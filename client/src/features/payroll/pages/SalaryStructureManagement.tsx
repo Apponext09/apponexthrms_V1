@@ -536,7 +536,10 @@ export const SalaryStructureManagement: React.FC = () => {
     apiClient.get('/settings/locations').then((res: any) => {
       const locs = res.data?.data || res.data || [];
       if (Array.isArray(locs) && locs.length > 0) {
-        const names = locs.map((l: any) => l.name || l.location_name).filter(Boolean);
+        const names = locs
+          .filter((l: any) => l.status !== 'inactive' && l.status !== 'Inactive' && l.is_active !== 'No' && l.isActive !== 'No')
+          .map((l: any) => l.name || l.location_name)
+          .filter(Boolean);
         setDbLocations(names);
       }
     }).catch(() => { });

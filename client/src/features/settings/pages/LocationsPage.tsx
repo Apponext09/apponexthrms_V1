@@ -8,7 +8,7 @@ export function LocationsPage() {
   const { currentPage, pageSize, searchQuery, filters, isModalOpen, openModal, closeModal, editingId } =
     useSettingsStore();
 
-  const { data: locationsData, isLoading } = useLocations(currentPage, pageSize, searchQuery, filters.type || '', filters.status || '');
+  const { data: locationsData, isLoading } = useLocations(currentPage, pageSize, searchQuery, filters.type || '', filters.status || 'all');
   const createMutation = useCreateLocation();
   const updateMutation = useUpdateLocation();
   const deleteMutation = useDeleteLocation();

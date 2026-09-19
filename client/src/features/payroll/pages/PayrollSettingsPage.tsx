@@ -292,7 +292,10 @@ export const PayrollSettingsPage: React.FC = () => {
       apiClient.get('/employees', companyParams).catch(() => ({ data: [] }))
     ]).then(([deptRes, locRes, gradeRes, desigRes, empRes]: any[]) => {
       const dbDepts = (deptRes.data?.data || deptRes.data || []).map((d: any) => d.name || d.department_name || d.title).filter(Boolean);
-      const dbLocs = (locRes.data?.data || locRes.data || []).map((l: any) => l.name || l.location_name || l.city || l.branch).filter(Boolean);
+      const dbLocs = (locRes.data?.data || locRes.data || [])
+        .filter((l: any) => l.status !== 'inactive' && l.status !== 'Inactive' && l.is_active !== 'No' && l.isActive !== 'No')
+        .map((l: any) => l.name || l.location_name || l.city || l.branch)
+        .filter(Boolean);
       const dbGrades = (gradeRes.data?.data || gradeRes.data || []).map((g: any) => g.name || g.grade_name || g.pay_grade_name || g.title).filter(Boolean);
       const dbDesigs = (desigRes.data?.data || desigRes.data || []).map((d: any) => d.name || d.designation_name || d.title).filter(Boolean);
 

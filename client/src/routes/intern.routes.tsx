@@ -13,6 +13,10 @@ const RegularizationPage = lazy(() => import('../features/employee/portal-pages/
 const ShiftRosterPage = lazy(() => import('../features/employee/portal-pages/ShiftRosterPage'));
 const LeavePage = lazy(() => import('../features/employee/portal-pages/LeavePage'));
 const PayslipViewer = lazy(() => import('../features/payroll/pages/PayslipViewer').then(m => ({ default: m.PayslipViewer })));
+const MyExpensesPage = lazy(() => import('../features/expenses/pages/MyExpensesPage').then(m => ({ default: m.MyExpensesPage })));
+const TravelRequestsPage = lazy(() => import('../features/expenses/pages/TravelRequestsPage').then(m => ({ default: m.TravelRequestsPage })));
+const TravelAdvancesPage = lazy(() => import('../features/expenses/pages/TravelAdvancesPage').then(m => ({ default: m.TravelAdvancesPage })));
+const MileageClaimsPage = lazy(() => import('../features/expenses/pages/MileageClaimsPage').then(m => ({ default: m.MileageClaimsPage })));
 const DocumentsPage = lazy(() => import('../features/employee/portal-pages/DocumentsPage'));
 const HolidayCalendarPage = lazy(() => import('../features/employee/portal-pages/HolidayCalendarPage'));
 const AnnouncementsPage = lazy(() => import('../features/employee/portal-pages/AnnouncementsPage'));
@@ -38,6 +42,10 @@ export const internRoutes = (
     <Route path="/intern/shift-roster" element={<ShiftRosterPage />} />
     <Route path="/intern/leaves" element={<LeavePage />} />
     <Route path="/intern/payslips" element={<PayslipViewer />} />
+    <Route path="/intern/expenses" element={<MyExpensesPage />} />
+    <Route path="/intern/travel-requests" element={<TravelRequestsPage />} />
+    <Route path="/intern/travel-advances" element={<TravelAdvancesPage />} />
+    <Route path="/intern/mileage-claims" element={<MileageClaimsPage />} />
     <Route path="/intern/documents" element={<DocumentsPage />} />
     <Route path="/intern/holiday-calendar" element={<HolidayCalendarPage />} />
     <Route path="/intern/announcements" element={<AnnouncementsPage />} />

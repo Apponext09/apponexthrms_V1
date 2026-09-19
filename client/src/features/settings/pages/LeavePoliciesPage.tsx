@@ -1216,7 +1216,7 @@ export function LeavePoliciesPage() {
       setDesignations(Array.isArray(desigsData) ? desigsData : []);
 
       const locsData = locsRes.data?.data?.items || locsRes.data?.data || locsRes.data || [];
-      setLocations(Array.isArray(locsData) ? locsData : []);
+      setLocations(Array.isArray(locsData) ? locsData.filter((l: any) => l.status !== 'inactive' && l.status !== 'Inactive' && l.is_active !== 'No' && l.isActive !== 'No') : []);
 
       const shiftsData = shiftsRes.data?.data || shiftsRes.data || [];
       setShiftOptions(Array.isArray(shiftsData) ? shiftsData : []);

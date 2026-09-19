@@ -217,7 +217,10 @@ export const IdCardDesignerPage: React.FC = () => {
           setDepartments(deptRes.data.data.map((d: any) => ({ id: d.id, name: d.name || d.department_name })));
         }
         if (locRes.data?.data) {
-          setLocations(locRes.data.data.map((l: any) => ({ id: l.id, name: l.name || l.location_name })));
+          const rawLocs = Array.isArray(locRes.data.data) ? locRes.data.data : [];
+          setLocations(rawLocs
+            .filter((l: any) => l.status !== 'inactive' && l.status !== 'Inactive' && l.is_active !== 'No' && l.isActive !== 'No')
+            .map((l: any) => ({ id: l.id, name: l.name || l.location_name })));
         }
       } catch (err) {}
     };

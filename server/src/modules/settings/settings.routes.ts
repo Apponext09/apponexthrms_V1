@@ -921,6 +921,9 @@ router.get('/locations', asyncHandler(async (req: Request, res: Response) => {
   const ctx = req.ctx!;
   const page = parseInt(req.query.page as string) || 1;
   const pageSize = parseInt(req.query.pageSize as string) || 500;
+  const status = req.query.status as string;
+  const all = req.query.all as string;
+  const includeInactive = req.query.includeInactive as string;
 
   const db = getKnex();
   const offset = (page - 1) * pageSize;
@@ -931,6 +934,19 @@ router.get('/locations', asyncHandler(async (req: Request, res: Response) => {
 
   if (ctx.companyId) {
     query = query.where('company_id', ctx.companyId);
+  }
+
+  if (status === 'inactive' || status === 'Inactive') {
+    query = query.where(function () {
+      this.where('status', 'inactive').orWhere('is_active', 'No');
+    });
+  } else if (status !== 'all' && status !== 'All' && all !== 'true' && includeInactive !== 'true') {
+    // Default to only active locations for all dropdowns & master lookups
+    query = query.where(function () {
+      this.where('status', 'active').orWhere('is_active', 'Yes');
+    }).where(function () {
+      this.whereNot('status', 'inactive').whereNot('is_active', 'No');
+    });
   }
 
   const locations = await query
@@ -1045,7 +1061,20 @@ router.get('/departments', asyncHandler(async (req: Request, res: Response) => {
     .whereNull('deleted_at');
 
   if (ctx.companyId) {
-    query = query.where('company_id', ctx.companyId);
+    const cid = Number(ctx.companyId);
+    query = query.where((builder) => {
+      builder.where('company_id', cid)
+        .orWhereNull('company_id')
+        .orWhere('company_ids', 'like', `%"${cid}"%`)
+        .orWhere('company_ids', 'like', `%[${cid}]%`)
+        .orWhere('company_ids', 'like', `%,${cid},%`)
+        .orWhere('company_ids', 'like', `%,${cid}]%`)
+        .orWhere('company_ids', 'like', `%[${cid},%`)
+        .orWhere('company_ids', 'like', `%${cid}%`)
+        .orWhereNull('company_ids')
+        .orWhere('company_ids', '')
+        .orWhere('company_ids', '[]');
+    });
   }
 
   const departments = await query
@@ -3456,7 +3485,12 @@ router.get('/late-deduction-policies/eligibility-data', asyncHandler(async (req:
   // 1. Fetch locations
   const locations = await db('locations')
     .where('organization_id', ctx.organizationId)
-    .whereNull('deleted_at');
+    .whereNull('deleted_at')
+    .where(function () {
+      this.where('status', 'active').orWhere('is_active', 'Yes');
+    })
+    .whereNot('status', 'inactive')
+    .whereNot('is_active', 'No');
 
   // 2. Fetch departments
   const departments = await db('departments')
@@ -4118,7 +4152,12 @@ router.get('/org-locations', asyncHandler(async (req: Request, res: Response) =>
   // 1. Fetch locations from master locations table
   let locQuery = db('locations')
     .where('organization_id', ctx.organizationId)
-    .whereNull('deleted_at');
+    .whereNull('deleted_at')
+    .where(function () {
+      this.where('status', 'active').orWhere('is_active', 'Yes');
+    })
+    .whereNot('status', 'inactive')
+    .whereNot('is_active', 'No');
 
   if (ctx.companyId) {
     locQuery = locQuery.where('company_id', ctx.companyId);

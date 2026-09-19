@@ -69,11 +69,11 @@ export function EmployeeEditPage() {
     const mobile = (basicForm.mobile || '').trim();
     const phone = (basicForm.phone || '').trim();
     if (mobile && !/^\d{10}$/.test(mobile)) {
-      toast.error('Mobile number must be exactly 10 digits');
+      showToast.error('Mobile number must be exactly 10 digits');
       return;
     }
     if (phone && !/^\d{10}$/.test(phone)) {
-      toast.error('Phone number must be exactly 10 digits');
+      showToast.error('Phone number must be exactly 10 digits');
       return;
     }
     setIsSaving(true);
@@ -377,7 +377,9 @@ export function EmployeeEditPage() {
                     onChange={(e) => setBasicForm({ ...basicForm, currentLocationId: e.target.value ? Number(e.target.value) : '', locationId: e.target.value ? Number(e.target.value) : '' })}
                   >
                     <option value="">-- Select Office Location --</option>
-                    {(locationsData?.items || locationsData?.data || [])?.map((loc: any) => (
+                    {(locationsData?.items || locationsData?.data || [])
+                      ?.filter((loc: any) => loc.status !== 'inactive' && loc.status !== 'Inactive' && loc.is_active !== 'No' && loc.isActive !== 'No')
+                      ?.map((loc: any) => (
                       <option key={loc.id} value={loc.id}>
                         {loc.name || loc.location_name || loc.code}
                       </option>

@@ -90,7 +90,10 @@ export const GratuityConfiguration: React.FC = () => {
       ]);
 
       const depts = (deptRes.data?.data || deptRes.data || []).map((d: any) => d.name || d.department_name).filter(Boolean);
-      const locs = (locRes.data?.data || locRes.data || []).map((l: any) => l.name || l.location_name).filter(Boolean);
+      const locs = (locRes.data?.data || locRes.data || [])
+        .filter((l: any) => l.status !== 'inactive' && l.status !== 'Inactive' && l.is_active !== 'No' && l.isActive !== 'No')
+        .map((l: any) => l.name || l.location_name)
+        .filter(Boolean);
       const grades = (gradeRes.data?.data || gradeRes.data || []).map((g: any) => g.name || g.grade_name || g.pay_grade_name).filter(Boolean);
       const comps = (compRes.data?.data || compRes.data || []).map((c: any) => c.name || c.company_name).filter(Boolean);
 

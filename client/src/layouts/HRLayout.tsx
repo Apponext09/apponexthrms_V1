@@ -23,6 +23,7 @@ import { PortalSidebarBrand } from './PortalSidebarBrand';
 import { masterBuilderApi, CustomMasterItem } from '@/features/master-builder/api/masterBuilderApi';
 import { LiveDateTimeDisplay } from '@/components/LiveDateTimeDisplay';
 import { GlobalSearchButton } from '@/features/search/components/GlobalSearch';
+import { useSubscriptionStore } from '@/features/subscriptions/store/subscriptionStore';
 
 import {
   ChevronDown, ChevronRight, Menu, Sun, Moon, LogOut, Building2, Lock,
@@ -67,6 +68,7 @@ function mapToHRHref(href: string): string {
   if (href === '/' || href === '/dashboard') return '/hr/dashboard';
   if (href === '/employees') return '/hr/employees';
   if (href === '/employee-lifecycle') return '/hr/employee-lifecycle';
+  if (href === '/employee/lifecycle') return '/hr/lifecycle';
   if (href === '/org-structure') return '/hr/org-structure';
   if (href.startsWith('/recruitment')) return `/hr${href}`;
   if (href === '/attendance') return '/hr/attendance';
@@ -132,6 +134,7 @@ export function HRLayout() {
   const { theme, setTheme } = useThemeStore();
   const { data: licensedFeatures } = useLicensedFeatures();
   const { attendanceMode, liveTrackingEnabled } = useAttendanceModuleSettings();
+  const { enabledModules } = useSubscriptionStore();
 
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -159,7 +162,7 @@ export function HRLayout() {
 
   // Compute HR visible sections derived from navigation.ts so cleanliness & tab order match CEO/Admin 1:1
   const hrSections = useMemo(() => {
-    const rawSections = getVisibleSections(roles, licensedFeatures, attendanceMode, liveTrackingEnabled);
+    const rawSections = getVisibleSections(roles, licensedFeatures, attendanceMode, liveTrackingEnabled, enabledModules);
     return rawSections.map((sec) => {
       const items = sec.items.map((item) => {
         const hrHref = mapToHRHref(item.href);

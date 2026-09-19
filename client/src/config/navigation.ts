@@ -28,6 +28,13 @@ export interface NavSection {
   items: NavItem[];
   minRoles?: Role[]; // If set, entire section gated to these roles
   collapsible?: boolean; // If true, section can be collapsed (default: true for subsections)
+  /**
+   * Maps this section to a subscription plan module name.
+   * null = always visible (no subscription gating).
+   * When the org has an active plan, only sections whose subscriptionModule is
+   * included in the plan's modules array will be rendered.
+   */
+  subscriptionModule?: string | null;
 }
 
 const NAVIGATION_SECTIONS: NavSection[] = [
@@ -37,6 +44,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
     label: 'Dashboard',
     icon: 'LayoutDashboard',
     collapsible: false,
+    subscriptionModule: null, // Always visible
     items: [
       { name: 'Dashboard', href: '/dashboard', icon: 'LayoutDashboard' },
     ],
@@ -48,6 +56,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
     label: 'CORE HR',
     icon: 'Users',
     minRoles: ['organization_admin', 'hr', 'hr_manager', 'department_head'],
+    subscriptionModule: 'Core HR & Directory',
     items: [
       { name: 'Employee', href: '/employees', icon: 'Users' },
       {
@@ -55,6 +64,12 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         href: '/employee-lifecycle',
         icon: 'RefreshCw',
         minRoles: ['organization_admin', 'hr', 'hr_manager'],
+      },
+      {
+        name: 'My Lifecycle',
+        href: '/employee/lifecycle',
+        icon: 'GitBranch',
+        minRoles: ['hr', 'hr_manager'],
       },
       { name: 'Org. Structure', href: '/org-structure', icon: 'GitBranch' },
     ],
@@ -65,6 +80,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
     id: 'recruitment',
     label: 'RECRUITMENT',
     icon: 'Briefcase',
+    subscriptionModule: 'Recruitment & ATS',
     items: [
       { name: 'Dashboard', href: '/recruitment/dashboard', icon: 'BarChart3' },
       { name: 'Interview Schedule', href: '/recruitment/interview-schedule', icon: 'Calendar' },
@@ -121,6 +137,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
     id: 'attendance',
     label: 'ATTENDANCE',
     icon: 'Clock',
+    subscriptionModule: 'Attendance & Time Tracking',
     items: [
       {
         name: 'Dashboard',
@@ -193,6 +210,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
     label: 'SHIFT MANAGEMENT',
     icon: 'CalendarClock',
     minRoles: ['organization_admin', 'hr', 'hr_manager', 'department_head'],
+    subscriptionModule: 'Attendance & Time Tracking',
     items: [
       { name: 'General Shift', href: '/attendance/shifts', icon: 'Clock' },
       { name: 'Roster Shift', href: '/attendance/roster-shifts', icon: 'CalendarClock' },
@@ -204,6 +222,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
     id: 'leave',
     label: 'LEAVE MANAGEMENT',
     icon: 'Calendar',
+    subscriptionModule: 'Leave Management & Approvals',
     items: [
       { name: 'My Leaves', href: '/leaves/my-leaves', icon: 'Calendar' },
       {
@@ -232,6 +251,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
     id: 'payroll',
     label: 'PAYROLL',
     icon: 'IndianRupee',
+    subscriptionModule: 'Automated Payroll Processing',
     items: [
       { name: 'Dashboard', href: '/payroll', icon: 'IndianRupee' },
       { name: 'Admin Payroll Portal', href: '/payroll/admin-portal', icon: 'ShieldCheck', minRoles: ['organization_admin', 'hr', 'hr_manager'] },
@@ -251,6 +271,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
     id: 'settlement_management',
     label: 'SETTLEMENT MANAGEMENT',
     icon: 'UserX',
+    subscriptionModule: 'Automated Payroll Processing',
     items: [
       {
         name: 'Exit Settlements (FnF)',
@@ -270,6 +291,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
     id: 'loan_management',
     label: 'LOAN MANAGEMENT',
     icon: 'Percent',
+    subscriptionModule: 'Automated Payroll Processing',
     items: [
       {
         name: 'Loan Type Settings',
@@ -286,6 +308,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
     id: 'expense_management',
     label: 'EXPENSE MANAGEMENT',
     icon: 'ReceiptIndianRupee',
+    subscriptionModule: 'Expense Management',
     items: [
       { name: 'Dashboard', href: '/expenses/dashboard', icon: 'TrendingUp', minRoles: ['organization_admin', 'super_admin', 'ceo', 'hr_admin', 'hr', 'hr_manager'] },
       { name: 'My Expenses', href: '/expenses/my-expenses', icon: 'ReceiptIndianRupee' },
@@ -308,6 +331,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
     label: 'PMS',
     icon: 'Target',
     minRoles: ['support'],
+    subscriptionModule: 'Performance & OKRs',
     items: [
       {
         name: 'Dashboard',
@@ -327,6 +351,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
     label: 'ASSET MANAGEMENT',
     icon: 'Package',
     minRoles: ['support'],
+    subscriptionModule: 'Asset Lifecycle Management',
     items: [
       {
         name: 'Dashboard',
@@ -349,6 +374,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
     id: 'lms',
     label: 'LMS',
     icon: 'GraduationCap',
+    subscriptionModule: 'Learning Management System',
     items: [
       { name: 'Dashboard', href: '/lms/dashboard', icon: 'LayoutDashboard', minRoles: ['organization_admin', 'super_admin', 'ceo', 'hr_admin', 'hr', 'hr_manager'] },
       { name: 'Course Management', href: '/lms/courses', icon: 'BookOpen', minRoles: ['organization_admin', 'super_admin', 'ceo', 'hr_admin', 'hr', 'hr_manager'] },
@@ -370,6 +396,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
     label: 'REPORTS & ANALYTICS',
     icon: 'BarChart3',
     minRoles: ['organization_admin', 'hr', 'hr_manager', 'department_head'],
+    subscriptionModule: null, // Always visible (core reporting)
     items: [
       { name: 'Attendance Report', href: '/analytics/attendance', icon: 'BarChart3' },
       { name: 'Timelog Report', href: '/analytics/timelog', icon: 'FileText' },
@@ -395,6 +422,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
     label: 'HR OPERATIONS',
     icon: 'ClipboardList',
     minRoles: ['organization_admin', 'hr', 'hr_manager'],
+    subscriptionModule: 'Core HR & Directory',
     items: [
       { name: 'Requests', href: '/hr-operations/requests', icon: 'Inbox' },
       { name: 'Holiday Calendar', href: '/holidays', icon: 'Calendar' },
@@ -407,6 +435,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
     label: 'POLICY GOVERNANCE',
     icon: 'ShieldCheck',
     minRoles: ['organization_admin', 'hr', 'hr_manager', 'super_admin'],
+    subscriptionModule: 'Core HR & Directory',
     items: [
       { name: 'Policy Dashboard', href: '/policies/manage', icon: 'ShieldCheck' },
       { name: 'Create & Assign Policy', href: '/policies/create', icon: 'FilePlus' },
@@ -421,6 +450,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
     icon: 'Database',
     minRoles: ['organization_admin', 'hr', 'hr_manager', 'super_admin'],
     collapsible: true,
+    subscriptionModule: null, // Always visible (core settings)
     items: [
       { name: 'Master Builder', href: '/masters/builder', icon: 'Boxes', badge: 'Builder' },
       { name: 'Company', href: '/masters?tab=company', icon: 'Building2' },
@@ -440,6 +470,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
     icon: 'Layers',
     minRoles: ['organization_admin', 'hr', 'hr_manager', 'super_admin'],
     collapsible: true,
+    subscriptionModule: null, // Always visible (core settings)
     items: [
       { name: 'OT Rule', href: '/operational-masters?tab=ot-rule', icon: 'Sliders' },
       { name: 'Break', href: '/operational-masters?tab=break', icon: 'Coffee' },
@@ -461,13 +492,15 @@ const NAVIGATION_SECTIONS: NavSection[] = [
     icon: 'Boxes',
     minRoles: ['organization_admin', 'hr', 'hr_manager', 'super_admin'],
     collapsible: true,
+    subscriptionModule: null, // Always visible (platform management)
     items: [
       { name: 'CEO / Admin', href: '/modules?module=ceo', icon: 'ShieldCheck' },
       { name: 'HR', href: '/modules?module=hr', icon: 'Users' },
       { name: 'Manager', href: '/modules?module=manager', icon: 'UserCheck' },
       { name: 'Team Lead', href: '/modules?module=team-lead', icon: 'UserCog' },
       { name: 'Employee', href: '/modules?module=employee', icon: 'User' },
-      { name: 'Intern', href: '/modules?module=intern', icon: 'GraduationCap', badge: 'Coming Soon' },
+      { name: 'Intern', href: '/modules?module=intern', icon: 'GraduationCap' },
+      { name: 'Consultant', href: '/modules?module=consultant', icon: 'Briefcase' },
     ],
   },
 
@@ -478,6 +511,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
     icon: 'Settings',
     minRoles: ['organization_admin', 'hr', 'hr_manager', 'super_admin'],
     collapsible: true,
+    subscriptionModule: 'Settings & RBAC',
     items: [
       { name: 'General Settings', href: '/settings/general', icon: 'Sliders' },
       { name: 'Attendance Module', href: '/settings/attendance-module', icon: 'Clock' },
@@ -640,13 +674,69 @@ const ITEM_FEATURE_MAP: Record<string, Partial<Record<'ceo' | 'hr', string>>> = 
 };
 
 /**
- * Get visible sections filtered by role, licensing, and module toggle states
+ * Get visible sections filtered by role, licensing, module toggle states, and subscription plan modules
  */
+
+// ── Helper: Flexible Subscription Module Resolution ────────────────────────
+export function isModuleAllowed(subscriptionModule?: string | null, enabledModules?: string[] | null): boolean {
+  if (!enabledModules || enabledModules.length === 0) {
+    // No plan assigned or full access
+    return true;
+  }
+  if (!subscriptionModule) {
+    // Section is always visible (like dashboard or analytics or settings)
+    return true;
+  }
+
+  const normQuery = subscriptionModule.toLowerCase().trim();
+
+  // 1. Direct or lowercase match
+  if (enabledModules.some((m) => m.toLowerCase().trim() === normQuery)) {
+    return true;
+  }
+
+  // 2. Alias mapping across all modules
+  const ALIAS_MAP: Record<string, string[]> = {
+    'Core HR & Directory': ['core_hr', 'core', 'employee', 'employees', 'directory', 'lifecycle', 'org_structure', 'id_card', 'core hr'],
+    'Attendance & Time Tracking': ['attendance', 'time_tracking', 'attendance_tracking', 'shifts', 'shift_management', 'tracking', 'punches', 'attendance & time tracking'],
+    'Shift Management': ['shifts', 'shift_management', 'general_shift', 'roster_shift', 'shift management'],
+    'Leave Management & Approvals': ['leave', 'leaves', 'leave_management', 'holidays', 'approvals', 'leave management & approvals', 'leave management'],
+    'Automated Payroll Processing': ['payroll', 'loans', 'loan_management', 'salary', 'payslips', 'settlement', 'settlement_management', 'automated payroll processing', 'payroll processing'],
+    'Settlement Management': ['settlement', 'settlement_management', 'fnf', 'exit', 'settlement management'],
+    'Loan Management': ['loans', 'loan_management', 'loan management'],
+    'Expense Management': ['expense', 'expenses', 'expense_management', 'travel', 'claims', 'mileage', 'travel_advances', 'expense management', 'expense & travel management'],
+    'Performance & OKRs': ['performance', 'pms', 'okrs', 'goals', 'appraisals', 'reviews', 'performance & okrs', 'performance & okrs (pms)'],
+    'Recruitment & ATS': ['recruitment', 'ats', 'jobs', 'mrf', 'candidates', 'interview', 'recruitment & ats'],
+    'Learning Management System': ['lms', 'learning', 'courses', 'academy', 'learning_management', 'learning management system', 'learning management (lms)'],
+    'Asset Lifecycle Management': ['assets', 'asset_management', 'asset', 'asset lifecycle management'],
+    'HR Operations': ['hr_operations', 'hr operations', 'workflows', 'announcements', 'requests', 'hr operations & automation'],
+    'Policy Governance': ['policy_governance', 'policies', 'policy', 'policy governance'],
+    'Reports & Analytics': ['reports', 'analytics', 'reports & analytics'],
+    'Settings & RBAC': ['settings', 'rbac', 'roles', 'permissions', 'settings & rbac', 'settings & masters', 'masters'],
+  };
+
+  for (const [standardKey, aliases] of Object.entries(ALIAS_MAP)) {
+    const isStandardEnabled = enabledModules.some((em) => {
+      const normEm = em.toLowerCase().trim();
+      return normEm === standardKey.toLowerCase() || aliases.includes(normEm);
+    });
+
+    if (isStandardEnabled) {
+      if (standardKey.toLowerCase() === normQuery || aliases.includes(normQuery)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
 export function getVisibleSections(
   userRoles: string[],
   licensedFeatures?: LicensedFeaturesResponse,
   attendanceMode?: string,
-  liveTrackingEnabled?: boolean
+  liveTrackingEnabled?: boolean,
+  enabledModules?: string[] | null   // ← Subscription plan modules (null = full access)
 ): NavSection[] {
   const persona = getPersona(userRoles);
   const savedState = getSavedModulesState();
@@ -659,6 +749,15 @@ export function getVisibleSections(
         return null; // Hide entire section
       }
     }
+
+    // ── Subscription Plan Module Gating ─────────────────────────────────────
+    // Only apply when enabledModules is a non-empty array (org has a plan assigned)
+    if (enabledModules && enabledModules.length > 0 && section.subscriptionModule !== null) {
+      if (section.subscriptionModule && !isModuleAllowed(section.subscriptionModule, enabledModules)) {
+        return null; // Section's module is not in this org's subscription plan
+      }
+    }
+    // ── End Subscription Gating ──────────────────────────────────────────────
 
     // Check if entire section is disabled in Module Management
     const sectionModuleId = SECTION_MODULE_MAP[section.id]?.[persona];

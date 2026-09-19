@@ -5,7 +5,7 @@ import {
   LayoutDashboard, Clock, Palmtree, FileText, User,
   Calendar, Megaphone, Building2, BookOpen, Briefcase,
   CheckCircle2, TrendingUp, Target, Bell, ChevronRight,
-  GraduationCap, Timer, Award, Activity
+  GraduationCap, Timer, Award, Activity, ReceiptIndianRupee
 } from 'lucide-react';
 
 import { useAuthStore } from '@/features/auth/store/authStore';
@@ -25,6 +25,7 @@ const QUICK_ACTIONS = [
   { label: 'Mark Attendance',   icon: Clock,       href: '/intern/attendance',       color: 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800 hover:border-amber-400' },
   { label: 'Apply Leave',       icon: Palmtree,    href: '/intern/leaves',           color: 'bg-sky-50 dark:bg-sky-950/30 border-sky-200 dark:border-sky-800 hover:border-sky-400' },
   { label: 'My Payslip',        icon: FileText,    href: '/intern/payslips',         color: 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800 hover:border-emerald-400' },
+  { label: 'Expense Claims',    icon: ReceiptIndianRupee, href: '/intern/expenses',  color: 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800 hover:border-amber-400' },
   { label: 'My Documents',      icon: BookOpen,    href: '/intern/documents',        color: 'bg-violet-50 dark:bg-violet-950/30 border-violet-200 dark:border-violet-800 hover:border-violet-400' },
   { label: 'Holiday Calendar',  icon: Calendar,    href: '/intern/holiday-calendar', color: 'bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-800 hover:border-rose-400' },
   { label: 'My Profile',        icon: User,        href: '/intern/profile',          color: 'bg-orange-50 dark:bg-orange-950/30 border-orange-200 dark:border-orange-800 hover:border-orange-400' },

@@ -76,7 +76,9 @@ export const ExpensePoliciesPage: React.FC = () => {
           const lRaw = locRes?.data?.data || locRes?.data || [];
           const dRaw = desRes?.data?.data || desRes?.data || [];
           const gRaw = grdRes?.data?.data || grdRes?.data || [];
-          setOrgLocations((Array.isArray(lRaw) ? lRaw : []).map((x: any) => ({ id: x.id, name: x.name || x.location_name || String(x.id) })));
+          setOrgLocations((Array.isArray(lRaw) ? lRaw : [])
+            .filter((x: any) => x.status !== 'inactive' && x.status !== 'Inactive' && x.is_active !== 'No' && x.isActive !== 'No')
+            .map((x: any) => ({ id: x.id, name: x.name || x.location_name || String(x.id) })));
           setOrgDesignations((Array.isArray(dRaw) ? dRaw : []).map((x: any) => ({ id: x.id, name: x.name || x.designation_name || String(x.id) })));
           setOrgGrades((Array.isArray(gRaw) ? gRaw : []).map((x: any) => ({ id: x.id, name: x.name || x.grade_name || String(x.id) })));
         });

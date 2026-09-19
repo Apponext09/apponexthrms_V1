@@ -14,7 +14,9 @@ const ShiftRosterPage = lazy(() => import('../features/employee/portal-pages/Shi
 const LeavePage = lazy(() => import('../features/employee/portal-pages/LeavePage'));
 const PayslipViewer = lazy(() => import('../features/payroll/pages/PayslipViewer').then(m => ({ default: m.PayslipViewer })));
 const MyExpensesPage = lazy(() => import('../features/expenses/pages/MyExpensesPage').then(m => ({ default: m.MyExpensesPage })));
-const TravelPage = lazy(() => import('../features/employee/portal-pages/TravelPage'));
+const TravelRequestsPage = lazy(() => import('../features/expenses/pages/TravelRequestsPage').then(m => ({ default: m.TravelRequestsPage })));
+const TravelAdvancesPage = lazy(() => import('../features/expenses/pages/TravelAdvancesPage').then(m => ({ default: m.TravelAdvancesPage })));
+const MileageClaimsPage = lazy(() => import('../features/expenses/pages/MileageClaimsPage').then(m => ({ default: m.MileageClaimsPage })));
 const DocumentsPage = lazy(() => import('../features/employee/portal-pages/DocumentsPage'));
 const HolidayCalendarPage = lazy(() => import('../features/employee/portal-pages/HolidayCalendarPage'));
 const AnnouncementsPage = lazy(() => import('../features/employee/portal-pages/AnnouncementsPage'));
@@ -41,7 +43,9 @@ export const consultantRoutes = (
     <Route path="/consultant/leaves" element={<LeavePage />} />
     <Route path="/consultant/payslips" element={<PayslipViewer />} />
     <Route path="/consultant/expenses" element={<MyExpensesPage />} />
-    <Route path="/consultant/travel" element={<TravelPage />} />
+    <Route path="/consultant/travel-requests" element={<TravelRequestsPage />} />
+    <Route path="/consultant/travel-advances" element={<TravelAdvancesPage />} />
+    <Route path="/consultant/mileage-claims" element={<MileageClaimsPage />} />
     <Route path="/consultant/documents" element={<DocumentsPage />} />
     <Route path="/consultant/holiday-calendar" element={<HolidayCalendarPage />} />
     <Route path="/consultant/announcements" element={<AnnouncementsPage />} />

@@ -1480,7 +1480,7 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[]; selectedCompanyId?: 
   };
 
   const { data: companies = [] } = useQuery({ queryKey: ['companies'], queryFn: async () => { const r = await apiClient.get('/settings/companies'); return r.data?.data || r.data || []; } });
-  const { data: locations = [] } = useQuery({ queryKey: ['locs'], queryFn: async () => { const r = await apiClient.get('/settings/locations'); return r.data?.data || r.data || []; } });
+  const { data: locations = [] } = useQuery({ queryKey: ['locs'], queryFn: async () => { const r = await apiClient.get('/settings/locations'); const arr = r.data?.data || r.data || []; return Array.isArray(arr) ? arr.filter((l: any) => l.status !== 'inactive' && l.status !== 'Inactive' && l.is_active !== 'No' && l.isActive !== 'No') : []; } });
   const { data: departments = [] } = useQuery({ queryKey: ['depts'], queryFn: async () => { const r = await apiClient.get('/settings/departments'); return r.data?.data || r.data || []; } });
   const { data: grades = [] } = useQuery({ queryKey: ['grades'], queryFn: async () => { const r = await apiClient.get('/settings/grades').catch(() => apiClient.get('/settings/pay-grades')); return r.data?.data || r.data || []; } });
   const { data: designations = [] } = useQuery({ queryKey: ['designations'], queryFn: async () => { const r = await apiClient.get('/settings/designations'); return r.data?.data || r.data || []; } });

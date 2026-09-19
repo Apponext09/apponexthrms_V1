@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   RotateCcw, MapPin, Search, Building2, HelpCircle, Upload, Image as ImageIcon,
   Plus, CheckCircle2, XCircle, Loader2, Mail, Phone, FileCheck, Shield, Check, X,
-  Eye, EyeOff, KeyRound, Boxes, AlertCircle
+  Eye, EyeOff, KeyRound, Boxes, AlertCircle, FileText, FileUp, Trash2, Paperclip
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -801,7 +801,13 @@ export function CompanyMasterForm({
               data: customFieldValues,
             });
           } catch (extErr) {
-            console.warn('Extended data save notice:', extErr);
+            try {
+              await masterBuilderApi.createRecord(companyMasterId, {
+                data: customFieldValues,
+              });
+            } catch (createErr) {
+              console.warn('Extended data save notice:', createErr);
+            }
           }
         }
 
@@ -1673,14 +1679,185 @@ export function CompanyMasterForm({
               const fieldKey = field.fieldKey || field.field_key;
               const fieldName = field.fieldName || field.field_name || fieldKey;
               const isRequired = Boolean(field.isRequired ?? field.is_required);
-              const fieldType = field.fieldType || field.field_type || 'text';
+              const fieldType = String(field.fieldType || field.field_type || 'text').toLowerCase();
               const placeholder = field.placeholder || `Enter ${fieldName}`;
-              return (
-                <div key={field.id} className="space-y-1.5">
-                  <label className="text-xs font-semibold text-foreground">
-                    {fieldName} {isRequired && <span className="text-rose-500">*</span>}
-                  </label>
-                  {fieldType === 'textarea' ? (
+              const helpText = field.helpText || field.help_text;
+              const opts = typeof field.options === 'string' ? JSON.parse(field.options || '{}') : (field.options || {});
+              const val = customFieldValues[fieldKey];
+              const isFullWidth = opts.columnWidth === 'full' || opts.colSpan === 2 || fieldType === 'textarea' || fieldType === 'image' || fieldType === 'file';
+
+              const renderFieldControl = () => {
+                // 1. IMAGE UPLOAD
+                if (fieldType === 'image') {
+                  if (val) {
+                    return (
+                      <div className="border rounded-2xl p-3.5 bg-card flex items-center gap-3.5 border-border shadow-soft-xs">
+                        <img
+                          src={typeof val === 'string' ? val : val?.url || val?.data}
+                          alt="Preview"
+                          className="w-16 h-16 rounded-xl object-cover border border-border shrink-0 bg-muted"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold text-foreground truncate">
+                            {typeof val === 'object' && val?.name ? val.name : typeof val === 'string' && val.startsWith('data:') ? 'Image Attached' : String(val)}
+                          </p>
+                          <p className="text-[11px] text-emerald-600 font-medium flex items-center gap-1 mt-0.5">
+                            <CheckCircle2 className="size-3" /> Ready to save
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <label className="cursor-pointer text-xs font-medium px-3 py-1.5 rounded-xl border border-border hover:bg-muted text-foreground transition-colors flex items-center gap-1.5">
+                            <Upload className="size-3.5" />
+                            <span>Change</span>
+                            <input
+                              type="file"
+                              accept={opts.fileAccept || 'image/*'}
+                              className="hidden"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  const reader = new FileReader();
+                                  reader.onload = () => {
+                                    setCustomFieldValues((prev) => ({
+                                      ...prev,
+                                      [fieldKey]: reader.result as string,
+                                    }));
+                                  };
+                                  reader.readAsDataURL(file);
+                                }
+                              }}
+                            />
+                          </label>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-destructive hover:bg-destructive/10 rounded-lg cursor-pointer"
+                            onClick={() => setCustomFieldValues((prev) => ({ ...prev, [fieldKey]: '' }))}
+                          >
+                            <Trash2 className="size-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  }
+                  return (
+                    <label className="border-2 border-dashed border-border hover:border-primary/50 hover:bg-primary/5 rounded-2xl p-5 flex flex-col items-center justify-center cursor-pointer transition-colors text-center group">
+                      <div className="w-11 h-11 rounded-full bg-primary/10 text-primary flex items-center justify-center mb-2 group-hover:scale-105 transition-transform">
+                        <ImageIcon className="size-5" />
+                      </div>
+                      <span className="text-xs font-semibold text-foreground">Click to upload image</span>
+                      <span className="text-[11px] text-muted-foreground mt-0.5">PNG, JPG, WebP, GIF, SVG (up to 5MB)</span>
+                      <input
+                        type="file"
+                        accept={opts.fileAccept || 'image/*'}
+                        className="hidden"
+                        required={isRequired && !val}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            const reader = new FileReader();
+                            reader.onload = () => {
+                              setCustomFieldValues((prev) => ({
+                                ...prev,
+                                [fieldKey]: reader.result as string,
+                              }));
+                            };
+                            reader.readAsDataURL(file);
+                          }
+                        }}
+                      />
+                    </label>
+                  );
+                }
+
+                // 2. FILE / DOCUMENT UPLOAD
+                if (fieldType === 'file') {
+                  if (val) {
+                    return (
+                      <div className="border rounded-2xl p-3.5 bg-card flex items-center justify-between gap-3 border-border shadow-soft-xs">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="size-11 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                            <FileText className="size-5" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-xs font-semibold text-foreground truncate">
+                              {typeof val === 'object' && val?.name ? val.name : typeof val === 'string' && val.startsWith('data:') ? 'Document Attached' : String(val)}
+                            </p>
+                            <p className="text-[11px] text-emerald-600 font-medium flex items-center gap-1 mt-0.5">
+                              <CheckCircle2 className="size-3" /> Ready to save
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <label className="cursor-pointer text-xs font-medium px-3 py-1.5 rounded-xl border border-border hover:bg-muted text-foreground transition-colors flex items-center gap-1.5">
+                            <Upload className="size-3.5" />
+                            <span>Replace</span>
+                            <input
+                              type="file"
+                              accept={opts.fileAccept || '*/*'}
+                              className="hidden"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  const reader = new FileReader();
+                                  reader.onload = () => {
+                                    setCustomFieldValues((prev) => ({
+                                      ...prev,
+                                      [fieldKey]: reader.result as string,
+                                    }));
+                                  };
+                                  reader.readAsDataURL(file);
+                                }
+                              }}
+                            />
+                          </label>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-destructive hover:bg-destructive/10 rounded-lg cursor-pointer"
+                            onClick={() => setCustomFieldValues((prev) => ({ ...prev, [fieldKey]: '' }))}
+                          >
+                            <Trash2 className="size-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  }
+                  return (
+                    <label className="border-2 border-dashed border-border hover:border-primary/50 hover:bg-primary/5 rounded-2xl p-5 flex flex-col items-center justify-center cursor-pointer transition-colors text-center group">
+                      <div className="w-11 h-11 rounded-full bg-primary/10 text-primary flex items-center justify-center mb-2 group-hover:scale-105 transition-transform">
+                        <FileUp className="size-5" />
+                      </div>
+                      <span className="text-xs font-semibold text-foreground">Click to upload file / document</span>
+                      <span className="text-[11px] text-muted-foreground mt-0.5">PDF, DOC, DOCX, XLS, XLSX, Images, ZIP</span>
+                      <input
+                        type="file"
+                        accept={opts.fileAccept || '*/*'}
+                        className="hidden"
+                        required={isRequired && !val}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            const reader = new FileReader();
+                            reader.onload = () => {
+                              setCustomFieldValues((prev) => ({
+                                ...prev,
+                                [fieldKey]: reader.result as string,
+                              }));
+                            };
+                            reader.readAsDataURL(file);
+                          }
+                        }}
+                      />
+                    </label>
+                  );
+                }
+
+                // 3. TEXTAREA
+                if (fieldType === 'textarea') {
+                  return (
                     <textarea
                       value={customFieldValues[fieldKey] || ''}
                       onChange={(e) => setCustomFieldValues((prev) => ({ ...prev, [fieldKey]: e.target.value }))}
@@ -1688,16 +1865,21 @@ export function CompanyMasterForm({
                       rows={3}
                       className="w-full text-xs p-3 rounded-xl border border-input bg-background focus:outline-none focus:ring-1 focus:ring-primary"
                     />
-                  ) : fieldType === 'boolean' ? (
+                  );
+                }
+
+                // 4. BOOLEAN TOGGLE
+                if (fieldType === 'boolean') {
+                  return (
                     <div className="flex items-center gap-2 pt-1">
                       <button
                         type="button"
                         onClick={() => setCustomFieldValues((prev) => ({ ...prev, [fieldKey]: true }))}
                         className={cn(
-                          'py-1.5 px-3 text-xs font-bold rounded-xl border transition-all flex items-center gap-1',
+                          'py-1.5 px-3 text-xs font-bold rounded-xl border transition-all flex items-center gap-1 cursor-pointer',
                           customFieldValues[fieldKey]
                             ? 'bg-primary text-primary-foreground border-primary'
-                            : 'bg-background text-muted-foreground border-border'
+                            : 'bg-background text-muted-foreground border-border hover:bg-muted'
                         )}
                       >
                         <Check className="h-3.5 w-3.5" /> Yes
@@ -1706,25 +1888,85 @@ export function CompanyMasterForm({
                         type="button"
                         onClick={() => setCustomFieldValues((prev) => ({ ...prev, [fieldKey]: false }))}
                         className={cn(
-                          'py-1.5 px-3 text-xs font-bold rounded-xl border transition-all flex items-center gap-1',
+                          'py-1.5 px-3 text-xs font-bold rounded-xl border transition-all flex items-center gap-1 cursor-pointer',
                           !customFieldValues[fieldKey]
                             ? 'bg-muted text-foreground border-border'
-                            : 'bg-background text-muted-foreground border-border'
+                            : 'bg-background text-muted-foreground border-border hover:bg-muted'
                         )}
                       >
                         <X className="h-3.5 w-3.5" /> No
                       </button>
                     </div>
-                  ) : (
-                    <Input
-                      type={fieldType === 'number' ? 'number' : fieldType === 'email' ? 'email' : 'text'}
+                  );
+                }
+
+                // 5. CHOICE / SELECT DROPDOWN
+                if (fieldType === 'choice' || fieldType === 'select') {
+                  const choiceList = Array.isArray(opts.choiceList) ? opts.choiceList : Array.isArray(opts.options) ? opts.options : [];
+                  return (
+                    <select
                       value={customFieldValues[fieldKey] || ''}
                       onChange={(e) => setCustomFieldValues((prev) => ({ ...prev, [fieldKey]: e.target.value }))}
-                      placeholder={placeholder}
+                      className="w-full h-10 px-3 text-xs rounded-xl border border-input bg-background focus:outline-none focus:ring-1 focus:ring-primary"
+                      required={isRequired}
+                    >
+                      <option value="">{placeholder || `-- Select ${fieldName} --`}</option>
+                      {choiceList.map((opt: any, idx: number) => {
+                        const optVal = typeof opt === 'string' ? opt : opt.value || opt.label || opt.name;
+                        const optLabel = typeof opt === 'string' ? opt : opt.label || opt.name || opt.value;
+                        return (
+                          <option key={idx} value={optVal}>
+                            {optLabel}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  );
+                }
+
+                // 6. DATE INPUT
+                if (fieldType === 'date') {
+                  return (
+                    <Input
+                      type="date"
+                      value={customFieldValues[fieldKey] || ''}
+                      onChange={(e) => setCustomFieldValues((prev) => ({ ...prev, [fieldKey]: e.target.value }))}
                       className="text-xs h-10 bg-background rounded-xl"
                       required={isRequired}
                     />
-                  )}
+                  );
+                }
+
+                // 7. STANDARD / NUMBER / EMAIL / PHONE / COLOR / URL
+                return (
+                  <Input
+                    type={
+                      fieldType === 'number' ? 'number' :
+                      fieldType === 'email' ? 'email' :
+                      fieldType === 'phone' || fieldType === 'tel' ? 'tel' :
+                      fieldType === 'url' ? 'url' :
+                      fieldType === 'color' ? 'color' : 'text'
+                    }
+                    value={customFieldValues[fieldKey] || ''}
+                    onChange={(e) => setCustomFieldValues((prev) => ({ ...prev, [fieldKey]: e.target.value }))}
+                    placeholder={placeholder}
+                    className="text-xs h-10 bg-background rounded-xl"
+                    required={isRequired}
+                  />
+                );
+              };
+
+              return (
+                <div key={field.id} className={`space-y-1.5 ${isFullWidth ? 'md:col-span-2' : ''}`}>
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-semibold text-foreground">
+                      {fieldName} {isRequired && <span className="text-rose-500">*</span>}
+                    </label>
+                    {helpText && (
+                      <span className="text-[11px] text-muted-foreground font-normal">{helpText}</span>
+                    )}
+                  </div>
+                  {renderFieldControl()}
                 </div>
               );
             })}

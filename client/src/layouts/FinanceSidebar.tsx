@@ -94,6 +94,7 @@ const FINANCE_NAV = [
       { name: "My Leaves",        href: "/finance/leaves",           icon: Palmtree },
       { name: "My Payslips",      href: "/finance/payslips",         icon: DollarSign },
       { name: "Holiday Calendar", href: "/finance/holiday-calendar", icon: Calendar },
+      { name: "My Documents",     href: "/finance/documents",        icon: FileBarChart },
     ],
   },
   {

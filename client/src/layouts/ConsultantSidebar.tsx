@@ -38,14 +38,18 @@ const C = {
   avatarBg: 'bg-primary', avatarBorder: 'border-primary/30',
 };
 
+import { useSubscriptionStore } from '@/features/subscriptions/store/subscriptionStore';
+
 // ── Nav definitions ───────────────────────────────────────────────────────────
 const CONSULTANT_NAV = [
   {
     label: 'OVERVIEW',
+    subscriptionModule: null,
     items: [{ name: 'My Dashboard', href: '/consultant/dashboard', icon: LayoutDashboard }],
   },
   {
     label: 'EMPLOYEE CORE',
+    subscriptionModule: 'Core HR & Directory',
     items: [
       { name: 'My Lifecycle', href: '/consultant/lifecycle', icon: GitBranch },
       { name: 'Org Structure', href: '/consultant/org-chart', icon: Building2 },
@@ -54,6 +58,7 @@ const CONSULTANT_NAV = [
   },
   {
     label: 'ATTENDANCE',
+    subscriptionModule: 'Attendance & Time Tracking',
     items: [
       { name: 'Face Punch', href: '/consultant/face-attendance', icon: ScanFace },
       { name: 'My Attendance Log', href: '/consultant/attendance', icon: Clock },
@@ -63,26 +68,36 @@ const CONSULTANT_NAV = [
   },
   {
     label: 'LEAVES',
+    subscriptionModule: 'Leave Management & Approvals',
     items: [
       { name: 'My Leaves', href: '/consultant/leaves', icon: Palmtree },
     ],
   },
   {
     label: 'EXPENSES',
+    subscriptionModule: 'Expense Management',
     items: [
       { name: 'Expense Claims',   href: '/consultant/expenses', icon: ReceiptIndianRupee },
-      { name: 'Travel Requests',  href: '/consultant/travel',   icon: Plane },
+      { name: 'Travel Requests',  href: '/consultant/travel-requests', icon: Plane },
+      { name: 'Travel Advances',  href: '/consultant/travel-advances', icon: CreditCard },
+      { name: 'Mileage Claims',   href: '/consultant/mileage-claims',  icon: Activity },
     ],
   },
   {
     label: 'PAYROLL',
+    subscriptionModule: 'Automated Payroll Processing',
     items: [
       { name: 'My Payslips', href: '/consultant/payslips', icon: CreditCard },
     ],
   },
-  { label: 'DOCUMENTS', items: [{ name: 'My Documents', href: '/consultant/documents', icon: BookOpen }] },
+  {
+    label: 'DOCUMENTS',
+    subscriptionModule: 'Core HR & Directory',
+    items: [{ name: 'My Documents', href: '/consultant/documents', icon: BookOpen }],
+  },
   {
     label: 'COMPANY',
+    subscriptionModule: null,
     items: [
       { name: 'Announcements', href: '/consultant/announcements', icon: Megaphone },
     ],
@@ -98,6 +113,7 @@ export function ConsultantSidebar({ open, onOpenChange }: ConsultantSidebarProps
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuthStore();
+  const { hasModule, isGatingEnabled } = useSubscriptionStore();
   const [openMenu, setOpenMenu] = useState<string | null>(null);
 
   const handleLogout = () => {
@@ -109,6 +125,11 @@ export function ConsultantSidebar({ open, onOpenChange }: ConsultantSidebarProps
 
   const isActive = (href: string) =>
     location.pathname === href || location.pathname.startsWith(href + '/');
+
+  const visibleNav = CONSULTANT_NAV.filter(sec => {
+    if (!isGatingEnabled || !sec.subscriptionModule) return true;
+    return hasModule(sec.subscriptionModule);
+  });
 
   return (
     <div
@@ -122,7 +143,7 @@ export function ConsultantSidebar({ open, onOpenChange }: ConsultantSidebarProps
 
       {/* ── Nav ── */}
       <nav className="no-scrollbar flex-1 space-y-1 overflow-y-auto px-3 py-4">
-        {CONSULTANT_NAV.map((section) => (
+        {visibleNav.map((section) => (
           <div key={section.label}>
             {section.label === 'OVERVIEW' ? (
               <div className="space-y-0.5">

@@ -22,6 +22,10 @@ function getPageTitle(pathname: string): string {
   if (pathname.includes('/attendance'))       return 'My Attendance';
   if (pathname.includes('/leaves'))           return 'My Leaves';
   if (pathname.includes('/payslips'))         return 'My Payslips';
+  if (pathname.includes('/expenses'))         return 'Expense Claims';
+  if (pathname.includes('/travel-requests'))  return 'Travel Requests';
+  if (pathname.includes('/travel-advances'))  return 'Travel Advances';
+  if (pathname.includes('/mileage-claims'))   return 'Mileage Claims';
   if (pathname.includes('/documents'))        return 'My Documents';
   if (pathname.includes('/holiday-calendar')) return 'Holiday Calendar';
   if (pathname.includes('/announcements'))    return 'Announcements';
@@ -132,7 +136,7 @@ export function InternLayout() {
         </header>
 
         {/* ── Page Content ── */}
-        <main className="flex-1 overflow-y-auto">
+        <main className="app-shell-scroll flex-1 overflow-auto p-4 md:p-6">
           <Outlet />
         </main>
       </div>

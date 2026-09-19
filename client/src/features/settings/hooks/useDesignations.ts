@@ -135,13 +135,15 @@ export function useDummyMappings() {
     queryKey: ['mapping_locations'],
     queryFn: async () => {
       try {
-        const { data } = await apiClient.get('/settings/locations', { params: { pageSize: 200 } });
+        const { data } = await apiClient.get('/settings/locations', { params: { pageSize: 500, status: 'active' } });
         const raw = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : (data?.data?.items || []));
-        return raw.map((l: any) => ({
-          id: String(l.id ?? l.locationId ?? l.location_id ?? l.uuid ?? l.name),
-          name: l.locationName || l.location_name || l.name || l.title || `Location #${l.id || ''}`,
-          code: l.officeType || l.office_type || l.city || '',
-        }));
+        return raw
+          .filter((l: any) => l.status !== 'inactive' && l.status !== 'Inactive' && l.is_active !== 'No' && l.isActive !== 'No')
+          .map((l: any) => ({
+            id: String(l.id ?? l.locationId ?? l.location_id ?? l.uuid ?? l.name),
+            name: l.locationName || l.location_name || l.name || l.title || `Location #${l.id || ''}`,
+            code: l.officeType || l.office_type || l.city || '',
+          }));
       } catch {
         return [];
       }

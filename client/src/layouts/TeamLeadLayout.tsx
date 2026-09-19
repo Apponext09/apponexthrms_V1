@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Toaster } from '@/components/ui/toast';
 import { useAuthStore } from '@/features/auth/store/authStore';
 import { useThemeStore } from '@/features/settings/store/themeStore';
+import { useSubscriptionStore } from '@/features/subscriptions/store/subscriptionStore';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { getUserRoleAndDept } from '@/lib/userProfile';
 import {
@@ -41,12 +42,14 @@ const C = {
 const TEAM_LEAD_NAV = [
   {
     label: 'OVERVIEW',
+    subscriptionModule: null,
     items: [
       { name: 'Dashboard', href: '/team-lead/dashboard', icon: LayoutDashboard },
     ],
   },
   {
     label: 'EMPLOYEE CORE',
+    subscriptionModule: 'Core HR & Directory',
     items: [
       {
         name: 'Employee Core',
@@ -63,6 +66,7 @@ const TEAM_LEAD_NAV = [
   },
   {
     label: 'LEAVES',
+    subscriptionModule: 'Leave Management & Approvals',
     items: [
       {
         name: 'Leaves',
@@ -78,6 +82,7 @@ const TEAM_LEAD_NAV = [
   },
   {
     label: 'ATTENDANCE',
+    subscriptionModule: 'Attendance & Time Tracking',
     items: [
       {
         name: 'Attendance',
@@ -95,6 +100,7 @@ const TEAM_LEAD_NAV = [
   },
   {
     label: 'PAYROLL',
+    subscriptionModule: 'Automated Payroll Processing',
     items: [
       {
         name: 'Payroll',
@@ -109,6 +115,7 @@ const TEAM_LEAD_NAV = [
   },
   {
     label: 'LOAN MGMT',
+    subscriptionModule: 'Automated Payroll Processing',
     items: [
       {
         name: 'Loan Mgmt',
@@ -122,6 +129,7 @@ const TEAM_LEAD_NAV = [
   },
   {
     label: 'EXPENSE',
+    subscriptionModule: 'Expense Management',
     items: [
       {
         name: 'Expense',
@@ -139,6 +147,7 @@ const TEAM_LEAD_NAV = [
   },
   {
     label: 'PERFORMANCE',
+    subscriptionModule: 'Performance & OKRs',
     items: [
       {
         name: 'Performance',
@@ -154,6 +163,7 @@ const TEAM_LEAD_NAV = [
   },
   {
     label: 'RECRUITMENT',
+    subscriptionModule: 'Recruitment & ATS',
     items: [
       {
         name: 'Recruitment',
@@ -168,6 +178,7 @@ const TEAM_LEAD_NAV = [
   },
   {
     label: 'APPROVALS & GOVERNANCE',
+    subscriptionModule: null,
     items: [
       {
         name: 'Approvals & Governance',
@@ -227,6 +238,11 @@ function TeamLeadSidebarNavContent({
   handleLogout,
   navigate,
 }: TeamLeadSidebarNavContentProps) {
+  const { hasModule, isGatingEnabled } = useSubscriptionStore();
+  const visibleNav = TEAM_LEAD_NAV.filter(sec => {
+    if (!isGatingEnabled || !sec.subscriptionModule) return true;
+    return hasModule(sec.subscriptionModule);
+  });
   return (
     <div className="flex flex-col h-full">
       {/* ── Logo ── */}
@@ -234,7 +250,7 @@ function TeamLeadSidebarNavContent({
 
       {/* ── Nav ── */}
       <nav className="no-scrollbar flex-1 space-y-1 overflow-y-auto px-3 py-4">
-        {TEAM_LEAD_NAV.map((section) => (
+        {visibleNav.map((section) => (
           <div key={section.label}>
             <AnimatePresence>
               {sidebarOpen && section.label && !(section.items.length === 1 && (section.items[0] as any).subItems) && (

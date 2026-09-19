@@ -243,7 +243,8 @@ export function HolidayCalendarsPage({ onBackToMasters }: HolidayCalendarsPagePr
       ]);
 
       setCompanies(compRes.data?.data || compRes.data || []);
-      setLocations(locRes.data?.data || locRes.data || []);
+      const rawLocs = locRes.data?.data || locRes.data || [];
+      setLocations(Array.isArray(rawLocs) ? rawLocs.filter((l: any) => l.status !== 'inactive' && l.status !== 'Inactive' && l.is_active !== 'No' && l.isActive !== 'No') : []);
       setDepartments(deptRes.data?.data || deptRes.data || []);
     } catch (err) {
       console.error('Error fetching master dropdowns:', err);

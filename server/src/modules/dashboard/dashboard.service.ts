@@ -40,6 +40,75 @@ export interface AdminDashboardStats {
     avatarUrl?: string;
     departmentName?: string;
   }>;
+  attendanceAnalytics: {
+    today: {
+      present: number;
+      late: number;
+      halfDay: number;
+      wfh: number;
+      onLeave: number;
+      absent: number;
+      totalHeadcount: number;
+      attendanceRate: number;
+    };
+    weeklyTrend: Array<{
+      day: string;
+      date: string;
+      present: number;
+      late: number;
+      absent: number;
+    }>;
+  };
+  leaveAnalytics: {
+    byType: Array<{
+      leaveTypeId: number;
+      name: string;
+      code: string;
+      color: string;
+      approvedCount: number;
+      pendingCount: number;
+    }>;
+    monthlyTrend: Array<{
+      month: string;
+      applied: number;
+      approved: number;
+    }>;
+  };
+  payrollAnalytics: {
+    monthlyTrend: Array<{
+      month: string;
+      grossSalary: number;
+      netSalary: number;
+      deductions: number;
+    }>;
+  };
+  recruitmentAnalytics: {
+    pipelineStages: Array<{
+      stage: string;
+      label: string;
+      count: number;
+    }>;
+    openJobsByDept: Array<{
+      departmentName: string;
+      openCount: number;
+    }>;
+  };
+  expenseAnalytics: {
+    monthlyTrend: Array<{
+      month: string;
+      claimedAmount: number;
+      approvedAmount: number;
+    }>;
+    byCategory: Array<{
+      categoryName: string;
+      totalAmount: number;
+    }>;
+  };
+  workforceAnalytics: {
+    byEmploymentType: Array<{ type: string; count: number }>;
+    byStatus: Array<{ status: string; count: number }>;
+    byGender: Array<{ gender: string; count: number }>;
+  };
 }
 
 export class AdminDashboardService {
@@ -636,6 +705,466 @@ export class AdminDashboardService {
       recentEmployees = [];
     }
 
+    // ── 6. REAL ATTENDANCE ANALYTICS ──────────────────────────────────────────
+    const todayStr = new Date().toISOString().slice(0, 10);
+    let attendanceAnalytics = {
+      today: {
+        present: 0,
+        late: 0,
+        halfDay: 0,
+        wfh: 0,
+        onLeave: onLeaveToday,
+        absent: 0,
+        totalHeadcount,
+        attendanceRate: 0,
+      },
+      weeklyTrend: [] as Array<{ day: string; date: string; present: number; late: number; absent: number }>,
+    };
+
+    try {
+      const hasAttTable = await db.schema.hasTable('attendance_records');
+      if (hasAttTable) {
+        let attTodayQuery = db('attendance_records as ar')
+          .join('employees as e', 'ar.employee_id', 'e.id')
+          .whereNull('e.deleted_at')
+          .where('ar.check_in_date', todayStr);
+
+        if (targetCompanyId) {
+          attTodayQuery = attTodayQuery.where('e.company_id', targetCompanyId);
+        } else {
+          attTodayQuery = attTodayQuery.where('ar.organization_id', organizationId);
+        }
+
+        const todayRecords = await attTodayQuery.select(
+          'ar.status',
+          'ar.is_late',
+          'ar.is_half_day'
+        );
+
+        let presentCount = 0;
+        let lateCount = 0;
+        let halfDayCount = 0;
+        let wfhCount = 0;
+
+        for (const r of todayRecords) {
+          const st = String(r.status || '').toLowerCase();
+          const isLate = Boolean(r.is_late || r.isLate || st === 'late');
+          const isHalf = Boolean(r.is_half_day || r.isHalfDay || st.includes('half'));
+          const isWfh = st.includes('wfh') || st.includes('home') || st.includes('remote');
+
+          if (isHalf) halfDayCount++;
+          else if (isLate) lateCount++;
+          else if (isWfh) wfhCount++;
+          else presentCount++;
+        }
+
+        const accountedCount = presentCount + lateCount + halfDayCount + wfhCount + onLeaveToday;
+        const absentCount = Math.max(0, totalHeadcount - accountedCount);
+        const presentTotal = presentCount + lateCount + halfDayCount + wfhCount;
+        const rate = totalHeadcount > 0 ? Math.min(100, Math.round((presentTotal / totalHeadcount) * 100)) : 0;
+
+        attendanceAnalytics.today = {
+          present: presentCount,
+          late: lateCount,
+          halfDay: halfDayCount,
+          wfh: wfhCount,
+          onLeave: onLeaveToday,
+          absent: absentCount,
+          totalHeadcount,
+          attendanceRate: rate,
+        };
+
+        // 7-Day Attendance Trend
+        const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        const weeklyTrend: Array<{ day: string; date: string; present: number; late: number; absent: number }> = [];
+
+        for (let i = 6; i >= 0; i--) {
+          const d = new Date();
+          d.setDate(d.getDate() - i);
+          const dateStr = d.toISOString().slice(0, 10);
+          const dayName = dayLabels[d.getDay()];
+
+          let dayQ = db('attendance_records as ar')
+            .join('employees as e', 'ar.employee_id', 'e.id')
+            .whereNull('e.deleted_at')
+            .where('ar.check_in_date', dateStr);
+
+          if (targetCompanyId) dayQ = dayQ.where('e.company_id', targetCompanyId);
+          else dayQ = dayQ.where('ar.organization_id', organizationId);
+
+          const dayRecs = await dayQ.select('ar.status', 'ar.is_late');
+          let dayPresent = 0;
+          let dayLate = 0;
+          for (const rec of dayRecs) {
+            const st = String(rec.status || '').toLowerCase();
+            if (rec.is_late || st === 'late') dayLate++;
+            else if (st !== 'absent') dayPresent++;
+          }
+          const dayAbsent = Math.max(0, totalHeadcount - (dayPresent + dayLate));
+
+          weeklyTrend.push({
+            day: dayName,
+            date: dateStr,
+            present: dayPresent,
+            late: dayLate,
+            absent: dayAbsent,
+          });
+        }
+        attendanceAnalytics.weeklyTrend = weeklyTrend;
+      }
+    } catch (e) {
+      console.warn('[AdminDashboardService] attendanceAnalytics error:', e);
+    }
+
+    // ── 7. REAL LEAVE ANALYTICS ───────────────────────────────────────────────
+    let leaveAnalytics = {
+      byType: [] as Array<{ leaveTypeId: number; name: string; code: string; color: string; approvedCount: number; pendingCount: number }>,
+      monthlyTrend: [] as Array<{ month: string; applied: number; approved: number }>,
+    };
+
+    try {
+      const hasLtTable = await db.schema.hasTable('leave_types');
+      const hasLaTable = await db.schema.hasTable('leave_applications');
+
+      if (hasLtTable && hasLaTable) {
+        let ltQuery = db('leave_types as lt')
+          .leftJoin('leave_applications as la', function () {
+            this.on('lt.id', '=', 'la.leave_type_id').andOnNull('la.deleted_at');
+          })
+          .select(
+            'lt.id',
+            'lt.name',
+            'lt.code',
+            'lt.color',
+            db.raw("COUNT(CASE WHEN la.status = 'approved' THEN 1 END) as approved_count"),
+            db.raw("COUNT(CASE WHEN la.status IN ('submitted', 'pending', 'pending_manager', 'pending_hr') THEN 1 END) as pending_count")
+          )
+          .whereNull('lt.deleted_at')
+          .where('lt.organization_id', organizationId)
+          .groupBy('lt.id', 'lt.name', 'lt.code', 'lt.color');
+
+        const ltRows = await ltQuery;
+        leaveAnalytics.byType = (ltRows || []).map((row: any) => ({
+          leaveTypeId: Number(row.id),
+          name: row.name || 'Leave',
+          code: row.code || 'LV',
+          color: row.color || '#6366f1',
+          approvedCount: Number(row.approved_count || 0),
+          pendingCount: Number(row.pending_count || 0),
+        }));
+
+        // 6-Month Leave Applications Trend
+        const leaveMonthlyTrend: Array<{ month: string; applied: number; approved: number }> = [];
+        for (let i = 5; i >= 0; i--) {
+          const targetMonth = new Date(now.getFullYear(), now.getMonth() - i, 1);
+          const nextMonth = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
+          const monthStartIso = targetMonth.toISOString().slice(0, 10);
+          const monthEndIso = nextMonth.toISOString().slice(0, 10);
+          const monthLabel = monthNames[targetMonth.getMonth()];
+
+          let laTrendQ = db('leave_applications as la')
+            .whereNull('la.deleted_at')
+            .where('la.created_at', '>=', monthStartIso)
+            .where('la.created_at', '<', monthEndIso)
+            .where('la.organization_id', organizationId);
+
+          if (targetCompanyId) {
+            laTrendQ = laTrendQ
+              .join('employees as e', 'la.employee_id', 'e.id')
+              .where('e.company_id', targetCompanyId);
+          }
+
+          const [appliedRow]: any = await laTrendQ.clone().count('* as count');
+          const [approvedRow]: any = await laTrendQ.clone().where('la.status', 'approved').count('* as count');
+
+          leaveMonthlyTrend.push({
+            month: monthLabel,
+            applied: Number(appliedRow?.count || 0),
+            approved: Number(approvedRow?.count || 0),
+          });
+        }
+        leaveAnalytics.monthlyTrend = leaveMonthlyTrend;
+      }
+    } catch (e) {
+      console.warn('[AdminDashboardService] leaveAnalytics error:', e);
+    }
+
+    // ── 8. REAL PAYROLL ANALYTICS ─────────────────────────────────────────────
+    let payrollAnalytics = {
+      monthlyTrend: [] as Array<{ month: string; grossSalary: number; netSalary: number; deductions: number }>,
+    };
+
+    try {
+      const hasPayslips = await db.schema.hasTable('payslips');
+      for (let i = 5; i >= 0; i--) {
+        const targetMonth = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const monthIso = targetMonth.toISOString().slice(0, 7); // YYYY-MM
+        const monthLabel = monthNames[targetMonth.getMonth()];
+
+        let grossVal = 0;
+        let netVal = 0;
+        let dedVal = 0;
+
+        if (hasPayslips) {
+          let payQ = db('payslips')
+            .whereNull('deleted_at')
+            .where('payslip_month', 'like', `${monthIso}%`);
+
+          if (targetCompanyId) {
+            const hasCompanyId = await db.schema.hasColumn('payslips', 'company_id');
+            if (hasCompanyId) payQ = payQ.where('company_id', targetCompanyId);
+            else {
+              payQ = payQ
+                .join('employees as e', 'payslips.employee_id', 'e.id')
+                .where('e.company_id', targetCompanyId);
+            }
+          } else {
+            payQ = payQ.where('organization_id', organizationId);
+          }
+
+          const [sumPay] = (await payQ.select(
+            db.raw('COALESCE(SUM(gross_salary), 0) as gross'),
+            db.raw('COALESCE(SUM(net_salary), 0) as net'),
+            db.raw('COALESCE(SUM(total_deductions), 0) as deductions')
+          )) as Array<{ gross?: number | string; net?: number | string; deductions?: number | string }>;
+
+          grossVal = Number(sumPay?.gross || 0);
+          netVal = Number(sumPay?.net || 0);
+          dedVal = Number(sumPay?.deductions || 0);
+        }
+
+        // If no generated payslip exists for this month, calculate from active employee compensation baseline
+        if (grossVal === 0 && monthlyPayrollCost > 0) {
+          const monthEmpCount = growthTrend[5 - i]?.employees || totalHeadcount;
+          const ratio = totalHeadcount > 0 ? Math.min(1, monthEmpCount / totalHeadcount) : 1;
+          grossVal = Math.round(monthlyPayrollCost * ratio);
+          dedVal = Math.round(grossVal * 0.1);
+          netVal = grossVal - dedVal;
+        }
+
+        payrollAnalytics.monthlyTrend.push({
+          month: monthLabel,
+          grossSalary: grossVal,
+          netSalary: netVal,
+          deductions: dedVal,
+        });
+      }
+    } catch (e) {
+      console.warn('[AdminDashboardService] payrollAnalytics error:', e);
+    }
+
+    // ── 9. REAL RECRUITMENT ANALYTICS ─────────────────────────────────────────
+    let recruitmentAnalytics = {
+      pipelineStages: [] as Array<{ stage: string; label: string; count: number }>,
+      openJobsByDept: [] as Array<{ departmentName: string; openCount: number }>,
+    };
+
+    try {
+      const stageMap: Record<string, number> = {
+        applied: 0,
+        screening: 0,
+        interview: 0,
+        offered: 0,
+        hired: 0,
+        rejected: 0,
+      };
+
+      // 1. Check applications table
+      const hasApps = await db.schema.hasTable('applications');
+      if (hasApps) {
+        let appQ = db('applications')
+          .whereNull('deleted_at')
+          .where('organization_id', organizationId)
+          .select('application_status')
+          .count('* as count')
+          .groupBy('application_status');
+
+        const appRows = await appQ;
+        for (const row of appRows) {
+          let st = String(row.application_status || '').toLowerCase();
+          if (st === 'offer') st = 'offered';
+          if (stageMap[st] !== undefined) {
+            stageMap[st] += Number(row.count || 0);
+          } else {
+            stageMap.applied += Number(row.count || 0);
+          }
+        }
+      }
+
+      // 2. Also check candidates table if candidates exist without applications
+      const hasCandidates = await db.schema.hasTable('candidates');
+      if (hasCandidates) {
+        const [candTotal]: any = await db('candidates')
+          .whereNull('deleted_at')
+          .where('organization_id', organizationId)
+          .count('* as count');
+        const totalCands = Number(candTotal?.count || 0);
+        const totalApps = Object.values(stageMap).reduce((a, b) => a + b, 0);
+        if (totalCands > totalApps) {
+          stageMap.applied += (totalCands - totalApps);
+        }
+      }
+
+      const stagesConfig = [
+        { stage: 'applied', label: 'Applied' },
+        { stage: 'screening', label: 'Screening' },
+        { stage: 'interview', label: 'Interview' },
+        { stage: 'offered', label: 'Offered' },
+        { stage: 'hired', label: 'Hired' },
+        { stage: 'rejected', label: 'Rejected' },
+      ];
+
+      recruitmentAnalytics.pipelineStages = stagesConfig.map((s) => ({
+        stage: s.stage,
+        label: s.label,
+        count: stageMap[s.stage] || 0,
+      }));
+
+      // Open jobs by department
+      const hasJobs = await db.schema.hasTable('jobs');
+      if (hasJobs) {
+        let jobDeptQ = db('jobs as j')
+          .leftJoin('departments as d', 'j.department_id', 'd.id')
+          .whereNull('j.deleted_at')
+          .where('j.status', 'published')
+          .where('j.organization_id', organizationId)
+          .select(db.raw("COALESCE(d.name, 'General') as departmentName"))
+          .count('j.id as count')
+          .groupBy(db.raw("COALESCE(d.name, 'General')"));
+
+        const jobDeptRows = await jobDeptQ;
+        recruitmentAnalytics.openJobsByDept = (jobDeptRows || []).map((row: any) => ({
+          departmentName: row.departmentName || 'General',
+          openCount: Number(row.count || 0),
+        }));
+      }
+    } catch (e) {
+      console.warn('[AdminDashboardService] recruitmentAnalytics error:', e);
+    }
+
+    // ── 10. REAL EXPENSE ANALYTICS ────────────────────────────────────────────
+    let expenseAnalytics = {
+      monthlyTrend: [] as Array<{ month: string; claimedAmount: number; approvedAmount: number }>,
+      byCategory: [] as Array<{ categoryName: string; totalAmount: number }>,
+    };
+
+    try {
+      const hasExpenses = await db.schema.hasTable('expense_claims');
+      if (hasExpenses) {
+        // 6-Month Expense Trends
+        for (let i = 5; i >= 0; i--) {
+          const targetMonth = new Date(now.getFullYear(), now.getMonth() - i, 1);
+          const nextMonth = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
+          const monthStartIso = targetMonth.toISOString().slice(0, 10);
+          const monthEndIso = nextMonth.toISOString().slice(0, 10);
+          const monthLabel = monthNames[targetMonth.getMonth()];
+
+          let expQ = db('expense_claims as ec')
+            .whereNull('ec.deleted_at')
+            .where('ec.created_at', '>=', monthStartIso)
+            .where('ec.created_at', '<', monthEndIso)
+            .where('ec.organization_id', organizationId);
+
+          if (targetCompanyId) {
+            expQ = expQ
+              .join('employees as e', 'ec.employee_id', 'e.id')
+              .where('e.company_id', targetCompanyId);
+          }
+
+          const [expRow]: any = await expQ.select(
+            db.raw('COALESCE(SUM(total_claimed_amount), COALESCE(SUM(amount), 0)) as claimed'),
+            db.raw("COALESCE(SUM(CASE WHEN ec.status IN ('approved', 'paid', 'settled') THEN COALESCE(total_approved_amount, amount) ELSE 0 END), 0) as approved")
+          );
+
+          expenseAnalytics.monthlyTrend.push({
+            month: monthLabel,
+            claimedAmount: Number(expRow?.claimed || 0),
+            approvedAmount: Number(expRow?.approved || 0),
+          });
+        }
+
+        // Expenses by Category
+        let catQ = db('expense_claims as ec')
+          .leftJoin('expense_categories as c', 'ec.category_id', 'c.id')
+          .whereNull('ec.deleted_at')
+          .where('ec.organization_id', organizationId)
+          .select(
+            db.raw("COALESCE(c.name, 'General Expense') as categoryName"),
+            db.raw('COALESCE(SUM(ec.total_claimed_amount), COALESCE(SUM(ec.amount), 0)) as totalAmount')
+          )
+          .groupBy('categoryName')
+          .orderBy('totalAmount', 'desc')
+          .limit(6);
+
+        if (targetCompanyId) {
+          catQ = catQ
+            .join('employees as e', 'ec.employee_id', 'e.id')
+            .where('e.company_id', targetCompanyId);
+        }
+
+        const catRows = await catQ;
+        expenseAnalytics.byCategory = (catRows || []).map((r: any) => ({
+          categoryName: r.categoryName || 'General',
+          totalAmount: Number(r.totalAmount || 0),
+        }));
+      }
+    } catch (e) {
+      console.warn('[AdminDashboardService] expenseAnalytics error:', e);
+    }
+
+    // ── 11. REAL WORKFORCE ANALYTICS ──────────────────────────────────────────
+    let workforceAnalytics = {
+      byEmploymentType: [] as Array<{ type: string; count: number }>,
+      byStatus: [] as Array<{ status: string; count: number }>,
+      byGender: [] as Array<{ gender: string; count: number }>,
+    };
+
+    try {
+      let empBase = db('employees')
+        .whereNull('deleted_at')
+        .where('organization_id', organizationId);
+
+      if (targetCompanyId) empBase = empBase.where('company_id', targetCompanyId);
+
+      // Employment Types
+      const hasEmpTypeCol = await db.schema.hasColumn('employees', 'employment_type');
+      if (hasEmpTypeCol) {
+        const typeRows = await empBase.clone()
+          .select(db.raw("COALESCE(employment_type, 'Full-time') as type"))
+          .count('* as count')
+          .groupBy('type');
+        workforceAnalytics.byEmploymentType = (typeRows || []).map((r: any) => ({
+          type: String(r.type || 'Full-time').replace(/_/g, ' '),
+          count: Number(r.count || 0),
+        }));
+      }
+
+      // Statuses
+      const statusRows = await empBase.clone()
+        .select(db.raw("COALESCE(status, 'active') as status"))
+        .count('* as count')
+        .groupBy('status');
+      workforceAnalytics.byStatus = (statusRows || []).map((r: any) => ({
+        status: String(r.status || 'active').replace(/_/g, ' '),
+        count: Number(r.count || 0),
+      }));
+
+      // Gender
+      const hasGenderCol = await db.schema.hasColumn('employees', 'gender');
+      if (hasGenderCol) {
+        const genderRows = await empBase.clone()
+          .select(db.raw("COALESCE(gender, 'Not Specified') as gender"))
+          .count('* as count')
+          .groupBy('gender');
+        workforceAnalytics.byGender = (genderRows || []).map((r: any) => ({
+          gender: String(r.gender || 'Not Specified'),
+          count: Number(r.count || 0),
+        }));
+      }
+    } catch (e) {
+      console.warn('[AdminDashboardService] workforceAnalytics error:', e);
+    }
+
     return {
       companyInfo: {
         id: companyIdVal,
@@ -658,7 +1187,14 @@ export class AdminDashboardService {
       growthTrend,
       departmentBreakdown,
       recentEmployees,
+      attendanceAnalytics,
+      leaveAnalytics,
+      payrollAnalytics,
+      recruitmentAnalytics,
+      expenseAnalytics,
+      workforceAnalytics,
     };
   }
 }
+
 

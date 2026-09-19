@@ -504,15 +504,27 @@ export class AuthService {
         const firstName = orgAdminRow.first_name || (orgAdminRow.owner_name ? orgAdminRow.owner_name.split(' ')[0] : 'Admin');
         const lastName = orgAdminRow.last_name || (orgAdminRow.owner_name ? orgAdminRow.owner_name.split(' ').slice(1).join(' ') : 'User');
 
+        let enabledModules: string[] | null = null;
+        try {
+          const rawMods = orgAdminRow.enabled_modules || orgAdminRow.enabledModules;
+          if (rawMods) {
+            enabledModules = typeof rawMods === 'string' ? JSON.parse(rawMods) : rawMods;
+          }
+        } catch (e) { enabledModules = null; }
+
         return {
           accessToken,
           refreshToken,
           user: {
+            id: user.id,
             email: orgAdminRow.email,
             orgName: orgAdminRow.name,
+            organizationId: orgAdminRow.id,
             roles: ['organization_admin'],
+            enabledModules,
           } as any,
           roles: ['organization_admin'],
+          enabledModules,
         };
       }
     }
@@ -585,6 +597,14 @@ export class AuthService {
         const firstName = nameParts[0] || 'Company';
         const lastName  = nameParts.slice(1).join(' ') || 'Admin';
 
+        let enabledModules: string[] | null = null;
+        try {
+          const rawMods = org?.enabled_modules || org?.enabledModules;
+          if (rawMods) {
+            enabledModules = typeof rawMods === 'string' ? JSON.parse(rawMods) : rawMods;
+          }
+        } catch (e) { enabledModules = null; }
+
         logger.info(`[AUTH] Company admin login success — company_id=${cidStr} email=${cleanEmail}`);
 
         return {
@@ -593,9 +613,12 @@ export class AuthService {
           user: {
             email: compLoginEmail,
             orgName: org?.name || companyRow.name,
+            organizationId: compOrgId,
             roles: ['company_admin', 'organization_admin'],
+            enabledModules,
           } as any,
           roles: ['company_admin', 'organization_admin'],
+          enabledModules,
         };
       }
     }
@@ -756,6 +779,15 @@ export class AuthService {
       });
     }
 
+    // Parse enabled modules from the org's assigned subscription plan (NULL = full access)
+    let enabledModules: string[] | null = null;
+    try {
+      const rawMods = org?.enabled_modules || org?.enabledModules;
+      if (rawMods) {
+        enabledModules = typeof rawMods === 'string' ? JSON.parse(rawMods) : rawMods;
+      }
+    } catch (e) { enabledModules = null; }
+
     return {
       accessToken,
       refreshToken,
@@ -774,6 +806,7 @@ export class AuthService {
         policyAcceptedAt: (user as any).policy_accepted_at || (user as any).policyAcceptedAt || null,
       } as any,
       roles,
+      enabledModules,
     };
   }
 
@@ -1072,6 +1105,15 @@ export class AuthService {
     const designation = emp?.designation_name || emp?.designation || rawUser?.designation || org?.designation || '';
     const resolvedEmpId = emp?.id || empId || null;
 
+    // Parse enabled modules from the org's assigned subscription plan (NULL = full access = no gating)
+    let enabledModules: string[] | null = null;
+    try {
+      const rawMods = org?.enabled_modules || org?.enabledModules;
+      if (rawMods) {
+        enabledModules = typeof rawMods === 'string' ? JSON.parse(rawMods) : rawMods;
+      }
+    } catch (e) { enabledModules = null; }
+
     return {
       user: {
         id: rawUser.id,
@@ -1092,6 +1134,7 @@ export class AuthService {
         accessRole: userWithPerms?.accessRole || rawUser?.role || rawUser?.access_role || rawUser?.accessRole || (roles.includes('finance') ? 'finance' : 'employee'),
         policyAccepted: Boolean(rawUser.policy_accepted || rawUser.policyAccepted),
         policyAcceptedAt: rawUser.policy_accepted_at || rawUser.policyAcceptedAt || null,
+        enabledModules,
       },
       organization: org
         ? {
@@ -1109,10 +1152,12 @@ export class AuthService {
           industry: org.industry || '',
           planTier: org.plan_tier || org.subscription_tier || '',
           subscriptionTier: org.subscription_tier || org.plan_tier || '',
+          subscriptionPlanId: org.subscription_plan_id || org.subscriptionPlanId || null,
         }
         : null,
       permissions,
       roles,
+      enabledModules,
     };
   }
 

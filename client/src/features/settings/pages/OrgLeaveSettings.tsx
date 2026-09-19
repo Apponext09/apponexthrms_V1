@@ -137,12 +137,14 @@ export function OrgLeaveSettings() {
           list = [{ uuid: 'org-location-default', name: fallbackLocName, code: 'HQ' }];
         }
         if (Array.isArray(list)) {
-          const normalized = list.map((loc: any) => ({
-            ...loc,
-            name: loc.name || loc.locationName || loc.location_name || 'Unknown Location',
-            code: loc.code || loc.locationCode || 'HQ',
-            uuid: loc.uuid || 'org-location-default'
-          }));
+          const normalized = list
+            .filter((loc: any) => loc.status !== 'inactive' && loc.status !== 'Inactive' && loc.is_active !== 'No' && loc.isActive !== 'No')
+            .map((loc: any) => ({
+              ...loc,
+              name: loc.name || loc.locationName || loc.location_name || 'Unknown Location',
+              code: loc.code || loc.locationCode || 'HQ',
+              uuid: loc.uuid || 'org-location-default'
+            }));
           setLocations(normalized);
         }
       } catch (err) {
