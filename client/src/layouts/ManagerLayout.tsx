@@ -529,7 +529,7 @@ export function ManagerLayout() {
             <Menu className="h-4 w-4" />
           </Button>
 
-          <div className="flex items-center gap-2">
+          <div className="ml-auto flex items-center gap-2">
             <div className="hidden min-[1180px]:block"><GlobalSearchButton /></div>
             <LiveDateTimeDisplay />
             <Button variant="ghost" size="icon" onClick={() => setTheme(currentTheme === 'dark' ? 'light' : 'dark')} aria-label={currentTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
