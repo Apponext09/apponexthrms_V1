@@ -695,7 +695,9 @@ export class JobReferenceService {
           comments: input.comments || null,
           resume_url: resumePath,
           signature_url: signaturePath,
-          source: referringEmployeeId ? 'Referral' : 'Direct Apply',
+          // candidates.source is an enum in existing installations. Store its
+          // canonical values here; display labels are derived when reading.
+          source: referringEmployeeId ? 'employee_referral' : 'direct_apply',
           created_by: referringEmployeeId || 1,
           updated_by: referringEmployeeId || 1,
         });
@@ -765,7 +767,9 @@ export class JobReferenceService {
           department_id: mrf?.department_id || null,
           location_id: mrf?.company_location_id || null,
           no_of_positions: mrf?.number_of_positions || 1,
-          status: 'internal',
+          // Both recruitment job schemas use `published` for portal-visible
+          // postings; `internal` is not a valid jobs.status enum value.
+          status: 'published',
           created_by: mrf?.created_by || mrf?.requested_by || 1,
           updated_by: mrf?.created_by || mrf?.requested_by || 1,
         });
@@ -783,17 +787,18 @@ export class JobReferenceService {
         .where('a.organization_id', organizationId)
         .where((q) => {
           q.where('a.candidate_id', candidate.id)
-           .orWhere('c.email', input.emailId);
+           .orWhere('c.email', effectiveEmail);
         })
-        .where((q) => {
-          if (job?.id) q.where('a.job_id', job.id);
-          q.orWhere('a.mrf_request_id', mrfId);
-        })
+        // Use the stable core columns. Older production schemas may not have
+        // applications.mrf_request_id; referencing it here made duplicate
+        // detection fail and then the unique (candidate_id, job_id) insert
+        // surfaced as an unexplained 500.
+        .where('a.job_id', job.id)
         .first();
     } catch { application = null; }
 
     if (application) {
-      throw new Error(`You have already submitted an application for this position (${job?.job_title || 'Opening'})! Duplicate applications for the same candidate and job opening are not allowed.`);
+      return { candidate, job, application, alreadyApplied: true };
     }
 
     try {
@@ -842,7 +847,7 @@ export class JobReferenceService {
           candidate_id: candidate.id,
           job_id: job?.id || null,
           mrf_request_id: mrfId,
-          source: referringEmployeeId ? 'Referral' : 'Direct Apply',
+          source: referringEmployeeId ? 'employee_referral' : 'direct_apply',
           position: posTitle,
           status: 'Applied',
           uploaded_by: referringEmployeeId || 1,
