@@ -94,7 +94,7 @@ export const PolicyContentEditorStep: React.FC<PolicyContentEditorStepProps> = (
 
   const handleRemoveSection = (id: string) => {
     if (activeSections.length <= 1) {
-      alert('A policy must have at least one content section.');
+      window.appAlert('A policy must have at least one content section.');
       return;
     }
     onChangeSections(activeSections.filter((sec) => sec.id !== id));

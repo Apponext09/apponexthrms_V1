@@ -1,4 +1,4 @@
-﻿import { Link } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -25,7 +25,7 @@ export function ApprovalCard({ approval }: ApprovalCardProps) {
   const handleReject = async () => {
     setIsSubmitting(true);
     try {
-      const reason = prompt('Rejection reason:');
+      const reason = await window.appPrompt('Rejection reason:');
       if (reason) {
         await rejectStep(approval.id, reason);
       }

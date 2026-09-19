@@ -22,8 +22,8 @@ import { useGrades, useCreateGrade, useUpdateGrade, useDeleteGrade, type GradeCr
 import { cn } from '@/lib/utils';
 
 const gradeCreateSchema = z.object({
-  name: z.string().min(2, 'Grade Name is required'),
-  code: z.string().min(1, 'Code is required'),
+  name: z.string().trim().min(2, 'Grade Name is required'),
+  code: z.string().trim().min(1, 'Code is required'),
   description: z.string().optional(),
   color: z.string().optional(),
   status: z.enum(['active', 'inactive']).optional(),
@@ -118,7 +118,7 @@ export function GradeMasterCustomUI() {
   };
 
   const handleDelete = async (id: number | string) => {
-    if (window.confirm('Are you sure you want to delete this grade?')) {
+    if (await window.appConfirm('Are you sure you want to delete this grade?')) {
       await deleteMutation.mutateAsync(id);
       if (editingGrade?.id === id) resetForm();
     }

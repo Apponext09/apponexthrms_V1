@@ -131,7 +131,7 @@ export const ExpensePoliciesPage: React.FC = () => {
 
   const handleSavePolicy = async () => {
     if (!policyName.trim()) {
-      alert('Please enter a policy name.');
+      window.appAlert('Please enter a policy name.');
       return;
     }
     try {
@@ -158,19 +158,19 @@ export const ExpensePoliciesPage: React.FC = () => {
       setIsModalOpen(false);
       fetchPoliciesAndCategories();
     } catch (err: any) {
-      alert(err.message || 'Failed to save policy');
+      window.appAlert(err.message || 'Failed to save policy');
     } finally {
       setSubmitting(false);
     }
   };
 
   const handleDeletePolicy = async (id: number) => {
-    if (!confirm('Are you sure you want to delete this expense policy?')) return;
+    if (!await window.appConfirm('Are you sure you want to delete this expense policy?')) return;
     try {
       await expenseApi.deletePolicy(id);
       fetchPoliciesAndCategories();
     } catch (err: any) {
-      alert(err.message || 'Delete failed');
+      window.appAlert(err.message || 'Delete failed');
     }
   };
 

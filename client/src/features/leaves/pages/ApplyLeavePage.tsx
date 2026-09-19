@@ -128,7 +128,7 @@ export function ApplyLeavePage() {
       const isEndHoliday = holidaysList.some(h => getFormattedDate(h.date || h.holidayDate) === formData.endDate);
 
       if (isStartWeekOff || isEndWeekOff || isStartHoliday || isEndHoliday) {
-        const proceed = window.confirm("Your selected leave date falls on a weekend or public holiday. Do you still want to apply?");
+        const proceed = await window.appConfirm("Your selected leave date falls on a weekend or public holiday. Do you still want to apply?");
         if (!proceed) return;
       }
     }

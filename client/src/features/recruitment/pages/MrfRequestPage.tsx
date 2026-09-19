@@ -1860,7 +1860,7 @@ export const MrfRequestPage: React.FC = () => {
   // Delete Request handler
   const handleDelete = async (id: number) => {
     const recordToDelete = safeDataList.find(item => item.id === id);
-    if (confirm(`Are you sure you want to delete ${recordToDelete?.mrNumber}?`)) {
+    if (await window.appConfirm(`Are you sure you want to delete ${recordToDelete?.mrNumber}?`)) {
       try {
         const response = await apiClient.delete(`/recruitment/mrf/${id}`);
         if (response.data?.success) {

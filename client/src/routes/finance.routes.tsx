@@ -51,8 +51,14 @@ export const financeRoutes = (
     <Route path="/finance/approvals" element={<FinanceApprovalsPage />} />
     
     {/* Expense & Disbursal Module Routes */}
-    <Route path="/finance/expenses/verification" element={<FinanceVerificationPage />} />
-    <Route path="/finance/expenses/finance-verification" element={<FinanceVerificationPage />} />
+    <Route
+      path="/finance/expenses/verification"
+      element={<FinanceVerificationPage portalLabel="Finance Verification" portalDescription="Review the finance-assigned workflow step, including eligible amount adjustments, before payment processing." />}
+    />
+    <Route
+      path="/finance/expenses/finance-verification"
+      element={<FinanceVerificationPage portalLabel="Finance Verification" portalDescription="Review the finance-assigned workflow step, including eligible amount adjustments, before payment processing." />}
+    />
     <Route path="/finance/expenses/reimbursements" element={<ReimbursementsPage />} />
     <Route path="/finance/expenses/travel-advances" element={<TravelAdvancesPage />} />
     <Route
@@ -62,6 +68,7 @@ export const financeRoutes = (
           defaultStatusFilter="pending_finance"
           allowedStatuses={['pending_finance', 'pending_approvals', 'returned', 'rejected']}
           portalLabel="Finance Payout & Verification Queue"
+          portalDescription="Review finance-assigned workflow steps before payout processing."
         />
       }
     />

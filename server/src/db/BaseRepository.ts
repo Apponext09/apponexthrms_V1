@@ -190,14 +190,26 @@ export abstract class BaseRepository<T extends Record<string, any>> {
    * Create a new record
    */
   async create(ctx: TenantContext, data: Partial<T>): Promise<T> {
+    let companyId = ctx.companyId || (data as any).company_id || (data as any).companyId;
+    // Company-scoped master records created from the organization (parent)
+    // context still belong to the parent company rather than remaining unmapped.
+    if (this.companyScoped && !companyId) {
+      const parentCompany = await this.db('company')
+        .where('organization_id', ctx.organizationId)
+        .where((builder) => builder.where('is_parent', 1).orWhere('is_parent', true))
+        .whereNull('deleted_at')
+        .first('company_id');
+      companyId = parentCompany?.company_id;
+    }
+
     const insertPayload: any = {
       ...data,
       organization_id: ctx.organizationId,
       created_at: mysqlNow(),
       updated_at: mysqlNow(),
     };
-    if (this.companyScoped && ctx?.companyId) {
-      insertPayload.company_id = ctx.companyId;
+    if (this.companyScoped && companyId) {
+      insertPayload.company_id = companyId;
     }
     const [id] = await this.db(this.tableName).insert(insertPayload);
 
@@ -239,14 +251,41 @@ export abstract class BaseRepository<T extends Record<string, any>> {
       ...data,
       updated_at: mysqlNow(),
     };
-    // A request may update fields only; it must never transfer a record to a different company.
-    if (this.companyScoped) delete updateData.company_id;
+
+    // Master forms may send either API convention. Normalize it before the
+    // database update so a company mapping is actually persisted.
+    const requestedCompanyId = updateData.company_id ?? updateData.companyId;
+    delete updateData.companyId;
+
+    let refreshedCtx = ctx;
+    if (this.companyScoped && requestedCompanyId !== undefined) {
+      if (requestedCompanyId === null || requestedCompanyId === '') {
+        updateData.company_id = null;
+      } else {
+        const companyId = Number(requestedCompanyId);
+        if (!Number.isInteger(companyId) || companyId <= 0) {
+          throw new Error('A valid company is required');
+        }
+
+        const company = await this.db('company')
+          .where('organization_id', ctx.organizationId)
+          .where('company_id', companyId)
+          .whereNull('deleted_at')
+          .first('company_id');
+        if (!company) {
+          throw new Error('The selected company does not belong to this organization');
+        }
+
+        updateData.company_id = companyId;
+        refreshedCtx = { ...ctx, companyId };
+      }
+    }
 
     await (this.query(ctx)
       .where(this.isPrimaryKeyUuid(id) ? 'uuid' : 'id', id)
       .update(updateData as any) as any);
 
-    const updated = await this.getById(ctx, id);
+    const updated = await this.getById(refreshedCtx, id);
     if (!updated) {
       throw new Error(`Failed to update ${this.tableName}`);
     }

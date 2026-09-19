@@ -62,7 +62,7 @@ export function CoreHREmployeeCustomizer() {
   };
 
   const handleReset = () => {
-    if (confirm('Reset all Core HR customizations to defaults?')) {
+    if (await window.appConfirm('Reset all Core HR customizations to defaults?')) {
       resetToDefaults();
       toast.info('Core HR customization reset to factory defaults');
     }

@@ -155,7 +155,7 @@ export const MyExpensesPage: React.FC = () => {
   };
 
   const handleQuickReject = async (claim: any) => {
-    const reason = prompt('Please enter reason for rejection:', 'Does not comply with expense policy');
+    const reason = await window.appPrompt('Please enter reason for rejection:', 'Does not comply with expense policy');
     if (reason === null) return;
     try {
       setProcessingId(claim.id);

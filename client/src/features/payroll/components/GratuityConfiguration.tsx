@@ -189,7 +189,7 @@ export const GratuityConfiguration: React.FC = () => {
   };
 
   const handleDelete = async (id: number | string) => {
-    if (!confirm('Are you sure you want to delete this Gratuity Rule?')) return;
+    if (!await window.appConfirm('Are you sure you want to delete this Gratuity Rule?')) return;
     try {
       await apiClient.delete(`/payroll/gratuity-rules/${id}`);
       showToast.success('Deleted', 'Gratuity Rule deleted successfully.');

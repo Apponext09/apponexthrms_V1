@@ -55,6 +55,17 @@ export function normalizeDesignation(d: any): Designation {
   };
 }
 
+/** Mapping pickers must never offer an inactive master record. */
+function isActiveMappingOption(item: any): boolean {
+  const value = item?.status ?? item?.is_active ?? item?.isActive ?? item?.active;
+  if (value === undefined || value === null || value === '') return true;
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value === 1;
+
+  return !['inactive', 'no', 'false', '0', 'disabled', 'archived', 'deleted']
+    .includes(String(value).trim().toLowerCase());
+}
+
 export function useDesignations() {
   const queryClient = useQueryClient();
   const { selectedCompanyId } = useCompanyStore();
@@ -120,7 +131,7 @@ export function useDummyMappings() {
       try {
         const { data } = await apiClient.get('/settings/companies');
         const raw = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : (data?.data?.items || []));
-        return raw.map((c: any) => ({
+        return raw.filter(isActiveMappingOption).map((c: any) => ({
           id: String(c.id ?? c.companyId ?? c.company_id ?? c.uuid ?? c.code ?? c.name),
           name: c.name || c.company_name || c.companyName || `Company #${c.id || c.companyId || ''}`,
           code: c.code || c.company_code || '',
@@ -135,15 +146,13 @@ export function useDummyMappings() {
     queryKey: ['mapping_locations'],
     queryFn: async () => {
       try {
-        const { data } = await apiClient.get('/settings/locations', { params: { pageSize: 500, status: 'active' } });
+        const { data } = await apiClient.get('/settings/locations', { params: { pageSize: 200 } });
         const raw = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : (data?.data?.items || []));
-        return raw
-          .filter((l: any) => l.status !== 'inactive' && l.status !== 'Inactive' && l.is_active !== 'No' && l.isActive !== 'No')
-          .map((l: any) => ({
-            id: String(l.id ?? l.locationId ?? l.location_id ?? l.uuid ?? l.name),
-            name: l.locationName || l.location_name || l.name || l.title || `Location #${l.id || ''}`,
-            code: l.officeType || l.office_type || l.city || '',
-          }));
+        return raw.filter(isActiveMappingOption).map((l: any) => ({
+          id: String(l.id ?? l.locationId ?? l.location_id ?? l.uuid ?? l.name),
+          name: l.locationName || l.location_name || l.name || l.title || `Location #${l.id || ''}`,
+          code: l.officeType || l.office_type || l.city || '',
+        }));
       } catch {
         return [];
       }
@@ -156,7 +165,7 @@ export function useDummyMappings() {
       try {
         const { data } = await apiClient.get('/settings/departments', { params: { pageSize: 200 } });
         const raw = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : (data?.data?.items || []));
-        return raw.map((d: any) => ({
+        return raw.filter(isActiveMappingOption).map((d: any) => ({
           id: String(d.id ?? d.departmentId ?? d.department_id ?? d.uuid ?? d.name),
           name: d.departmentName || d.department_name || d.name || `Department #${d.id || ''}`,
           code: d.code || d.departmentCode || d.department_code || '',
@@ -175,6 +184,7 @@ export function useDummyMappings() {
 
       const processShiftItem = (s: any) => {
         if (!s) return;
+        if (typeof s !== 'string' && !isActiveMappingOption(s)) return;
         if (typeof s === 'string') {
           if (!seenIds.has(s)) {
             seenIds.add(s);
@@ -213,7 +223,12 @@ export function useDummyMappings() {
       } catch (_) {}
 
       return allShifts;
-    }
+    },
+    // Shift administration happens on a separate page. Poll while the
+    // designation form is open so new or changed shifts appear without a
+    // browser refresh.
+    refetchInterval: 5_000,
+    refetchOnWindowFocus: true,
   });
 
   const gradesQuery = useQuery({
@@ -222,7 +237,7 @@ export function useDummyMappings() {
       try {
         const { data } = await apiClient.get('/settings/grades', { params: { pageSize: 200 } });
         const raw = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : (data?.data?.items || []));
-        return raw.map((g: any) => ({
+        return raw.filter(isActiveMappingOption).map((g: any) => ({
           id: String(g.id ?? g.gradeId ?? g.grade_id ?? g.uuid ?? g.code ?? g.name),
           name: g.name || g.grade_name || g.gradeName || g.code || `Grade #${g.id || ''}`,
           code: g.code || '',

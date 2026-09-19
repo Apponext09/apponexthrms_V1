@@ -244,7 +244,7 @@ export const LoanManagement: React.FC = () => {
 
   const handleDeleteLoanType = async (id: string | number, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    if (!window.confirm('Are you sure you want to delete this Loan Type?')) return;
+    if (!await window.appConfirm('Are you sure you want to delete this Loan Type?')) return;
     try {
       await apiClient.delete(`/payroll/loan-types/${id}`);
     } catch (err) {}

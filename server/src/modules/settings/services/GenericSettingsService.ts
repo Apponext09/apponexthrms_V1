@@ -37,6 +37,10 @@ export class GenericSettingsService {
   }
 
   async create(ctx: TenantContext, data: any, auditDetails?: any) {
+    if (typeof (this.repo as any).ensureTable === 'function') {
+      await (this.repo as any).ensureTable();
+    }
+
     // Check code uniqueness if applicable
     if (this.codeField && data[this.codeField]) {
       const existing = await this.repo.getByFields(ctx, { [this.codeField]: data[this.codeField] });
@@ -61,6 +65,10 @@ export class GenericSettingsService {
   }
 
   async update(ctx: TenantContext, id: number | string, data: any, auditDetails?: any) {
+    if (typeof (this.repo as any).ensureTable === 'function') {
+      await (this.repo as any).ensureTable();
+    }
+
     const existing = await this.getById(ctx, id);
 
     // Check code uniqueness if code is being updated

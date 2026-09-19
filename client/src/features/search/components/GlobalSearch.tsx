@@ -654,7 +654,7 @@ export function GlobalSearchButton() {
     finance: [
       ["Dashboard", "dashboard"],
       ["Finance Verification", "expenses/verification"],
-      ["Reimbursements & Payouts", "expenses/reimbursements"],
+      ["Payment Cycle Reports", "expenses/reimbursements"],
       ["Travel Advances", "expenses/travel-advances"],
       ["Expense Approvals", "expenses/approvals"],
       ["Expense Reports", "expenses/reports"],

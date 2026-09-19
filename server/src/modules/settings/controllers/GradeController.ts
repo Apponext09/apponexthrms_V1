@@ -5,8 +5,8 @@ import { GenericSettingsService } from '../services/GenericSettingsService';
 import { GradeRepository } from '../repositories/GradeRepository';
 
 const gradeCreateSchema = z.object({
-  name: z.string().min(2, 'Name is required').max(150, 'Name must be under 150 characters'),
-  code: z.string().min(1, 'Code is required').max(50, 'Code must be under 50 characters'),
+  name: z.string().trim().min(2, 'Name is required').max(150, 'Name must be under 150 characters'),
+  code: z.string().trim().min(1, 'Code is required').max(50, 'Code must be under 50 characters'),
   description: z.string().max(1000).optional().nullable(),
   color: z.string().max(20).optional().nullable(),
   status: z.enum(['active', 'inactive']).default('active'),

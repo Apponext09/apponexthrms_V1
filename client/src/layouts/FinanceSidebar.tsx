@@ -58,7 +58,7 @@ const FINANCE_NAV = [
     label: "EXPENSE & DISBURSAL",
     items: [
       { name: "Finance Verification",     href: "/finance/expenses/verification",   icon: FileCheck2 },
-      { name: "Reimbursements & Payouts", href: "/finance/expenses/reimbursements", icon: CreditCard },
+      { name: "Payment Cycle Reports",   href: "/finance/expenses/reimbursements", icon: CreditCard },
       { name: "Travel Advances",          href: "/finance/expenses/travel-advances", icon: IndianRupee },
       { name: "Expense Approvals",        href: "/finance/expenses/approvals",      icon: CheckCircle2 },
       { name: "Expense Reports",          href: "/finance/expenses/reports",        icon: LineChart },

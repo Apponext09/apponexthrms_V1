@@ -22,9 +22,9 @@ function getPageTitle(pathname: string): string {
   if (pathname.includes("/face-punch"))      return "Face Punch Terminal";
   if (pathname.includes("/expenses/verification")) return "Finance Expense Verification";
   if (pathname.includes("/expenses/finance-verification")) return "Finance Expense Verification";
-  if (pathname.includes("/expenses/reimbursements")) return "Reimbursements & Disbursals";
+  if (pathname.includes("/expenses/reimbursements")) return "Payment Cycle Reports";
   if (pathname.includes("/expenses/approvals")) return "Expense Approvals";
-  if (pathname.includes("/expenses/dashboard")) return "Expense Analytics Dashboard";
+  if (pathname.includes("/expenses/dashboard")) return "Expense Management Dashboard";
   if (pathname.includes("/expenses/my-expenses")) return "My Expenses";
   if (pathname.includes("/expenses/travel-requests")) return "Travel Requests";
   if (pathname.includes("/expenses/travel-advances")) return "Travel Advances";

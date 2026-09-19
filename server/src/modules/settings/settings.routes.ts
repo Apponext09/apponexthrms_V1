@@ -1249,12 +1249,47 @@ router.post('/departments', asyncHandler(async (req: Request, res: Response) => 
   const ctx = req.ctx!;
   const db = getKnex();
 
-  const name = req.body.name || req.body.departmentName || 'Department';
-  const code = req.body.code || req.body.departmentCode || `DEPT-${Math.floor(100 + Math.random() * 900)}`;
+  const name = String(req.body.name || req.body.departmentName || '').trim();
+  const code = String(req.body.code || req.body.departmentCode || '').trim().toUpperCase();
+  if (!name || !code) {
+    res.status(400).json({ success: false, message: 'Department name and code are required' });
+    return;
+  }
+
+  const requestedCompanyIds = parseDeptCompanyIds(
+    req.body.companyIds ?? req.body.company_ids,
+    req.body.companyId ?? req.body.company_id
+  );
+  let companyId = ctx.companyId || requestedCompanyIds[0] || null;
+  if (!companyId) {
+    const parentCompany = await db('company')
+      .where('organization_id', ctx.organizationId)
+      .where((builder) => builder.where('is_parent', 1).orWhere('is_parent', true))
+      .whereNull('deleted_at')
+      .first('company_id');
+    companyId = parentCompany?.company_id || null;
+  }
+  if (!companyId) {
+    res.status(400).json({ success: false, message: 'A company must be selected before creating a department' });
+    return;
+  }
+
+  const duplicate = await db('departments')
+    .where('organization_id', ctx.organizationId)
+    .whereNull('deleted_at')
+    .where((builder) => {
+      builder.whereRaw('LOWER(name) = ?', [name.toLowerCase()])
+        .orWhereRaw('LOWER(code) = ?', [code.toLowerCase()]);
+    })
+    .first('id');
+  if (duplicate) {
+    res.status(409).json({ success: false, message: 'A department with this name or code already exists' });
+    return;
+  }
+
   const email = req.body.email || req.body.departmentMail || null;
   const colour = req.body.colour || req.body.color || '#00b4d8';
   const description = req.body.description || null;
-  const companyId = ctx.companyId || null;
   const isActive = req.body.isActive || req.body.is_active || 'Yes';
   const status = (isActive === 'No' || isActive === 'inactive') ? 'inactive' : 'active';
 
@@ -1277,7 +1312,9 @@ router.post('/departments', asyncHandler(async (req: Request, res: Response) => 
   }
 
   // Build insert payload — always include all extended fields
-  const companyIdsArray = companyId ? [Number(companyId)] : [];
+  const companyIdsArray = requestedCompanyIds.length > 0
+    ? requestedCompanyIds
+    : [Number(companyId)];
 
   const rawCompanyEmails = req.body.companyEmails ?? req.body.company_emails ?? req.body.defaultEmails;
   const companyEmailsJson = (rawCompanyEmails && typeof rawCompanyEmails === 'object')
@@ -1357,7 +1394,6 @@ router.get('/departments/:id', asyncHandler(async (req: Request, res: Response) 
 
   const dept = await db('departments')
     .where({ id, organization_id: ctx.organizationId })
-    .modify((builder) => { if (ctx.companyId) builder.where('company_id', ctx.companyId); })
     .first();
 
   if (!dept) {
@@ -1441,8 +1477,32 @@ const handleUpdateDepartment = asyncHandler(async (req: Request, res: Response) 
   const db = getKnex();
   const id = Number(req.params.id);
 
-  const name = req.body.name || req.body.departmentName;
-  const code = req.body.code || req.body.departmentCode;
+  const rawName = req.body.name ?? req.body.departmentName;
+  const rawCode = req.body.code ?? req.body.departmentCode;
+  const name = rawName !== undefined ? String(rawName).trim() : undefined;
+  const code = rawCode !== undefined ? String(rawCode).trim().toUpperCase() : undefined;
+  if ((name !== undefined && !name) || (code !== undefined && !code)) {
+    res.status(400).json({ success: false, message: 'Department name and code cannot be blank' });
+    return;
+  }
+  if (name || code) {
+    const duplicate = await db('departments')
+      .where('organization_id', ctx.organizationId)
+      .whereNull('deleted_at')
+      .whereNot('id', id)
+      .where((builder) => {
+        if (name) builder.whereRaw('LOWER(name) = ?', [name.toLowerCase()]);
+        if (code) {
+          if (name) builder.orWhereRaw('LOWER(code) = ?', [code.toLowerCase()]);
+          else builder.whereRaw('LOWER(code) = ?', [code.toLowerCase()]);
+        }
+      })
+      .first('id');
+    if (duplicate) {
+      res.status(409).json({ success: false, message: 'A department with this name or code already exists' });
+      return;
+    }
+  }
   const email = req.body.email;         // undefined = not sent, null/'' = clear it
   const colour = req.body.colour || req.body.color;
   const description = req.body.description;
@@ -1485,10 +1545,20 @@ const handleUpdateDepartment = asyncHandler(async (req: Request, res: Response) 
     updatePayload.status = (isActive === 'No' || isActive === 'inactive') ? 'inactive' : 'active';
   }
 
-  // Company IDs
-  if (ctx.companyId) {
-    updatePayload.company_ids = JSON.stringify([Number(ctx.companyId)]);
-    updatePayload.company_id = Number(ctx.companyId);
+  // Company mappings must come from the submitted form. Previously this used
+  // only the current company context, which discarded all selected mappings
+  // whenever a department was updated.
+  const hasCompanyMapping = req.body.companyIds !== undefined
+    || req.body.company_ids !== undefined
+    || req.body.companyId !== undefined
+    || req.body.company_id !== undefined;
+  if (hasCompanyMapping) {
+    const companyIds = parseDeptCompanyIds(
+      req.body.companyIds ?? req.body.company_ids,
+      req.body.companyId ?? req.body.company_id
+    );
+    updatePayload.company_ids = JSON.stringify(companyIds);
+    updatePayload.company_id = companyIds[0] ?? null;
   }
 
   // Company emails
@@ -1500,7 +1570,6 @@ const handleUpdateDepartment = asyncHandler(async (req: Request, res: Response) 
 
   const count = await db('departments')
     .where({ id, organization_id: ctx.organizationId })
-    .modify((builder) => { if (ctx.companyId) builder.where('company_id', ctx.companyId); })
     .update(updatePayload);
 
 
@@ -1511,7 +1580,6 @@ const handleUpdateDepartment = asyncHandler(async (req: Request, res: Response) 
 
   const updated = await db('departments')
     .where({ id, organization_id: ctx.organizationId })
-    .modify((builder) => { if (ctx.companyId) builder.where('company_id', ctx.companyId); })
     .first();
 
   // Parse company_ids from updated row
@@ -4646,9 +4714,5 @@ router.get('/id-card/active-template', asyncHandler((req, res) => idCardCtrl.res
 router.post('/id-card/upload-asset', asyncHandler((req, res) => idCardCtrl.uploadAsset(req, res)));
 
 export default router;
-
-
-
-
 
 
