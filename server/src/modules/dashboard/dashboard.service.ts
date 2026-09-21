@@ -515,11 +515,61 @@ export class AdminDashboardService {
       onLeaveToday = 0;
     }
 
-    // Estimated Monthly Payroll
+    // Total monthly gross outlay. Assigned salary structures are the payroll
+    // source of truth; retain legacy compensation/payslip sources as fallbacks.
     let monthlyPayrollCost = 0;
     try {
+      const hasSalaryStructures = await db.schema.hasTable('salary_structures');
+      const hasStructureGross = hasSalaryStructures && await db.schema.hasColumn('salary_structures', 'gross_monthly');
+      const hasStructureCtc = hasSalaryStructures && await db.schema.hasColumn('salary_structures', 'annual_ctc');
+
+      if (hasStructureGross || hasStructureCtc) {
+        let structureOutlayQuery = db('salary_structures as ss')
+          .join('employees as e', 'ss.employee_id', 'e.id')
+          .whereNull('ss.deleted_at')
+          .whereNull('e.deleted_at')
+          .whereIn('e.status', ['active', 'probation', 'confirmed', 'onboarding', 'Active']);
+        if (targetCompanyId) {
+          structureOutlayQuery = structureOutlayQuery.where('e.company_id', targetCompanyId);
+        } else {
+          structureOutlayQuery = structureOutlayQuery.where('e.organization_id', organizationId);
+        }
+        const grossExpression = hasStructureGross && hasStructureCtc
+          ? 'COALESCE(NULLIF(ss.gross_monthly, 0), ss.annual_ctc / 12, 0)'
+          : hasStructureGross ? 'COALESCE(ss.gross_monthly, 0)' : 'COALESCE(ss.annual_ctc / 12, 0)';
+        const structureOutlayRow = await structureOutlayQuery
+          .select(db.raw(`COALESCE(SUM(${grossExpression}), 0) as total`))
+          .first() as { total?: number | string } | undefined;
+        monthlyPayrollCost = Number(structureOutlayRow?.total || 0);
+      }
+
+      const hasGrossSalary = await db.schema.hasColumn('employees', 'gross_salary');
+      const hasAnnualCtc = await db.schema.hasColumn('employees', 'annual_ctc');
+
+      if (monthlyPayrollCost === 0 && (hasGrossSalary || hasAnnualCtc)) {
+        let grossOutlayQuery = db('employees as e')
+          .whereNull('e.deleted_at')
+          .whereIn('e.status', ['active', 'probation', 'confirmed', 'onboarding', 'Active']);
+
+        if (targetCompanyId) {
+          grossOutlayQuery = grossOutlayQuery.where('e.company_id', targetCompanyId);
+        } else {
+          grossOutlayQuery = grossOutlayQuery.where('e.organization_id', organizationId);
+        }
+
+        const grossExpression = hasGrossSalary && hasAnnualCtc
+          ? 'COALESCE(NULLIF(e.gross_salary, 0), e.annual_ctc / 12, 0)'
+          : hasGrossSalary
+            ? 'COALESCE(e.gross_salary, 0)'
+            : 'COALESCE(e.annual_ctc / 12, 0)';
+        const grossOutlayRow = await grossOutlayQuery
+          .select(db.raw(`COALESCE(SUM(${grossExpression}), 0) as total`))
+          .first() as { total?: number | string } | undefined;
+        monthlyPayrollCost = Number(grossOutlayRow?.total || 0);
+      }
+
       const hasCompTable = await db.schema.hasTable('employee_compensation');
-      if (hasCompTable) {
+      if (monthlyPayrollCost === 0 && hasCompTable) {
         let compQuery = db('employee_compensation as ec')
           .join('employees as e', 'ec.employee_id', 'e.id')
           .whereNull('ec.deleted_at')
@@ -1196,5 +1246,3 @@ export class AdminDashboardService {
     };
   }
 }
-
-
