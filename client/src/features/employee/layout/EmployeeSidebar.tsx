@@ -400,8 +400,8 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
   return (
     <aside
       className={cn(
-        'portal-sidebar h-dvh flex flex-col justify-between border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-all duration-300 select-none overflow-hidden',
-        open ? 'w-72 md:w-28' : 'w-20'
+        'portal-sidebar flex h-dvh flex-col justify-between overflow-hidden border-r border-sidebar-border bg-white text-sidebar-foreground transition-all duration-300 select-none dark:bg-slate-950',
+        open ? 'w-[calc(100vw-1.5rem)] max-w-72 md:w-28' : 'w-20'
       )}
     >
       <div className="flex flex-col flex-1 min-h-0">
@@ -413,11 +413,11 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
       </div>
 
       {/* Employee User Card Footer */}
-      <div className="flex-shrink-0 border-t border-border bg-card p-3">
+      <div className="flex-shrink-0 border-t border-border bg-white p-3 dark:bg-slate-950">
         <SidebarProfileMenu profilePath="/employee/profile" onLogout={handleLogout} onProfileNavigate={() => { if (window.innerWidth < 768) onOpenChange(false); }}>
         <div
           className={cn(
-            'flex min-h-14 cursor-pointer items-center justify-center rounded-xl border border-border bg-card p-2.5 hover:bg-muted transition-colors'
+            'mx-auto flex size-12 cursor-pointer items-center justify-center rounded-xl border border-border bg-white p-1.5 transition-colors hover:bg-muted dark:bg-slate-950'
           )}
           title="View Profile"
         >
@@ -428,20 +428,6 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
                 {getInitials()}
               </AvatarFallback>
             </Avatar>
-            <AnimatePresence>
-              {open && (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.2 }}
-                  className="hidden overflow-hidden text-left"
-                >
-                  <p className="text-xs font-bold text-foreground truncate">{employeeName}</p>
-                  <p className="text-[10px] text-muted-foreground truncate">{user?.email || 'employee@apponext.com'}</p>
-                </motion.div>
-              )}
-            </AnimatePresence>
           </div>
 
         </div>

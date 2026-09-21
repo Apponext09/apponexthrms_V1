@@ -25,25 +25,29 @@ export function SidebarProfileMenu({ children, profilePath, onLogout, onProfileN
 
   return (
     <>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>{children}</DropdownMenuTrigger>
-        <DropdownMenuContent side="top" align="start" className="w-48">
-          <DropdownMenuItem onSelect={openProfile} className="gap-2">
-            <User className="size-4" />
-            My Profile
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            onSelect={onLogout}
-            className="gap-2 text-red-600 focus:bg-red-50 focus:text-red-700 dark:text-red-400 dark:focus:bg-red-950/40"
-          >
-            <LogOut className="size-4" />
-            Logout
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <div className="md:hidden">{children}</div>
 
-      <div className="mt-2 grid gap-1 md:hidden">
+      <div className="hidden md:block">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>{children}</DropdownMenuTrigger>
+          <DropdownMenuContent side="right" align="end" sideOffset={8} className="z-50 w-48 border-border bg-popover text-popover-foreground shadow-lg">
+            <DropdownMenuItem onSelect={openProfile} className="gap-2">
+              <User className="size-4" />
+              My Profile
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onSelect={onLogout}
+              className="gap-2 text-red-600 focus:bg-red-50 focus:text-red-700 dark:text-red-400 dark:focus:bg-red-950/40"
+            >
+              <LogOut className="size-4" />
+              Logout
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+
+      <div className="mt-2 grid gap-1 border-t border-border pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] md:hidden">
         <button
           type="button"
           onClick={openProfile}
