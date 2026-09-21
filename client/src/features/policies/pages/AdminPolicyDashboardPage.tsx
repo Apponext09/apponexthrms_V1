@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { policiesApi } from '../api/policiesApi';
 import type { RolePolicyRecord, PolicyDashboardStats, PolicyVersionRecord } from '../types/policy';
-import { POLICY_CATEGORIES, AVAILABLE_ROLES } from '../types/policy';
+import { POLICY_CATEGORIES } from '../types/policy';
 import { PolicyStatusBadge } from '../components/PolicyStatusBadge';
 import { PolicyReader } from '../components/PolicyReader';
 
@@ -26,11 +26,22 @@ import {
   RefreshCw,
   X,
   Filter,
+  MessageSquare,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
 export const AdminPolicyDashboardPage: React.FC = () => {
   const navigate = useNavigate();
+
+  const [dynamicRoles, setDynamicRoles] = useState<Array<{ id: string | number; name: string; code: string }>>([]);
+
+  useEffect(() => {
+    policiesApi.getTargetOptions().then((res) => {
+      if (res && Array.isArray(res.roles)) {
+        setDynamicRoles(res.roles);
+      }
+    }).catch(() => {});
+  }, []);
 
   const [stats, setStats] = useState<PolicyDashboardStats>({
     totalPolicies: 0,
@@ -146,6 +157,14 @@ export const AdminPolicyDashboardPage: React.FC = () => {
           >
             <BarChart3 className="w-3.5 h-3.5 text-primary" /> Policy Reports
           </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => navigate('/policies/queries')}
+            className="font-bold text-xs gap-1.5 h-9"
+          >
+            <MessageSquare className="w-3.5 h-3.5 text-primary" /> Policy Queries
+          </Button>
         </div>
       </div>
 
@@ -237,9 +256,9 @@ export const AdminPolicyDashboardPage: React.FC = () => {
               className="h-8 rounded-lg border border-input bg-background px-2.5 text-xs font-medium"
             >
               <option value="all">All Roles</option>
-              {AVAILABLE_ROLES.map((r) => (
-                <option key={r.code} value={r.code}>
-                  {r.label}
+              {dynamicRoles.map((r) => (
+                <option key={r.code || r.id} value={r.code}>
+                  {r.name}
                 </option>
               ))}
             </select>
@@ -435,18 +454,36 @@ export const AdminPolicyDashboardPage: React.FC = () => {
             ) : (
               <div className="space-y-3 max-h-80 overflow-y-auto">
                 {versionsList.map((ver) => (
-                  <div key={ver.id} className="border border-border/80 rounded-xl p-3 bg-muted/20 space-y-1 text-xs">
+                  <div key={ver.id} className="border border-border/80 rounded-xl p-3.5 bg-muted/20 space-y-1.5 text-xs">
                     <div className="flex items-center justify-between">
-                      <span className="font-bold text-primary font-mono">{ver.versionNumber}</span>
+                      <Badge variant="outline" className="font-bold font-mono text-[10px]">
+                        Version {ver.version || ver.versionNumber || '1.0'}
+                      </Badge>
                       <span className="text-[10px] text-muted-foreground">
                         {ver.createdAt ? new Date(ver.createdAt).toLocaleString() : ''}
                       </span>
                     </div>
-                    <div className="font-bold text-foreground">{ver.title}</div>
-                    <p className="text-[11px] text-muted-foreground">{ver.changeDescription || 'Standard policy version update.'}</p>
-                    <div className="text-[10px] text-muted-foreground pt-1">
-                      Updated By: <strong>{ver.updatedBy}</strong>
-                    </div>
+                    <div className="font-bold text-foreground">{ver.title || versionHistoryPolicy.title}</div>
+                    {ver.changeDescription && (
+                      <p className="text-[11px] text-muted-foreground italic pl-2 border-l-2 border-primary/40">
+                        "{ver.changeDescription}"
+                      </p>
+                    )}
+                    {ver.fileUrl && (
+                      <div className="flex items-center justify-between pt-1 border-t border-border/40 text-[11px]">
+                        <span className="text-muted-foreground truncate max-w-[200px]">
+                          {ver.fileName || 'Policy Document.pdf'}
+                        </span>
+                        <a
+                          href={ver.fileUrl.startsWith('/') ? `${window.location.protocol}//${window.location.host}${ver.fileUrl}` : ver.fileUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-primary hover:underline font-bold"
+                        >
+                          View PDF Document
+                        </a>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

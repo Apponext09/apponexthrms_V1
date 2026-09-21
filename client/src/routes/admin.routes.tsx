@@ -192,6 +192,11 @@ const AdminPolicyDashboardPage = lazy(() =>
     default: m.AdminPolicyDashboardPage,
   })),
 );
+const AdminPolicyQueriesPage = lazy(() =>
+  import("../features/policies/pages/AdminPolicyQueriesPage").then((m) => ({
+    default: m.AdminPolicyQueriesPage,
+  })),
+);
 const CreatePolicyPage = lazy(() =>
   import("../features/policies/pages/CreatePolicyPage").then((m) => ({
     default: m.CreatePolicyPage,
@@ -853,6 +858,7 @@ export const adminRoutes = (
 
     {/* Policies */}
     <Route path="/policies/manage" element={<AdminPolicyDashboardPage />} />
+    <Route path="/policies/queries" element={<AdminPolicyQueriesPage />} />
     <Route path="/policies/create" element={<CreatePolicyPage />} />
     <Route path="/policies/edit/:id" element={<CreatePolicyPage />} />
     <Route

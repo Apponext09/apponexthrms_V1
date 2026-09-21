@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/config/api';
 import { showToast } from '@/components/ui/toast';
@@ -134,8 +135,9 @@ interface PayrollSlabItem {
 // ─────────────────────────────────────────────────────────────────────────────
 export const PayrollSettingsPage: React.FC = () => {
   const queryClient = useQueryClient();
+  const location = useLocation();
   const { selectedCompanyId } = useCompanyStore();
-  const searchParams = new URLSearchParams(window.location.search);
+  const searchParams = new URLSearchParams(location.search);
   const initialTab = (searchParams.get('tab') as any) || 'components';
   const [activeTab, setActiveTab] = useState<'cycles' | 'components' | 'slabs' | 'settings' | 'report_settings'>(initialTab);
 
@@ -144,7 +146,7 @@ export const PayrollSettingsPage: React.FC = () => {
     if (tabParam === 'cycles' || tabParam === 'components' || tabParam === 'slabs' || tabParam === 'settings' || tabParam === 'report_settings') {
       setActiveTab(tabParam as any);
     }
-  }, [window.location.search]);
+  }, [location.search]);
 
   // ── Settings Tab state (payroll_settings table — statuses, approvals, etc.) ──
   const [payrollSettings, setPayrollSettings] = useState<any>(null);

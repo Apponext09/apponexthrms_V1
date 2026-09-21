@@ -1,7 +1,6 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import type { PolicySection, TargetAssignment } from '../types/policy';
-import { AVAILABLE_ROLES } from '../types/policy';
 import {
   ShieldCheck,
   Building2,
@@ -12,7 +11,10 @@ import {
   ArrowLeft,
   Save,
   CheckCircle2,
+  Eye,
+  FileText,
 } from 'lucide-react';
+import { PolicyPdfModal } from './PolicyPdfModal';
 
 interface PolicyReviewPublishStepProps {
   policyInfo: {
@@ -27,6 +29,8 @@ interface PolicyReviewPublishStepProps {
   };
   sections: PolicySection[];
   assignments: TargetAssignment[];
+  attachedFile?: { fileUrl?: string; fileName?: string; fileSize?: number; fileType?: string } | null;
+  attachments?: any[];
   options: {
     sendNotification: boolean;
     requireAcknowledgement: boolean;
@@ -42,15 +46,20 @@ export const PolicyReviewPublishStep: React.FC<PolicyReviewPublishStepProps> = (
   policyInfo,
   sections,
   assignments,
+  attachedFile,
+  attachments = [],
   options,
   onBack,
   onSaveDraft,
   onPublish,
   isSubmitting = false,
 }) => {
+  const [showPreviewModal, setShowPreviewModal] = React.useState(false);
+  const [previewFileUrl, setPreviewFileUrl] = React.useState<string | null>(null);
+
   const roleTargets = assignments
     .filter((a) => a.targetType === 'role')
-    .map((a) => AVAILABLE_ROLES.find((r) => r.code === a.targetId)?.label || a.targetId);
+    .map((a) => a.targetId.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase()));
 
   const deptTargets = assignments
     .filter((a) => a.targetType === 'department')
@@ -172,24 +181,95 @@ export const PolicyReviewPublishStep: React.FC<PolicyReviewPublishStepProps> = (
           </div>
         </div>
 
-        {/* Section 3: Content Preview Summary */}
+        {/* Section 3: Document Source & Attachments */}
         <div className="border border-border rounded-xl p-4 bg-background space-y-3">
           <div className="flex items-center justify-between border-b border-border pb-2">
             <div className="text-xs font-bold text-foreground uppercase tracking-wider">
-              3. Policy Sections ({sections.length})
+              3. Policy Documents & Attachments ({attachments.length + (attachedFile?.fileUrl ? 1 : 0)})
             </div>
+            {attachedFile?.fileUrl && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setPreviewFileUrl(attachedFile.fileUrl || null);
+                  setShowPreviewModal(true);
+                }}
+                className="h-7 text-xs font-bold gap-1 text-emerald-600 border-emerald-500/30"
+              >
+                <Eye className="w-3.5 h-3.5" /> Preview Main PDF
+              </Button>
+            )}
           </div>
-          <div className="space-y-2">
-            {sections.map((sec, idx) => (
-              <div key={sec.id || idx} className="text-xs space-y-0.5">
-                <div className="font-bold text-foreground flex items-center gap-1.5">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" /> {sec.title}
+
+          {attachedFile?.fileUrl && (
+            <div className="flex items-center justify-between p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-lg text-xs">
+              <div className="flex items-center gap-2.5">
+                <FileText className="w-5 h-5 text-emerald-600 shrink-0" />
+                <div className="truncate">
+                  <div className="font-bold text-foreground truncate">{attachedFile.fileName || 'Main Policy Document.pdf'}</div>
+                  <div className="text-[10px] text-emerald-600 font-bold">Main Source of Truth Document</div>
                 </div>
-                <p className="text-muted-foreground line-clamp-1 pl-5 text-[11px]">{sec.content}</p>
               </div>
-            ))}
-          </div>
+              <Button
+                type="button"
+                size="sm"
+                variant="default"
+                onClick={() => {
+                  setPreviewFileUrl(attachedFile.fileUrl || null);
+                  setShowPreviewModal(true);
+                }}
+                className="h-7 text-xs font-bold gap-1 bg-emerald-600 hover:bg-emerald-700 text-white shrink-0"
+              >
+                <Eye className="w-3.5 h-3.5" /> View PDF
+              </Button>
+            </div>
+          )}
+
+          {attachments.length > 0 && (
+            <div className="space-y-2 pt-1">
+              <div className="text-[11px] font-bold text-muted-foreground uppercase">Supporting Attachments</div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                {attachments.map((att, idx) => (
+                  <div key={idx} className="flex items-center justify-between p-2.5 bg-muted/20 border border-border rounded-lg">
+                    <div className="flex items-center gap-2 min-w-0 truncate">
+                      <FileText className="w-4 h-4 text-primary shrink-0" />
+                      <span className="font-semibold text-foreground truncate">{att.fileName}</span>
+                    </div>
+                    {att.storagePath && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setPreviewFileUrl(att.storagePath);
+                          setShowPreviewModal(true);
+                        }}
+                        className="h-6 px-2 text-[10px] font-bold gap-1 text-primary"
+                      >
+                        <Eye className="w-3 h-3" /> View
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
+
+        {/* Modal for PDF Preview */}
+        {attachedFile?.fileUrl && (
+          <PolicyPdfModal
+            isOpen={showPreviewModal}
+            onClose={() => setShowPreviewModal(false)}
+            fileUrl={attachedFile.fileUrl}
+            fileName={attachedFile.fileName}
+            fileSize={attachedFile.fileSize}
+            title={policyInfo.title || 'Policy Document Preview'}
+            documentRef={policyInfo.documentRef || 'POL-PREVIEW'}
+          />
+        )}
 
         {/* Section 4: Configuration Options */}
         <div className="grid grid-cols-3 gap-3 text-xs font-semibold p-3 bg-muted/30 rounded-xl border border-border">

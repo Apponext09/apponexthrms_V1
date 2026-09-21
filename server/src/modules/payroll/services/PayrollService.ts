@@ -23,6 +23,17 @@ import {
 import type { TenantContext } from '../../../db/types';
 import { SalaryCalculationService } from './SalaryCalculationService';
 import { PayrollFormulaEvaluator } from '../utils/PayrollFormulaEvaluator';
+import { classifyComponent } from '../utils/payroll.classify';
+import { resolvePeriodContext } from '../utils/payroll.period';
+import {
+  roundMoney,
+  prorate,
+  sumMoney,
+  subtractMoney,
+  resolveRoundingConfig,
+  DEFAULT_ROUNDING,
+  type RoundingConfig,
+} from '../utils/payroll.money';
 
 export { positiveNum, withSnakeAliases };
 
@@ -121,6 +132,19 @@ export class PayrollService {
 
       const existingRun = await query.first().catch(() => null);
       if (existingRun) {
+        // ── Guard: never wipe a run that has been locked/approved/published ────
+        // The destructive branch below deletes every earning, deduction and
+        // payslip for the run. Doing that to a finalized run silently destroys
+        // issued payslips. Finalized runs must be explicitly unlocked / reversed
+        // before they can be regenerated.
+        const PROTECTED_STATUSES = ['locked', 'approved', 'published', 'paid', 'finalized'];
+        if (PROTECTED_STATUSES.includes(String(existingRun.status))) {
+          throw new ValidationError(
+            `A ${existingRun.status} payroll run already exists for ${runMonthPrefix}. ` +
+            `Unlock or reverse it before regenerating.`
+          );
+        }
+
         const runId = existingRun.id;
         const empRows = await db0('payroll_run_employees').where('payroll_run_id', runId).select('id');
         const empIds = empRows.map((r: any) => r.id);
@@ -279,15 +303,40 @@ export class PayrollService {
     // ── Shared service for formula evaluation ───────────────────────────────
     const calcService = new SalaryCalculationService();
 
+    // ── Organization money-rounding policy (decimal-safe, configurable) ─────
+    let rounding: RoundingConfig = DEFAULT_ROUNDING;
+    try {
+      const settingsRow = await db('payroll_settings')
+        .where('organization_id', ctx.organizationId)
+        .whereNull('deleted_at')
+        .first();
+      if (settingsRow) rounding = resolveRoundingConfig(settingsRow);
+    } catch { /* default half_up / paise */ }
+
+    // ── Payroll policy + cycle row (shared by every employee this run) ──────
+    const policyRow = await db('payroll_policies')
+      .where('organization_id', ctx.organizationId)
+      .whereNull('deleted_at')
+      .first()
+      .catch(() => null);
+    const runCycleRow = run.payroll_cycle_id
+      ? await db('payroll_cycles').where('id', run.payroll_cycle_id).whereNull('deleted_at').first().catch(() => null)
+      : null;
+
     let processedCount = 0;
     let errorCount = 0;
+    let firstError = '';
 
     for (const empRun of employees) {
       try {
         const empId = (empRun as any).employeeId ?? (empRun as any).employee_id;
         const runMonthStr = resolveRunMonthStr(run);
-        const periodEnd = `${runMonthStr}-31`;
         const periodStart = `${runMonthStr}-01`;
+        // Real last day of the run month — never "-31", which MySQL rejects in
+        // strict mode (Incorrect DATE value) for 30-day months and February,
+        // silently breaking the date-aware salary-structure lookup below.
+        const [pmY, pmM] = runMonthStr.split('-').map(Number);
+        const periodEnd = `${runMonthStr}-${String(new Date(pmY, pmM, 0).getDate()).padStart(2, '0')}`;
 
         // 🌟 1. Date-aware lookup: find active salary structure for this payroll month
         const struct = withSnakeAliases(
@@ -326,56 +375,17 @@ export class PayrollService {
         const resolvedAnnualCtc = positiveNum(struct?.annual_ctc, resolvedGross * 12);
         const resolvedBasicMonthly = positiveNum(struct?.basic_monthly, Math.round(resolvedGross * 0.5));
 
-        // ── Cycle dates ──────────────────────────────────────────────────────
-        const [runYear, runMon] = runMonthStr.split('-').map(Number);
-        const monthDays = new Date(runYear, runMon, 0).getDate();
-        let totalCycleDays = monthDays;
-        let cycleRow: any = null;
-        let cycleStartDay = 1;
-        let cycleCutoffDay = monthDays;
+        // ── Pay period, proration & LOP — shared engine (payroll.period.ts) ───
+        const cycleRow = runCycleRow;
+        const monthStart = periodStart;   // full calendar month; cutoff_day no longer shortens pay
+        const monthEnd = periodEnd;
 
-        if (run.payroll_cycle_id) {
-          cycleRow = await db('payroll_cycles').where('id', run.payroll_cycle_id).whereNull('deleted_at').first().catch(() => null);
-          if (cycleRow) {
-            if (cycleRow.start_date) {
-              cycleStartDay = Math.max(1, Math.min(monthDays, Number(cycleRow.start_date)));
-            }
-            const rawCutoffNum = Number(cycleRow.cutoff_day);
-            if (cycleRow.cutoff_day != null && rawCutoffNum > 0) {
-              cycleCutoffDay = Math.max(1, Math.min(monthDays, rawCutoffNum));
-            } else {
-              // cutoff_day = 0 or null -> full calendar month
-              cycleCutoffDay = monthDays;
-            }
-            if (cycleRow.total_days_calc && !isNaN(Number(cycleRow.total_days_calc)) && Number(cycleRow.total_days_calc) > 0) {
-              totalCycleDays = Number(cycleRow.total_days_calc);
-            } else if (cycleRow.frequency === 'Weekly') totalCycleDays = 7;
-            else if (cycleRow.frequency === 'Bi-Weekly') totalCycleDays = 14;
-            else if (cycleRow.frequency === 'Semi-Monthly') totalCycleDays = 15;
-            else {
-              totalCycleDays = Math.max(1, cycleCutoffDay - cycleStartDay + 1);
-            }
-          }
-        }
-
-        const monthStart = `${runMonthStr}-${String(cycleStartDay).padStart(2, '0')}`;
-        const monthEnd = `${runMonthStr}-${String(cycleCutoffDay).padStart(2, '0')}`;
-        let attendanceLopDays = 0;
-        try {
-          const [yearStr, monStr] = runMonthStr.split('-');
-          const lr = await db('leave_applications')
-            .where('employee_id', empId)
-            .whereIn('status', ['approved', 'processed'])
-            .whereRaw('YEAR(application_start_date) = ? AND MONTH(application_start_date) = ?', [Number(yearStr), Number(monStr)])
-            .sum('total_days as total_lop').first();
-          attendanceLopDays = Number(lr?.total_lop || 0);
-        } catch { attendanceLopDays = 0; }
-
+        // Approved *unpaid* leave that overlaps the run month (paid leave is not LOP)
         const unpaidLeaveResult = await db('leave_applications as la')
           .leftJoin('leave_types as lt', 'la.leave_type_id', 'lt.id')
           .where('la.employee_id', empId).where('la.status', 'approved')
-          .where('la.application_start_date', '>=', monthStart)
-          .where('la.application_end_date', '<=', monthEnd)
+          .where('la.application_start_date', '<=', monthEnd)
+          .where('la.application_end_date', '>=', monthStart)
           .where(function () {
             this.where('lt.paid_type', 'unpaid')
               .orWhere('lt.leave_classification', 'unpaid')
@@ -383,44 +393,50 @@ export class PayrollService {
               .orWhereRaw("UPPER(lt.leave_code) = 'UL'");
           })
           .sum('la.total_days as lopDays').first().catch(() => null);
+        const unpaidLeaveDays = Number((unpaidLeaveResult as any)?.lopDays ?? 0);
 
-        // ── Effective Date, Date of Joining (DOJ) & Exit Date calculation ───────
-        let activeStartDay = cycleStartDay;
-        let activeEndDay = cycleCutoffDay;
+        // All approved leave in the month — informational only (payslip "leave" field)
+        let attendanceLopDays = 0;
+        try {
+          const lr = await db('leave_applications')
+            .where('employee_id', empId)
+            .whereIn('status', ['approved', 'processed'])
+            .where('application_start_date', '<=', monthEnd)
+            .where('application_end_date', '>=', monthStart)
+            .sum('total_days as total_lop').first();
+          attendanceLopDays = Number(lr?.total_lop || 0);
+        } catch { attendanceLopDays = 0; }
 
-        if (empRow?.date_of_joining || empRow?.dateOfJoining || empRow?.doj) {
-          const dojRaw = empRow.date_of_joining || empRow.dateOfJoining || empRow.doj;
-          const dojDate = new Date(dojRaw);
-          if (!isNaN(dojDate.getTime())) {
-            const dojY = dojDate.getFullYear();
-            const dojM = dojDate.getMonth() + 1;
-            if (dojY === runYear && dojM === runMon) {
-              activeStartDay = Math.max(cycleStartDay, dojDate.getDate());
-            } else if (dojY > runYear || (dojY === runYear && dojM > runMon)) {
-              activeStartDay = monthDays + 1; // Future joiner
-            }
+        // Attendance summary for the month (absence / half-days as LOP)
+        let attSummary: { recordCount: number; absentDays: number; halfDays: number } = { recordCount: 0, absentDays: 0, halfDays: 0 };
+        try {
+          const rows = await db('attendance_records')
+            .where('employee_id', empId)
+            .whereBetween('check_in_date', [monthStart, monthEnd])
+            .whereNull('deleted_at')
+            .select('status');
+          attSummary.recordCount = rows.length;
+          for (const r of rows) {
+            const s = String(r.status || '').toLowerCase();
+            if (s === 'absent') attSummary.absentDays++;
+            else if (s === 'half_day' || s === 'half-day') attSummary.halfDays++;
           }
-        }
+        } catch { /* no attendance module data */ }
 
-        if (empRow?.relieving_date || empRow?.exit_date || empRow?.resignation_date) {
-          const exitRaw = empRow.relieving_date || empRow.exit_date || empRow.resignation_date;
-          const exitDate = new Date(exitRaw);
-          if (!isNaN(exitDate.getTime())) {
-            const exitY = exitDate.getFullYear();
-            const exitM = exitDate.getMonth() + 1;
-            if (exitY === runYear && exitM === runMon) {
-              activeEndDay = Math.min(cycleCutoffDay, exitDate.getDate());
-            } else if (exitY < runYear || (exitY === runYear && exitM < runMon)) {
-              activeEndDay = 0; // Exited in past
-            }
-          }
-        }
+        const period = resolvePeriodContext({
+          runMonthStr,
+          cycleRow,
+          empRow: empRow || {},
+          policyRow,
+          unpaidLeaveDays,
+          attendance: attSummary,
+        });
 
-        const maxEligibleDays = Math.max(0, activeEndDay - activeStartDay + 1);
-        const unadjustedLopDays = Number((unpaidLeaveResult as any)?.lopDays ?? 0);
-        const payableDays = Math.max(0, maxEligibleDays - unadjustedLopDays);
-        const lopDays = Math.max(0, totalCycleDays - payableDays);
-        const lopRatio = totalCycleDays > 0 ? Math.max(0, Math.min(1, payableDays / totalCycleDays)) : 1;
+        const totalCycleDays = period.totalDays;
+        // True loss-of-pay days (unpaid leave + absence + half-days). A mid-month
+        // joiner/leaver gap is handled via lopRatio, not counted as LOP here.
+        const lopDays = period.lopDays;
+        const lopRatio = period.lopRatio;
 
         // ── Loan EMI (Module-type source) ─────────────────────────────────────
         let loanEmiDeduction = 0;
@@ -428,6 +444,21 @@ export class PayrollService {
           .where({ employee_id: empId, status: 'active' }).whereNull('deleted_at')
           .select('emi').catch(() => []);
         for (const loan of activeLoans) loanEmiDeduction += Number(loan.emi || 0);
+
+        // ── Salary advance recovery (always-on, mirrors loan EMI) ─────────────
+        // advance_amount spread over recovery_months while the advance is active.
+        // NOTE: per-run recovery rows in advance_recoveries are not yet written
+        // back — advances must be marked 'completed' by HR / F&F when fully repaid.
+        let advanceRecoveryDeduction = 0;
+        try {
+          const advRows = await db('salary_advances')
+            .where({ employee_id: empId, status: 'active' }).whereNull('deleted_at')
+            .select('advance_amount', 'recovery_months');
+          for (const adv of advRows) {
+            const months = Math.max(1, Number(adv.recovery_months || 1));
+            advanceRecoveryDeduction += roundMoney(Number(adv.advance_amount || 0) / months, rounding);
+          }
+        } catch { advanceRecoveryDeduction = 0; }
 
         // ── Load slab + fresh components ──────────────────────────────────────
         const slabId = (struct as any)?.slab_id || (struct as any)?.slabId || (empRow as any)?.salary_slab_id;
@@ -527,12 +558,12 @@ export class PayrollService {
         const earnedRows: Array<{
           componentId: number; name: string; groupName: string;
           groupCategory: string; baseAmount: number; earnedAmount: number;
-          formula: string; isNonCashable: boolean;
+          formula: string; isNonCashable: boolean; statutoryCode: string | null; isBasic: boolean;
         }> = [];
 
         const deductionRows: Array<{
           componentId: number | null; name: string;
-          amount: number; isSystemRow: boolean;
+          amount: number; isSystemRow: boolean; statutoryCode: string | null;
         }> = [];
 
         // Track if we have a special allowance component to fill as residual
@@ -543,6 +574,7 @@ export class PayrollService {
           const category = (comp.group_category || comp.groupCategory || '').toLowerCase();
           const compType = (comp.component_type || comp.componentType || comp.type || 'Value');
           const compNameLower = (comp.name || '').toLowerCase();
+          const cls = classifyComponent(comp);
 
           // ── GATE 1: Effective date range — compare against PAYROLL RUN PERIOD not today ─
           // runMonthStr = 'YYYY-MM'. Component is included only if it was active
@@ -550,7 +582,7 @@ export class PayrollService {
           if (comp.effective_from_date) {
             const fd = new Date(comp.effective_from_date);
             // Not yet effective at end of run month → skip
-            if (!isNaN(fd.getTime()) && fd > new Date(`${runMonthStr}-28`)) continue;
+            if (!isNaN(fd.getTime()) && fd > new Date(`${periodEnd}T23:59:59`)) continue;
           }
           if (comp.effective_to_date) {
             const td = new Date(comp.effective_to_date);
@@ -562,8 +594,8 @@ export class PayrollService {
           if (!matchesComponentCondition(comp, empRow || {}, struct || {}, runMonthStr)) continue;
 
           // ── GATE 3: Intern exemption for statutory components ───────────────
-          if (isIntern && (compNameLower.includes('provident') || compNameLower.includes('pf') ||
-            compNameLower.includes('esic') || compNameLower.includes('professional tax'))) continue;
+          // Interns are exempt from PF / ESI / PT (but not TDS).
+          if (isIntern && cls.statutoryCode && ['epf', 'eps', 'vpf', 'esi', 'pt', 'lwf'].includes(cls.statutoryCode)) continue;
 
           // ── GATE 4: Amount computation by component type ───────────────────────
           let baseAmount = 0;
@@ -590,7 +622,7 @@ export class PayrollService {
                   const yr = now.getFullYear();
                   const currentFY = now.getMonth() >= 3 ? `${yr}-${yr + 1}` : `${yr - 1}-${yr}`;
                   const projected = (formulaContext['gross'] || resolvedGross) * 12;
-                  const tdsResult = await this.taxService.calculateTDS(ctx, empId, currentFY, projected, 'new');
+                  const tdsResult = await this.taxService.calculateTDS(ctx, empId, currentFY, projected, 'new', { skipAccessCheck: true });
                   onDemandTds = Math.round(tdsResult.totalTaxCalculated / 12);
                 } catch { onDemandTds = 0; }
               }
@@ -688,8 +720,8 @@ export class PayrollService {
             ? Boolean(basedOnAttendanceFlag)
             : (category === 'earning');
           const earnedAmount = isAttendanceBased
-            ? Math.round(baseAmount * lopRatio)
-            : Math.round(baseAmount);
+            ? prorate(baseAmount, lopRatio, rounding)
+            : roundMoney(baseAmount, rounding);
 
           // ── Register in formula context for cascading (next component can use this value) ─
           const normKey = PayrollFormulaEvaluator.normalizeKey(comp.name);
@@ -699,7 +731,7 @@ export class PayrollService {
 
           // ── Route to earnings or deductions ─────────────────────────────────
           if (category === 'earning') {
-            const isSpecial = compNameLower.includes('special') || compNameLower.includes('balance allowance') || compNameLower.includes('residual');
+            const isSpecial = cls.isSpecialAllowanceResidual;
             earnedRows.push({
               componentId: comp.id,
               name: comp.name,
@@ -709,6 +741,8 @@ export class PayrollService {
               earnedAmount: isSpecial ? -1 : earnedAmount,
               formula: comp.formula || `${compType}: ${comp.amount}`,
               isNonCashable: Boolean(comp.is_non_cashable || comp.isNonCashable),
+              statutoryCode: cls.statutoryCode,
+              isBasic: cls.isBasic,
             });
             if (isSpecial) specialAllowanceIdx = earnedRows.length - 1;
           } else if (category === 'deduction') {
@@ -717,16 +751,23 @@ export class PayrollService {
               name: comp.name,
               amount: earnedAmount,
               isSystemRow: false,
+              statutoryCode: cls.statutoryCode,
             });
           }
         }
 
-        // ── Special Allowance: residual = gross - sum(other earnings) ──────────
+        // ── Special Allowance: residual so that Σ(earnings) == earned gross ────
+        // Earned gross is the *prorated* gross (attendance / mid-month join), not
+        // the full monthly gross — otherwise the residual back-fills the days the
+        // employee wasn't paid for.
         if (specialAllowanceIdx >= 0) {
-          const otherEarningsSum = earnedRows
-            .filter((_, i) => i !== specialAllowanceIdx)
-            .reduce((s, r) => s + (r.earnedAmount === -1 ? 0 : r.earnedAmount), 0);
-          const residual = Math.max(0, Math.round(resolvedGross - otherEarningsSum));
+          const otherEarningsSum = sumMoney(
+            earnedRows
+              .filter((_, i) => i !== specialAllowanceIdx)
+              .map((r) => (r.earnedAmount === -1 ? 0 : r.earnedAmount))
+          );
+          const earnedGross = prorate(resolvedGross, lopRatio, rounding);
+          const residual = Math.max(0, subtractMoney(earnedGross, otherEarningsSum));
           earnedRows[specialAllowanceIdx].earnedAmount = residual;
           earnedRows[specialAllowanceIdx].baseAmount = residual;
           formulaContext['special_allowance'] = residual;
@@ -735,34 +776,40 @@ export class PayrollService {
         // ── Track which system-level items are covered by slab components ─────────
         const slabCoversLop = slabComponents.some(c => (c.module_source || c.moduleSource || '').toLowerCase().includes('lop'));
         const slabCoversTds = slabComponents.some(c => (c.module_source || c.moduleSource || '').toLowerCase().includes('tds')
-          || deductionRows.some(d => d.name.toLowerCase().includes('tds') && !d.isSystemRow));
+          || classifyComponent(c).statutoryCode === 'tds')
+          || deductionRows.some(d => d.statutoryCode === 'tds' && !d.isSystemRow);
         const slabCoversLoan = slabComponents.some(c => (c.module_source || c.moduleSource || '').toLowerCase().includes('loan'));
 
         // ── TDS calculation ───────────────────────────────────────────────────
         let tdsDeduction = Number(struct?.tds_deduction || 0);
-        const totalEarningsCalc = earnedRows.reduce((s, r) => s + r.earnedAmount, 0);
+        const totalEarningsCalc = sumMoney(earnedRows.map((r) => r.earnedAmount));
         if (!isIntern && !slabCoversTds && tdsDeduction === 0 && totalEarningsCalc > 0) {
           try {
             const now = new Date();
             const yr = now.getFullYear();
             const currentFY = now.getMonth() >= 3 ? `${yr}-${yr + 1}` : `${yr - 1}-${yr}`;
-            const tdsResult = await this.taxService.calculateTDS(ctx, empId, currentFY, totalEarningsCalc * 12, 'new');
-            tdsDeduction = Math.round(tdsResult.totalTaxCalculated / 12);
+            const tdsResult = await this.taxService.calculateTDS(ctx, empId, currentFY, totalEarningsCalc * 12, 'new', { skipAccessCheck: true });
+            tdsDeduction = roundMoney(tdsResult.totalTaxCalculated / 12, rounding);
           } catch { /* ignore */ }
         }
-        if (tdsDeduction > 0 && !deductionRows.some(d => d.name.toLowerCase().includes('tds'))) {
-          deductionRows.push({ componentId: null, name: 'TDS (Tax Deducted at Source)', amount: tdsDeduction, isSystemRow: true });
+        if (tdsDeduction > 0 && !deductionRows.some(d => d.statutoryCode === 'tds')) {
+          deductionRows.push({ componentId: null, name: 'TDS (Tax Deducted at Source)', amount: tdsDeduction, isSystemRow: true, statutoryCode: 'tds' });
         }
 
         // ── Loan EMI: add if not already in deductions via Module component ───
         if (loanEmiDeduction > 0 && !deductionRows.some(d => d.name.toLowerCase().includes('loan'))) {
-          deductionRows.push({ componentId: null, name: 'Loan EMI', amount: loanEmiDeduction, isSystemRow: true });
+          deductionRows.push({ componentId: null, name: 'Loan EMI', amount: roundMoney(loanEmiDeduction, rounding), isSystemRow: true, statutoryCode: null });
+        }
+
+        // ── Salary advance recovery: add if not already covered by a Module component ─
+        if (advanceRecoveryDeduction > 0 && !deductionRows.some(d => d.name.toLowerCase().includes('advance'))) {
+          deductionRows.push({ componentId: null, name: 'Salary Advance Recovery', amount: roundMoney(advanceRecoveryDeduction, rounding), isSystemRow: true, statutoryCode: null });
         }
 
         // ── LOP informational calculation (already prorated in earnings Gate 6) ───
         let lopDeduction = 0;
         if (lopDays > 0 && resolvedGross > 0) {
-          lopDeduction = Math.round((resolvedGross / totalCycleDays) * lopDays);
+          lopDeduction = totalCycleDays > 0 ? prorate(resolvedGross, lopDays / totalCycleDays, rounding) : 0;
           // Note: Earnings components are already prorated by lopRatio in Gate 6 (earnedAmount = baseAmount * lopRatio).
           // We do NOT add lopDeduction to deductionRows to avoid double deduction.
         }
@@ -780,7 +827,7 @@ export class PayrollService {
               const effDate = new Date(struct.effective_from);
               const runDate = new Date(periodStart);
               const monthsDiff = Math.max(1, (runDate.getFullYear() - effDate.getFullYear()) * 12 + (runDate.getMonth() - effDate.getMonth()));
-              arrearsAmount = diff * monthsDiff;
+              arrearsAmount = roundMoney(diff * monthsDiff, rounding);
             }
           }
         }
@@ -821,9 +868,9 @@ export class PayrollService {
           } catch { /* ignore JSON parse */ }
         }
 
-        // ── Final totals ──────────────────────────────────────────────────────
-        let totalEarnings = earnedRows.reduce((s, r) => s + r.earnedAmount, 0) + arrearsAmount;
-        let totalDeductions = deductionRows.reduce((s, r) => s + r.amount, 0);
+        // ── Final totals (decimal-safe: summed in paise) ──────────────────────
+        let totalEarnings = sumMoney([...earnedRows.map((r) => r.earnedAmount), arrearsAmount]);
+        let totalDeductions = sumMoney(deductionRows.map((r) => r.amount));
 
         if (regOverride) {
           totalEarnings = Number(regOverride.total_gross_earned || regOverride.gross_earned || totalEarnings);
@@ -833,121 +880,128 @@ export class PayrollService {
         // ── Earnings-exceed-gross warning ─────────────────────────────────────
         let processingWarning = '';
         if (!regOverride && totalEarnings > resolvedGross * 1.1) {
-          const excess = Math.round(totalEarnings - resolvedGross);
-          processingWarning = ` [ALERT: Earnings ₹${totalEarnings} exceed gross ₹${resolvedGross} by ₹${excess}. Check component amounts.]`;
+          const excess = roundMoney(subtractMoney(totalEarnings, resolvedGross), rounding);
+          processingWarning = ` [ALERT: Earnings ${totalEarnings} exceed gross ${resolvedGross} by ${excess}. Check component amounts.]`;
         }
 
-        const netSalary = regOverride ? Number(regOverride.net_salary) : Math.max(0, totalEarnings - totalDeductions);
-        const paidDays = regOverride ? Number(regOverride.paid_days) : Math.max(0, totalCycleDays - lopDays);
-        const unpaidDays = regOverride ? Number(regOverride.unpaid_days) : lopDays;
+        const netSalary = regOverride ? Number(regOverride.net_salary) : Math.max(0, subtractMoney(totalEarnings, totalDeductions));
+        const paidDays = regOverride ? Number(regOverride.paid_days) : period.payableDays;
 
         // Employer contributions (for CTC display only — NOT employee deductions)
-        const pfDeductionAmt = deductionRows.find(d => d.name.toLowerCase().includes('provident') || d.name.toLowerCase().includes(' epf') || d.name === 'Employee Provident Fund (EPF)')?.amount ?? 0;
+        const pfDeductionAmt = deductionRows.find(d => d.statutoryCode === 'epf' || d.statutoryCode === 'eps')?.amount ?? 0;
         const pfEmployer = Number(struct?.pf_employer || pfDeductionAmt);
-        const esicDeductionAmt = deductionRows.find(d => d.name.toLowerCase().includes('esi') || d.name.toLowerCase().includes('esic'))?.amount ?? 0;
-        const esicEmployer = Number(struct?.esic_employer || (esicDeductionAmt > 0 ? Math.round(totalEarnings * 0.0325) : 0));
+        const esicDeductionAmt = deductionRows.find(d => d.statutoryCode === 'esi')?.amount ?? 0;
+        const esicEmployer = Number(struct?.esic_employer || (esicDeductionAmt > 0 ? roundMoney(totalEarnings * 0.0325, rounding) : 0));
 
-        const basicEarned = earnedRows.find(r => r.name.toLowerCase().includes('basic'))?.earnedAmount ?? Math.round(totalEarnings * 0.5);
-        const processingNotes = `Dynamic: ${earnedRows.length} earnings, ${deductionRows.length} deductions. LOP=${lopDays}d, PaidDays=${paidDays}${arrearsAmount > 0 ? `, Arrears=₹${arrearsAmount}` : ''}${usedFallback ? ' [fallback: no slab components]' : ''}${processingWarning}`;
+        const basicEarned = earnedRows.find(r => r.isBasic)?.earnedAmount ?? roundMoney(totalEarnings * 0.5, rounding);
+        const periodNote = period.notes.length ? ` | ${period.notes.join('; ')}` : '';
+        const processingNotes = `Dynamic: ${earnedRows.length} earnings, ${deductionRows.length} deductions. LOP=${lopDays}d, PaidDays=${paidDays}/${totalCycleDays}${arrearsAmount > 0 ? `, Arrears=${arrearsAmount}` : ''}${usedFallback ? ' [fallback: no slab components]' : ''}${periodNote}${processingWarning}`;
 
-        // ── Update payroll_run_employees ──────────────────────────────────────
-        await this.runEmployeeRepo.update(ctx, empRun.id, {
-          working_days: paidDays,
-          leave_days: Number((unadjustedLopDays + attendanceLopDays).toFixed(2)),
-          paid_leave_days: Math.max(0, paidDays),
-          unpaid_leave_days: unpaidDays,
-          overtime_hours: 0,
-          tax_deducted: tdsDeduction,
-          total_earnings: totalEarnings,
-          total_deductions: totalDeductions,
-          net_salary: netSalary,
-          status: 'processed',
-          processed_at: mysqlNow(),
-          processing_notes: processingNotes,
-          updated_by: ctx.userId
-        });
+        // ── Persist this employee's results atomically ───────────────────────
+        // One transaction per employee: a failure here rolls back *this*
+        // employee's rows only, leaving the rest of the run intact, and never
+        // leaves half-written earnings/deductions behind. Errors are no longer
+        // swallowed — they propagate to the per-employee catch below.
+        const payslipMonthDate = `${runMonthStr}-01`;
+        const payslipNum = `PS-${runMonthStr.replace(/-/g, '')}-${empId}`;
+        const empCompanyId = empRow?.company_id || (run as any).company_id || ctx.companyId || null;
 
-        // ── Write payroll_earnings rows ───────────────────────────────────────
-        try {
-          await db('payroll_earnings').where('payroll_run_employee_id', empRun.id).delete().catch(() => { });
-          await db('payroll_deductions').where('payroll_run_employee_id', empRun.id).delete().catch(() => { });
+        const earningInserts: any[] = [];
+        for (const row of earnedRows) {
+          if (row.earnedAmount === 0 && row.baseAmount === 0) continue;
+          earningInserts.push({
+            uuid: uuidv4(),
+            organization_id: ctx.organizationId,
+            payroll_run_employee_id: empRun.id,
+            component_id: row.componentId || null,
+            component_name: row.name,
+            group_name: row.groupName || null,
+            calculated_value: row.baseAmount,
+            actual_value: row.earnedAmount,
+            formula_used: row.formula || row.name,
+            is_non_cashable: row.isNonCashable ? 1 : 0,
+            created_at: new Date(),
+          });
+        }
+        if (arrearsAmount > 0) {
+          earningInserts.push({
+            uuid: uuidv4(), organization_id: ctx.organizationId,
+            payroll_run_employee_id: empRun.id, component_id: null,
+            component_name: 'Arrears (Backdated Revision)',
+            calculated_value: arrearsAmount, actual_value: arrearsAmount,
+            formula_used: 'Backdated salary revision arrear', created_at: new Date(),
+          });
+        }
+        if (regOverride && Number(regOverride.adjustment || 0) !== 0) {
+          earningInserts.push({
+            uuid: uuidv4(), organization_id: ctx.organizationId,
+            payroll_run_employee_id: empRun.id, component_id: null,
+            component_name: 'Adjustment / Bonus',
+            calculated_value: Number(regOverride.adjustment), actual_value: Number(regOverride.adjustment),
+            formula_used: 'Manual override', created_at: new Date(),
+          });
+        }
+        const deductionInserts = deductionRows
+          .filter((ded) => ded.amount !== 0)
+          .map((ded) => ({
+            uuid: uuidv4(),
+            organization_id: ctx.organizationId,
+            payroll_run_employee_id: empRun.id,
+            component_id: ded.componentId || null,
+            component_name: ded.name,
+            calculated_value: ded.amount,
+            actual_value: ded.amount,
+            created_at: new Date(),
+          }));
 
-          for (const row of earnedRows) {
-            if (row.earnedAmount === 0 && row.baseAmount === 0) continue;
-            await db('payroll_earnings').insert({
-              uuid: uuidv4(),
-              organization_id: ctx.organizationId,
-              payroll_run_employee_id: empRun.id,
-              component_id: row.componentId || null,
-              component_name: row.name,
-              group_name: row.groupName || null,
-              calculated_value: row.baseAmount,
-              actual_value: row.earnedAmount,
-              formula_used: row.formula || row.name,
-              is_non_cashable: row.isNonCashable ? 1 : 0,
-              created_at: new Date()
-            }).catch(() => { });
-          }
+        await db.transaction(async (trx) => {
+          await trx('payroll_run_employees')
+            .where('id', empRun.id)
+            .where('organization_id', ctx.organizationId)
+            .update({
+              working_days: paidDays,
+              leave_days: Number(attendanceLopDays.toFixed(2)),
+              paid_leave_days: Number(Math.max(0, attendanceLopDays - period.lopDays).toFixed(2)),
+              unpaid_leave_days: Number((period.lopDays).toFixed(2)),
+              overtime_hours: 0,
+              tax_deducted: tdsDeduction,
+              total_earnings: totalEarnings,
+              total_deductions: totalDeductions,
+              net_salary: netSalary,
+              status: 'processed',
+              processed_at: mysqlNow(),
+              processing_notes: processingNotes,
+              updated_by: ctx.userId,
+              updated_at: mysqlNow(),
+            });
 
-          if (arrearsAmount > 0) {
-            await db('payroll_earnings').insert({
-              uuid: uuidv4(), organization_id: ctx.organizationId,
-              payroll_run_employee_id: empRun.id, component_id: null,
-              component_name: 'Arrears (Backdated Revision)',
-              calculated_value: arrearsAmount, actual_value: arrearsAmount,
-              formula_used: 'Backdated salary revision arrear', created_at: new Date()
-            }).catch(() => { });
-          }
+          await trx('payroll_earnings').where('payroll_run_employee_id', empRun.id).delete();
+          await trx('payroll_deductions').where('payroll_run_employee_id', empRun.id).delete();
+          if (earningInserts.length) await trx('payroll_earnings').insert(earningInserts);
+          if (deductionInserts.length) await trx('payroll_deductions').insert(deductionInserts);
 
-          if (regOverride && Number(regOverride.adjustment || 0) !== 0) {
-            await db('payroll_earnings').insert({
-              uuid: uuidv4(), organization_id: ctx.organizationId,
-              payroll_run_employee_id: empRun.id, component_id: null,
-              component_name: 'Adjustment / Bonus',
-              calculated_value: Number(regOverride.adjustment), actual_value: Number(regOverride.adjustment),
-              formula_used: 'Manual override', created_at: new Date()
-            }).catch(() => { });
-          }
-
-          for (const ded of deductionRows) {
-            if (ded.amount === 0) continue;
-            await db('payroll_deductions').insert({
-              uuid: uuidv4(),
-              organization_id: ctx.organizationId,
-              payroll_run_employee_id: empRun.id,
-              component_id: ded.componentId || null,
-              component_name: ded.name,
-              calculated_value: ded.amount,
-              actual_value: ded.amount,
-              created_at: new Date()
-            }).catch(() => { });
-          }
-        } catch { /* supplemental rows — silent */ }
-
-        // ── Upsert preview payslip ────────────────────────────────────────────
-        try {
-          const payslipMonthDate = `${runMonthStr}-01`;
-          const payslipNum = `PS-${runMonthStr.replace(/-/g, '')}-${empId}`;
-          const empCompanyId = empRow?.company_id || (run as any).company_id || ctx.companyId || null;
-          const existing = await db('payslips')
+          const existing = await trx('payslips')
             .where({ organization_id: ctx.organizationId, employee_id: empId, payslip_month: payslipMonthDate })
-            .whereNull('deleted_at').first().catch(() => null);
+            .whereNull('deleted_at')
+            .first();
 
-          if (existing) {
-            await db('payslips').where('id', existing.id).update({
+          if (existing?.is_locked) {
+            // A locked / published payslip is authoritative — never overwrite it
+            // during (re)processing. FIX 1 also blocks regenerating finalized runs.
+          } else if (existing) {
+            await trx('payslips').where('id', existing.id).update({
               payroll_run_id: payrollRunId,
               company_id: existing.company_id || (empCompanyId ? Number(empCompanyId) : null),
-              // Always keep CTC from the salary structure — never recompute from earnings
               ctc: resolvedAnnualCtc || existing.ctc || 0,
               basic_salary: basicEarned,
               gross_salary: totalEarnings,
               total_deductions: totalDeductions,
               net_salary: netSalary,
               is_locked: false,
-              updated_at: new Date()
+              updated_at: new Date(),
             });
           } else {
-            await db('payslips').insert({
+            await trx('payslips').insert({
               uuid: uuidv4(),
               organization_id: ctx.organizationId,
               company_id: empCompanyId ? Number(empCompanyId) : null,
@@ -955,8 +1009,6 @@ export class PayrollService {
               payroll_run_id: payrollRunId,
               payslip_month: payslipMonthDate,
               payslip_number: payslipNum,
-              // CTC = annual CTC from salary structure (source of truth)
-              // Never compute as (earnings + employer contributions) × 12 — that inflates CTC
               ctc: resolvedAnnualCtc || 0,
               basic_salary: basicEarned,
               gross_salary: totalEarnings,
@@ -964,18 +1016,34 @@ export class PayrollService {
               net_salary: netSalary,
               is_locked: false,
               created_by: ctx.userId, updated_by: ctx.userId,
-              created_at: new Date(), updated_at: new Date()
+              created_at: new Date(), updated_at: new Date(),
             });
           }
-        } catch { }
+        });
 
         processedCount++;
       } catch (error) {
         errorCount++;
+        if (!firstError) firstError = (error as Error).message;
+        console.error(`[processPayroll] run ${payrollRunId} employee ${(empRun as any).id} failed:`, error);
         await this.runEmployeeRepo.updateProcessingStatus(
           ctx, empRun.id, 'error', (error as Error).message
         );
       }
+    }
+
+    // If every employee failed, the run produced nothing usable — surface it
+    // instead of parking a "completed" run with zero figures.
+    if (processedCount === 0 && errorCount > 0) {
+      await this.runRepo.update(ctx, payrollRunId, {
+        status: 'draft',
+        processed_employees: 0,
+        error_count: errorCount,
+        updated_by: ctx.userId,
+      });
+      throw new ValidationError(
+        `Payroll processing failed for all ${errorCount} employee(s). First error: ${firstError}`
+      );
     }
 
     const updated = await this.runRepo.update(ctx, payrollRunId, {
@@ -991,6 +1059,15 @@ export class PayrollService {
   async lockPayroll(ctx: TenantContext, payrollRunId: number) {
     const run = await this.runRepo.getById(ctx, payrollRunId);
     if (!run) throw new NotFoundError('Payroll run not found');
+
+    // Only a fully processed run can be locked for approval. Locking a draft /
+    // processing run would freeze zero/partial figures.
+    const lockable = ['completed', 'calculated', 'processing'];
+    if (!lockable.includes(String(run.status))) {
+      throw new ValidationError(
+        `Payroll run cannot be locked from status "${run.status}". Process it first.`
+      );
+    }
 
     const updated = await this.runRepo.update(ctx, payrollRunId, {
       status: 'locked',
@@ -1123,24 +1200,33 @@ export class PayrollService {
   }
 
   async publishPayroll(ctx: TenantContext, payrollRunId: number) {
-    const run = withSnakeAliases(await this.runRepo.getById(ctx, payrollRunId));
-    if (!run) throw new NotFoundError('Payroll run not found');
+    const db = getKnex();
 
-    if (run.status !== 'approved') {
-      throw new ValidationError(`Payroll must be approved before publishing. Current status: "${run.status}". CEO/Admin approval is required.`);
+    // ── Atomic approved → published flip — blocks a double-publish race ──────
+    const flipped = await db('payroll_runs')
+      .where('id', payrollRunId)
+      .where('organization_id', ctx.organizationId)
+      .where('status', 'approved')
+      .update({
+        status: 'published',
+        published_at: mysqlNow(),
+        updated_by: ctx.userId,
+        updated_at: mysqlNow(),
+      });
+
+    if (flipped === 0) {
+      const current = await this.runRepo.getById(ctx, payrollRunId);
+      if (!current) throw new NotFoundError('Payroll run not found');
+      throw new ValidationError(
+        `Payroll must be approved before publishing. Current status: "${(current as any).status}". CEO/Admin approval is required.`
+      );
     }
 
-    const updated = await this.runRepo.update(ctx, payrollRunId, {
-      status: 'published',
-      approved_by: run.approved_by || ctx.userId,
-      approved_at: run.approved_at || mysqlNow(),
-      published_at: mysqlNow(),
-      updated_by: ctx.userId
-    });
+    const run = withSnakeAliases(await this.runRepo.getById(ctx, payrollRunId));
+    const updated = run;
 
     // Generate / upsert payslips — preview payslips may already exist from processPayroll
     // 🔧 FIX: Upsert by (employee_id + payslip_month) to prevent duplicates.
-    const db = getKnex();
     const employees = await this.runEmployeeRepo.getForRun(ctx, payrollRunId);
     for (const emp of employees) {
       // getForRun() goes through BaseRepository.list(), which camelCases —
@@ -1178,39 +1264,43 @@ export class PayrollService {
         ? positiveNum(existingPayslip.basic_salary, Math.round(empTotalEarnings * 0.5))
         : positiveNum(struct?.basic_monthly, Math.round(empTotalEarnings * 0.5));
 
-      if (existingPayslip) {
-        // Update the preview payslip with final locked values
-        await db('payslips').where('id', existingPayslip.id).update({
-          payroll_run_id: payrollRunId,
-          ctc: ctcVal,
-          basic_salary: basicVal,
-          gross_salary: empTotalEarnings,
-          total_deductions: empTotalDeductions,
-          net_salary: empNetSalary,
-          is_locked: true,
-          locked_at: mysqlNow(),
-          updated_by: ctx.userId,
-          updated_at: new Date()
-        });
-      } else {
-        await this.payslipRepo.create(ctx, {
-          uuid: uuidv4(),
-          organization_id: ctx.organizationId,
-          employee_id: empId,
-          payroll_run_id: payrollRunId,
-          payslip_month: payslipMonthVal,
-          payslip_number: payslipNumber,
-          ctc: ctcVal,
-          basic_salary: basicVal,
-          gross_salary: empTotalEarnings,
-          total_deductions: empTotalDeductions,
-          net_salary: empNetSalary,
-          is_locked: true,
-          locked_at: mysqlNow(),
-          created_by: ctx.userId,
-          updated_by: ctx.userId
-        });
-      }
+      await db.transaction(async (trx) => {
+        if (existingPayslip) {
+          // Update the preview payslip with final locked values
+          await trx('payslips').where('id', existingPayslip.id).update({
+            payroll_run_id: payrollRunId,
+            ctc: ctcVal,
+            basic_salary: basicVal,
+            gross_salary: empTotalEarnings,
+            total_deductions: empTotalDeductions,
+            net_salary: empNetSalary,
+            is_locked: true,
+            locked_at: mysqlNow(),
+            updated_by: ctx.userId,
+            updated_at: mysqlNow(),
+          });
+        } else {
+          await trx('payslips').insert({
+            uuid: uuidv4(),
+            organization_id: ctx.organizationId,
+            employee_id: empId,
+            payroll_run_id: payrollRunId,
+            payslip_month: payslipMonthVal,
+            payslip_number: payslipNumber,
+            ctc: ctcVal,
+            basic_salary: basicVal,
+            gross_salary: empTotalEarnings,
+            total_deductions: empTotalDeductions,
+            net_salary: empNetSalary,
+            is_locked: true,
+            locked_at: mysqlNow(),
+            created_by: ctx.userId,
+            updated_by: ctx.userId,
+            created_at: mysqlNow(),
+            updated_at: mysqlNow(),
+          });
+        }
+      });
 
       // Send in-app and template notifications to each employee
       try {

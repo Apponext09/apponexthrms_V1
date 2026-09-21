@@ -220,6 +220,59 @@ export class PayrollRegisterController {
       const monthStart = fromDate ? String(fromDate).slice(0, 10) : `${targetMonth}-${String(cycleStartDay).padStart(2, '0')}`;
       const monthEnd = toDate ? String(toDate).slice(0, 10) : `${targetMonth}-${String(cycleCutoffDay).padStart(2, '0')}`;
 
+      // ── Authoritative results from an already-processed payroll run ──────────
+      // Once payroll has actually been processed, the register MUST reflect the
+      // figures that were persisted by PayrollService.processPayroll (the single
+      // calculation engine) — not re-derive them here. The preview chain below
+      // only runs for months that have not been processed yet.
+      const authByEmp = new Map<number, any>();
+      try {
+        const processedRun = await db('payroll_runs')
+          .where('organization_id', targetOrgId)
+          .whereRaw("DATE_FORMAT(run_month, '%Y-%m') = ?", [targetMonth])
+          .whereIn('status', ['completed', 'calculated', 'locked', 'approved', 'published', 'paid'])
+          .orderBy('id', 'desc')
+          .first();
+        if (processedRun) {
+          const preRows = await db('payroll_run_employees')
+            .where('payroll_run_id', processedRun.id)
+            .where('organization_id', targetOrgId);
+          const preIds = preRows.map((r: any) => r.id ?? r.ID);
+          const earnAgg = preIds.length ? await db('payroll_earnings')
+            .whereIn('payroll_run_employee_id', preIds)
+            .select('payroll_run_employee_id', 'component_name', 'actual_value') : [];
+          const dedAgg = preIds.length ? await db('payroll_deductions')
+            .whereIn('payroll_run_employee_id', preIds)
+            .select('payroll_run_employee_id', 'component_name', 'actual_value') : [];
+          const byPre: Record<number, { earnings: any[]; deductions: any[] }> = {};
+          for (const r of preRows) byPre[r.id ?? r.ID] = { earnings: [], deductions: [] };
+          for (const e of earnAgg) byPre[(e as any).payrollRunEmployeeId ?? (e as any).payroll_run_employee_id]?.earnings.push(e);
+          for (const d of dedAgg) byPre[(d as any).payrollRunEmployeeId ?? (d as any).payroll_run_employee_id]?.deductions.push(d);
+          const { classifyComponent } = await import('../utils/payroll.classify');
+          for (const r of preRows) {
+            const s = withSnakeAliases(r) || r;
+            const bucket = byPre[r.id ?? r.ID] || { earnings: [], deductions: [] };
+            const find = (arr: any[], code: string) => Number(
+              arr.find((x) => classifyComponent({ name: x.componentName ?? x.component_name }).statutoryCode === code)
+                ?.actualValue ?? arr.find((x) => classifyComponent({ name: x.componentName ?? x.component_name }).statutoryCode === code)?.actual_value ?? 0
+            );
+            authByEmp.set(Number(s.employee_id), {
+              runId: processedRun.id,
+              paid_days: Number(s.working_days ?? 0),
+              unpaid_days: Number(s.unpaid_leave_days ?? 0),
+              gross_earned: Number(s.total_earnings ?? 0),
+              total_deduction: Number(s.total_deductions ?? 0),
+              net_salary: Number(s.net_salary ?? 0),
+              tds: Number(s.tax_deducted ?? 0) || find(bucket.deductions, 'tds'),
+              pf: find(bucket.deductions, 'epf') + find(bucket.deductions, 'eps'),
+              esic: find(bucket.deductions, 'esi'),
+              pt: find(bucket.deductions, 'pt'),
+              runStatus: processedRun.status,
+            });
+          }
+        }
+      } catch { /* preview mode */ }
+
       const resultRows = [];
 
       for (const rawEmp of employees) {
@@ -910,6 +963,31 @@ export class PayrollRegisterController {
           is_overridden: Boolean(override),
           component_values: componentValues,
         });
+
+        // ── Overlay authoritative processed-run figures (single engine) ───────
+        // A manual register override still wins; otherwise the persisted run
+        // values replace the preview re-calculation so the register always
+        // matches GET /payroll/:id, the payslip and the payslip details.
+        const auth = authByEmp.get(Number(emp.id));
+        if (auth && !override) {
+          const row: any = resultRows[resultRows.length - 1];
+          row.paid_days = auth.paid_days;
+          row.unpaid_days = auth.unpaid_days;
+          row.gross_earned = auth.gross_earned;
+          row.grossEarned = auth.gross_earned;
+          row.total_gross_earned = auth.gross_earned;
+          row.total_deduction = auth.total_deduction;
+          row.totalDeduction = auth.total_deduction;
+          row.net_salary = auth.net_salary;
+          row.netSalary = auth.net_salary;
+          row.pt = auth.pt;
+          row.pf = auth.pf;
+          row.esic = auth.esic;
+          row.tds = auth.tds;
+          row.status = String(auth.runStatus || 'PROCESSED').toUpperCase();
+          row.source = 'payroll_run';
+          row.payroll_run_id = auth.runId;
+        }
       }
 
       // ── Apply payrollStatus filter (post-processing) ───────────────────────────────

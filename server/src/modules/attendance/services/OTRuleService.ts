@@ -1,7 +1,8 @@
 import { v4 as uuidv4 } from 'uuid';
 import { OTRuleRepository, type OTRule } from '../repositories/OTRuleRepository';
 import { AuditService } from '../../audit/audit.service';
-import { NotFoundError } from '../../../common/errors/index';
+import { NotFoundError, ValidationError, ConflictError } from '../../../common/errors/index';
+import { getKnex } from '../../../db/knex';
 import type { TenantContext } from '../../../db/types';
 import { logger } from '@/common/lib/logger';
 
@@ -24,10 +25,24 @@ export class OTRuleService {
   // ── CRUD ──────────────────────────────────────────────────────────────────
 
   async createRule(ctx: TenantContext, input: Record<string, any>): Promise<OTRule> {
+    const ruleName = input.ruleName || input.rule_name;
+    if (!ruleName || !String(ruleName).trim()) {
+      throw new ValidationError('OT rule name is required');
+    }
+    // Reject a duplicate name up front with a clean 409 (there is no DB unique constraint,
+    // but two rules with the same name are never useful and confuse eligibility resolution).
+    const dup = await getKnex()('ot_rules')
+      .where({ organization_id: ctx.organizationId, rule_name: String(ruleName).trim() })
+      .whereNull('deleted_at')
+      .first('id');
+    if (dup) {
+      throw new ConflictError(`An OT rule named '${String(ruleName).trim()}' already exists`);
+    }
+
     const rule = await this.ruleRepo.create(ctx, {
       uuid:            uuidv4(),
-      code:            input.code || (input.ruleName || input.rule_name || 'OT').toLowerCase().replace(/[^a-z0-9]/g, '_'),
-      rule_name:       input.ruleName || input.rule_name,
+      // NOTE: ot_rules has no `code` column — do not insert one (was a guaranteed 500 on every create).
+      rule_name:       String(ruleName).trim(),
       title_change:    input.titleChange || input.title_change || null,
       period:          input.period || 'daily',
       shift_type:      input.shiftType || input.shift_type || 'time_bound',
@@ -68,8 +83,18 @@ export class OTRuleService {
   async updateRule(ctx: TenantContext, id: number, input: Record<string, any>): Promise<OTRule> {
     const updates: Record<string, any> = { updated_by: ctx.userId };
 
-    if (input.ruleName !== undefined) updates.rule_name = input.ruleName;
-    if (input.rule_name !== undefined) updates.rule_name = input.rule_name;
+    const newName = input.ruleName ?? input.rule_name;
+    if (newName !== undefined) {
+      const trimmed = String(newName).trim();
+      if (!trimmed) throw new ValidationError('OT rule name cannot be empty');
+      const clash = await getKnex()('ot_rules')
+        .where({ organization_id: ctx.organizationId, rule_name: trimmed })
+        .whereNull('deleted_at')
+        .whereNot('id', id)
+        .first('id');
+      if (clash) throw new ConflictError(`An OT rule named '${trimmed}' already exists`);
+      updates.rule_name = trimmed;
+    }
     if (input.titleChange !== undefined) updates.title_change = input.titleChange;
     if (input.period !== undefined) updates.period = input.period;
     if (input.shiftType !== undefined) updates.shift_type = input.shiftType;

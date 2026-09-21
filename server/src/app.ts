@@ -14,6 +14,7 @@ import { errorHandler, notFoundHandler } from './common/middleware/errorHandler'
 import swaggerUi from 'swagger-ui-express';
 import v1Routes from './routes/v1';
 import masterHolidayCalendarRoutes from './modules/master/routes/masterHolidayCalendar.routes';
+import { policyController } from './modules/policy/controllers/PolicyController';
 import { swaggerDocument } from './swagger/swaggerDoc';
 import { getSwaggerHtml } from './swagger/swaggerHtml';
 
@@ -98,6 +99,7 @@ export function createApp() {
   const uploadsDir = path.join(__dirname, '../uploads');
   const resumesDir = path.join(uploadsDir, 'resumes');
   const companiesDir = path.join(uploadsDir, 'companies');
+  const policiesDir = path.join(uploadsDir, 'policies');
   const publicUploadsDir = path.join(process.cwd(), 'public', 'uploads');
 
   if (!fs.existsSync(uploadsDir)) {
@@ -108,6 +110,9 @@ export function createApp() {
   }
   if (!fs.existsSync(companiesDir)) {
     fs.mkdirSync(companiesDir, { recursive: true });
+  }
+  if (!fs.existsSync(policiesDir)) {
+    fs.mkdirSync(policiesDir, { recursive: true });
   }
   if (!fs.existsSync(publicUploadsDir)) {
     fs.mkdirSync(publicUploadsDir, { recursive: true });
@@ -170,9 +175,15 @@ export function createApp() {
   app.use('/api/v1', v1Routes);
 
   /**
+   * Direct E-Signature Webhook route alias
+   */
+  app.post('/api/integrations/esign/webhook', policyController.handleWebhook);
+
+  /**
    * Direct Master API alias routes
    */
   app.use('/api/master/holiday-calendars', (req, res, next) => masterHolidayCalendarRoutes(req, res, next));
+
 
   /**
    * 404 handler (must come after all routes)

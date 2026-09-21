@@ -2,6 +2,7 @@ import { EmployeeStatusRepository, type EmployeeStatusCreate, type EmployeeStatu
 import type { TenantContext, ListQueryOptions } from '../../../db/types';
 import { NotFoundError, ConflictError } from '../../../common/errors';
 import crypto from 'crypto';
+import { assertMasterNotInUse } from '../utils/masterUsage';
 
 export class EmployeeStatusService {
   private repo: EmployeeStatusRepository;

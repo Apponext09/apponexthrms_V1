@@ -9,6 +9,7 @@ import { NotFoundError, ValidationError } from '../../../common/errors/index';
 import type { TenantContext } from '../../../db/types';
 import { getKnex } from '../../../db/knex';
 import { withSnakeAliases } from '../utils/payroll.utils';
+import { assertCanAccessEmployeePayroll, scopeEmployeeIdForCaller } from '../utils/payroll.access';
 
 interface CreateSettlementInput {
   employeeId: number;
@@ -356,6 +357,7 @@ export class SettlementService {
     const db = getKnex();
     const settlement = withSnakeAliases(await this.settlementRepo.getById(ctx, settlementId));
     if (!settlement) return null;
+    await assertCanAccessEmployeePayroll(ctx, settlement.employee_id);
 
     const emp = withSnakeAliases(await db('employees').where('id', settlement.employee_id).first().catch(() => null));
     return {
@@ -377,6 +379,7 @@ export class SettlementService {
 
   async getSettlements(ctx: TenantContext, employeeId?: number) {
     try {
+      employeeId = await scopeEmployeeIdForCaller(ctx, employeeId);
       const db = getKnex();
 
       let tableName = 'full_and_final_settlements';

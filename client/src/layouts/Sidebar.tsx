@@ -354,19 +354,11 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
                         <span className="flex-shrink-0 text-muted-foreground transition-colors group-hover:text-foreground">
                           {getIconComponent(section.icon || section.items?.[0]?.icon)}
                         </span>
-                        <AnimatePresence>
-                          {open && (
-                            <motion.span
-                              initial={{ opacity: 0 }}
-                              animate={{ opacity: 1 }}
-                              exit={{ opacity: 0 }}
-                              transition={{ duration: 0.12 }}
-                              className="flex-1 overflow-hidden truncate text-left text-[12px] font-semibold tracking-tight"
-                            >
-                              {section.label}
-                            </motion.span>
-                          )}
-                        </AnimatePresence>
+                        {open && (
+                          <span className="flex-1 overflow-hidden truncate text-left text-[12px] font-semibold tracking-tight">
+                            {section.label}
+                          </span>
+                        )}
                         {open && (
                           <ChevronDown
                             className={cn(
@@ -405,20 +397,12 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
                                   <span className="flex-shrink-0">
                                     {getIconComponent(item.icon)}
                                   </span>
-                                  <AnimatePresence>
-                                    {open && (
-                                      <motion.div
-                                        initial={{ opacity: 0 }}
-                                        animate={{ opacity: 1 }}
-                                        exit={{ opacity: 0 }}
-                                        transition={{ duration: 0.12 }}
-                                        className="flex-1 text-left overflow-hidden flex items-center justify-between gap-1.5"
-                                      >
-                                        <span className="truncate">{item.name}</span>
-                                        <ChevronDown className="ml-auto size-3 flex-shrink-0 text-muted-foreground/60 transition-transform duration-200 group-data-[state=open]/sub:rotate-180" />
-                                      </motion.div>
-                                    )}
-                                  </AnimatePresence>
+                                  {open && (
+                                    <div className="flex-1 text-left overflow-hidden flex items-center justify-between gap-1.5">
+                                      <span className="truncate">{item.name}</span>
+                                      <ChevronDown className="ml-auto size-3 flex-shrink-0 text-muted-foreground/60 transition-transform duration-200 group-data-[state=open]/sub:rotate-180" />
+                                    </div>
+                                  )}
                                 </button>
                               </CollapsibleTrigger>
 
@@ -440,24 +424,16 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
                                       <span className="flex-shrink-0">
                                         {getIconComponent(child.icon)}
                                       </span>
-                                      <AnimatePresence>
-                                        {open && (
-                                          <motion.div
-                                            initial={{ opacity: 0 }}
-                                            animate={{ opacity: 1 }}
-                                            exit={{ opacity: 0 }}
-                                            transition={{ duration: 0.12 }}
-                                            className="flex-1 text-left overflow-hidden flex items-center gap-1.5"
-                                          >
-                                            <span className="truncate">{child.name}</span>
-                                            {child.badge && (
-                                              <Badge variant="secondary" className="text-[9px] px-1 py-0 ml-auto font-normal">
-                                                {child.badge}
-                                              </Badge>
-                                            )}
-                                          </motion.div>
-                                        )}
-                                      </AnimatePresence>
+                                      {open && (
+                                        <div className="flex-1 text-left overflow-hidden flex items-center gap-1.5">
+                                          <span className="truncate">{child.name}</span>
+                                          {child.badge && (
+                                            <Badge variant="secondary" className="text-[9px] px-1 py-0 ml-auto font-normal">
+                                              {child.badge}
+                                            </Badge>
+                                          )}
+                                        </div>
+                                      )}
                                     </button>
                                   );
                                 })}
@@ -482,25 +458,17 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
                             <span className="flex-shrink-0">
                               {getIconComponent(item.icon)}
                             </span>
-                            <AnimatePresence>
-                              {open && (
-                                <motion.div
-                                  initial={{ opacity: 0 }}
-                                  animate={{ opacity: 1 }}
-                                  exit={{ opacity: 0 }}
-                                  transition={{ duration: 0.12 }}
-                                  className="flex-1 text-left overflow-hidden flex items-center gap-1.5"
-                                >
-                                  <span className="truncate">{item.name}</span>
-                                  {item.badge && (
-                                    <Badge variant="secondary" className="text-[9px] px-1 py-0 ml-auto font-normal">
-                                      {item.badge}
-                                    </Badge>
-                                  )}
-                                  {isLocked && <Lock className="h-3 w-3 ml-auto flex-shrink-0 text-amber-500" />}
-                                </motion.div>
-                              )}
-                            </AnimatePresence>
+                            {open && (
+                              <div className="flex-1 text-left overflow-hidden flex items-center gap-1.5">
+                                <span className="truncate">{item.name}</span>
+                                {item.badge && (
+                                  <Badge variant="secondary" className="text-[9px] px-1 py-0 ml-auto font-normal">
+                                    {item.badge}
+                                  </Badge>
+                                )}
+                                {isLocked && <Lock className="h-3 w-3 ml-auto flex-shrink-0 text-amber-500" />}
+                              </div>
+                            )}
                           </button>
                         );
                       })}
@@ -523,19 +491,11 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
                     <span className="flex-shrink-0">
                       {getIconComponent(section.items[0].icon)}
                     </span>
-                    <AnimatePresence>
-                      {open && (
-                        <motion.span
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          exit={{ opacity: 0 }}
-                          transition={{ duration: 0.12 }}
-                          className="font-medium overflow-hidden flex-1 text-left truncate"
-                        >
-                          {section.label}
-                        </motion.span>
-                      )}
-                    </AnimatePresence>
+                    {open && (
+                      <span className="font-medium overflow-hidden flex-1 text-left truncate">
+                        {section.label}
+                      </span>
+                    )}
                   </button>
                 )}
               </Collapsible>

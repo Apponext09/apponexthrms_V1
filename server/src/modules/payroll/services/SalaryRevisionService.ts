@@ -8,6 +8,7 @@ import { NotFoundError, ValidationError } from '../../../common/errors/index';
 import type { TenantContext } from '../../../db/types';
 import { getKnex } from '../../../db/knex';
 import { PayrollFormulaEvaluator } from '../utils/PayrollFormulaEvaluator';
+import { assertCanAccessEmployeePayroll } from '../utils/payroll.access';
 
 interface RequestRevisionInput {
   employeeId: number;
@@ -363,10 +364,18 @@ export class SalaryRevisionService {
   }
 
   async getRevision(ctx: TenantContext, revisionId: number) {
-    return this.revisionRepo.getById(ctx, revisionId);
+    const revision = await this.revisionRepo.getById(ctx, revisionId);
+    if (revision) {
+      await assertCanAccessEmployeePayroll(ctx, (revision as any).employeeId ?? (revision as any).employee_id);
+    }
+    return revision;
   }
 
   async getRevisionComponents(ctx: TenantContext, revisionId: number) {
+    const revision = await this.revisionRepo.getById(ctx, revisionId);
+    if (revision) {
+      await assertCanAccessEmployeePayroll(ctx, (revision as any).employeeId ?? (revision as any).employee_id);
+    }
     return this.revisionComponentRepo.getForRevision(ctx, revisionId);
   }
 

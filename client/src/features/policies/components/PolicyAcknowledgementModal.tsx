@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import type { RolePolicyRecord } from '../types/policy';
 import { Button } from '@/components/ui/button';
+import { PolicySignaturePad } from './PolicySignaturePad';
 import {
   ShieldCheck,
   CheckCircle2,
@@ -23,6 +24,7 @@ export const PolicyAcknowledgementModal: React.FC<PolicyAcknowledgementModalProp
 }) => {
   const [readConfirmed, setReadConfirmed] = useState(false);
   const [termsAgreed, setTermsAgreed] = useState(false);
+  const [signatureData, setSignatureData] = useState<string | null>(null);
   const [comments, setComments] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -105,6 +107,11 @@ export const PolicyAcknowledgementModal: React.FC<PolicyAcknowledgementModalProp
               </span>
             </label>
           </div>
+
+          {/* Signature Input (Draw, Type, Upload Signature) */}
+          <PolicySignaturePad
+            onSignatureChange={(data) => setSignatureData(data)}
+          />
 
           <div className="space-y-1 pt-1">
             <label className="block text-xs font-bold text-foreground">Optional Employee Remarks / Comments</label>

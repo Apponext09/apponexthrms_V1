@@ -7,6 +7,7 @@ import { EmployeeProfessionalInfoRepository } from '../repositories/EmployeeProf
 import { AuditService } from '../../audit/audit.service';
 import { BiometricService } from '../../attendance/services/BiometricService';
 import { NotFoundError, ValidationError } from '../../../common/errors/index';
+import { OrgHierarchyService } from './OrgHierarchyService';
 import type { TenantContext, ListQueryOptions } from '../../../db/types';
 
 async function resolveAuditUserId(db: any, ctx: TenantContext): Promise<number> {
@@ -647,10 +648,22 @@ export class EmployeeService {
     if (input.job_title !== undefined) payload.job_title = input.job_title;
     if (input.customIdCard !== undefined) payload.custom_id_card = input.customIdCard;
     if (input.custom_id_card !== undefined) payload.custom_id_card = input.custom_id_card;
-    if (input.reportingManagerId !== undefined) payload.reporting_manager_id = input.reportingManagerId;
-    if (input.reporting_manager_id !== undefined) payload.reporting_manager_id = input.reporting_manager_id;
+    if (input.reportingManagerId !== undefined || input.reporting_manager_id !== undefined) {
+      const targetMgrId = input.reportingManagerId !== undefined ? input.reportingManagerId : input.reporting_manager_id;
+      const numTargetId = targetMgrId !== null && targetMgrId !== undefined && String(targetMgrId).trim() !== '' ? Number(targetMgrId) : null;
+      const existingMgrId = (employee as any).reporting_manager_id !== null && (employee as any).reporting_manager_id !== undefined ? Number((employee as any).reporting_manager_id) : null;
+
+      if (numTargetId !== existingMgrId) {
+        const orgHierarchyService = new OrgHierarchyService();
+        await orgHierarchyService.validateReportingManagerUpdate(ctx, Number(employeeId), numTargetId);
+      }
+      payload.reporting_manager_id = targetMgrId;
+    }
     if (input.designationId !== undefined) payload.current_designation_id = input.designationId;
     if (input.departmentId !== undefined) payload.current_department_id = input.departmentId;
+    if ((input as any).currentDepartmentId !== undefined) payload.current_department_id = (input as any).currentDepartmentId;
+    if ((input as any).current_department_id !== undefined) payload.current_department_id = (input as any).current_department_id;
+    if ((input as any).department_id !== undefined) payload.current_department_id = (input as any).department_id;
     if (input.branchId !== undefined) payload.current_branch_id = input.branchId;
     if (input.locationId !== undefined) payload.current_location_id = input.locationId;
     if (input.costCenterId !== undefined) payload.cost_center_id = input.costCenterId;

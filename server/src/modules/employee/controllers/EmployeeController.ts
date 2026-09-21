@@ -76,6 +76,11 @@ export class EmployeeController {
       success: true,
       status: emp.status || 'active',
       data: {
+        // Identity of the new record — callers need this to navigate to the profile
+        // or to chain follow-up calls (salary structure, documents, id-card…).
+        id: (emp as any).id,
+        uuid: (emp as any).uuid,
+        employeeCode: (emp as any).employee_code ?? (emp as any).employeeCode,
         employeeName: fullName,
         employeeEmail: emp.email,
         organizationName: org?.name || '',
@@ -471,7 +476,7 @@ export class EmployeeController {
           empId = empByEmail.id;
         }
       }
-    } catch (e) {}
+    } catch (e) { }
 
     const result = await this.documentService.getEmployeeDocuments(ctx, empId, {
       page: 1,
@@ -831,6 +836,29 @@ export class EmployeeController {
 
     const result = await this.service.getMyProfileUpdateRequests(empId);
     return res.json({ success: true, data: result });
+  });
+
+  /**
+   * GET /employees/org-hierarchy/rules
+   */
+  getOrgHierarchyRules = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { OrgHierarchyService } = await import('../services/OrgHierarchyService');
+    const service = new OrgHierarchyService();
+    const rules = await service.getHierarchyRules(ctx);
+    res.json({ success: true, data: rules });
+  });
+
+  /**
+   * PUT /employees/org-hierarchy/rules
+   */
+  saveOrgHierarchyRules = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { rules } = req.body;
+    const { OrgHierarchyService } = await import('../services/OrgHierarchyService');
+    const service = new OrgHierarchyService();
+    await service.saveHierarchyRules(ctx, rules || []);
+    res.json({ success: true, message: 'Org hierarchy rules saved successfully' });
   });
 }
 

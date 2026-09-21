@@ -7,7 +7,7 @@ import {
   invalidateOrgPermissions,
 } from '../../common/lib/cache';
 import { logger } from '@/common/lib/logger';
-import { NotFoundError, ForbiddenError } from '../../common/errors/index';
+import { NotFoundError, ForbiddenError, ConflictError } from '../../common/errors/index';
 import { RoleRepository } from './repositories/role.repository';
 import { PermissionRepository } from './repositories/permission.repository';
 import { AuditService } from '../audit/audit.service';
@@ -149,7 +149,7 @@ export class RbacService {
       .first();
 
     if (existing) {
-      throw new Error('User already has this role');
+      throw new ConflictError('User already has this role');
     }
 
     // Assign role
@@ -233,7 +233,7 @@ export class RbacService {
     // Check code is unique
     const existing = await this.roleRepo.getByCode(ctx, input.code);
     if (existing) {
-      throw new Error(`Role code '${input.code}' already exists`);
+      throw new ConflictError(`Role code '${input.code}' already exists`);
     }
 
     const [roleId] = await this.db('roles').insert({
@@ -319,8 +319,8 @@ export class RbacService {
       .count('* as count')
       .first();
 
-    if ((assignmentCount as any).count > 0) {
-      throw new Error('Cannot delete role that is assigned to users');
+    if (Number((assignmentCount as any)?.count || 0) > 0) {
+      throw new ConflictError('Cannot delete a role that is still assigned to users');
     }
 
     // Soft delete

@@ -13,6 +13,7 @@ import { getOrgLeaveSettings, getDefaultWeeklyWorkPattern } from '../leaves/util
 import { BranchController } from './controllers/BranchController';
 import { LocationController } from './controllers/LocationController';
 import { GradeController } from './controllers/GradeController';
+import { CostCenterController } from './controllers/CostCenterController';
 import { BreakController } from './controllers/BreakController';
 import { RolesResponsibilityController } from './controllers/RolesResponsibilityController';
 import { KraController } from './controllers/KraController';
@@ -991,8 +992,8 @@ router.post('/locations', asyncHandler(async (req: Request, res: Response) => {
     state,
     country,
     status: 'active',
-    created_by: ctx.userId,
-    updated_by: ctx.userId,
+    created_by: ctx.userId || 1,
+    updated_by: ctx.userId || 1,
     created_at: new Date(),
     updated_at: new Date(),
   });
@@ -1015,8 +1016,8 @@ router.post('/locations', asyncHandler(async (req: Request, res: Response) => {
         longitude,
         timezone: 'Asia/Kolkata',
         is_primary: false,
-        created_by: ctx.userId,
-        updated_by: ctx.userId,
+        created_by: ctx.userId || 1,
+        updated_by: ctx.userId || 1,
         created_at: new Date(),
         updated_at: new Date(),
       });
@@ -1031,8 +1032,8 @@ router.post('/locations', asyncHandler(async (req: Request, res: Response) => {
           latitude,
           longitude,
           radius_meters: 1000,
-          created_by: ctx.userId,
-          updated_by: ctx.userId,
+          created_by: ctx.userId || 1,
+          updated_by: ctx.userId || 1,
           created_at: new Date(),
           updated_at: new Date(),
         });
@@ -1044,11 +1045,90 @@ router.post('/locations', asyncHandler(async (req: Request, res: Response) => {
     success: true,
     data: { id, name, code, message: 'Location created successfully' },
   };
-
-  res.status(201).json(response);
+  res.json(response);
 }));
 
+async function ensureDepartmentColumns() {
+  try {
+    const db = getKnex();
+    const hasTable = await db.schema.hasTable('departments');
+    if (!hasTable) return;
+
+    const [hasCompanyIds, hasCompanyEmails, hasIsActive, hasColour, hasEmail] = await Promise.all([
+      db.schema.hasColumn('departments', 'company_ids'),
+      db.schema.hasColumn('departments', 'company_emails'),
+      db.schema.hasColumn('departments', 'is_active'),
+      db.schema.hasColumn('departments', 'colour'),
+      db.schema.hasColumn('departments', 'email'),
+    ]);
+
+    if (!hasCompanyIds) {
+      await db.schema.table('departments', (table) => table.json('company_ids').nullable()).catch(() => { });
+    }
+    if (!hasCompanyEmails) {
+      await db.schema.table('departments', (table) => table.json('company_emails').nullable()).catch(() => { });
+    }
+    if (!hasIsActive) {
+      await db.schema.table('departments', (table) => table.string('is_active', 50).defaultTo('Yes')).catch(() => { });
+    }
+    if (!hasColour) {
+      await db.schema.table('departments', (table) => table.string('colour', 50).defaultTo('#00b4d8')).catch(() => { });
+    }
+    if (!hasEmail) {
+      await db.schema.table('departments', (table) => table.string('email', 150).nullable()).catch(() => { });
+    }
+  } catch (err) {
+    console.warn('[ensureDepartmentColumns] schema check error:', err);
+  }
+}
+
+function parseDeptCompanyIds(rawCompanyIds: any, rawCompanyId?: any): number[] {
+  const out = new Set<number>();
+  const add = (v: any) => {
+    const n = Number(v);
+    if (Number.isFinite(n) && n > 0) out.add(n);
+  };
+
+  if (Array.isArray(rawCompanyIds)) {
+    rawCompanyIds.forEach(add);
+  } else if (typeof rawCompanyIds === 'string' && rawCompanyIds.trim()) {
+    const str = rawCompanyIds.trim();
+    if (str.startsWith('[')) {
+      try {
+        const parsed = JSON.parse(str);
+        if (Array.isArray(parsed)) parsed.forEach(add);
+      } catch {}
+    } else {
+      str.split(',').forEach((s) => add(s.trim()));
+    }
+  } else if (typeof rawCompanyIds === 'number') {
+    add(rawCompanyIds);
+  }
+
+  if (rawCompanyId !== undefined && rawCompanyId !== null && rawCompanyId !== '') {
+    add(rawCompanyId);
+  }
+  return [...out];
+}
+
+function formatDeptResponse(dept: any) {
+  if (!dept) return dept;
+  const companyIds = parseDeptCompanyIds(dept.company_ids || dept.companyIds, dept.company_id || dept.companyId);
+  let companyEmails = dept.company_emails || dept.companyEmails;
+  if (typeof companyEmails === 'string') {
+    try { companyEmails = JSON.parse(companyEmails); } catch { }
+  }
+  return {
+    ...dept,
+    company_ids: companyIds,
+    companyIds: companyIds,
+    company_emails: companyEmails || {},
+    companyEmails: companyEmails || {},
+  };
+}
+
 router.get('/departments', asyncHandler(async (req: Request, res: Response) => {
+  await ensureDepartmentColumns();
   const ctx = req.ctx!;
   const page = parseInt(req.query.page as string) || 1;
   const pageSize = parseInt(req.query.pageSize as string) || 500;
@@ -1241,7 +1321,7 @@ router.post('/departments/:id/managers', asyncHandler(async (req: Request, res: 
   const employee = await db('employees').where({ id: employeeId, organization_id: ctx.organizationId, current_department_id: departmentId }).first('id');
   if (!employee) throw new Error('Manager must be an employee in the selected department');
   if (isPrimary) await db('department_managers').where({ organization_id: ctx.organizationId, department_id: departmentId }).update({ is_primary: false });
-  const [id] = await db('department_managers').insert({ organization_id: ctx.organizationId, department_id: departmentId, employee_id: employeeId, manager_type: managerType, is_primary: Boolean(isPrimary), assigned_by: ctx.userId, assigned_at: new Date() });
+  const [id] = await db('department_managers').insert({ organization_id: ctx.organizationId, department_id: departmentId, employee_id: employeeId, manager_type: managerType, is_primary: Boolean(isPrimary), assigned_by: ctx.userId || 1, assigned_at: new Date() });
   res.status(201).json({ success: true, data: { id } });
 }));
 
@@ -1388,12 +1468,14 @@ router.post('/departments', asyncHandler(async (req: Request, res: Response) => 
 
 // Get single department by ID
 router.get('/departments/:id', asyncHandler(async (req: Request, res: Response) => {
+  await ensureDepartmentColumns();
   const ctx = req.ctx!;
   const db = getKnex();
   const id = Number(req.params.id);
 
   const dept = await db('departments')
     .where({ id, organization_id: ctx.organizationId })
+    .whereNull('deleted_at')
     .first();
 
   if (!dept) {
@@ -1449,30 +1531,11 @@ router.get('/departments/:id', asyncHandler(async (req: Request, res: Response) 
   });
 }));
 
-function parseDeptCompanyIds(rawIds: any, singleId: any): number[] {
-  if (Array.isArray(rawIds)) {
-    return rawIds.map((id: any) => Number(id)).filter((id: number) => !isNaN(id) && id > 0);
-  }
-  if (typeof rawIds === 'string' && rawIds.trim()) {
-    try {
-      const parsed = JSON.parse(rawIds);
-      if (Array.isArray(parsed)) {
-        return parsed.map((id: any) => Number(id)).filter((id: number) => !isNaN(id) && id > 0);
-      }
-    } catch {
-      const parts = rawIds.split(',').map((s: string) => Number(s.trim())).filter((id: number) => !isNaN(id) && id > 0);
-      if (parts.length > 0) return parts;
-    }
-  }
-  if (singleId !== undefined && singleId !== null && singleId !== '') {
-    const num = Number(singleId);
-    if (!isNaN(num) && num > 0) return [num];
-  }
-  return [];
-}
+
 
 // Update department by ID (supports PUT and PATCH)
 const handleUpdateDepartment = asyncHandler(async (req: Request, res: Response) => {
+  await ensureDepartmentColumns();
   const ctx = req.ctx!;
   const db = getKnex();
   const id = Number(req.params.id);
@@ -1529,7 +1592,7 @@ const handleUpdateDepartment = asyncHandler(async (req: Request, res: Response) 
   // Build update payload — always include all fields that were sent
   const updatePayload: Record<string, any> = {
     updated_at: new Date(),
-    updated_by: ctx.userId,
+    updated_by: ctx.userId || 1,
   };
 
   if (name !== undefined) updatePayload.name = name;
@@ -1634,8 +1697,54 @@ const handleUpdateDepartment = asyncHandler(async (req: Request, res: Response) 
 router.put('/departments/:id', handleUpdateDepartment);
 router.patch('/departments/:id', handleUpdateDepartment);
 
-// Delete department by ID
+// Delete department by ID — soft delete, blocked while the department is still referenced.
+// (Was a hard `.delete()`: it hit the employees.current_department_id FK and 500'd on any
+// in-use department, and would have orphaned employee/designation rows if the FK were laxer.)
 router.delete('/departments/:id', asyncHandler(async (req: Request, res: Response) => {
+  const ctx = req.ctx!;
+  const db = getKnex();
+  const id = Number(req.params.id);
+
+  const dept = await db('departments')
+    .where({ id, organization_id: ctx.organizationId })
+    .whereNull('deleted_at')
+    .first();
+  if (!dept) {
+    res.status(404).json({ success: false, message: 'Department not found' });
+    return;
+  }
+
+  const empCount = Number(
+    (await db('employees')
+      .where({ organization_id: ctx.organizationId, current_department_id: id })
+      .whereNull('deleted_at')
+      .count('id as c')
+      .first() as any)?.c || 0
+  );
+  const desigCount = Number(
+    (await db('designations')
+      .where({ department_id: id })
+      .whereNull('deleted_at')
+      .count('id as c')
+      .first() as any)?.c || 0
+  );
+  if (empCount > 0 || desigCount > 0) {
+    res.status(409).json({
+      success: false,
+      message: `Cannot delete "${dept.name}" — it is still assigned to ${empCount} employee(s) and ${desigCount} designation(s). Reassign them or set the department to Inactive.`,
+    });
+    return;
+  }
+
+  await db('departments')
+    .where({ id, organization_id: ctx.organizationId })
+    .update({ deleted_at: new Date(), updated_by: ctx.userId, updated_at: new Date() });
+
+  res.json({ success: true, message: 'Department deleted successfully' });
+}));
+
+// Restore a soft-deleted department (parity with locations/branches; the client already calls this)
+router.post('/departments/:id/restore', asyncHandler(async (req: Request, res: Response) => {
   const ctx = req.ctx!;
   const db = getKnex();
   const id = Number(req.params.id);
@@ -1643,14 +1752,14 @@ router.delete('/departments/:id', asyncHandler(async (req: Request, res: Respons
   const count = await db('departments')
     .where({ id, organization_id: ctx.organizationId })
     .modify((builder) => { if (ctx.companyId) builder.where('company_id', ctx.companyId); })
-    .delete();
+    .update({ deleted_at: null, updated_by: ctx.userId || 1, updated_at: new Date() });
 
   if (!count) {
-    res.status(404).json({ success: false, message: 'Department not found' });
+    res.status(404).json({ success: false, message: 'Department not found or not deleted' });
     return;
   }
-
-  res.json({ success: true, message: 'Department deleted successfully' });
+  const restored = await db('departments').where({ id, organization_id: ctx.organizationId }).first();
+  res.json({ success: true, data: restored, message: 'Department restored successfully' });
 }));
 
 // ==========================================
@@ -2377,13 +2486,23 @@ router.post('/leave-types', asyncHandler(async (req: Request, res: Response) => 
     encashment_settings
   } = req.body;
 
+  if (!leave_name || !String(leave_name).trim()) {
+    res.status(400).json({ success: false, message: 'Leave name is required.' });
+    return;
+  }
+  if (!leave_code || !String(leave_code).trim()) {
+    res.status(400).json({ success: false, message: 'Leave code is required.' });
+    return;
+  }
+  const normalizedCode = String(leave_code).trim().toUpperCase();
+
   const existingCode = await db('leave_types')
-    .where({ organization_id: ctx.organizationId, leave_code: leave_code.toUpperCase() })
+    .where({ organization_id: ctx.organizationId, leave_code: normalizedCode })
     .whereNull('deleted_at')
     .first();
 
   if (existingCode) {
-    res.status(400).json({ success: false, message: `A leave category with code '${leave_code.toUpperCase()}' already exists. Please edit the existing one.` });
+    res.status(409).json({ success: false, message: `A leave type with code '${normalizedCode}' already exists. Please edit the existing one.` });
     return;
   }
 
@@ -2415,8 +2534,8 @@ router.post('/leave-types', asyncHandler(async (req: Request, res: Response) => 
     const [id] = await trx('leave_types').insert({
       uuid: uuidv4(),
       organization_id: ctx.organizationId,
-      leave_name,
-      leave_code: leave_code.toUpperCase(),
+      leave_name: String(leave_name).trim(),
+      leave_code: normalizedCode,
       annual_quota: parseInt(annual_quota, 10) || 0,
       carry_forward_enabled: Boolean(carry_forward_enabled),
       carry_forward_limit: parseInt(carry_forward_limit, 10) || null,
@@ -2537,7 +2656,7 @@ router.post('/leave-types', asyncHandler(async (req: Request, res: Response) => 
       before_state: null,
       after_state: JSON.stringify({
         leave_name,
-        leave_code: leave_code.toUpperCase(),
+        leave_code: normalizedCode,
         annual_quota: parseInt(annual_quota, 10) || 0,
         carry_forward_enabled: Boolean(carry_forward_enabled),
         carry_forward_limit: parseInt(carry_forward_limit, 10) || null,
@@ -2590,10 +2709,29 @@ router.put('/leave-types/:id', asyncHandler(async (req: Request, res: Response) 
     encashment_settings
   } = req.body;
 
-  const currentType = await db('leave_types').where({ id }).first();
+  const currentType = await db('leave_types')
+    .where({ id, organization_id: ctx.organizationId })
+    .whereNull('deleted_at')
+    .first();
   if (!currentType) {
     res.status(404).json({ success: false, message: 'Leave type not found' });
     return;
+  }
+
+  // Reject a rename onto an existing code with a clean 409 (leave_types has UNIQUE(org, leave_code)).
+  if (leave_code !== undefined && leave_code !== null && String(leave_code).trim()) {
+    const targetCode = String(leave_code).trim().toUpperCase();
+    if (targetCode !== currentType.leave_code) {
+      const clash = await db('leave_types')
+        .where({ organization_id: ctx.organizationId, leave_code: targetCode })
+        .whereNull('deleted_at')
+        .whereNot('id', id)
+        .first('id');
+      if (clash) {
+        res.status(409).json({ success: false, message: `A leave type with code '${targetCode}' already exists.` });
+        return;
+      }
+    }
   }
 
   const isAllowNeg = Boolean(allow_negative_balance);
@@ -2717,7 +2855,7 @@ router.put('/leave-types/:id', asyncHandler(async (req: Request, res: Response) 
 
   // 1. Update leave type safely without wiping unpassed settings
   await db('leave_types')
-    .where({ id })
+    .where({ id, organization_id: ctx.organizationId })
     .update(updateData);
 
   // 2. Update all active policy assignments and balances ONLY IF quota actually changed
@@ -3035,21 +3173,55 @@ router.delete('/leave-types/:id', asyncHandler(async (req: Request, res: Respons
   const db = getKnex();
   const id = Number(req.params.id);
 
-  // Soft delete leave type
-  await db('leave_types')
-    .where({ id })
-    .update({
-      deleted_at: new Date(),
-      status: 'inactive'
-    });
+  // Tenant-scoped existence check — was `where({ id })` only (cross-org IDOR: any admin
+  // could soft-delete another organization's leave type by guessing the id).
+  const leaveType = await db('leave_types')
+    .where({ id, organization_id: ctx.organizationId })
+    .whereNull('deleted_at')
+    .first();
+  if (!leaveType) {
+    res.status(404).json({ success: false, message: 'Leave type not found' });
+    return;
+  }
 
-  // Deactivate assignments
+  // Block deletion only when the leave type is genuinely in use — an employee has actually
+  // consumed against it, or has leave pending approval, or there's an open application. A
+  // freshly-created type that was only auto-allocated (zero usage) can still be removed; the
+  // DELETE below deactivates those allocations. This keeps historical ledgers intact.
+  const balCount = Number(
+    (await db('leave_balances')
+      .where({ organization_id: ctx.organizationId, leave_type_id: id })
+      .whereNull('deleted_at')
+      .where((b: any) => b.where('consumed_balance', '>', 0).orWhere('pending_approval_balance', '>', 0))
+      .count('id as c')
+      .first()
+      .catch(() => ({ c: 0 })) as any)?.c || 0
+  );
+  const appCount = Number(
+    (await db('leave_applications')
+      .where({ organization_id: ctx.organizationId, leave_type_id: id })
+      .whereNull('deleted_at')
+      .whereNotIn('status', ['rejected', 'cancelled', 'withdrawn', 'draft'])
+      .count('id as c')
+      .first()
+      .catch(() => ({ c: 0 })) as any)?.c || 0
+  );
+  if (balCount > 0 || appCount > 0) {
+    const ltName = (leaveType as any).leaveName ?? (leaveType as any).leave_name ?? 'this leave type';
+    res.status(409).json({
+      success: false,
+      message: `Cannot delete "${ltName}" — ${balCount} employee balance(s) with usage and ${appCount} open application(s) still reference it. Set it to Inactive instead.`,
+    });
+    return;
+  }
+
+  await db('leave_types')
+    .where({ id, organization_id: ctx.organizationId })
+    .update({ deleted_at: new Date(), status: 'inactive', updated_at: new Date() });
+
   await db('leave_policy_assignments')
     .where({ organization_id: ctx.organizationId, leave_type_id: id })
-    .update({
-      is_active: false,
-      updated_at: new Date()
-    });
+    .update({ is_active: false, updated_at: new Date() });
 
   res.json({ success: true, message: 'Leave type deleted successfully' });
 }));
@@ -4177,6 +4349,19 @@ router.put('/grades/:id', asyncHandler(gradeController.update.bind(gradeControll
 router.patch('/grades/:id', asyncHandler(gradeController.update.bind(gradeController)));
 router.delete('/grades/:id', asyncHandler(gradeController.delete.bind(gradeController)));
 router.post('/grades/:id/restore', asyncHandler(gradeController.restore.bind(gradeController)));
+
+// ─── Cost Center Master Routes ────────────────────────────────────────────────
+// The cost_centers table + repository + employees.cost_center_id FK already existed with
+// no HTTP surface (S5-R1). Wired here with the standard GenericSettings pattern.
+const costCenterController = new CostCenterController();
+router.get('/cost-centers', asyncHandler(costCenterController.list.bind(costCenterController)));
+router.get('/cost-centers/:id', asyncHandler(costCenterController.get.bind(costCenterController)));
+router.post('/cost-centers', asyncHandler(costCenterController.create.bind(costCenterController)));
+router.put('/cost-centers/:id', asyncHandler(costCenterController.update.bind(costCenterController)));
+router.patch('/cost-centers/:id', asyncHandler(costCenterController.update.bind(costCenterController)));
+router.delete('/cost-centers/:id', asyncHandler(costCenterController.delete.bind(costCenterController)));
+router.post('/cost-centers/:id/restore', asyncHandler(costCenterController.restore.bind(costCenterController)));
+
 // --- Designations ---
 router.get('/designations', asyncHandler(async (req: Request, res: Response) => {
   const result = await designationService.listDesignations(req.ctx!, req.query);
@@ -4625,9 +4810,13 @@ router.post('/notification-templates/:id/restore', asyncHandler((req, res) => no
 // RESOURCE PLAN CRUD ROUTES
 // ==========================================
 router.get('/resource-plans', asyncHandler(async (req, res) => {
-  const ctx = req.ctx;
+  const ctx = req.ctx!;
   const db = getKnex();
-  let query = db('resource_plans').select('*');
+  // Was completely un-scoped — returned every tenant's plans. Scope by org (legacy NULL rows included).
+  let query = db('resource_plans')
+    .select('*')
+    .whereNull('deleted_at')
+    .where((b) => { b.where('organization_id', ctx.organizationId).orWhereNull('organization_id'); });
 
   if (ctx?.companyId) {
     query = query.where((builder) => {
@@ -4636,52 +4825,82 @@ router.get('/resource-plans', asyncHandler(async (req, res) => {
   }
 
   const plans = await query.orderBy('created_at', 'desc');
-  // Knex's postProcessResponse already converts snake_case to camelCase
   res.json({ success: true, data: plans });
 }));
 
 router.post('/resource-plans', asyncHandler(async (req, res) => {
-  const ctx = req.ctx;
+  const ctx = req.ctx!;
   const db = getKnex();
   const id = uuidv4();
   const { companyId, locationId, departmentId, designationId, staffRequired, status } = req.body;
 
+  if (!departmentId && !designationId) {
+    res.status(400).json({ success: false, message: 'A resource plan needs at least a department or a designation.' });
+    return;
+  }
+
   await db('resource_plans').insert({
     id,
-    company_id: companyId || ctx?.companyId || null,
+    organization_id: ctx.organizationId,
+    company_id: String(companyId || ctx?.companyId || ''), // column is NOT NULL varchar
     location_id: locationId || null,
-    department_id: departmentId,
-    designation_id: designationId,
-    staff_required: staffRequired || 1,
-    status: status || 'active'
+    department_id: departmentId || null,
+    designation_id: designationId || null,
+    staff_required: Number(staffRequired) > 0 ? Number(staffRequired) : 1,
+    status: status || 'active',
+    created_at: db.fn.now(),
+    updated_at: db.fn.now()
   });
 
-  res.json({ success: true, data: { id } });
+  res.status(201).json({ success: true, data: { id } });
 }));
 
 router.put('/resource-plans/:id', asyncHandler(async (req, res) => {
+  const ctx = req.ctx!;
   const db = getKnex();
   const { id } = req.params;
   const { companyId, locationId, departmentId, designationId, staffRequired, status } = req.body;
 
-  await db('resource_plans').where({ id }).update({
-    company_id: companyId,
-    location_id: locationId || null,
-    department_id: departmentId,
-    designation_id: designationId,
-    staff_required: staffRequired,
-    status,
-    updated_at: db.fn.now()
-  });
+  const existing = await db('resource_plans')
+    .where({ id })
+    .where((b) => { b.where('organization_id', ctx.organizationId).orWhereNull('organization_id'); })
+    .whereNull('deleted_at')
+    .first('id');
+  if (!existing) {
+    res.status(404).json({ success: false, message: 'Resource plan not found' });
+    return;
+  }
+
+  const patch: Record<string, any> = { updated_at: db.fn.now() };
+  if (companyId !== undefined) patch.company_id = String(companyId || '');
+  if (locationId !== undefined) patch.location_id = locationId || null;
+  if (departmentId !== undefined) patch.department_id = departmentId || null;
+  if (designationId !== undefined) patch.designation_id = designationId || null;
+  if (staffRequired !== undefined) patch.staff_required = Number(staffRequired) > 0 ? Number(staffRequired) : 1;
+  if (status !== undefined) patch.status = status;
+
+  await db('resource_plans')
+    .where({ id })
+    .where((b) => { b.where('organization_id', ctx.organizationId).orWhereNull('organization_id'); })
+    .update(patch);
 
   res.json({ success: true, message: 'Resource plan updated successfully' });
 }));
 
 router.delete('/resource-plans/:id', asyncHandler(async (req, res) => {
+  const ctx = req.ctx!;
   const db = getKnex();
   const { id } = req.params;
 
-  await db('resource_plans').where({ id }).delete();
+  const count = await db('resource_plans')
+    .where({ id })
+    .where((b) => { b.where('organization_id', ctx.organizationId).orWhereNull('organization_id'); })
+    .whereNull('deleted_at')
+    .update({ deleted_at: db.fn.now() });
+  if (!count) {
+    res.status(404).json({ success: false, message: 'Resource plan not found' });
+    return;
+  }
 
   res.json({ success: true, message: 'Resource plan deleted successfully' });
 }));
@@ -4690,10 +4909,10 @@ router.delete('/resource-plans/:id', asyncHandler(async (req, res) => {
 // ==========================================
 const eventCtrl = new EventController();
 
-router.get('/events',        asyncHandler((req, res) => eventCtrl.list(req, res)));
-router.get('/events/:id',    asyncHandler((req, res) => eventCtrl.getById(req, res)));
-router.post('/events',       asyncHandler((req, res) => eventCtrl.create(req, res)));
-router.put('/events/:id',    asyncHandler((req, res) => eventCtrl.update(req, res)));
+router.get('/events', asyncHandler((req, res) => eventCtrl.list(req, res)));
+router.get('/events/:id', asyncHandler((req, res) => eventCtrl.getById(req, res)));
+router.post('/events', asyncHandler((req, res) => eventCtrl.create(req, res)));
+router.put('/events/:id', asyncHandler((req, res) => eventCtrl.update(req, res)));
 router.delete('/events/:id', asyncHandler((req, res) => eventCtrl.delete(req, res)));
 
 // ==========================================

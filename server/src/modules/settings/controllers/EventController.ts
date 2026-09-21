@@ -145,7 +145,22 @@ export class EventController {
       };
 
       if (hasOrganizerCol) {
-        insertData.organizer_id = ctx?.userId || null;
+        // events.organizer_id is an FK to employees.id — ctx.userId is a USER id, not an
+        // employee id, so writing it straight in was a guaranteed FK-violation 500. Resolve
+        // the caller's employee, honour an explicit organizerId, else leave it null.
+        let organizerId: number | null = Number(body.organizerId || body.organizer_id) || null;
+        if (!organizerId && ctx?.userId) {
+          const u = await db('users').where('id', ctx.userId).first('employee_id');
+          organizerId = u?.employee_id ? Number(u.employee_id) : null;
+        }
+        if (organizerId) {
+          const emp = await db('employees')
+            .where({ id: organizerId, organization_id: ctx?.organizationId })
+            .whereNull('deleted_at')
+            .first('id');
+          organizerId = emp ? organizerId : null;
+        }
+        insertData.organizer_id = organizerId;
       }
 
       const [insertedId] = await db('events').insert(insertData);
