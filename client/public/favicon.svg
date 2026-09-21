@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <!-- Background Gradient & Shadow -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="100%" stop-color="#f8fafc" />
+    </linearGradient>
+    <filter id="badgeShadow" x="-10%" y="-10%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0f172a" flood-opacity="0.15" />
+    </filter>
+    <linearGradient id="blueGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2563eb" />
+      <stop offset="100%" stop-color="#1d4ed8" />
+    </linearGradient>
+    <linearGradient id="cyanGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0284c7" />
+      <stop offset="100%" stop-color="#0369a1" />
+    </linearGradient>
+  </defs>
+
+  <!-- Clean Contrast Card Background (Visible in both Dark & Light Browser Tabs) -->
+  <rect x="6" y="6" width="116" height="116" rx="26" fill="url(#bgGrad)" stroke="#e2e8f0" stroke-width="2.5" filter="url(#badgeShadow)" />
+
+  <!-- Logo Content Group centered -->
+  <g transform="translate(14, 14) scale(0.78)">
+    <!-- Arc Swoosh -->
+    <path d="M 18,52 A 46,46 0 1,1 106,78" fill="none" stroke="#0284c7" stroke-width="4.5" stroke-linecap="round" />
+
+    <!-- 3 People Avatars -->
+    <!-- Left Person (Green) -->
+    <circle cx="34" cy="30" r="7.5" fill="#22c55e" />
+    <path d="M 23,45 A 11,11 0 0,1 45,45 Z" fill="#22c55e" />
+
+    <!-- Center Person (Blue) -->
+    <circle cx="64" cy="22" r="9.5" fill="#0284c7" />
+    <path d="M 50,42 A 14,14 0 0,1 78,42 Z" fill="#0284c7" />
+
+    <!-- Right Person (Orange) -->
+    <circle cx="94" cy="30" r="7.5" fill="#f97316" />
+    <path d="M 83,45 A 11,11 0 0,1 105,45 Z" fill="#f97316" />
+
+    <!-- Stylized A Body with Chart Bars & Arrow -->
+    <!-- Left Leg of A -->
+    <path d="M 64,36 L 24,104 L 38,104 L 64,56 L 90,104 L 104,104 Z" fill="url(#blueGrad)" />
+
+    <!-- Growth Chart Bars inside A -->
+    <rect x="71" y="80" width="6.5" height="20" rx="2" fill="url(#cyanGrad)" />
+    <rect x="80" y="72" width="6.5" height="28" rx="2" fill="url(#cyanGrad)" />
+    <rect x="89" y="64" width="6.5" height="36" rx="2" fill="url(#cyanGrad)" />
+
+    <!-- Upward Arrow Swoosh -->
+    <path d="M 38,96 Q 72,90 106,46" fill="none" stroke="#0f172a" stroke-width="4.5" stroke-linecap="round" />
+    <polygon points="106,40 114,48 100,50" fill="#0f172a" />
+  </g>
+</svg>

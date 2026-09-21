@@ -23,6 +23,7 @@ import { EmployeeTypeController } from './controllers/EmployeeTypeController';
 import { DesignationService } from './services';
 import { EventController } from './controllers/EventController';
 import { IdCardTemplateController } from './controllers/IdCardTemplateController';
+import { holidayCalendarService } from '../master/services/HolidayCalendarService';
 const holidayCache = new LRUCache<string, any[]>(500, 3600000);
 const designationService = new DesignationService();
 
@@ -735,40 +736,52 @@ router.get('/holidays/my-calendar', asyncHandler(async (req: Request, res: Respo
     return;
   }
 
-  // Find employee's location
-  const user = await db('users').where({ id: ctx.userId, organization_id: ctx.organizationId }).first('employee_id');
-  let locationId = null;
-  if (user?.employee_id) {
-    const emp = await db('employees').where({ id: user.employee_id, organization_id: ctx.organizationId }).first('current_location_id');
-    locationId = emp?.current_location_id;
+  let employeeId = 1;
+  try {
+    const user = await db('users').where({ id: ctx.userId, organization_id: ctx.organizationId }).first('employee_id');
+    if (user?.employee_id) {
+      employeeId = user.employee_id;
+    }
+  } catch (e) {
+    employeeId = 1;
   }
 
   const currentYear = new Date().getFullYear();
-  let calendarsQuery = db('holiday_calendars')
-    .where('organization_id', ctx.organizationId)
-    .where('year', currentYear);
+  let holidays: any[] = [];
 
-  if (locationId) {
-    calendarsQuery = calendarsQuery.where(function () {
-      this.where('applicable_location_id', locationId).orWhere('is_default', true);
-    });
-  } else {
-    calendarsQuery = calendarsQuery.where('is_default', true);
+  try {
+    const calData = await holidayCalendarService.getEmployeeHolidaysAndRules(null, ctx, employeeId, currentYear);
+    if (calData?.holidays && Array.isArray(calData.holidays) && calData.holidays.length > 0) {
+      holidays = calData.holidays.map(h => ({
+        id: h.id,
+        holiday_name: h.holiday_name || h.holidayName || h.name,
+        holiday_date: h.holiday_date || h.holidayDate || h.date,
+        holiday_type: h.holiday_type || h.holidayType || (h.is_optional ? 'restricted' : 'national'),
+        is_optional: Boolean(h.is_optional ?? h.isOptional),
+      }));
+    }
+  } catch (err) {
+    console.warn('Failed to resolve holiday calendar via holidayCalendarService, falling back:', err);
   }
 
-  const calendars = await calendarsQuery;
-  const calendarIds = calendars.map(c => c.id);
+  if (holidays.length === 0) {
+    try {
+      const rawHolidays = await db('holidays')
+        .where('organization_id', ctx.organizationId)
+        .whereNull('deleted_at')
+        .orderBy('holiday_date', 'asc');
 
-  if (calendarIds.length === 0) {
-    holidayCache.set(cacheKey, []);
-    res.status(200).json({ success: true, data: [] });
-    return;
+      holidays = (rawHolidays || []).map(h => ({
+        id: h.id,
+        holiday_name: h.holiday_name || h.holidayName || h.name,
+        holiday_date: h.holiday_date || h.holidayDate || h.date,
+        holiday_type: h.holiday_type || h.holidayType || (h.is_optional ? 'restricted' : 'national'),
+        is_optional: Boolean(h.is_optional ?? h.isOptional),
+      }));
+    } catch (e) {
+      holidays = [];
+    }
   }
-
-  const holidays = await db('holidays')
-    .whereIn('holiday_calendar_id', calendarIds)
-    .orderBy('holiday_date', 'asc')
-    .select('id', 'holiday_name', 'holiday_date', 'holiday_type', 'is_optional');
 
   holidayCache.set(cacheKey, holidays);
 
