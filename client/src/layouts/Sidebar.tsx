@@ -296,8 +296,8 @@ export function Sidebar({ open, onOpenChange, onNavigate }: SidebarProps) {
     <>
       <div
         className={cn(
-          'app-dashboard-sidebar flex h-dvh flex-col overflow-hidden border-r border-border bg-card select-none',
-          open ? 'w-72 md:w-28' : 'w-[72px]'
+          'app-dashboard-sidebar flex h-dvh flex-col overflow-hidden border-r border-border bg-white text-foreground dark:bg-slate-950 select-none',
+          open ? 'w-[calc(100vw-1.5rem)] max-w-72 md:w-28' : 'w-[72px]'
         )}
       >
         {/* Brand Header */}
@@ -307,7 +307,7 @@ export function Sidebar({ open, onOpenChange, onNavigate }: SidebarProps) {
         <SectionRail id="admin" groups={finalSections.map(section => ({ label: section.label, icon: ICON_REGISTRY[section.icon || section.items[0]?.icon] || LayoutDashboard, items: section.items.map(item => ({ ...item, icon: ICON_REGISTRY[item.icon] || LayoutDashboard, children: item.children?.map(child => ({ name: child.name, href: child.href, icon: ICON_REGISTRY[child.icon] || LayoutDashboard, isLocked: (child as any).isLocked })) })) }))} open={open} onNavigate={onNavigate} />
 
         {/* User Card & Platform Admin Footer */}
-        <div className="flex-shrink-0 space-y-2 border-t border-border bg-card p-3">
+        <div className="flex-shrink-0 space-y-2 border-t border-border bg-white p-3 dark:bg-slate-950">
           {roles.includes('super_admin') && (
             <>
               <button
@@ -334,7 +334,7 @@ export function Sidebar({ open, onOpenChange, onNavigate }: SidebarProps) {
           >
           <div
             className={cn(
-              'group flex min-h-14 cursor-pointer items-center justify-center rounded-xl border p-2.5 transition-colors',
+              'group mx-auto flex size-12 cursor-pointer items-center justify-center rounded-xl border p-1.5 transition-colors',
               location.pathname.startsWith('/settings/company-profile') || location.pathname.startsWith('/superadmin/profile')
                 ? 'bg-primary/10 border-primary/30 text-primary shadow-2xs'
                 : 'bg-card hover:bg-muted/80 border-border/60'
@@ -342,7 +342,6 @@ export function Sidebar({ open, onOpenChange, onNavigate }: SidebarProps) {
             title="Click to view Admin Profile"
           >
             {(() => {
-              const roleInfo = getUserRoleAndDept(user);
               return (
                 <>
                   <div className="flex min-w-0 items-center gap-2.5 overflow-hidden">
@@ -352,21 +351,6 @@ export function Sidebar({ open, onOpenChange, onNavigate }: SidebarProps) {
                         {getInitials()}
                       </AvatarFallback>
                     </Avatar>
-                    {open && (
-                      <div className="hidden overflow-hidden text-left leading-tight min-w-0">
-                        <p className="text-[12px] font-bold text-foreground truncate group-hover:text-primary transition-colors">
-                          {getFullName()}
-                        </p>
-                        <p className="text-[10px] font-semibold text-primary truncate">
-                          {roleInfo.roleTitle}
-                        </p>
-                        {roleInfo.departmentName && (
-                          <p className="text-[9px] text-muted-foreground truncate">
-                            {roleInfo.departmentName}
-                          </p>
-                        )}
-                      </div>
-                    )}
                   </div>
                 </>
               );

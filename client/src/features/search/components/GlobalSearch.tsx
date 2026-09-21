@@ -774,14 +774,14 @@ export function GlobalSearchButton() {
     <div className={cn(
       "relative",
       mobileExpanded
-        ? "fixed inset-x-3 top-2 z-[70] sm:static sm:z-auto sm:w-[min(16rem,calc(100vw-2rem))]"
-        : "w-9 sm:w-[min(16rem,calc(100vw-2rem))]"
+        ? "fixed inset-x-3 top-2 z-50 lg:static lg:z-auto lg:w-[min(16rem,calc(100vw-2rem))]"
+        : "w-9 lg:w-[min(16rem,calc(100vw-2rem))]"
     )}>
       {!mobileExpanded && (
         <button
           type="button"
           onClick={() => setMobileExpanded(true)}
-          className="flex size-9 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground hover:bg-muted sm:hidden"
+          className="flex size-9 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground hover:bg-muted lg:hidden"
           aria-label="Open search"
         >
           <Search className="size-4" />
@@ -790,7 +790,7 @@ export function GlobalSearchButton() {
       {mobileExpanded && (
         <button
           type="button"
-          className="fixed inset-0 -z-10 bg-black/30 sm:hidden"
+          className="fixed inset-0 -z-10 bg-black/30 lg:hidden"
           onClick={() => { setMobileExpanded(false); setInlineOpen(false); }}
           aria-label="Close search"
         />
@@ -806,15 +806,15 @@ export function GlobalSearchButton() {
         placeholder="Search modules..."
         autoFocus={mobileExpanded}
         className={cn(
-          "h-9 w-full border-border bg-card pl-9 pr-9 text-sm sm:bg-muted/50 sm:pr-3",
-          !mobileExpanded && "hidden sm:block"
+          "h-9 w-full border-border bg-card pl-9 pr-9 text-sm lg:bg-muted/50 lg:pr-3",
+          !mobileExpanded && "hidden lg:block"
         )}
       />
       {mobileExpanded && (
         <button
           type="button"
           onClick={() => { setMobileExpanded(false); setInlineOpen(false); setInlineQuery(""); }}
-          className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground sm:hidden"
+          className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground lg:hidden"
           aria-label="Close search"
         >
           <X className="size-4" />

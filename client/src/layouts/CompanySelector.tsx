@@ -84,7 +84,7 @@ export function CompanySelector() {
   if (isBranchLocked) {
     const label = user?.companyName || activeLabel;
     return (
-      <div className="h-9 max-w-[240px] flex items-center gap-2 rounded-lg border border-border/80 bg-muted/40 px-3 text-xs font-bold text-foreground shadow-xs cursor-default">
+      <div className="flex h-9 max-w-24 cursor-default items-center gap-1.5 rounded-lg border border-border bg-card px-2 text-xs font-bold text-foreground sm:max-w-60 sm:gap-2 sm:px-3">
         <Building2 className="size-3.5 flex-shrink-0 text-primary" />
         <span className="truncate">{label}</span>
         <Badge
@@ -103,7 +103,7 @@ export function CompanySelector() {
         <Button
           variant="outline"
           size="sm"
-          className="h-9 max-w-[220px] gap-2 rounded-lg border-border bg-muted/60 px-3 text-xs font-bold text-foreground hover:bg-muted hover:text-foreground transition-all shadow-xs"
+          className="h-9 max-w-24 gap-1.5 rounded-lg border-border bg-card px-2 text-xs font-bold text-foreground transition-colors hover:bg-muted hover:text-foreground sm:max-w-56 sm:gap-2 sm:px-3"
         >
           <Building2 className="size-3.5 flex-shrink-0 text-primary" />
           <span className="truncate">{activeLabel}</span>
@@ -118,7 +118,7 @@ export function CompanySelector() {
           >
             {isOrgActive ? 'Org' : 'Sub'}
           </Badge>
-          <ChevronDown className="size-3 flex-shrink-0 text-muted-foreground transition-transform duration-200" />
+          <ChevronDown className="hidden size-3 flex-shrink-0 text-muted-foreground sm:block" />
         </Button>
       </PopoverTrigger>
 

@@ -95,10 +95,10 @@ export function FinanceLayout() {
       )}
 
       {/* -- Main Content Area -- */}
-      <div className="flex flex-1 flex-col overflow-hidden">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
 
         {/* -- Topbar -- */}
-        <header className="flex h-14 flex-shrink-0 items-center justify-between border-b border-border bg-card px-4 shadow-sm">
+        <header className="flex h-16 flex-shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-3 sm:px-6">
           <div className="flex items-center gap-3">
             {/* Mobile hamburger */}
             <Button

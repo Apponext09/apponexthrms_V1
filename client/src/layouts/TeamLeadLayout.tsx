@@ -246,7 +246,7 @@ function TeamLeadSidebarNavContent({
     return hasModule(sec.subscriptionModule);
   });
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex h-full flex-col bg-white text-foreground dark:bg-slate-950">
       {/* ── Logo ── */}
       <PortalSidebarBrand open={false} portalLabel="Team Lead Portal" />
 
@@ -254,11 +254,11 @@ function TeamLeadSidebarNavContent({
       <SectionRail id="team_lead" groups={visibleNav.map(section => ({ ...section, label: section.items.length === 1 && (section.items[0] as any).subItems ? section.items[0].name : section.label, icon: section.items[0]?.icon }))} open={sidebarOpen} onNavigate={() => setMobileOpen(false)} />
 
       {/* ── User footer ── */}
-      <div className="flex-shrink-0 border-t border-border bg-card p-3">
+      <div className="flex-shrink-0 border-t border-border bg-white p-3 dark:bg-slate-950">
         <SidebarProfileMenu profilePath="/team-lead/profile" onLogout={handleLogout} onProfileNavigate={() => setMobileOpen(false)}>
         <div
           className={cn(
-            'group flex min-h-14 cursor-pointer items-center justify-center rounded-xl border p-2.5 transition-colors',
+            'group mx-auto flex size-12 cursor-pointer items-center justify-center rounded-xl border p-1.5 transition-colors',
             'border-border bg-card hover:bg-muted',
             !sidebarOpen && 'justify-center'
           )}
@@ -273,28 +273,6 @@ function TeamLeadSidebarNavContent({
             </Avatar>
             <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 bg-emerald-500 border-2 border-card rounded-full" />
           </div>
-
-          <AnimatePresence initial={false}>
-            {sidebarOpen && (
-              <motion.div
-                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                className="hidden flex-1 min-w-0 leading-tight"
-              >
-                <p className={cn('text-[12px] font-bold text-foreground truncate transition-colors', C.profileHover)}>
-                  {(() => {
-                    const fName = (user?.firstName || (user as any)?.first_name || '').trim();
-                    let lName = (user?.lastName || (user as any)?.last_name || '').trim();
-                    if (lName.toLowerCase() === 'user') lName = '';
-                    const full = `${fName} ${lName}`.trim();
-                    return full || fName || 'User';
-                  })()}
-                </p>
-                <p className={cn('text-[10px] font-medium truncate', C.icon)}>
-                  {roleInfo.roleTitle}
-                </p>
-              </motion.div>
-            )}
-          </AnimatePresence>
 
         </div>
         </SidebarProfileMenu>
@@ -345,7 +323,7 @@ export function TeamLeadLayout() {
   return (
     <div className="app-shell-reference flex h-dvh overflow-hidden bg-background">
       {/* ── Desktop Sidebar ── */}
-      <aside className={cn('role-portal-sidebar relative hidden h-dvh flex-shrink-0 flex-col overflow-hidden border-r border-border bg-card md:flex', sidebarOpen ? 'w-28' : 'w-[72px]')}>
+      <aside className={cn('role-portal-sidebar relative hidden h-dvh flex-shrink-0 flex-col overflow-hidden border-r border-border bg-white dark:bg-slate-950 md:flex', sidebarOpen ? 'w-28' : 'w-[72px]')}>
         {!sidebarOpen && (
           <button
             type="button"
@@ -371,7 +349,7 @@ export function TeamLeadLayout() {
             <motion.aside
               initial={{ x: -260 }} animate={{ x: 0 }} exit={{ x: -260 }}
               transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
-              className="role-portal-sidebar fixed inset-y-0 left-0 z-50 w-72 border-r border-border bg-card shadow-2xl md:hidden"
+              className="role-portal-sidebar fixed inset-y-0 left-0 z-50 w-[calc(100vw-1.5rem)] max-w-72 border-r border-border bg-white shadow-xl dark:bg-slate-950 md:hidden"
             >
               {renderSidebarContent()}
             </motion.aside>
@@ -381,7 +359,7 @@ export function TeamLeadLayout() {
 
       {/* ── Main content ── */}
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-        <header className="sticky top-0 z-30 flex-shrink-0 border-b border-border bg-card/80 backdrop-blur-md px-4 h-14 flex items-center gap-3">
+        <header className="sticky top-0 z-30 flex h-16 flex-shrink-0 items-center gap-3 border-b border-border bg-card px-3 sm:px-6">
           <Button
             variant="ghost" size="icon"
             onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -414,7 +392,7 @@ export function TeamLeadLayout() {
         <SectionTabs id="team_lead" />
 
         <main className="flex-1 overflow-auto">
-          <div className="p-6 min-h-full">
+          <div className="min-h-full p-4 sm:p-6">
             <Outlet />
           </div>
         </main>

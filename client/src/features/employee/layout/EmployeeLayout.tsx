@@ -88,7 +88,7 @@ export function EmployeeLayout() {
       )}
 
       {/* Main Container Area */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         {/* Top Navigation Header */}
         <header className="relative z-20 flex h-16 flex-shrink-0 items-center justify-between border-b border-border bg-card px-4 sm:px-6">
           <div className="flex min-w-0 items-center gap-3">
