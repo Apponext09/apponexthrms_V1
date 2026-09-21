@@ -33,8 +33,8 @@ export function LoginPage() {
 
     if (userRolesNorm.includes('super_admin') || accessRole === 'super_admin') {
       navigate('/superadmin/dashboard', { replace: true });
-    } else if (userRolesNorm.includes('finance') || accessRole === 'finance') {
-      navigate('/finance/reports', { replace: true });
+    } else if (userRolesNorm.includes('finance') || userRolesNorm.includes('finance_manager') || accessRole === 'finance' || accessRole === 'finance_manager') {
+      navigate('/finance/dashboard', { replace: true });
     } else if (userRolesNorm.includes('organization_admin') || userRolesNorm.includes('ceo') || accessRole === 'organization_admin' || accessRole === 'ceo') {
       navigate('/dashboard', { replace: true });
     } else if (userRolesNorm.includes('hr_manager') || userRolesNorm.includes('hr_admin') || accessRole === 'hr_manager' || accessRole === 'hr_admin') {
@@ -67,8 +67,8 @@ export function LoginPage() {
 
       if (userRolesNorm.includes('super_admin') || accessRole === 'super_admin') {
         navigate('/superadmin/dashboard', { replace: true });
-      } else if (userRolesNorm.includes('finance') || accessRole === 'finance') {
-        navigate('/finance/reports', { replace: true });
+      } else if (userRolesNorm.includes('finance') || userRolesNorm.includes('finance_manager') || accessRole === 'finance' || accessRole === 'finance_manager') {
+        navigate('/finance/dashboard', { replace: true });
       } else if (userRolesNorm.includes('organization_admin') || userRolesNorm.includes('ceo') || accessRole === 'organization_admin' || accessRole === 'ceo') {
         navigate('/dashboard', { replace: true });
       } else if (userRolesNorm.includes('hr_manager') || userRolesNorm.includes('hr_admin') || userRolesNorm.includes('hr') || accessRole === 'hr_manager' || accessRole === 'hr_admin' || accessRole === 'hr') {

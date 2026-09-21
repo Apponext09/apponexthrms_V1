@@ -651,7 +651,14 @@ export class EmployeeService {
     if (input.reportingManagerId !== undefined || input.reporting_manager_id !== undefined) {
       const targetMgrId = input.reportingManagerId !== undefined ? input.reportingManagerId : input.reporting_manager_id;
       const numTargetId = targetMgrId !== null && targetMgrId !== undefined && String(targetMgrId).trim() !== '' ? Number(targetMgrId) : null;
-      const existingMgrId = (employee as any).reporting_manager_id !== null && (employee as any).reporting_manager_id !== undefined ? Number((employee as any).reporting_manager_id) : null;
+      // Repository records are exposed in camelCase, while raw Knex records
+      // use snake_case. Resolve either form before deciding whether the
+      // reporting relationship has changed. Without this, a self-profile save
+      // revalidates an unchanged HR manager against the hierarchy and fails.
+      const existingMgrRaw = (employee as any).reporting_manager_id ?? (employee as any).reportingManagerId;
+      const existingMgrId = existingMgrRaw !== null && existingMgrRaw !== undefined && String(existingMgrRaw).trim() !== ''
+        ? Number(existingMgrRaw)
+        : null;
 
       if (numTargetId !== existingMgrId) {
         const orgHierarchyService = new OrgHierarchyService();
@@ -1808,4 +1815,3 @@ export class EmployeeService {
     });
   }
 }
-
