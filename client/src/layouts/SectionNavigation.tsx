@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { create } from 'zustand';
-
+//Imports
 export type SectionLink = { name: string; href: string; icon?: ComponentType<{ className?: string }>; isLocked?: boolean; children?: SectionLink[]; subItems?: SectionLink[] };
 export type SectionGroup = { label: string; icon?: ComponentType<{ className?: string }>; items: SectionLink[] };
 
@@ -173,20 +173,20 @@ export function SectionTabs({ id }: { id: string }) {
         <ChevronLeft className="size-4" />
       </button>}
       <div ref={scrollRef} onScroll={updateScrollEdges} className="no-scrollbar min-w-0 flex-1 overflow-x-auto">
-      <div className="flex w-max items-center gap-1 rounded-xl border border-border bg-muted/50 p-1">
-        {links(group).map(item => {
-          const active = selected?.href === item.href;
-          const Icon = item.icon;
-          return <button key={item.href} type="button" disabled={item.isLocked}
-            onClick={() => navigate(item.href)} aria-current={active ? 'page' : undefined}
-            className={cn('inline-flex min-h-9 shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 sm:text-[13px]',
-              active ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-card hover:text-foreground',
-              item.isLocked && 'cursor-not-allowed opacity-50')}>
-            {Icon && <Icon className="size-3.5 shrink-0" />}
-            <span>{item.name}</span>
-          </button>;
-        })}
-      </div>
+        <div className="flex w-max items-center gap-1 rounded-xl border border-border bg-muted/50 p-1">
+          {links(group).map(item => {
+            const active = selected?.href === item.href;
+            const Icon = item.icon;
+            return <button key={item.href} type="button" disabled={item.isLocked}
+              onClick={() => navigate(item.href)} aria-current={active ? 'page' : undefined}
+              className={cn('inline-flex min-h-9 shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 sm:text-[13px]',
+                active ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-card hover:text-foreground',
+                item.isLocked && 'cursor-not-allowed opacity-50')}>
+              {Icon && <Icon className="size-3.5 shrink-0" />}
+              <span>{item.name}</span>
+            </button>;
+          })}
+        </div>
       </div>
       {scrollEdges.right && <button type="button" onClick={() => scrollTabs(1)} aria-label="Scroll tabs right"
         className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground shadow-sm transition-colors hover:bg-muted hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50">
