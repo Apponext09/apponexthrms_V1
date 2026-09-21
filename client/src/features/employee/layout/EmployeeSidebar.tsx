@@ -406,7 +406,7 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
     >
       <div className="flex flex-col flex-1 min-h-0">
         {/* Brand Header */}
-        <PortalSidebarBrand open={false} portalLabel="Employee Self Service" />
+        <PortalSidebarBrand open={false} portalLabel="Employee Portal" />
 
         {/* Navigation List */}
           <SectionRail id="employee" groups={[{ label: 'Dashboard', icon: LayoutDashboard, items: [{ name: 'Dashboard', href: '/employee/dashboard', icon: LayoutDashboard }] }, ...visibleNavSections.map(section => ({ ...section, icon: section.items[0]?.icon }))]} open={open} onNavigate={() => { if (window.innerWidth < 768) onOpenChange(false); }} />
@@ -415,22 +415,26 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
       {/* Employee User Card Footer */}
       <div className="flex-shrink-0 border-t border-border bg-white p-2 dark:bg-slate-950">
         <SidebarProfileMenu profilePath="/employee/profile" onLogout={handleLogout} onProfileNavigate={() => { if (window.innerWidth < 768) onOpenChange(false); }}>
-        <div
-          className={cn(
-            'mx-auto flex size-11 cursor-pointer items-center justify-center rounded-xl border border-border bg-white p-0.5 transition-colors hover:bg-muted dark:bg-slate-950'
-          )}
-          title="View Profile"
-        >
-          <div className="flex min-w-0 items-center gap-2.5 overflow-hidden">
-            <Avatar className="size-10 flex-shrink-0 border border-primary/30 shadow-soft-xs">
-              <AvatarImage src={employeeAvatar || user?.avatarUrl || (user as any)?.avatar || (user as any)?.profile_picture} alt="Profile" />
-              <AvatarFallback className="bg-primary text-xs font-bold text-primary-foreground">
-                {getInitials()}
-              </AvatarFallback>
-            </Avatar>
+          <div className="flex flex-col items-center justify-center cursor-pointer group">
+            <div
+              className={cn(
+                'mx-auto flex size-11 items-center justify-center rounded-xl border border-border bg-white p-0.5 transition-colors hover:bg-muted dark:bg-slate-950'
+              )}
+              title="View Employee Profile"
+            >
+              <div className="flex min-w-0 items-center gap-2.5 overflow-hidden">
+                <Avatar className="size-10 flex-shrink-0 border border-primary/30 shadow-soft-xs">
+                  <AvatarImage src={employeeAvatar || user?.avatarUrl || (user as any)?.avatar || (user as any)?.profile_picture} alt="Profile" />
+                  <AvatarFallback className="bg-primary text-xs font-bold text-primary-foreground">
+                    {getInitials()}
+                  </AvatarFallback>
+                </Avatar>
+              </div>
+            </div>
+            <span className="text-[8.5px] font-bold tracking-tight text-primary text-center leading-tight truncate max-w-[68px] mt-1">
+              Employee Portal
+            </span>
           </div>
-
-        </div>
         </SidebarProfileMenu>
       </div>
     </aside>

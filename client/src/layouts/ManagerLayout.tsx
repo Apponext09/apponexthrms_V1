@@ -260,25 +260,29 @@ function ManagerSidebarNavContent({
       {/* ── User footer ── */}
       <div className="flex-shrink-0 border-t border-border bg-white p-2 dark:bg-slate-950">
         <SidebarProfileMenu profilePath="/manager/profile" onLogout={handleLogout} onProfileNavigate={() => setMobileOpen(false)}>
-        <div
-          className={cn(
-            'group mx-auto flex size-11 cursor-pointer items-center justify-center rounded-xl border p-0.5 transition-colors',
-            'border-border bg-card hover:bg-muted',
-            !sidebarOpen && 'justify-center'
-          )}
-          title="View Profile"
-        >
-          <div className="relative flex-shrink-0">
-            <Avatar className={cn('size-10 border shadow-soft-xs', C.avatarBorder)}>
-              <AvatarImage src={user?.avatarUrl || (user as any)?.avatar || (user as any)?.profile_picture} alt="Profile" />
-              <AvatarFallback className={cn(C.avatarBg, 'text-white font-bold text-xs')}>
-                {initials}
-              </AvatarFallback>
-            </Avatar>
-            <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 bg-emerald-500 border-2 border-card rounded-full" />
+          <div className="flex flex-col items-center justify-center cursor-pointer group">
+            <div
+              className={cn(
+                'mx-auto flex size-11 items-center justify-center rounded-xl border p-0.5 transition-colors',
+                'border-border bg-card hover:bg-muted',
+                !sidebarOpen && 'justify-center'
+              )}
+              title="View Manager Profile"
+            >
+              <div className="relative flex-shrink-0">
+                <Avatar className={cn('size-10 border shadow-soft-xs', C.avatarBorder)}>
+                  <AvatarImage src={user?.avatarUrl || (user as any)?.avatar || (user as any)?.profile_picture} alt="Profile" />
+                  <AvatarFallback className={cn(C.avatarBg, 'text-white font-bold text-xs')}>
+                    {initials}
+                  </AvatarFallback>
+                </Avatar>
+                <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 bg-emerald-500 border-2 border-card rounded-full" />
+              </div>
+            </div>
+            <span className="text-[8.5px] font-bold tracking-tight text-primary text-center leading-tight truncate max-w-[68px] mt-1">
+              Manager Portal
+            </span>
           </div>
-
-        </div>
         </SidebarProfileMenu>
       </div>
     </div>

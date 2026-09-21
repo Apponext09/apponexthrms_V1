@@ -149,17 +149,22 @@ export function ConsultantSidebar({ open, onOpenChange }: ConsultantSidebarProps
       {/* ── User Footer ── */}
       <div className="border-t border-border bg-white p-2 dark:bg-slate-950">
         <SidebarProfileMenu profilePath="/consultant/profile" onLogout={handleLogout} onProfileNavigate={() => { if (window.innerWidth < 768) onOpenChange(false); }}>
-        <div
-          className="mx-auto flex size-11 cursor-pointer items-center justify-center rounded-xl border border-border bg-white p-0.5 transition-colors hover:bg-muted dark:bg-slate-950"
-          title="View Profile"
-        >
-          <Avatar className={cn('size-10 flex-shrink-0 border-2', C.avatarBorder)}>
-            <AvatarImage src={user?.avatarUrl || (user as any)?.avatar || (user as any)?.profile_picture} alt="Profile" />
-            <AvatarFallback className={cn('text-xs font-bold text-white', C.avatarBg)}>
-              {initials}
-            </AvatarFallback>
-          </Avatar>
-        </div>
+          <div className="flex flex-col items-center justify-center cursor-pointer group">
+            <div
+              className="mx-auto flex size-11 items-center justify-center rounded-xl border border-border bg-white p-0.5 transition-colors hover:bg-muted dark:bg-slate-950"
+              title="View Consultant Profile"
+            >
+              <Avatar className={cn('size-10 flex-shrink-0 border-2', C.avatarBorder)}>
+                <AvatarImage src={user?.avatarUrl || (user as any)?.avatar || (user as any)?.profile_picture} alt="Profile" />
+                <AvatarFallback className={cn('text-xs font-bold text-white', C.avatarBg)}>
+                  {initials}
+                </AvatarFallback>
+              </Avatar>
+            </div>
+            <span className="text-[8.5px] font-bold tracking-tight text-primary text-center leading-tight truncate max-w-[68px] mt-1">
+              Consultant Portal
+            </span>
+          </div>
         </SidebarProfileMenu>
       </div>
     </div>

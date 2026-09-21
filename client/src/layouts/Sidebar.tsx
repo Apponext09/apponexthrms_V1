@@ -332,22 +332,27 @@ export function Sidebar({ open, onOpenChange, onNavigate }: SidebarProps) {
             onLogout={handleLogout}
             onProfileNavigate={onNavigate}
           >
-          <div
-            className={cn(
-              'group mx-auto flex size-11 cursor-pointer items-center justify-center rounded-xl border p-0.5 transition-colors',
-              location.pathname.startsWith('/settings/company-profile') || location.pathname.startsWith('/superadmin/profile')
-                ? 'bg-primary/10 border-primary/30 text-primary shadow-2xs'
-                : 'bg-card hover:bg-muted/80 border-border/60'
-            )}
-            title="Click to view Admin Profile"
-          >
-            <Avatar className="size-10 flex-shrink-0 border border-primary/30 shadow-soft-xs">
-              <AvatarImage src={user?.avatarUrl || (user as any)?.avatar || (user as any)?.profile_picture || (user as any)?.profilePicture} alt="Profile" />
-              <AvatarFallback className="bg-primary text-primary-foreground font-bold text-xs">
-                {getInitials()}
-              </AvatarFallback>
-            </Avatar>
-          </div>
+            <div className="flex flex-col items-center justify-center cursor-pointer group">
+              <div
+                className={cn(
+                  'mx-auto flex size-11 items-center justify-center rounded-xl border p-0.5 transition-colors',
+                  location.pathname.startsWith('/settings/company-profile') || location.pathname.startsWith('/superadmin/profile')
+                    ? 'bg-primary/10 border-primary/30 text-primary shadow-2xs'
+                    : 'bg-card hover:bg-muted/80 border-border/60'
+                )}
+                title={`Click to view ${portalLabel} Profile`}
+              >
+                <Avatar className="size-10 flex-shrink-0 border border-primary/30 shadow-soft-xs">
+                  <AvatarImage src={user?.avatarUrl || (user as any)?.avatar || (user as any)?.profile_picture || (user as any)?.profilePicture} alt="Profile" />
+                  <AvatarFallback className="bg-primary text-primary-foreground font-bold text-xs">
+                    {getInitials()}
+                  </AvatarFallback>
+                </Avatar>
+              </div>
+              <span className="text-[8.5px] font-bold tracking-tight text-primary text-center leading-tight truncate max-w-[68px] mt-1">
+                {portalLabel}
+              </span>
+            </div>
           </SidebarProfileMenu>
         </div>
       </div>

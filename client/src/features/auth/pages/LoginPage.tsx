@@ -214,29 +214,13 @@ export function LoginPage() {
             {/* Top Subtle Blue Gradient Line */}
             <div className="absolute top-0 left-10 right-10 h-[3px] bg-gradient-to-r from-transparent via-blue-600 to-transparent rounded-t-full" />
 
-            {/* 3-People Leadership Avatar (Exact replica from reference) */}
-            <div className="flex justify-center mb-4">
-              <div className="relative flex items-center justify-center w-14 h-14 rounded-2xl bg-blue-50/80 border border-blue-100/70 shadow-2xs">
-                <div className="absolute inset-0 rounded-2xl bg-blue-400/10 blur-xs pointer-events-none" />
-                <svg
-                  className="w-9 h-9 relative z-10"
-                  viewBox="0 0 64 64"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  {/* Left Person (Sky Blue) */}
-                  <circle cx="18" cy="24" r="5.5" fill="#60a5fa" />
-                  <path d="M 8,40 C 8,33 13,30 18,30 C 23,30 28,33 28,40 Z" fill="#60a5fa" />
-
-                  {/* Right Person (Sky Blue) */}
-                  <circle cx="46" cy="24" r="5.5" fill="#60a5fa" />
-                  <path d="M 36,40 C 36,33 41,30 46,30 C 51,30 56,33 56,40 Z" fill="#60a5fa" />
-
-                  {/* Center Leader (Royal Blue) */}
-                  <circle cx="32" cy="18" r="7.5" fill="#1d4ed8" />
-                  <path d="M 18,38 C 18,29 24,26 32,26 C 40,26 46,29 46,38 Z" fill="#1d4ed8" />
-                </svg>
-              </div>
+            {/* Apponext HRMS Official Logo */}
+            <div className="flex justify-center mb-3">
+              <img
+                src={hrmsLogo}
+                alt="Apponext HRMS Logo"
+                className="h-16 w-auto object-contain drop-shadow-xs"
+              />
             </div>
 
             {/* Header Titles */}
