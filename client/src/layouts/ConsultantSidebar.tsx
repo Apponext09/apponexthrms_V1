@@ -45,60 +45,60 @@ import { useSubscriptionStore } from '@/features/subscriptions/store/subscriptio
 // ── Nav definitions ───────────────────────────────────────────────────────────
 const CONSULTANT_NAV = [
   {
-    label: 'OVERVIEW',
+    label: 'Overview',
     subscriptionModule: null,
-    items: [{ name: 'My Dashboard', href: '/consultant/dashboard', icon: LayoutDashboard }],
+    items: [{ name: 'Dashboard', href: '/consultant/dashboard', icon: LayoutDashboard }],
   },
   {
-    label: 'EMPLOYEE CORE',
+    label: 'CoreHR',
     subscriptionModule: 'Core HR & Directory',
     items: [
-      { name: 'My Lifecycle', href: '/consultant/lifecycle', icon: GitBranch },
-      { name: 'Org Structure', href: '/consultant/org-chart', icon: Building2 },
-      { name: 'ID Card', href: '/consultant/id-card', icon: Shield },
+      { name: 'Lifecycle', href: '/consultant/lifecycle', icon: GitBranch },
+      { name: 'Structure', href: '/consultant/org-chart', icon: Building2 },
+      { name: 'Identity', href: '/consultant/id-card', icon: Shield },
     ],
   },
   {
-    label: 'ATTENDANCE',
+    label: 'Attendance',
     subscriptionModule: 'Attendance & Time Tracking',
     items: [
-      { name: 'Face Punch', href: '/consultant/face-attendance', icon: ScanFace },
-      { name: 'My Attendance Log', href: '/consultant/attendance', icon: Clock },
-      { name: 'My Shifts', href: '/consultant/shift-roster', icon: Calendar },
-      { name: 'Attendance Correction', href: '/consultant/attendance-regularization', icon: RefreshCw },
+      { name: 'FacePunch', href: '/consultant/face-attendance', icon: ScanFace },
+      { name: 'Logs', href: '/consultant/attendance', icon: Clock },
+      { name: 'Shifts', href: '/consultant/shift-roster', icon: Calendar },
+      { name: 'Correction', href: '/consultant/attendance-regularization', icon: RefreshCw },
     ],
   },
   {
-    label: 'LEAVES',
+    label: 'Leaves',
     subscriptionModule: 'Leave Management & Approvals',
     items: [
-      { name: 'My Leaves', href: '/consultant/leaves', icon: Palmtree },
+      { name: 'Leaves', href: '/consultant/leaves', icon: Palmtree },
     ],
   },
   {
-    label: 'EXPENSES',
+    label: 'Expenses',
     subscriptionModule: 'Expense Management',
     items: [
-      { name: 'Expense Claims',   href: '/consultant/expenses', icon: ReceiptIndianRupee },
-      { name: 'Travel Requests',  href: '/consultant/travel-requests', icon: Plane },
-      { name: 'Travel Advances',  href: '/consultant/travel-advances', icon: CreditCard },
-      { name: 'Mileage Claims',   href: '/consultant/mileage-claims',  icon: Activity },
+      { name: 'Expenses',   href: '/consultant/expenses', icon: ReceiptIndianRupee },
+      { name: 'Travel',  href: '/consultant/travel-requests', icon: Plane },
+      { name: 'Advances',  href: '/consultant/travel-advances', icon: CreditCard },
+      { name: 'Mileage',   href: '/consultant/mileage-claims',  icon: Activity },
     ],
   },
   {
-    label: 'PAYROLL',
+    label: 'Payroll',
     subscriptionModule: 'Automated Payroll Processing',
     items: [
-      { name: 'My Payslips', href: '/consultant/payslips', icon: CreditCard },
+      { name: 'Payslips', href: '/consultant/payslips', icon: CreditCard },
     ],
   },
   {
-    label: 'DOCUMENTS',
+    label: 'Documents',
     subscriptionModule: 'Core HR & Directory',
-    items: [{ name: 'My Documents', href: '/consultant/documents', icon: BookOpen }],
+    items: [{ name: 'Documents', href: '/consultant/documents', icon: BookOpen }],
   },
   {
-    label: 'COMPANY',
+    label: 'Company',
     subscriptionModule: null,
     items: [
       { name: 'Announcements', href: '/consultant/announcements', icon: Megaphone },
@@ -147,14 +147,14 @@ export function ConsultantSidebar({ open, onOpenChange }: ConsultantSidebarProps
       <SectionRail id="consultant" groups={visibleNav} open={open} onNavigate={() => { if (window.innerWidth < 768) onOpenChange(false); }} />
 
       {/* ── User Footer ── */}
-      <div className="border-t border-border bg-white p-3 dark:bg-slate-950">
+      <div className="border-t border-border bg-white p-2 dark:bg-slate-950">
         <SidebarProfileMenu profilePath="/consultant/profile" onLogout={handleLogout} onProfileNavigate={() => { if (window.innerWidth < 768) onOpenChange(false); }}>
         <div
-          className="mx-auto flex size-12 cursor-pointer items-center justify-center rounded-xl border border-border bg-white p-1.5 transition-colors hover:bg-muted dark:bg-slate-950"
+          className="mx-auto flex size-11 cursor-pointer items-center justify-center rounded-xl border border-border bg-white p-0.5 transition-colors hover:bg-muted dark:bg-slate-950"
           title="View Profile"
         >
-          <Avatar className={cn('h-8 w-8 flex-shrink-0 border-2', C.avatarBorder)}>
-            <AvatarImage src={user?.avatarUrl} />
+          <Avatar className={cn('size-10 flex-shrink-0 border-2', C.avatarBorder)}>
+            <AvatarImage src={user?.avatarUrl || (user as any)?.avatar || (user as any)?.profile_picture} alt="Profile" />
             <AvatarFallback className={cn('text-xs font-bold text-white', C.avatarBg)}>
               {initials}
             </AvatarFallback>
