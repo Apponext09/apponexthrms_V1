@@ -477,7 +477,19 @@ export class LifecycleService {
       }
     }
 
-    // B. Priority 2 (Fallback): Match logged-in user if no target employeeId was requested or found
+    // B. Priority 2 (Fallback): use the authenticated account's explicit employee
+    // link. HR accounts may have a different account ID and email from their
+    // employee record, so resolving only by email can deny an HR user their own
+    // lifecycle even though the employee link is present.
+    const linkedEmployeeId = currentUser?.employee_id ?? currentUser?.employeeId;
+    if (!emp && linkedEmployeeId) {
+      emp = await buildEmpQuery()
+        .where('employees.id', Number(linkedEmployeeId))
+        .first()
+        .catch(() => null);
+    }
+
+    // C. Match logged-in user by email if no explicit employee link was found.
     if (!emp && currentUser?.email) {
       emp = await buildEmpQuery()
         .whereRaw('LOWER(employees.email) = ?', [currentUser.email.toLowerCase()])
