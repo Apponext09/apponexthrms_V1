@@ -99,7 +99,7 @@ export function LoginPage() {
 
   return (
     <div className="relative h-screen w-screen max-h-screen overflow-hidden flex flex-col justify-between bg-gradient-to-br from-[#f6faff] via-[#edf4fe] to-[#e0efff] font-sans select-none">
-      
+
       {/* ─── Ambient Glow Blobs ────────────────────────────────────────────── */}
       <div className="pointer-events-none absolute -top-32 -left-32 w-[550px] h-[550px] rounded-full bg-blue-400/25 blur-[140px]" />
       <div className="pointer-events-none absolute -bottom-40 -right-40 w-[600px] h-[600px] rounded-full bg-sky-300/35 blur-[150px]" />
@@ -192,32 +192,18 @@ export function LoginPage() {
               <span className="text-sm sm:text-base font-black tracking-tight text-slate-900">
                 APPONEXT <span className="text-blue-600">HRMS</span>
               </span>
-              <span className="hidden sm:inline-flex px-1.5 py-0.5 rounded-md text-[9px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
-                Enterprise Cloud
-              </span>
             </div>
             <p className="text-[9px] sm:text-[10px] font-semibold text-slate-400 tracking-wide uppercase">
               Manage • Empower • Grow
             </p>
           </div>
         </div>
-
-        {/* System Status Badge */}
-        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/80 border border-slate-200/90 shadow-2xs backdrop-blur-md">
-          <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-          </span>
-          <span className="text-[10px] sm:text-[11px] font-bold text-slate-700">Cloud Live</span>
-          <span className="text-slate-300">•</span>
-          <span className="text-[10px] sm:text-[11px] font-medium text-slate-500 hidden md:inline">256-Bit SSL</span>
-        </div>
       </header>
 
       {/* ─── Main Content Area (Centered Card, No Scroll) ─────────────────── */}
       <main className="relative z-10 flex-1 flex items-center justify-center p-3 sm:p-4 overflow-hidden">
         <div className="w-full max-w-[400px]">
-          
+
           {/* Floating Luxury Login Card (Faithful to Reference Mockup) */}
           <motion.div
             initial={{ opacity: 0, y: 12, scale: 0.98 }}
@@ -241,11 +227,11 @@ export function LoginPage() {
                   {/* Left Person (Sky Blue) */}
                   <circle cx="18" cy="24" r="5.5" fill="#60a5fa" />
                   <path d="M 8,40 C 8,33 13,30 18,30 C 23,30 28,33 28,40 Z" fill="#60a5fa" />
-                  
+
                   {/* Right Person (Sky Blue) */}
                   <circle cx="46" cy="24" r="5.5" fill="#60a5fa" />
                   <path d="M 36,40 C 36,33 41,30 46,30 C 51,30 56,33 56,40 Z" fill="#60a5fa" />
-                  
+
                   {/* Center Leader (Royal Blue) */}
                   <circle cx="32" cy="18" r="7.5" fill="#1d4ed8" />
                   <path d="M 18,38 C 18,29 24,26 32,26 C 40,26 46,29 46,38 Z" fill="#1d4ed8" />
@@ -279,7 +265,7 @@ export function LoginPage() {
 
             {/* Login Form */}
             <form onSubmit={handleSubmit} className="space-y-3.5">
-              
+
               {/* Username / Employee ID */}
               <div className="group relative flex items-center rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-white hover:border-slate-300 focus-within:bg-white focus-within:border-blue-600 focus-within:ring-4 focus-within:ring-blue-500/10 transition-all duration-200">
                 <div className="absolute left-3.5 pointer-events-none text-slate-400 group-focus-within:text-blue-600 transition-colors">
@@ -347,8 +333,7 @@ export function LoginPage() {
 
             {/* Trust Footer */}
             <div className="mt-5 pt-3.5 border-t border-slate-100 flex items-center justify-center gap-1.5 text-[10px] sm:text-[11px] font-semibold text-slate-400">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-              <span>Apponext Enterprise Security • ISO 27001</span>
+              <span>Human Resource Management System • Trusted & Secure</span>
             </div>
           </motion.div>
         </div>
