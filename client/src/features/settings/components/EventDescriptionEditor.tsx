@@ -109,7 +109,7 @@ export function EventDescriptionEditor({
     }
   };
 
-  const handleAddLink = () => {
+  const handleAddLink = async () => {
     const previousUrl = editor.getAttributes('link').href;
     const url = await window.appPrompt('Enter Link URL:', previousUrl || 'https://');
     if (url === null) return;
@@ -120,7 +120,7 @@ export function EventDescriptionEditor({
     editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
   };
 
-  const handleInsertTable = () => {
+  const handleInsertTable = async () => {
     const rowsStr = await window.appPrompt('Enter number of rows:', '3');
     if (rowsStr === null) return;
     const colsStr = await window.appPrompt('Enter number of columns:', '3');

@@ -100,7 +100,7 @@ export function DashboardCustomizerModal({ open, onOpenChange }: DashboardCustom
     onOpenChange(false);
   };
 
-  const handleReset = () => {
+  const handleReset = async () => {
     if (await window.appConfirm('Reset all dashboard customizations back to factory defaults?')) {
       resetToDefaults();
       toast.info('Reset dashboard configuration to defaults');

@@ -263,7 +263,7 @@ export function TipTapRichTextEditor({
   };
 
   // Helper to add hyperlink
-  const handleAddLink = () => {
+  const handleAddLink = async () => {
     if (!editor) return;
     const previousUrl = editor.getAttributes('link').href;
     const url = await window.appPrompt('Enter Link URL:', previousUrl || 'https://');
