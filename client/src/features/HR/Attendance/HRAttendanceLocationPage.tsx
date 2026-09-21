@@ -79,7 +79,13 @@ export const HRAttendanceLocationPage: React.FC = () => {
   const [locationSearch, setLocationSearch] = useState('');
   const [sortBy, setSortBy] = useState<'name' | 'code' | 'radius'>('name');
 
-  const [activeTab, setActiveTab] = useState<'mapping' | 'geofences'>('mapping');
+  const [activeTab, setActiveTab] = useState<'mapping' | 'geofences'>(
+    location.pathname === '/attendance/locations' ? 'geofences' : 'mapping',
+  );
+
+  useEffect(() => {
+    if (!isHrPath) setActiveTab(location.pathname === '/attendance/locations' ? 'geofences' : 'mapping');
+  }, [isHrPath, location.pathname]);
 
   // Load Real Data from Backend
   const loadData = async (showRefreshToast = false) => {
@@ -228,23 +234,23 @@ export const HRAttendanceLocationPage: React.FC = () => {
   };
 
   return (
-    <div className="space-y-4 pb-12 select-none">
+    <div className="-m-4 space-y-5 bg-[#F2F7FD] p-4 pb-12 font-['Plus_Jakarta_Sans',ui-sans-serif,system-ui,sans-serif] sm:-m-6 sm:p-6 dark:bg-background">
       {/* Page Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-card border border-border/80 p-4 rounded-xl shadow-2xs">
+      <div className="flex flex-col items-start justify-between gap-4 rounded-2xl border border-blue-100 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:p-5 dark:border-border dark:bg-card">
         <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-lg bg-primary/10 text-primary shrink-0">
+          <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white">
             <MapPin className="w-5 h-5" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-lg font-black text-foreground tracking-tight">
+              <h1 className="text-balance text-xl font-bold text-[#0B2545] dark:text-foreground">
                 Location Management & Mapping
               </h1>
               <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 font-bold text-[10px] px-2 py-0.5">
                 {isHrPath ? 'HR Portal' : 'Admin Portal'}
               </Badge>
             </div>
-            <p className="text-xs text-muted-foreground mt-0.5">
+            <p className="mt-1 text-pretty text-sm text-[#4A6285] dark:text-muted-foreground">
               Manage office geofence locations and assign branch access & punch permissions to employees across the organization.
             </p>
           </div>
@@ -298,33 +304,35 @@ export const HRAttendanceLocationPage: React.FC = () => {
       </div>
 
       {/* Navigation Tabs Bar */}
-      <div className="flex items-center gap-2 border-b border-border/80 pb-2">
+      <div role="group" aria-label="Location management views" className="flex w-fit max-w-full flex-wrap items-center gap-1 rounded-xl border border-blue-100 bg-blue-50/60 p-1 dark:border-border dark:bg-muted/30">
         <Button
-          variant={activeTab === 'mapping' ? 'default' : 'outline'}
+          aria-pressed={activeTab === 'mapping'}
+          variant={activeTab === 'mapping' ? 'default' : 'ghost'}
           size="sm"
-          onClick={() => setActiveTab('mapping')}
-          className={`h-8 text-xs font-bold gap-1.5 ${
+          onClick={() => { setActiveTab('mapping'); if (!isHrPath) navigate('/attendance/employee-locations'); }}
+          className={`h-9 rounded-lg text-xs font-semibold gap-1.5 ${
             activeTab === 'mapping'
-              ? 'bg-primary text-primary-foreground shadow-2xs'
-              : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
+              ? 'bg-blue-600 text-white shadow-sm hover:bg-blue-700'
+              : 'text-muted-foreground hover:bg-white hover:text-foreground'
           }`}
         >
           <UserCheck className="w-3.5 h-3.5" />
-          1. Employee Access Mapping ({filteredEmployees.length})
+          Employee Access ({filteredEmployees.length})
         </Button>
 
         <Button
-          variant={activeTab === 'geofences' ? 'default' : 'outline'}
+          aria-pressed={activeTab === 'geofences'}
+          variant={activeTab === 'geofences' ? 'default' : 'ghost'}
           size="sm"
-          onClick={() => setActiveTab('geofences')}
-          className={`h-8 text-xs font-bold gap-1.5 ${
+          onClick={() => { setActiveTab('geofences'); if (!isHrPath) navigate('/attendance/locations'); }}
+          className={`h-9 rounded-lg text-xs font-semibold gap-1.5 ${
             activeTab === 'geofences'
-              ? 'bg-primary text-primary-foreground shadow-2xs'
-              : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
+              ? 'bg-blue-600 text-white shadow-sm hover:bg-blue-700'
+              : 'text-muted-foreground hover:bg-white hover:text-foreground'
           }`}
         >
           <MapPin className="w-3.5 h-3.5" />
-          2. Office & Geofence Locations ({stats.activeLocationsCount})
+          Office & Geofences ({stats.activeLocationsCount})
         </Button>
       </div>
 
@@ -332,7 +340,7 @@ export const HRAttendanceLocationPage: React.FC = () => {
 
       {/* Tab 1: Employee Access Mapping */}
       {activeTab === 'mapping' && (
-        <div className="space-y-4 animate-in fade-in-50 duration-200">
+        <div className="space-y-4">
           {/* Search Bar */}
           <Card className="border border-border/80 shadow-2xs bg-card p-3">
             <div className="relative flex-1">
@@ -346,6 +354,8 @@ export const HRAttendanceLocationPage: React.FC = () => {
               />
               {filters.search && (
                 <button
+                  type="button"
+                  aria-label="Clear employee search"
                   onClick={() => setFilters((prev) => ({ ...prev, search: '' }))}
                   className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground"
                 >
@@ -514,7 +524,7 @@ export const HRAttendanceLocationPage: React.FC = () => {
 
       {/* Tab 2: Office & Geofence Locations Management */}
       {activeTab === 'geofences' && (
-        <div className="space-y-4 animate-in fade-in-50 duration-200">
+        <div className="space-y-4">
           <Card className="border border-border/80 shadow-2xs bg-card p-3">
             <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
               <div className="relative flex-1 w-full">

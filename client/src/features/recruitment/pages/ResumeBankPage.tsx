@@ -674,11 +674,11 @@ export const ResumeBankPage: React.FC = () => {
   const paginatedLogs = logsData;
 
   return (
-    <div className="flex-1 space-y-6 max-w-full overflow-hidden p-6 min-h-[calc(100vh-4rem)]">
+    <div className="recruitment-page flex-1 min-w-0 space-y-4">
       {/* ── Top Header Banner ────────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card p-6 rounded-2xl border border-border/80 shadow-2xs relative overflow-hidden">
+      <div className="recruitment-page-header flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card p-6 rounded-2xl border border-border/80 shadow-2xs relative overflow-hidden">
         <div className="flex items-center gap-3.5 relative z-10">
-          <div className="w-11 h-11 rounded-2xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center font-bold shrink-0 border border-purple-500/20 shadow-xs">
+          <div className="w-11 h-11 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold shrink-0 border border-primary/20 shadow-xs">
             <Briefcase className="w-5 h-5" />
           </div>
           <div className="space-y-0.5">
@@ -704,28 +704,28 @@ export const ResumeBankPage: React.FC = () => {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="mb-6 bg-muted/70 p-1.5 rounded-2xl border border-border/80 flex flex-wrap gap-1">
+        <TabsList className="mb-4 flex h-auto max-w-full flex-wrap gap-1 rounded-xl border border-border bg-muted/60 p-1">
           <TabsTrigger value="source" className="rounded-xl text-xs font-bold px-4 py-2 transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs">
-            <FileText className="w-3.5 h-3.5 mr-1.5 text-primary" />
+            <FileText className="w-3.5 h-3.5 mr-1.5" />
             Resume Source Screen
           </TabsTrigger>
-          <TabsTrigger value="ats" className="rounded-xl text-xs font-bold px-4 py-2 transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs text-amber-600 dark:text-amber-400">
-            <Sparkles className="w-3.5 h-3.5 mr-1.5 text-amber-500 fill-amber-500 animate-pulse" />
+          <TabsTrigger value="ats" className="rounded-xl text-xs font-bold px-4 py-2 transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs">
+            <Sparkles className="w-3.5 h-3.5 mr-1.5" />
             AI ATS Screening & Top-N Rank
           </TabsTrigger>
           <TabsTrigger value="upload" className="rounded-xl text-xs font-bold px-4 py-2 transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs">
-            <FileUp className="w-3.5 h-3.5 mr-1.5 text-purple-500" />
+            <FileUp className="w-3.5 h-3.5 mr-1.5" />
             Bulk Upload (PDF / ZIP / Word)
           </TabsTrigger>
           <TabsTrigger value="logs" className="rounded-xl text-xs font-bold px-4 py-2 transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs">
-            <History className="w-3.5 h-3.5 mr-1.5 text-emerald-500" />
+            <History className="w-3.5 h-3.5 mr-1.5" />
             Bulk Upload Logs
           </TabsTrigger>
         </TabsList>
 
         {/* TAB 1: RESUME SOURCE SCREEN */}
         <TabsContent value="source" className="space-y-6">
-          <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-visible relative z-30">
+          <Card className="bg-card border-border shadow-sm rounded-xl overflow-visible relative z-30">
             <CardHeader className="py-4 px-6 border-b border-border/60 bg-muted/30 rounded-t-2xl">
               <CardTitle className="text-sm font-extrabold text-foreground">Resume Bank Search & Filters</CardTitle>
             </CardHeader>
@@ -823,7 +823,7 @@ export const ResumeBankPage: React.FC = () => {
           </Card>
 
           {/* TABLE CONTAINER */}
-          <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+          <Card className="bg-card border-border shadow-sm rounded-xl overflow-hidden">
             <CardHeader className="flex flex-row items-center justify-between py-4 px-6 border-b border-border/60">
               <CardTitle className="text-sm font-extrabold text-foreground">Candidates Database ({totalEntries})</CardTitle>
             </CardHeader>

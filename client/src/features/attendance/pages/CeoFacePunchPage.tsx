@@ -27,6 +27,7 @@ import { useAuthStore } from '@/features/auth/store/authStore';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
+import { AttendancePageHeader } from '../components/AttendancePageHeader';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -48,6 +49,8 @@ export default function CeoFacePunchPage() {
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const cameraRequestRef = useRef(0);
 
   // Camera state
   const [stream, setStream] = useState<MediaStream | null>(null);
@@ -59,10 +62,11 @@ export default function CeoFacePunchPage() {
   const [punchAction, setPunchAction] = useState<'check_in' | 'check_out'>('check_in');
   const [biometricLoading, setBiometricLoading] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
+  const [now, setNow] = useState(() => new Date());
 
   // CEO-specific status (from /biometric/ceo-status — NOT from auth store employeeId)
   const [ceoStatusLoading, setCeoStatusLoading] = useState(true);
-  const [enrollmentStatus, setEnrollmentStatus] = useState<'loading' | 'enrolled' | 'not_enrolled'>('loading');
+  const [enrollmentStatus, setEnrollmentStatus] = useState<'loading' | 'enrolled' | 'not_enrolled' | 'unavailable'>('loading');
   const [checkInStatus, setCheckInStatus] = useState<'not_started' | 'checked_in' | 'completed'>('not_started');
   const [checkInTime, setCheckInTime] = useState<string>('--');
   const [checkOutTime, setCheckOutTime] = useState<string>('--');
@@ -110,7 +114,7 @@ export default function CeoFacePunchPage() {
       }
     } catch (err) {
       console.warn('CEO status fetch failed', err);
-      setEnrollmentStatus('not_enrolled');
+      setEnrollmentStatus('unavailable');
     } finally {
       setCeoStatusLoading(false);
     }
@@ -122,6 +126,11 @@ export default function CeoFacePunchPage() {
 
   // ── Camera ────────────────────────────────────────────────────────────────
   const startCamera = async () => {
+    const request = ++cameraRequestRef.current;
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+    setStream(null);
+    setIsCameraActive(false);
     try {
       setCameraError(null);
       setCapturedImage(null);
@@ -136,10 +145,16 @@ export default function CeoFacePunchPage() {
         video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' },
         audio: false,
       });
+      if (request !== cameraRequestRef.current) {
+        mediaStream.getTracks().forEach((track) => track.stop());
+        return;
+      }
+      streamRef.current = mediaStream;
       setStream(mediaStream);
       setIsCameraActive(true);
       if (videoRef.current) videoRef.current.srcObject = mediaStream;
     } catch (err: any) {
+      if (request !== cameraRequestRef.current) return;
       if (err?.name === 'NotAllowedError') setCameraError('Camera permission denied. Allow camera access and retry.');
       else if (err?.name === 'NotFoundError') setCameraError('No camera device found.');
       else setCameraError('Unable to access camera.');
@@ -148,13 +163,22 @@ export default function CeoFacePunchPage() {
   };
 
   const stopCamera = () => {
-    if (stream) { stream.getTracks().forEach((t) => t.stop()); setStream(null); }
+    cameraRequestRef.current += 1;
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+    if (videoRef.current) videoRef.current.srcObject = null;
+    setStream(null);
     setIsCameraActive(false);
   };
 
   useEffect(() => {
     startCamera();
     return () => { stopCamera(); };
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 60_000);
+    return () => window.clearInterval(timer);
   }, []);
 
   useEffect(() => {
@@ -216,9 +240,8 @@ export default function CeoFacePunchPage() {
 
   // ── Biometric Punch (No Shift or Geofence Constraints for CEO) ────────────
   const handlePunch = async () => {
-    if (enrollmentStatus === 'not_enrolled') {
-      toast.error('Face not enrolled. Please enroll your face first.');
-      speak('Face biometric not enrolled. Please contact HR to enroll your face.');
+    if (enrollmentStatus !== 'enrolled') {
+      toast.error(enrollmentStatus === 'not_enrolled' ? 'Face not enrolled. Please enroll your face first.' : 'Attendance status is unavailable. Refresh and try again.');
       return;
     }
 
@@ -274,7 +297,6 @@ export default function CeoFacePunchPage() {
   };
 
   // ── Derived values ────────────────────────────────────────────────────────
-  const now = new Date();
   const todayStr = now.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   const timeStr = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
 
@@ -286,54 +308,37 @@ export default function CeoFacePunchPage() {
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-4 pb-12 select-none">
+    <div className="-m-4 space-y-5 bg-[#F2F7FD] p-4 pb-12 font-['Plus_Jakarta_Sans',ui-sans-serif,system-ui,sans-serif] sm:-m-6 sm:p-6 dark:bg-background">
       <canvas ref={canvasRef} className="hidden" />
 
       {/* ── PAGE HEADER ────────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-card border border-border/80 p-4 rounded-xl shadow-2xs">
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-lg bg-primary/10 text-primary shrink-0">
-            <Crown className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-lg font-black text-foreground tracking-tight">
-                CEO Face Punch Terminal
-              </h1>
-              <Badge className="bg-primary/10 text-primary border border-primary/20 font-bold text-[10px] px-2">
-                <Crown className="w-2.5 h-2.5 mr-1" />
-                EXECUTIVE DIRECT PUNCH
-              </Badge>
-              <Badge className={cn('font-bold text-[10px] px-2 border', statusBadge.color)}>
-                {statusBadge.label}
-              </Badge>
-            </div>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {todayStr} · {timeStr}
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2 shrink-0">
+      <AttendancePageHeader
+        icon={Crown}
+        title="CEO Face Punch"
+        description={`${todayStr} · ${timeStr}`}
+        badge={<Badge className={cn('border text-xs font-semibold', statusBadge.color)}>{statusBadge.label}</Badge>}
+        actions={<>
           <Button
             size="sm"
-            variant="ghost"
+            variant="outline"
             onClick={() => setVoiceEnabled((v) => !v)}
-            className="h-8 px-2 text-xs"
+            aria-label={voiceEnabled ? 'Mute voice feedback' : 'Enable voice feedback'}
+            className="h-9 gap-2 text-xs"
           >
             {voiceEnabled ? <Volume2 className="w-3.5 h-3.5 text-primary" /> : <VolumeX className="w-3.5 h-3.5 text-muted-foreground" />}
+            {voiceEnabled ? 'Voice on' : 'Voice off'}
           </Button>
           <Button
             size="sm"
             variant="outline"
             onClick={() => navigate('/analytics/ceo-attendance')}
-            className="h-8 text-xs font-bold gap-1.5"
+            className="h-9 text-xs font-semibold gap-1.5"
           >
             <CalendarCheck className="w-3.5 h-3.5 text-primary" />
             CEO Punch Report
           </Button>
-        </div>
-      </div>
+        </>}
+      />
 
       {/* ── ENROLLMENT WARNING ──────────────────────────────────────────── */}
       {enrollmentStatus === 'not_enrolled' && (
@@ -347,28 +352,34 @@ export default function CeoFacePunchPage() {
           </div>
         </div>
       )}
+      {enrollmentStatus === 'unavailable' && (
+        <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+          <span>Attendance status could not be loaded. Refresh it before punching.</span>
+          <Button type="button" size="sm" variant="outline" onClick={fetchCeoStatus}>Retry status</Button>
+        </div>
+      )}
 
       {/* ── STATUS CARDS (NO SHIFT CONSTRAINTS FOR CEO) ────────────────── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
-          { label: 'Check-In Time', value: checkInTime, icon: Clock, color: 'text-emerald-600', bg: 'bg-emerald-50 border-emerald-200' },
-          { label: 'Check-Out Time', value: checkOutTime, icon: Clock, color: 'text-rose-600', bg: 'bg-rose-50 border-rose-200' },
-          { label: 'Attendance Mode', value: 'Executive Direct Punch', icon: Sparkles, color: 'text-primary', bg: 'bg-primary/5 border-primary/20' },
+          { label: 'Check-In Time', value: checkInTime, icon: Clock, color: 'text-[#0B2545]', bg: 'bg-blue-50 text-blue-600' },
+          { label: 'Check-Out Time', value: checkOutTime, icon: Clock, color: 'text-[#0B2545]', bg: 'bg-blue-50 text-blue-600' },
+          { label: 'Attendance Mode', value: 'Executive Direct Punch', icon: Sparkles, color: 'text-[#0B2545]', bg: 'bg-blue-50 text-blue-600' },
           {
             label: 'Shift Rules',
             value: 'Unrestricted (CEO)',
             icon: ShieldCheck,
-            color: 'text-emerald-600',
-            bg: 'bg-emerald-50 border-emerald-200',
+            color: 'text-[#0B2545]',
+            bg: 'bg-blue-50 text-blue-600',
           },
         ].map(({ label, value, icon: Icon, color, bg }) => (
-          <Card key={label} className={cn('border p-3.5 flex items-center gap-3', bg)}>
-            <div className={cn('p-2 rounded-lg', bg, 'shrink-0')}>
-              <Icon className={cn('w-4 h-4', color)} />
+          <Card key={label} className="flex items-center gap-3 rounded-2xl border border-blue-100 bg-white p-4 shadow-sm dark:border-border dark:bg-card">
+            <div className={cn('rounded-xl p-2.5 shrink-0', bg)}>
+              <Icon className="size-4" />
             </div>
             <div className="min-w-0">
-              <p className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider truncate">{label}</p>
-              <p className={cn('text-sm font-black mt-0.5 truncate', color)}>{value}</p>
+              <p className="truncate text-xs font-semibold text-[#4A6285] dark:text-muted-foreground">{label}</p>
+              <p className={cn('mt-1 truncate text-sm font-bold tabular-nums dark:text-foreground', color)}>{value}</p>
             </div>
           </Card>
         ))}
@@ -377,12 +388,12 @@ export default function CeoFacePunchPage() {
       {/* ── MAIN PUNCH PANEL ─────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
         {/* Camera feed — 3/5 width */}
-        <Card className="lg:col-span-3 border border-border/80 shadow-2xs bg-card overflow-hidden">
-          <div className="p-3 border-b border-border/60 flex items-center justify-between bg-muted/20">
+        <Card className="lg:col-span-3 overflow-hidden rounded-2xl border border-blue-100 bg-white shadow-sm dark:border-border dark:bg-card">
+          <div className="flex items-center justify-between border-b border-blue-100 bg-blue-50/50 p-4 dark:border-border dark:bg-muted/20">
             <div className="flex items-center gap-2">
               <Scan className="w-4 h-4 text-primary" />
-              <h2 className="font-bold text-xs text-foreground uppercase tracking-wider">
-                Face Biometric Scanner — CEO Terminal
+              <h2 className="text-sm font-semibold text-[#0B2545] dark:text-foreground">
+                Face scanner
               </h2>
             </div>
             <div className="flex items-center gap-2">
@@ -411,7 +422,7 @@ export default function CeoFacePunchPage() {
             {/* Success overlay */}
             {successMsg && (
               <div className="absolute inset-0 bg-emerald-950/90 flex flex-col items-center justify-center gap-3 z-10">
-                <CheckCircle2 className="w-16 h-16 text-emerald-400 animate-bounce" />
+                <CheckCircle2 className="size-14 text-emerald-400" />
                 <p className="text-emerald-300 font-black text-base text-center px-6">{successMsg}</p>
                 {savedProfilePhoto && (
                   <img
@@ -454,27 +465,25 @@ export default function CeoFacePunchPage() {
           </div>
 
           {/* Punch button row */}
-          <div className="p-4 border-t border-border/60 flex items-center justify-between gap-3 bg-muted/10">
+          <div className="flex items-center justify-between gap-3 border-t border-blue-100 bg-blue-50/30 p-4 dark:border-border dark:bg-muted/10">
             {successMsg ? (
               <Button
                 variant="outline"
                 size="sm"
+                disabled={checkInStatus === 'completed'}
                 onClick={() => { setCapturedImage(null); setSuccessMsg(null); setSavedProfilePhoto(null); startCamera(); }}
                 className="flex-1 h-9 text-xs font-bold gap-1.5"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
-                New Punch
+                {checkInStatus === 'completed' ? 'Attendance completed for today' : 'New Punch'}
               </Button>
             ) : (
               <Button
                 size="sm"
-                disabled={!isCameraActive || biometricLoading || enrollmentStatus === 'not_enrolled'}
+                disabled={!isCameraActive || biometricLoading || ceoStatusLoading || enrollmentStatus !== 'enrolled' || checkInStatus === 'completed'}
                 onClick={handlePunch}
                 className={cn(
-                  'flex-1 h-9 text-xs font-black gap-2 transition-all',
-                  punchAction === 'check_in'
-                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                    : 'bg-rose-600 hover:bg-rose-700 text-white'
+                  'h-10 flex-1 gap-2 bg-blue-600 text-sm font-semibold text-white hover:bg-blue-700'
                 )}
               >
                 {biometricLoading ? (
@@ -482,7 +491,9 @@ export default function CeoFacePunchPage() {
                 ) : (
                   <Zap className="w-4 h-4" />
                 )}
-                {biometricLoading
+                {checkInStatus === 'completed'
+                  ? 'Attendance completed for today'
+                  : biometricLoading
                   ? 'Verifying…'
                   : punchAction === 'check_in'
                   ? 'CEO Punch In'
@@ -495,7 +506,7 @@ export default function CeoFacePunchPage() {
         {/* Info panel — 2/5 width */}
         <div className="lg:col-span-2 space-y-3">
           {/* CEO Identity Card */}
-          <Card className="border border-border/80 shadow-2xs bg-card p-4">
+          <Card className="rounded-2xl border border-blue-100 bg-white p-4 shadow-sm dark:border-border dark:bg-card">
             <div className="flex items-center gap-3 pb-3 border-b border-border/60">
               <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-black text-sm shrink-0">
                 {empName.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()}
@@ -516,6 +527,8 @@ export default function CeoFacePunchPage() {
                   <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[9px] font-bold">
                     <ShieldCheck className="w-2.5 h-2.5 mr-1" /> Enrolled
                   </Badge>
+                ) : enrollmentStatus === 'unavailable' ? (
+                  <Badge className="border-amber-200 bg-amber-50 text-amber-700 text-[9px] font-bold">Unavailable</Badge>
                 ) : (
                   <Badge className="bg-rose-50 text-rose-700 border-rose-200 text-[9px] font-bold">
                     <AlertCircle className="w-2.5 h-2.5 mr-1" /> Not Enrolled
@@ -541,8 +554,8 @@ export default function CeoFacePunchPage() {
           </Card>
 
           {/* Quick instructions */}
-          <Card className="border border-border/80 shadow-2xs bg-card p-4">
-            <h3 className="font-bold text-xs text-foreground uppercase tracking-wider mb-3 flex items-center gap-2">
+          <Card className="rounded-2xl border border-blue-100 bg-white p-4 shadow-sm dark:border-border dark:bg-card">
+            <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-[#0B2545] dark:text-foreground">
               <UserCheck className="w-3.5 h-3.5 text-primary" />
               Executive Direct Punch
             </h3>
@@ -562,22 +575,13 @@ export default function CeoFacePunchPage() {
           </Card>
 
           {/* Quick links */}
-          <Card className="border border-border/80 shadow-2xs bg-card p-4">
-            <h3 className="font-bold text-xs text-foreground uppercase tracking-wider mb-3">Quick Actions</h3>
+          <Card className="rounded-2xl border border-blue-100 bg-white p-4 shadow-sm dark:border-border dark:bg-card">
+            <h3 className="mb-3 text-sm font-semibold text-[#0B2545] dark:text-foreground">Go to</h3>
             <div className="space-y-2">
               <Button
                 variant="outline"
                 size="sm"
-                className="w-full h-8 text-xs font-bold justify-start gap-2"
-                onClick={() => navigate('/analytics/ceo-attendance')}
-              >
-                <CalendarCheck className="w-3.5 h-3.5 text-primary" />
-                View CEO Attendance Report
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full h-8 text-xs font-bold justify-start gap-2"
+                className="h-9 w-full justify-start gap-2 text-xs font-semibold"
                 onClick={() => navigate('/attendance')}
               >
                 <Clock className="w-3.5 h-3.5 text-primary" />

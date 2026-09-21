@@ -1,7 +1,6 @@
 import { Bell, Moon, Sun, Menu } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useThemeStore } from '@/features/settings/store/themeStore';
-import { LiveDateTimeDisplay } from '@/components/LiveDateTimeDisplay';
 import { Button } from '@/components/ui/button';
 import { useNotifications } from '@/features/notifications/hooks/useNotifications';
 import { useNotificationSocket } from '@/features/notifications/hooks/useNotificationSocket';
@@ -40,14 +39,11 @@ export function PlatformAdminTopbar({
           >
             <Menu className="h-5 w-5" />
           </Button>
-          <div className="hidden md:block text-lg font-semibold text-foreground">
-            Platform Administration
-          </div>
+          <span className="hidden truncate text-base font-extrabold tracking-tight text-foreground md:inline">APPONEXTHRMS</span>
         </div>
 
         {/* Right Actions */}
         <div className="flex items-center gap-2">
-          <LiveDateTimeDisplay />
           {/* Theme toggle */}
           <Button
             variant="ghost"

@@ -1,3 +1,4 @@
+import { SectionRail } from '@/layouts/SectionNavigation';
 import React, { useState } from 'react';
 import {
   LayoutDashboard,
@@ -45,6 +46,7 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
 import { PortalSidebarBrand } from '@/layouts/PortalSidebarBrand';
+import { SidebarProfileMenu } from '@/layouts/SidebarProfileMenu';
 
 export interface EmployeeSidebarProps {
   open: boolean;
@@ -399,192 +401,23 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
     <aside
       className={cn(
         'portal-sidebar h-dvh flex flex-col justify-between border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-all duration-300 select-none overflow-hidden',
-        open ? 'w-64' : 'w-20'
+        open ? 'w-72 md:w-28' : 'w-20'
       )}
     >
       <div className="flex flex-col flex-1 min-h-0">
         {/* Brand Header */}
-        <PortalSidebarBrand open={open} portalLabel="Employee Self Service" />
+        <PortalSidebarBrand open={false} portalLabel="Employee Self Service" />
 
         {/* Navigation List */}
-        <nav className="no-scrollbar flex-1 space-y-1 overflow-y-auto px-3 py-3">
-          {/* Top Dedicated Dashboard Link */}
-          <div className="pb-1">
-            <button
-              onClick={() => handleItemClick('/employee/dashboard', 'Dashboard')}
-              title={!open ? 'Dashboard' : ''}
-              className={cn(
-                'group relative flex min-h-10 w-full items-center gap-3 rounded-lg px-3 py-2 text-xs font-medium transition-colors',
-                !open && 'justify-center px-2',
-                isDashboardActive
-                  ? 'portal-sidebar-active font-semibold text-white dark:text-slate-950'
-                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-              )}
-            >
-              <LayoutDashboard
-                className={cn(
-                  'size-4 flex-shrink-0 transition-transform group-hover:scale-110',
-                  isDashboardActive ? 'text-white dark:text-slate-950' : 'text-violet-500'
-                )}
-              />
-              <AnimatePresence>
-                {open && (
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.2 }}
-                    className="flex-1 overflow-hidden text-left"
-                  >
-                    <span className="truncate font-semibold">Dashboard</span>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </button>
-          </div>
-
-          {/* Section Accordions */}
-          {visibleNavSections.map((section, idx) => {
-            const isExpanded = !open || !!expandedSections[section.label];
-
-            return (
-              <div key={section.label || idx} className="space-y-1 pt-1">
-                {open ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setExpandedSections(prev => ({
-                        ...prev,
-                        [section.label]: !prev[section.label],
-                      }));
-                    }}
-                    className="group flex w-full items-center justify-between px-3 py-1.5 text-[10px] font-black uppercase text-muted-foreground hover:text-foreground tracking-wider"
-                  >
-                    <span>{section.label}</span>
-                    <ChevronRight
-                      className={cn(
-                        'h-3 w-3 text-muted-foreground/60 transition-transform duration-200 group-hover:text-foreground',
-                        isExpanded ? 'rotate-90' : ''
-                      )}
-                    />
-                  </button>
-                ) : (
-                  <div className="px-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70 text-center">
-                    •••
-                  </div>
-                )}
-
-                {isExpanded && (
-                  <div className="space-y-1 mt-0.5">
-                    {section.items.map((item) => {
-                      const isActive = location.pathname === item.href || location.pathname.startsWith(item.href + '/');
-                      const Icon = item.icon;
-                      const hasSubItems = item.subItems && item.subItems.length > 0;
-
-                      if (hasSubItems && open) {
-                        return (
-                          <Collapsible key={item.href} defaultOpen={isActive} className="space-y-1">
-                            <CollapsibleTrigger asChild>
-                              <button
-                                className={cn(
-                                  'group flex min-h-10 w-full items-center justify-between rounded-lg px-3 py-2 text-[12px] font-semibold transition-colors',
-                                  isActive
-                                    ? 'bg-primary/10 text-primary'
-                                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                                )}
-                              >
-                                <div className="flex items-center gap-3">
-                                  <Icon className="size-4 flex-shrink-0" />
-                                  <span className="text-xs font-semibold">{item.name}</span>
-                                </div>
-                                <ChevronRight className="h-3.5 w-3.5 transition-transform duration-200 group-data-[state=open]:rotate-90 text-muted-foreground" />
-                              </button>
-                            </CollapsibleTrigger>
-
-                            <CollapsibleContent className="ml-3 space-y-1 border-l border-border pl-3">
-                              {item.subItems?.map((sub) => {
-                                const SubIcon = sub.icon;
-                                const isSubActive = location.pathname === sub.href;
-                                return (
-                                  <button
-                                    key={sub.href}
-                                    onClick={() => handleItemClick(sub.href, sub.name)}
-                                    className={cn(
-                                      'flex min-h-9 w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs transition-colors',
-                                      isSubActive
-                                        ? 'portal-sidebar-active font-bold text-white dark:text-slate-950'
-                                        : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                                    )}
-                                  >
-                                    <SubIcon className="size-3.5 flex-shrink-0" />
-                                    <span>{sub.name}</span>
-                                  </button>
-                                );
-                              })}
-                            </CollapsibleContent>
-                          </Collapsible>
-                        );
-                      }
-
-                      return (
-                        <button
-                          key={item.name + item.href}
-                          onClick={() => handleItemClick(item.href, item.name)}
-                          title={!open ? item.name : ''}
-                          className={cn(
-                            'group relative flex min-h-10 w-full items-center gap-3 rounded-lg px-3 py-2 text-xs font-medium transition-colors',
-                            !open && 'justify-center px-2',
-                            isActive
-                              ? 'portal-sidebar-active font-semibold text-white dark:text-slate-950'
-                              : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                          )}
-                        >
-                          <Icon
-                            className={cn(
-                              'size-4 flex-shrink-0 transition-transform group-hover:scale-110',
-                              isActive ? 'text-white dark:text-slate-950' : item.color || 'text-muted-foreground'
-                            )}
-                          />
-
-                          <AnimatePresence>
-                            {open && (
-                              <motion.div
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                exit={{ opacity: 0 }}
-                                transition={{ duration: 0.2 }}
-                                className="flex-1 text-left overflow-hidden flex items-center justify-between"
-                              >
-                                <span className="truncate">{item.name}</span>
-                                {item.badge && (
-                                  <Badge
-                                    variant="secondary"
-                                    className="text-[9px] px-1.5 py-0 bg-violet-100 dark:bg-violet-950 text-violet-700 dark:text-violet-300"
-                                  >
-                                    {item.badge}
-                                  </Badge>
-                                )}
-                              </motion.div>
-                            )}
-                          </AnimatePresence>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </nav>
+          <SectionRail id="employee" groups={[{ label: 'Dashboard', icon: LayoutDashboard, items: [{ name: 'Dashboard', href: '/employee/dashboard', icon: LayoutDashboard }] }, ...visibleNavSections.map(section => ({ ...section, icon: section.items[0]?.icon }))]} open={open} onNavigate={() => { if (window.innerWidth < 768) onOpenChange(false); }} />
       </div>
 
       {/* Employee User Card Footer */}
       <div className="flex-shrink-0 border-t border-border bg-card p-3">
+        <SidebarProfileMenu profilePath="/employee/profile" onLogout={handleLogout} onProfileNavigate={() => { if (window.innerWidth < 768) onOpenChange(false); }}>
         <div
-          onClick={() => navigate('/employee/profile')}
           className={cn(
-            'flex min-h-14 cursor-pointer items-center rounded-xl border border-border bg-card p-2.5 hover:bg-muted transition-colors',
-            open ? 'justify-between' : 'justify-center'
+            'flex min-h-14 cursor-pointer items-center justify-center rounded-xl border border-border bg-card p-2.5 hover:bg-muted transition-colors'
           )}
           title="View Profile"
         >
@@ -602,7 +435,7 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
                   transition={{ duration: 0.2 }}
-                  className="overflow-hidden text-left"
+                  className="hidden overflow-hidden text-left"
                 >
                   <p className="text-xs font-bold text-foreground truncate">{employeeName}</p>
                   <p className="text-[10px] text-muted-foreground truncate">{user?.email || 'employee@apponext.com'}</p>
@@ -611,22 +444,8 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
             </AnimatePresence>
           </div>
 
-          {open && (
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleLogout();
-              }}
-              className="size-7 flex-shrink-0 rounded-lg text-muted-foreground hover:bg-rose-500/10 hover:text-rose-600"
-              title="Logout"
-              aria-label="Log out"
-            >
-              <LogOut className="size-3.5" />
-            </Button>
-          )}
         </div>
+        </SidebarProfileMenu>
       </div>
     </aside>
   );

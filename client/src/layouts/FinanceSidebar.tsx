@@ -1,3 +1,4 @@
+import { SectionRail } from '@/layouts/SectionNavigation';
 import {
   LayoutDashboard,
   BarChart2,
@@ -36,6 +37,7 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import { PortalSidebarBrand } from "@/layouts/PortalSidebarBrand";
+import { SidebarProfileMenu } from "@/layouts/SidebarProfileMenu";
 
 // -- Emerald accent constants ---------------------------------------------------
 const C = {
@@ -130,26 +132,20 @@ export function FinanceSidebar({ open, onOpenChange }: FinanceSidebarProps) {
     <div
       className={cn(
         "flex h-full flex-col border-r border-border bg-card transition-all duration-300 ease-in-out",
-        open ? "w-64" : "w-[72px]"
+        open ? "w-72 md:w-28" : "w-[72px]"
       )}
     >
       {/* -- Brand -- */}
-      <PortalSidebarBrand open={open} portalLabel="Finance Portal" />
+      <PortalSidebarBrand open={false} portalLabel="Finance Portal" />
 
       {/* -- Nav -- */}
-      <nav className="no-scrollbar flex-1 space-y-1 overflow-y-auto px-3 py-4">
-        {FINANCE_NAV.map((section) => (
-          <div key={section.label}>
-            {section.label === "OVERVIEW" ? <div className="space-y-0.5">{section.items.map((item) => { const Icon = item.icon; const active = isActive(item.href); return <button key={item.href} onClick={() => navigate(item.href)} title={!open ? item.name : undefined} className={cn("group flex min-h-10 w-full items-center gap-3 rounded-lg px-3 py-2 text-[12px] font-semibold transition-all", active ? `${C.activeBg} ${C.activeText} shadow-sm` : `text-muted-foreground ${C.hoverBg} ${C.hoverText}`, !open && "justify-center px-2")}><Icon size={16} className={cn("flex-shrink-0", active ? "text-white" : C.icon)} />{open && <span className="truncate">{item.name}</span>}</button>; })}</div> : (() => { const SectionIcon = section.items[0].icon; const hasActiveItem = section.items.some((item) => isActive(item.href)); const isOpen = openMenu === section.label || hasActiveItem; return <div className="space-y-1"><button type="button" onClick={() => setOpenMenu(isOpen ? null : section.label)} title={!open ? section.label : undefined} className={cn("group flex min-h-10 w-full items-center justify-between rounded-lg px-3 py-2 text-[12px] font-semibold transition-colors", hasActiveItem ? "bg-emerald-600/10 text-emerald-700 dark:text-emerald-400" : `text-muted-foreground ${C.hoverBg} ${C.hoverText}`, !open && "justify-center px-2")}><span className="flex items-center gap-3"><SectionIcon size={16} className={C.icon} />{open && <span>{section.label}</span>}</span>{open && <ChevronDown size={16} className={cn("transition-transform", isOpen && "rotate-180")} />}</button>{open && isOpen && <div className="ml-3 space-y-1 border-l border-border pl-3">{section.items.map((item) => { const Icon = item.icon; const active = isActive(item.href); return <button key={item.href} onClick={() => navigate(item.href)} className={cn("flex min-h-9 w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs font-medium transition-colors", active ? `${C.activeBg} ${C.activeText} font-bold` : `text-muted-foreground ${C.hoverBg} ${C.hoverText}`)}><Icon size={14} className={active ? "text-white" : C.icon} /><span className="truncate">{item.name}</span></button>; })}</div>}</div>; })()}
-          </div>
-        ))}
-      </nav>
+      <SectionRail id="finance" groups={FINANCE_NAV} open={open} onNavigate={() => { if (window.innerWidth < 768) onOpenChange(false); }} />
 
       {/* -- User Footer -- */}
       <div className="border-t border-border p-3">
+        <SidebarProfileMenu profilePath="/finance/profile" onLogout={handleLogout} onProfileNavigate={() => { if (window.innerWidth < 768) onOpenChange(false); }}>
         <div
-          onClick={() => navigate('/finance/profile')}
-          className={cn('flex cursor-pointer items-center gap-3 rounded-xl border border-border bg-card p-2.5 hover:bg-muted transition-colors', !open && 'justify-center')}
+          className="flex cursor-pointer items-center justify-center rounded-xl border border-border bg-card p-2.5 transition-colors hover:bg-muted"
           title="View Profile"
         >
           <Avatar className={cn('h-8 w-8 flex-shrink-0 border-2', C.avatarBorder)}>
@@ -164,7 +160,7 @@ export function FinanceSidebar({ open, onOpenChange }: FinanceSidebarProps) {
                 initial={{ opacity: 0, width: 0 }}
                 animate={{ opacity: 1, width: 'auto' }}
                 exit={{ opacity: 0, width: 0 }}
-                className="flex flex-1 items-center justify-between overflow-hidden"
+                className="hidden flex-1 items-center justify-between overflow-hidden"
               >
                 <div className="min-w-0">
                   <p className="truncate text-xs font-semibold text-foreground">
@@ -178,19 +174,11 @@ export function FinanceSidebar({ open, onOpenChange }: FinanceSidebarProps) {
                   </p>
                   <p className="truncate text-[10px] text-muted-foreground">Finance</p>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7 flex-shrink-0 text-muted-foreground hover:text-destructive"
-                  onClick={(e) => { e.stopPropagation(); handleLogout(); }}
-                  title="Sign out"
-                >
-                  <LogOut size={13} />
-                </Button>
               </motion.div>
             )}
           </AnimatePresence>
         </div>
+        </SidebarProfileMenu>
       </div>
     </div>
   );

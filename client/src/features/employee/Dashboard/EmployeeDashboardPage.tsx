@@ -758,7 +758,7 @@ stored in the ApponextHRMS Secure Document Vault.
 
   // Timer Effect for checked_in status
   useEffect(() => {
-    let interval: NodeJS.Timeout;
+    let interval: ReturnType<typeof setInterval>;
     if (checkInStatus === 'checked_in') {
       interval = setInterval(() => {
         setDurationSeconds(prev => {

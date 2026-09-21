@@ -832,11 +832,11 @@ export const ApplicantTrackerPage: React.FC = () => {
   const paginatedData = filteredData.slice(startIndex, endIndex);
 
   return (
-    <div className="flex-1 space-y-6 max-w-full overflow-hidden p-6 min-h-[calc(100vh-4rem)]">
+    <div className="recruitment-page flex-1 min-w-0 space-y-4">
       {/* ── Top Header Banner ────────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card p-6 rounded-2xl border border-border/80 shadow-2xs relative overflow-hidden">
+      <div className="recruitment-page-header flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card p-6 rounded-2xl border border-border/80 shadow-2xs relative overflow-hidden">
         <div className="flex items-center gap-3.5 relative z-10">
-          <div className="w-11 h-11 rounded-2xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold shrink-0 border border-blue-500/20 shadow-xs">
+          <div className="w-11 h-11 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold shrink-0 border border-primary/20 shadow-xs">
             <Layers className="w-5 h-5" />
           </div>
           <div className="space-y-0.5">
@@ -867,7 +867,7 @@ export const ApplicantTrackerPage: React.FC = () => {
       </div>
 
       {/* ── Filters Section ──────────────────────────────────────────────────── */}
-      <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+      <Card className="bg-card border-border shadow-sm rounded-xl overflow-hidden">
         <CardHeader className="py-4 px-6 border-b border-border/60 flex flex-row items-center justify-between">
           <CardTitle className="text-sm font-extrabold text-foreground flex items-center gap-2">
             <Search className="w-4 h-4 text-primary" />
@@ -977,7 +977,7 @@ export const ApplicantTrackerPage: React.FC = () => {
       </Card>
 
       {/* ── Results Section ──────────────────────────────────────────────────── */}
-      <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+      <Card className="bg-card border-border shadow-sm rounded-xl overflow-hidden">
         <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between p-5 border-b border-border/60 gap-4">
           <div>
             <CardTitle className="text-sm font-extrabold text-foreground flex items-center gap-2">

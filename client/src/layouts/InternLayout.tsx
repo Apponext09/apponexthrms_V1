@@ -1,3 +1,4 @@
+import { SectionTabs } from '@/layouts/SectionNavigation';
 import { useState, useEffect } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
@@ -14,7 +15,6 @@ import { NotificationBell } from '@/features/notifications/components/Notificati
 import { Toaster } from '@/components/ui/toast';
 import { InternSidebar } from './InternSidebar';
 import { cn } from '@/lib/utils';
-import { LiveDateTimeDisplay } from '@/components/LiveDateTimeDisplay';
 import { GlobalSearchButton } from '@/features/search/components/GlobalSearch';
 
 // ── Page title helper ─────────────────────────────────────────────────────────
@@ -109,17 +109,12 @@ export function InternLayout() {
               {sidebarOpen ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}
             </Button>
 
-            <div>
-              <h1 className="text-sm font-semibold text-foreground">{pageTitle}</h1>
-              <p className="hidden text-[10px] text-muted-foreground sm:block">
-                {new Date().toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-              </p>
-            </div>
+            <span className="hidden truncate text-base font-extrabold tracking-tight text-foreground md:inline">APPONEXTHRMS</span>
+
           </div>
 
           <div className="flex items-center gap-2">
-            <div className="hidden min-[1180px]:block"><GlobalSearchButton /></div>
-            <LiveDateTimeDisplay />
+            <GlobalSearchButton />
             {/* Theme toggle */}
             <Button
               variant="ghost"
@@ -134,6 +129,7 @@ export function InternLayout() {
             <NotificationBell className="size-8 rounded-lg" iconClassName="size-4" />
           </div>
         </header>
+        <SectionTabs id="intern" />
 
         {/* ── Page Content ── */}
         <main className="app-shell-scroll flex-1 overflow-auto p-4 md:p-6">

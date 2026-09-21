@@ -2161,7 +2161,7 @@ export const MrfRequestPage: React.FC = () => {
   };
 
   return (
-    <div className="p-6 bg-slate-50/50 min-h-screen text-slate-800 font-sans relative">
+    <div className="recruitment-page relative min-w-0 text-foreground">
       
       {/* Inline styles to make forms and tables highly compact and premium with complete dark mode support */}
       <style>{`
@@ -2187,42 +2187,42 @@ export const MrfRequestPage: React.FC = () => {
         
         /* Dark mode support overrides */
         .dark .bg-slate-50\\/50 {
-          background-color: rgb(15 23 42 / 0.95) !important;
+          background-color: hsl(var(--background) / 0.95) !important;
         }
         .dark .text-slate-800 {
-          color: rgb(241 245 249) !important;
+          color: hsl(var(--foreground)) !important;
         }
         .dark .bg-white {
-          background-color: rgb(30 41 59) !important;
-          color: rgb(241 245 249) !important;
+          background-color: hsl(var(--card)) !important;
+          color: hsl(var(--foreground)) !important;
         }
         .dark .border-slate-100,
         .dark .border-slate-200 {
-          border-color: rgb(51 65 85) !important;
+          border-color: hsl(var(--border)) !important;
         }
         .dark .bg-slate-50 {
-          background-color: rgb(15 23 42 / 0.4) !important;
+          background-color: hsl(var(--muted) / 0.4) !important;
         }
         .dark .bg-slate-100\\/70 {
-          background-color: rgb(15 23 42 / 0.3) !important;
+          background-color: hsl(var(--muted) / 0.3) !important;
         }
         .dark .text-slate-700 {
-          color: rgb(226 232 240) !important;
+          color: hsl(var(--foreground)) !important;
         }
         .dark .text-slate-600 {
-          color: rgb(203 213 225) !important;
+          color: hsl(var(--muted-foreground)) !important;
         }
         .dark .text-slate-500 {
-          color: rgb(148 163 184) !important;
+          color: hsl(var(--muted-foreground)) !important;
         }
         .dark .text-slate-755 {
-          color: rgb(241 245 249) !important;
+          color: hsl(var(--foreground)) !important;
         }
         .dark .divide-slate-100 > :not([hidden]) ~ :not([hidden]) {
-          border-color: rgb(51 65 85) !important;
+          border-color: hsl(var(--border)) !important;
         }
         .dark .hover\\:bg-slate-50\\/50:hover {
-          background-color: rgb(15 23 42 / 0.5) !important;
+          background-color: hsl(var(--muted) / 0.5) !important;
         }
         .dark .bg-emerald-50:hover {
           background-color: rgb(16 185 129 / 0.15) !important;
@@ -2239,24 +2239,24 @@ export const MrfRequestPage: React.FC = () => {
         
         /* Dialog overrides in dark mode */
         .dark .mrf-dialog-compact {
-          background-color: rgb(30 41 59) !important;
-          color: rgb(241 245 249) !important;
-          border-color: rgb(51 65 85) !important;
+          background-color: hsl(var(--card)) !important;
+          color: hsl(var(--foreground)) !important;
+          border-color: hsl(var(--border)) !important;
         }
         .dark .mrf-dialog-compact input,
         .dark .mrf-dialog-compact select,
         .dark .mrf-dialog-compact textarea,
         .dark .mrf-dialog-compact [role="combobox"] {
-          background-color: rgb(15 23 42) !important;
-          border-color: rgb(51 65 85) !important;
-          color: rgb(241 245 249) !important;
+          background-color: hsl(var(--background)) !important;
+          border-color: hsl(var(--border)) !important;
+          color: hsl(var(--foreground)) !important;
         }
         .dark .mrf-dialog-compact select option {
-          background-color: rgb(30 41 59) !important;
-          color: rgb(241 245 249) !important;
+          background-color: hsl(var(--card)) !important;
+          color: hsl(var(--foreground)) !important;
         }
         .dark .border-slate-300 {
-          border-color: rgb(51 65 85) !important;
+          border-color: hsl(var(--border)) !important;
         }
         .dark .bg-red-100 {
           background-color: rgb(239 68 68 / 0.2) !important;
@@ -2277,7 +2277,7 @@ export const MrfRequestPage: React.FC = () => {
       <div className="flex-1">
         
         {/* ── Top Header Banner ────────────────────────────────────────────────── */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card p-6 rounded-2xl border border-border/80 shadow-2xs relative overflow-visible mb-6">
+        <div className="recruitment-page-header mb-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card p-6 rounded-2xl border border-border/80 shadow-2xs relative overflow-visible">
           <div className="flex items-center gap-3.5 relative z-10">
             <div className="w-11 h-11 rounded-2xl bg-primary/10 text-primary flex items-center justify-center font-bold shrink-0 border border-primary/20 shadow-xs">
               <Briefcase className="w-5 h-5" />
@@ -2375,7 +2375,7 @@ export const MrfRequestPage: React.FC = () => {
         </div>
 
       {/* ── Filter Section ────────────────────────────────────────────────────── */}
-      <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden mb-6">
+      <Card className="bg-card border-border shadow-sm rounded-xl overflow-hidden mb-6">
         <CardContent className="p-5">
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-end">
             <div className="space-y-1.5">
@@ -2431,7 +2431,7 @@ export const MrfRequestPage: React.FC = () => {
 
       {/* ── Segmented Tabs & Results Card ─────────────────────────────────────── */}
       <div className="space-y-0">
-        <div className="flex items-center gap-2 mb-3">
+        <div className="recruitment-segments mb-3 flex items-center gap-2">
           <button
             onClick={() => setActiveTab('open')}
             className={`px-4 py-2 text-xs font-bold rounded-xl transition-all flex items-center gap-2 ${
@@ -2457,7 +2457,7 @@ export const MrfRequestPage: React.FC = () => {
         </div>
 
         {/* Result Card Wrapper */}
-        <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+        <Card className="bg-card border-border shadow-sm rounded-xl overflow-hidden">
           
           {/* Result Header */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between p-5 border-b border-border/60 gap-4">
