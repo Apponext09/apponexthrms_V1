@@ -188,7 +188,7 @@ export function EventMasterForm({
   };
 
   const handleDelete = async (id: string, title: string) => {
-    if (!window.confirm(`Are you sure you want to delete "${title}"?`)) return;
+    if (!await window.appConfirm(`Are you sure you want to delete "${title}"?`)) return;
     try {
       await deleteMutation.mutateAsync(id);
       showToast.success('Event deleted successfully');

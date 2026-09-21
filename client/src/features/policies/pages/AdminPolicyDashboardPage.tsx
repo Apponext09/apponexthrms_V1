@@ -89,7 +89,7 @@ export const AdminPolicyDashboardPage: React.FC = () => {
   };
 
   const handleArchivePolicy = async (id: number) => {
-    if (!window.confirm('Are you sure you want to archive this policy document?')) return;
+    if (!await window.appConfirm('Are you sure you want to archive this policy document?')) return;
     try {
       await policiesApi.archivePolicy(id);
       toast.success('Policy archived successfully.');

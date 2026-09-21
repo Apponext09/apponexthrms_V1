@@ -1,16 +1,19 @@
+import { SectionRail } from '@/layouts/SectionNavigation';
+import { SectionTabs } from '@/layouts/SectionNavigation';
 import { useState, useEffect } from 'react';
 import { Outlet, useLocation, useNavigate, NavLink } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Toaster } from '@/components/ui/toast';
 import { useAuthStore } from '@/features/auth/store/authStore';
 import { useThemeStore } from '@/features/settings/store/themeStore';
+import { useSubscriptionStore } from '@/features/subscriptions/store/subscriptionStore';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { getUserRoleAndDept } from '@/lib/userProfile';
 import {
   LayoutDashboard, Users, Clock, CheckCircle2, Calendar,
   BarChart3, Bell, Sun, Moon, Menu,
   LogOut, Award, FileText, CreditCard, ChevronRight,
-  ChevronDown, FileCheck, Building2, Scan, Percent, Navigation, Palmtree, TrendingUp, UserX, Shield, UserCheck
+  ChevronDown, FileCheck, Building2, Scan, Percent, Navigation, Palmtree, TrendingUp, UserX, Shield, UserCheck, GitBranch
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useNotifications } from '@/features/notifications/hooks/useNotifications';
@@ -20,6 +23,8 @@ import { NotificationDrawer } from '@/features/notifications/components/Notifica
 import { NotificationBell } from '@/features/notifications/components/NotificationBell';
 import { Button } from '@/components/ui/button';
 import { PortalSidebarBrand } from './PortalSidebarBrand';
+import { GlobalSearchButton } from '@/features/search/components/GlobalSearch';
+import { SidebarProfileMenu } from './SidebarProfileMenu';
 
 // ── Accent palette for Manager (violet/purple) ──────────────────────────────
 const C = {
@@ -40,14 +45,32 @@ const C = {
 
 const MANAGER_NAV = [
   {
-    label: '',
+    label: 'OVERVIEW',
+    subscriptionModule: null,
     items: [
       { name: 'Dashboard', href: '/manager/dashboard', icon: LayoutDashboard },
-      { name: 'My Department', href: '/manager/team', icon: Building2 },
+    ],
+  },
+  {
+    label: 'EMPLOYEE CORE',
+    subscriptionModule: 'Core HR & Directory',
+    items: [
+      {
+        name: 'Employee Core',
+        href: '/manager/dashboard',
+        icon: Users,
+        subItems: [
+          { name: 'My Department', href: '/manager/team', icon: Building2 },
+          { name: 'My Lifecycle', href: '/manager/lifecycle', icon: GitBranch },
+          { name: 'Org Structure', href: '/manager/org-chart', icon: Building2 },
+          { name: 'ID Card', href: '/manager/id-card', icon: Shield },
+        ],
+      },
     ],
   },
   {
     label: 'LEAVES',
+    subscriptionModule: 'Leave Management & Approvals',
     items: [
       {
         name: 'Leaves',
@@ -63,6 +86,7 @@ const MANAGER_NAV = [
   },
   {
     label: 'ATTENDANCE',
+    subscriptionModule: 'Attendance & Time Tracking',
     items: [
       {
         name: 'Attendance',
@@ -72,6 +96,7 @@ const MANAGER_NAV = [
           { name: 'Dashboard', href: '/manager/attendance', icon: LayoutDashboard },
           { name: 'Face Attendance', href: '/manager/face-attendance', icon: Scan },
           { name: 'My Attendance Log', href: '/manager/attendance-log', icon: Clock },
+          { name: 'Live Tracking', href: '/manager/live-tracking', icon: Navigation },
           { name: 'My Shift', href: '/manager/my-shift', icon: Calendar },
           { name: 'Attendance Correction', href: '/manager/attendance-correction', icon: CheckCircle2 },
         ],
@@ -80,6 +105,7 @@ const MANAGER_NAV = [
   },
   {
     label: 'PAYROLL',
+    subscriptionModule: 'Automated Payroll Processing',
     items: [
       {
         name: 'Payroll',
@@ -94,6 +120,7 @@ const MANAGER_NAV = [
   },
   {
     label: 'LOAN MGMT',
+    subscriptionModule: 'Automated Payroll Processing',
     items: [
       {
         name: 'Loan Mgmt',
@@ -107,6 +134,7 @@ const MANAGER_NAV = [
   },
   {
     label: 'EXPENSE',
+    subscriptionModule: 'Expense Management',
     items: [
       {
         name: 'Expense',
@@ -124,6 +152,7 @@ const MANAGER_NAV = [
   },
   {
     label: 'PERFORMANCE',
+    subscriptionModule: 'Performance & OKRs',
     items: [
       {
         name: 'Performance',
@@ -139,6 +168,7 @@ const MANAGER_NAV = [
   },
   {
     label: 'RECRUITMENT',
+    subscriptionModule: 'Recruitment & ATS',
     items: [
       {
         name: 'Recruitment',
@@ -154,6 +184,7 @@ const MANAGER_NAV = [
   },
   {
     label: 'APPROVALS & GOVERNANCE',
+    subscriptionModule: null,
     items: [
       {
         name: 'Approvals & Governance',
@@ -213,135 +244,25 @@ function ManagerSidebarNavContent({
   handleLogout,
   navigate,
 }: ManagerSidebarNavContentProps) {
+  const { hasModule, isGatingEnabled } = useSubscriptionStore();
+  const visibleNav = MANAGER_NAV.filter(sec => {
+    if (!isGatingEnabled || !sec.subscriptionModule) return true;
+    return hasModule(sec.subscriptionModule);
+  });
   return (
     <div className="flex flex-col h-full">
       {/* ── Logo ── */}
-      <PortalSidebarBrand open={sidebarOpen} portalLabel="Manager Portal" />
+      <PortalSidebarBrand open={false} portalLabel="Manager Portal" />
 
       {/* ── Nav ── */}
-      <nav className="no-scrollbar flex-1 space-y-1 overflow-y-auto px-3 py-4">
-        {MANAGER_NAV.map((section) => (
-          <div key={section.label}>
-            <AnimatePresence>
-              {sidebarOpen && section.label && !(section.items.length === 1 && (section.items[0] as any).subItems) && (
-                <motion.p
-                  initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                  className={cn('mb-1 px-3 text-[9px] font-bold uppercase', C.sectionLabel)}
-                >
-                  {section.label}
-                </motion.p>
-              )}
-            </AnimatePresence>
-
-            <div className="space-y-0.5">
-              {section.items.map((item: any) => {
-                const Icon = item.icon;
-                const hasSubItems = item.subItems && item.subItems.length > 0;
-
-                if (hasSubItems) {
-                  const isSubActive = item.subItems.some((sub: any) =>
-                    isItemActive(sub.href, pathname, ALL_MANAGER_HREFS)
-                  );
-                  const isOpen = openMenu === item.href || isSubActive;
-
-                  return (
-                    <div key={item.href} className="space-y-1">
-                      <button
-                        type="button"
-                        onClick={() => setOpenMenu(isOpen ? null : item.href)}
-                        className={cn(
-                          'group flex min-h-10 w-full items-center justify-between rounded-lg px-3 py-2 text-[12px] font-semibold transition-colors',
-                          isSubActive
-                            ? 'bg-primary/10 text-primary'
-                            : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-                          !sidebarOpen && 'justify-center px-2'
-                        )}
-                        title={!sidebarOpen ? item.name : undefined}
-                      >
-                        <div className="flex items-center gap-3">
-                          <Icon className={cn('size-4 flex-shrink-0', isSubActive ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground')} />
-                          {sidebarOpen && <span>{item.name}</span>}
-                        </div>
-                        {sidebarOpen && (
-                          <ChevronDown
-                            className={cn('h-4 w-4 transition-transform duration-200 text-muted-foreground', isOpen && 'rotate-180')}
-                          />
-                        )}
-                      </button>
-
-                      {isOpen && sidebarOpen && (
-                        <div className="ml-3 mt-1 space-y-1 border-l border-border pl-3">
-                          {item.subItems.map((sub: any) => {
-                            const SubIcon = sub.icon;
-                            const active = isItemActive(sub.href, pathname, ALL_MANAGER_HREFS);
-                            return (
-                              <NavLink
-                                key={sub.href}
-                                to={sub.href}
-                                end
-                                onClick={() => setMobileOpen(false)}
-                                className={cn(
-                                  'flex min-h-9 items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors',
-                                  active
-                                    ? 'portal-sidebar-active font-bold text-white dark:text-slate-950'
-                                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                                )}
-                              >
-                                <SubIcon className={cn('size-3.5 flex-shrink-0', active ? 'text-white dark:text-slate-950' : 'text-muted-foreground')} />
-                                <span className="truncate">{sub.name}</span>
-                              </NavLink>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  );
-                }
-
-                const active = isItemActive(item.href, pathname, ALL_MANAGER_HREFS);
-                return (
-                  <NavLink
-                    key={item.href}
-                    to={item.href}
-                    end
-                    onClick={() => setMobileOpen(false)}
-                    title={!sidebarOpen ? item.name : undefined}
-                    className={cn(
-                      'group relative flex min-h-10 items-center gap-3 rounded-lg px-3 py-2 text-[12px] transition-colors',
-                      active
-                        ? cn(C.activeBg, C.activeText, 'font-semibold shadow-md')
-                        : cn('text-muted-foreground font-medium', C.hoverBg, C.hoverText),
-                      !sidebarOpen && 'justify-center px-2'
-                    )}
-                  >
-                    <Icon className={cn(
-                      'size-4 flex-shrink-0 transition-colors',
-                      active ? 'text-white dark:text-slate-950' : 'text-muted-foreground'
-                    )} />
-                    <AnimatePresence initial={false}>
-                      {sidebarOpen && (
-                        <motion.span
-                          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                          className="truncate leading-none"
-                        >
-                          {item.name}
-                        </motion.span>
-                      )}
-                    </AnimatePresence>
-                  </NavLink>
-                );
-              })}
-            </div>
-          </div>
-        ))}
-      </nav>
+      <SectionRail id="manager" groups={visibleNav.map(section => ({ ...section, label: section.items.length === 1 && (section.items[0] as any).subItems ? section.items[0].name : section.label, icon: section.items[0]?.icon }))} open={sidebarOpen} onNavigate={() => setMobileOpen(false)} />
 
       {/* ── User footer ── */}
       <div className="flex-shrink-0 border-t border-border bg-card p-3">
+        <SidebarProfileMenu profilePath="/manager/profile" onLogout={handleLogout} onProfileNavigate={() => setMobileOpen(false)}>
         <div
-          onClick={() => navigate('/manager/profile')}
           className={cn(
-            'group flex min-h-14 cursor-pointer items-center gap-2.5 rounded-xl border p-2.5 transition-colors',
+            'group flex min-h-14 cursor-pointer items-center justify-center rounded-xl border p-2.5 transition-colors',
             'border-border bg-card hover:bg-muted',
             !sidebarOpen && 'justify-center'
           )}
@@ -361,7 +282,7 @@ function ManagerSidebarNavContent({
             {sidebarOpen && (
               <motion.div
                 initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                className="flex-1 min-w-0 leading-tight"
+                className="hidden flex-1 min-w-0 leading-tight"
               >
                 <p className={cn('text-[12px] font-bold text-foreground truncate transition-colors', C.profileHover)}>
                   {(() => {
@@ -379,20 +300,8 @@ function ManagerSidebarNavContent({
             )}
           </AnimatePresence>
 
-          {sidebarOpen && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={(e) => { e.stopPropagation(); handleLogout(); }}
-              className="h-6 w-6 rounded-lg text-muted-foreground/50 hover:text-rose-500 hover:bg-rose-500/10 flex-shrink-0 transition-colors"
-              title="Logout"
-              aria-label="Log out"
-            >
-              <LogOut className="h-3 w-3" />
-            </Button>
-          )}
         </div>
+        </SidebarProfileMenu>
       </div>
     </div>
   );
@@ -440,7 +349,7 @@ export function ManagerLayout() {
   return (
     <div className="app-shell-reference flex h-dvh overflow-hidden bg-background">
       {/* ── Desktop Sidebar ── */}
-      <aside className={cn('role-portal-sidebar relative hidden h-dvh flex-shrink-0 flex-col overflow-hidden border-r border-border bg-card md:flex', sidebarOpen ? 'w-64' : 'w-[72px]')}>
+      <aside className={cn('role-portal-sidebar relative hidden h-dvh flex-shrink-0 flex-col overflow-hidden border-r border-border bg-card md:flex', sidebarOpen ? 'w-28' : 'w-[72px]')}>
         {!sidebarOpen && (
           <button
             type="button"
@@ -466,7 +375,7 @@ export function ManagerLayout() {
             <motion.aside
               initial={{ x: -260 }} animate={{ x: 0 }} exit={{ x: -260 }}
               transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
-              className="role-portal-sidebar fixed inset-y-0 left-0 z-50 w-64 border-r border-border bg-card shadow-2xl md:hidden"
+              className="role-portal-sidebar fixed inset-y-0 left-0 z-50 w-72 border-r border-border bg-card shadow-2xl md:hidden"
             >
               {renderSidebarContent()}
             </motion.aside>
@@ -495,20 +404,10 @@ export function ManagerLayout() {
             <Menu className="h-4 w-4" />
           </Button>
 
-          <div className="flex items-center gap-2">
-            <div className={cn('h-2 w-2 rounded-full', C.dot)} />
-            <span className="text-sm font-bold text-foreground hidden sm:block">Manager Portal</span>
-            <span className={cn(
-              'hidden md:inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full border',
-              C.badge
-            )}>
-              {roleInfo.roleTitle} · {roleInfo.departmentName}
-            </span>
-          </div>
+          <span className="hidden truncate text-base font-extrabold tracking-tight text-foreground md:inline">APPONEXTHRMS</span>
 
-          <div className="flex-1" />
-
-          <div className="flex items-center gap-2">
+          <div className="ml-auto flex items-center gap-2">
+            <GlobalSearchButton />
             <Button variant="ghost" size="icon" onClick={() => setTheme(currentTheme === 'dark' ? 'light' : 'dark')} aria-label={currentTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
               {currentTheme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </Button>
@@ -517,6 +416,7 @@ export function ManagerLayout() {
 
           </div>
         </header>
+        <SectionTabs id="manager" />
 
         {/* Page content */}
         <main className="flex-1 overflow-auto">
@@ -527,7 +427,7 @@ export function ManagerLayout() {
       </div>
 
       <NotificationDrawer />
-      <Toaster position="bottom-right" />
+      <Toaster position="top-right" />
     </div>
   );
 }

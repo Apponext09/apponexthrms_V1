@@ -37,15 +37,15 @@ export const PolicyInformationStep: React.FC<PolicyInformationStepProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.title.trim()) {
-      alert('Policy Name is required.');
+      window.appAlert('Policy Name is required.');
       return;
     }
     if (!formData.documentRef.trim()) {
-      alert('Policy Reference ID is required.');
+      window.appAlert('Policy Reference ID is required.');
       return;
     }
     if (!formData.effectiveDate) {
-      alert('Effective Date is required.');
+      window.appAlert('Effective Date is required.');
       return;
     }
     onNext();

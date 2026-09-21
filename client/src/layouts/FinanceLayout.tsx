@@ -1,3 +1,4 @@
+import { SectionTabs } from '@/layouts/SectionNavigation';
 import { useState, useEffect } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
@@ -14,15 +15,16 @@ import { NotificationBell } from "@/features/notifications/components/Notificati
 import { Toaster } from "@/components/ui/toast";
 import { FinanceSidebar } from "./FinanceSidebar";
 import { cn } from "@/lib/utils";
+import { GlobalSearchButton } from '@/features/search/components/GlobalSearch';
 
 // -- Page title helper ----------------------------------------------------------
 function getPageTitle(pathname: string): string {
   if (pathname.includes("/face-punch"))      return "Face Punch Terminal";
   if (pathname.includes("/expenses/verification")) return "Finance Expense Verification";
   if (pathname.includes("/expenses/finance-verification")) return "Finance Expense Verification";
-  if (pathname.includes("/expenses/reimbursements")) return "Reimbursements & Disbursals";
+  if (pathname.includes("/expenses/reimbursements")) return "Payment Cycle Reports";
   if (pathname.includes("/expenses/approvals")) return "Expense Approvals";
-  if (pathname.includes("/expenses/dashboard")) return "Expense Analytics Dashboard";
+  if (pathname.includes("/expenses/dashboard")) return "Expense Management Dashboard";
   if (pathname.includes("/expenses/my-expenses")) return "My Expenses";
   if (pathname.includes("/expenses/travel-requests")) return "Travel Requests";
   if (pathname.includes("/expenses/travel-advances")) return "Travel Advances";
@@ -119,15 +121,12 @@ export function FinanceLayout() {
               {sidebarOpen ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}
             </Button>
 
-            <div>
-              <h1 className="text-sm font-semibold text-foreground">{pageTitle}</h1>
-              <p className="hidden text-[10px] text-muted-foreground sm:block">
-                {new Date().toLocaleDateString("en-IN", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
-              </p>
-            </div>
+            <span className="hidden truncate text-base font-extrabold tracking-tight text-foreground md:inline">APPONEXTHRMS</span>
+
           </div>
 
           <div className="flex items-center gap-2">
+            <GlobalSearchButton />
             {/* Theme toggle */}
             <Button
               variant="ghost"
@@ -140,20 +139,9 @@ export function FinanceLayout() {
 
             {/* Notifications bell */}
             <NotificationBell className="size-8 rounded-lg" iconClassName="size-4" />
-
-            {/* Avatar */}
-            <Avatar
-              className="h-8 w-8 cursor-pointer border-2 border-emerald-400 dark:border-emerald-700"
-              onClick={() => navigate("/finance/profile")}
-              title="My Profile"
-            >
-              <AvatarImage src={user?.avatarUrl} />
-              <AvatarFallback className="bg-emerald-600 text-xs font-bold text-white">
-                {initials}
-              </AvatarFallback>
-            </Avatar>
           </div>
         </header>
+        <SectionTabs id="finance" />
 
         {/* -- Page Content -- */}
         <main className="flex-1 overflow-y-auto p-4 sm:p-6">

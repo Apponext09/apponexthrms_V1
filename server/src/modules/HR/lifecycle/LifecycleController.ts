@@ -52,6 +52,34 @@ export class LifecycleController {
     res.json({ success: true, data });
   });
 
+  /**
+   * Return lifecycle details for the authenticated user's linked employee.
+   * This avoids relying on a client-side employeeId, which is not present in
+   * every role's login payload.
+   */
+  getMyEmployeeLifecycleDetails = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const data = await this.lifecycleService.getEmployeeLifecycleDetails(ctx, 0);
+    res.json({ success: true, data });
+  });
+
+  /** Submit a resignation for the authenticated employee only. */
+  submitMyResignation = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { resignationDate, lastWorkingDay, reason } = req.body || {};
+    if (!resignationDate || !lastWorkingDay || !reason?.trim()) {
+      return res.status(400).json({ success: false, message: 'Resignation date, last working day, and reason are required.' });
+    }
+    if (Number.isNaN(new Date(resignationDate).getTime()) || Number.isNaN(new Date(lastWorkingDay).getTime())) {
+      return res.status(400).json({ success: false, message: 'Please provide valid resignation and last working dates.' });
+    }
+    if (new Date(lastWorkingDay) < new Date(resignationDate)) {
+      return res.status(400).json({ success: false, message: 'Last working day cannot be before the resignation date.' });
+    }
+    const result = await this.lifecycleService.submitMyResignation(ctx, { resignationDate, lastWorkingDay, reason: reason.trim() });
+    res.status(201).json({ success: true, data: result });
+  });
+
   transferEmployee = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
     const {

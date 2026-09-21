@@ -39,9 +39,7 @@ export function PlatformAdminTopbar({
           >
             <Menu className="h-5 w-5" />
           </Button>
-          <div className="hidden md:block text-lg font-semibold text-foreground">
-            Platform Administration
-          </div>
+          <span className="hidden truncate text-base font-extrabold tracking-tight text-foreground md:inline">APPONEXTHRMS</span>
         </div>
 
         {/* Right Actions */}

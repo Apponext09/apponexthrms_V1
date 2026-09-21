@@ -151,7 +151,8 @@ export function MassSalaryStructureUploadPage() {
       const empList = empsRes.data?.data || empsRes.data?.items || empsRes.data || [];
       const deptList = deptsRes.data?.data || deptsRes.data || [];
       const gradeList = gradesRes.data?.data || gradesRes.data || [];
-      const locList = locsRes.data?.data || locsRes.data || [];
+      const rawLocList = locsRes.data?.data || locsRes.data || [];
+      const locList = Array.isArray(rawLocList) ? rawLocList.filter((l: any) => l.status !== 'inactive' && l.status !== 'Inactive' && l.is_active !== 'No' && l.isActive !== 'No') : [];
       const mappingsList = mappingsRes.data?.data || mappingsRes.data || [];
 
       const validSlabs = Array.isArray(slabList) ? slabList : [];

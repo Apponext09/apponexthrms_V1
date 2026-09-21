@@ -1,3 +1,4 @@
+import { SectionTabs } from '@/layouts/SectionNavigation';
 import { useState, useEffect } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
@@ -14,12 +15,17 @@ import { NotificationBell } from '@/features/notifications/components/Notificati
 import { Toaster } from '@/components/ui/toast';
 import { InternSidebar } from './InternSidebar';
 import { cn } from '@/lib/utils';
+import { GlobalSearchButton } from '@/features/search/components/GlobalSearch';
 
 // ── Page title helper ─────────────────────────────────────────────────────────
 function getPageTitle(pathname: string): string {
   if (pathname.includes('/attendance'))       return 'My Attendance';
   if (pathname.includes('/leaves'))           return 'My Leaves';
   if (pathname.includes('/payslips'))         return 'My Payslips';
+  if (pathname.includes('/expenses'))         return 'Expense Claims';
+  if (pathname.includes('/travel-requests'))  return 'Travel Requests';
+  if (pathname.includes('/travel-advances'))  return 'Travel Advances';
+  if (pathname.includes('/mileage-claims'))   return 'Mileage Claims';
   if (pathname.includes('/documents'))        return 'My Documents';
   if (pathname.includes('/holiday-calendar')) return 'Holiday Calendar';
   if (pathname.includes('/announcements'))    return 'Announcements';
@@ -103,15 +109,12 @@ export function InternLayout() {
               {sidebarOpen ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}
             </Button>
 
-            <div>
-              <h1 className="text-sm font-semibold text-foreground">{pageTitle}</h1>
-              <p className="hidden text-[10px] text-muted-foreground sm:block">
-                {new Date().toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-              </p>
-            </div>
+            <span className="hidden truncate text-base font-extrabold tracking-tight text-foreground md:inline">APPONEXTHRMS</span>
+
           </div>
 
           <div className="flex items-center gap-2">
+            <GlobalSearchButton />
             {/* Theme toggle */}
             <Button
               variant="ghost"
@@ -124,23 +127,12 @@ export function InternLayout() {
 
             {/* Notifications bell */}
             <NotificationBell className="size-8 rounded-lg" iconClassName="size-4" />
-
-            {/* Avatar */}
-            <Avatar
-              className="h-8 w-8 cursor-pointer border-2 border-amber-300 dark:border-amber-700"
-              onClick={() => navigate('/intern/profile')}
-              title="My Profile"
-            >
-              <AvatarImage src={user?.avatarUrl} />
-              <AvatarFallback className="bg-amber-500 text-xs font-bold text-white">
-                {initials}
-              </AvatarFallback>
-            </Avatar>
           </div>
         </header>
+        <SectionTabs id="intern" />
 
         {/* ── Page Content ── */}
-        <main className="flex-1 overflow-y-auto">
+        <main className="app-shell-scroll flex-1 overflow-auto p-4 md:p-6">
           <Outlet />
         </main>
       </div>

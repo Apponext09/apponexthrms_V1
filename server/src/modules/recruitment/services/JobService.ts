@@ -8,6 +8,32 @@ import { AuditService } from '../../audit/audit.service';
 import { NotFoundError, ValidationError } from '../../../common/errors/index';
 import type { TenantContext, ListQueryOptions } from '../../../db/types';
 
+function normalizeJobType(val?: any): 'full_time' | 'part_time' | 'contract' | 'internship' {
+  if (!val) return 'full_time';
+  const s = String(val).toLowerCase().replace(/[\s_-]+/g, '');
+  if (s.includes('part')) return 'part_time';
+  if (s.includes('contract') || s.includes('temp') || s.includes('freelance')) return 'contract';
+  if (s.includes('intern') || s.includes('trainee')) return 'internship';
+  return 'full_time';
+}
+
+function normalizeEmploymentType(val?: any): 'onsite' | 'remote' | 'hybrid' {
+  if (!val) return 'onsite';
+  const s = String(val).toLowerCase().replace(/[\s_-]+/g, '');
+  if (s.includes('remote') || s.includes('wfh') || s.includes('home')) return 'remote';
+  if (s.includes('hybrid') || s.includes('flex')) return 'hybrid';
+  return 'onsite';
+}
+
+function normalizeExperienceLevel(val?: any): 'entry' | 'mid' | 'senior' | 'lead' {
+  if (!val) return 'mid';
+  const s = String(val).toLowerCase().replace(/[\s_-]+/g, '');
+  if (s.includes('entry') || s.includes('fresh') || s.includes('junior')) return 'entry';
+  if (s.includes('lead') || s.includes('manager') || s.includes('dir') || s.includes('exec') || s.includes('principal')) return 'lead';
+  if (s.includes('senior') || s.includes('sr')) return 'senior';
+  return 'mid';
+}
+
 export class JobService {
   private jobRepo: JobRepository;
   private mrfRepo: MrfRequestRepository;
@@ -91,15 +117,15 @@ export class JobService {
       department_id: input.departmentId || null,
       designation_id: input.designationId || null,
       location_id: input.locationId || null,
-      job_type: input.jobType,
-      experience_level: input.experienceLevel,
+      job_type: normalizeJobType(input.jobType || (input as any).employmentType),
+      experience_level: normalizeExperienceLevel(input.experienceLevel),
       min_experience_years: input.minExperienceYears || null,
       max_experience_years: input.maxExperienceYears || null,
       min_salary: input.minSalary || null,
       max_salary: input.maxSalary || null,
-      currency: input.currency,
-      employment_type: input.employmentType,
-      no_of_positions: input.noOfPositions,
+      currency: input.currency || 'INR',
+      employment_type: normalizeEmploymentType(input.employmentType),
+      no_of_positions: input.noOfPositions || 1,
       expiry_date: input.expiryDate || null,
       job_template_id: input.jobTemplateId || null,
       is_internal: input.isInternal ?? false,
@@ -170,10 +196,21 @@ export class JobService {
       }
     }
 
-    const updated = await this.jobRepo.update(ctx, jobId, {
+    const sanitizedInput: any = {
       ...input,
       updated_by: ctx.userId,
-    } as any);
+    };
+    if (input.job_type !== undefined || (input as any).jobType !== undefined) {
+      sanitizedInput.job_type = normalizeJobType(input.job_type || (input as any).jobType);
+    }
+    if (input.employment_type !== undefined || (input as any).employmentType !== undefined) {
+      sanitizedInput.employment_type = normalizeEmploymentType(input.employment_type || (input as any).employmentType);
+    }
+    if (input.experience_level !== undefined || (input as any).experienceLevel !== undefined) {
+      sanitizedInput.experience_level = normalizeExperienceLevel(input.experience_level || (input as any).experienceLevel);
+    }
+
+    const updated = await this.jobRepo.update(ctx, jobId, sanitizedInput);
 
     await this.auditService.log(ctx, {
       action: 'UPDATE',

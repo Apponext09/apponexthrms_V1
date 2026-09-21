@@ -758,7 +758,7 @@ stored in the ApponextHRMS Secure Document Vault.
 
   // Timer Effect for checked_in status
   useEffect(() => {
-    let interval: NodeJS.Timeout;
+    let interval: ReturnType<typeof setInterval>;
     if (checkInStatus === 'checked_in') {
       interval = setInterval(() => {
         setDurationSeconds(prev => {
@@ -1104,10 +1104,6 @@ stored in the ApponextHRMS Secure Document Vault.
           </div>
         </div>
 
-        <div className="bg-muted/40 border border-border/60 rounded-xl px-4 py-2.5 text-center sm:text-right shrink-0">
-          <p className="text-xl font-mono font-bold tracking-tight text-foreground">{formatTime(currentTime)}</p>
-          <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider mt-0.5">{formatDate(currentTime)}</p>
-        </div>
       </div>
 
       {/* Leave Application Reminder Banner */}

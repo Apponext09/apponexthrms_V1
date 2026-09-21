@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -39,21 +39,22 @@ export const LeaveAllocationTab: React.FC<LeaveAllocationTabProps> = ({
   formData,
   setFormData,
   companies = [],
-  departments,
-  locations,
+  departments = [],
+  locations = [],
   subDepartments = [],
   designations = [],
-  gradeOptions,
-  employeeTypeOptions,
+  gradeOptions = [],
+  employeeTypeOptions = [],
   employeeStatusOptions = [],
+  leaveTypes = [],
 }) => {
-  const alloc = formData.allocation || {};
+  const alloc = formData?.allocation || {};
 
   const updateAlloc = (key: string, value: any) => {
     setFormData((prev: any) => ({
       ...prev,
       allocation: {
-        ...prev.allocation,
+        ...(prev?.allocation || {}),
         [key]: value,
       },
     }));
@@ -95,169 +96,6 @@ export const LeaveAllocationTab: React.FC<LeaveAllocationTabProps> = ({
 
   return (
     <div className="space-y-5 text-foreground dark:text-slate-100">
-      {/* 0. Basic Leave Category Meta Information */}
-      <Card className="border border-border/60/90 dark:border-slate-800 shadow-2xs rounded-xl bg-background dark:bg-slate-950">
-        <CardHeader className="bg-muted/30/60 dark:bg-slate-900/40 border-b border-slate-100 dark:border-slate-800/80 pb-3">
-          <div className="flex items-center gap-2">
-            <div className="p-1.5 rounded-lg bg-blue-600 text-white shadow-2xs">
-              <FileText className="w-3.5 h-3.5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-1.5">
-                <CardTitle className="text-xs font-bold text-foreground dark:text-white">
-                  Basic Leave Details
-                </CardTitle>
-                <HelpHint
-                  title="Basic Leave Details"
-                  titleHi="लीव की बुनियादी जानकारी"
-                  description="Set the leave category title, unique code identifier, and paid status."
-                  descriptionHi="इस लीव का नाम, कोड, वर्गीकरण और पेड/अनपेड प्रकार तय करें।"
-                />
-              </div>
-              <CardDescription className="text-[11px] text-muted-foreground">
-                Define category name, short code, and salary paid type.
-              </CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="p-4 space-y-3.5">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
-            <div>
-              <Label className="text-[11px] font-extrabold text-foreground dark:text-slate-200">
-                Leave Name *
-              </Label>
-              <Input
-                type="text"
-                value={formData.leave_name || ''}
-                onChange={(e) => setFormData((prev: any) => ({ ...prev, leave_name: e.target.value }))}
-                placeholder="e.g. Sick Leave, Casual Leave"
-                className="h-8 mt-1 text-xs font-semibold"
-                required
-              />
-            </div>
-
-            <div>
-              <Label className="text-[11px] font-extrabold text-foreground dark:text-slate-200">
-                Leave Code *
-              </Label>
-              <Input
-                type="text"
-                value={formData.leave_code || ''}
-                onChange={(e) => setFormData((prev: any) => ({ ...prev, leave_code: e.target.value.toUpperCase() }))}
-                placeholder="e.g. SL, CL"
-                className="h-8 mt-1 text-xs uppercase font-bold"
-                required
-              />
-            </div>
-
-            <div>
-              <Label className="text-[11px] font-extrabold text-indigo-600 dark:text-indigo-400 flex items-center justify-between">
-                <span>Annual Leave Count (Days) *</span>
-                <span className="text-[9px] font-normal text-muted-foreground/70">Total yearly quota</span>
-              </Label>
-              <Input
-                type="number"
-                min="0"
-                max="365"
-                value={formData.annual_quota ? formData.annual_quota : ''}
-                onChange={(e) => {
-                  const val = e.target.value === '' ? '' : (parseFloat(e.target.value) || 0);
-                  setFormData((prev: any) => ({
-                    ...prev,
-                    annual_quota: val,
-                    allocation: {
-                      ...prev.allocation,
-                      entitlementDays: val
-                    }
-                  }));
-                }}
-                placeholder="e.g. 10"
-                className="h-8 mt-1 text-xs font-extrabold text-indigo-600 dark:text-indigo-400 bg-indigo-50/40 dark:bg-indigo-950/40 border-indigo-200 dark:border-indigo-800"
-                required
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 pt-0.5">
-            <div>
-              <div className="flex items-center gap-1">
-                <Label className="text-[11px] font-semibold text-foreground dark:text-slate-300">
-                  Leave Classification
-                </Label>
-                <HelpHint
-                  title="Leave Classification"
-                  titleHi="लीव का वर्गीकरण"
-                  description="Defines whether the leave quota recurs on an annual calendar cycle or for special life events."
-                  descriptionHi="तय करें कि छुट्टी सालाना कैलेंडर चक्र पर मिलती है या विशेष घटनाओं (शादी/मातृत्व) के लिए।"
-                  effect="Calendar Leave resets every financial year. Non-Calendar Leave triggers on specific events."
-                  effectHi="कैलेंडर लीव हर साल 1 अप्रैल को रीसेट होती है, जबकि नॉन-कैलेंडर लीव विशेष इवेंट पर मिलती है।"
-                  example="Annual Leave = Calendar, Maternity Leave = Non-Calendar."
-                />
-              </div>
-              <select
-                value={formData.leave_classification || 'calendar'}
-                onChange={(e: any) => setFormData((prev: any) => ({ ...prev, leave_classification: e.target.value }))}
-                className="w-full h-8 mt-1 rounded-lg border border-border/60 dark:border-slate-700 bg-muted/30 dark:bg-slate-900 px-2.5 text-xs text-foreground dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              >
-                <option value="calendar">Calendar Leave (Annual cycle)</option>
-                <option value="non-calendar">Non-Calendar Leave (Special event)</option>
-                <option value="uncategorized">Uncategorized (LWP / Custom)</option>
-              </select>
-            </div>
-
-            <div>
-              <div className="flex items-center gap-1">
-                <Label className="text-[11px] font-semibold text-foreground dark:text-slate-300">
-                  Paid / Unpaid Type
-                </Label>
-                <HelpHint
-                  title="Paid vs Unpaid Classification"
-                  titleHi="पेड बनाम अनपेड लीव"
-                  description="Determines whether payroll calculates full daily salary or deducts wages when taken."
-                  descriptionHi="तय करें कि छुट्टी लेने पर पूरा वेतन मिलेगा या सैलरी से कटौैती होगी।"
-                  effect="Paid Leave = Full compensation. Unpaid LWP = Daily wage automatically deducted in payroll."
-                  effectHi="पेड लीव में पूरा वेतन मिलता है, अनपेड लीव (LWP) में सैलरी स्लिप से दिन का वेतन कटता है।"
-                  example="Casual Leave = Paid, Leave Without Pay = Unpaid."
-                />
-              </div>
-              <select
-                value={formData.paid_type || 'paid'}
-                onChange={(e: any) => setFormData((prev: any) => ({ ...prev, paid_type: e.target.value }))}
-                className="w-full h-8 mt-1 rounded-lg border border-border/60 dark:border-slate-700 bg-muted/30 dark:bg-slate-900 px-2.5 text-xs text-foreground dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              >
-                <option value="paid">Paid Leave (Full salary paid)</option>
-                <option value="unpaid">Unpaid Leave / LWP (Salary deducted)</option>
-                <option value="half_paid">Half-Paid Leave (50% salary)</option>
-              </select>
-            </div>
-
-            <div>
-              <div className="flex items-center gap-1">
-                <Label className="text-[11px] font-semibold text-foreground dark:text-slate-300">
-                  Policy Status
-                </Label>
-                <HelpHint
-                  title="Policy Status"
-                  titleHi="नीति की स्थिति"
-                  description="Controls whether this leave policy is active and available for employees to select."
-                  descriptionHi="तय करें कि यह लीव पॉलिसी सक्रिय है या कर्मचारियों के लिए बंद है।"
-                  effect="Active = Visible in employee dropdowns & balance cards. Inactive = Hidden from employees."
-                  effectHi="Active होने पर कर्मचारी अप्लाई कर सकेंगे, Inactive होने पर लीव ड्रॉपडाउन से हट जाएगी।"
-                />
-              </div>
-              <select
-                value={formData.status || 'active'}
-                onChange={(e: any) => setFormData((prev: any) => ({ ...prev, status: e.target.value }))}
-                className="w-full h-8 mt-1 rounded-lg border border-border/60 dark:border-slate-700 bg-muted/30 dark:bg-slate-900 px-2.5 text-xs font-semibold text-foreground dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              >
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-              </select>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
       {/* 1. Days worked to leave earned */}
       <Card className="border border-border/60/90 dark:border-slate-800 shadow-2xs rounded-xl bg-background dark:bg-slate-950">
         <CardHeader className="bg-muted/30/60 dark:bg-slate-900/40 border-b border-slate-100 dark:border-slate-800/80 pb-3">
@@ -614,24 +452,24 @@ export const LeaveAllocationTab: React.FC<LeaveAllocationTabProps> = ({
       <LeaveScopeCards
         title="Applies to"
         description="Leave this empty and this accrual applies to every employee."
-        scopeData={formData.employment_allocation || {}}
+        scopeData={formData?.employment_allocation || {}}
         onUpdateScope={(key, values) => {
           setFormData((prev: any) => ({
             ...prev,
             employment_allocation: {
-              ...prev.employment_allocation,
+              ...(prev?.employment_allocation || {}),
               [key]: values,
             },
           }));
         }}
-        companies={companies}
-        locations={locations}
-        departments={departments}
-        subDepartments={subDepartments}
-        designations={designations}
-        grades={gradeOptions}
-        employeeTypes={employeeTypeOptions}
-        employeeStatuses={employeeStatusOptions}
+        companies={companies || []}
+        locations={locations || []}
+        departments={departments || []}
+        subDepartments={subDepartments || []}
+        designations={designations || []}
+        grades={gradeOptions || []}
+        employeeTypes={employeeTypeOptions || []}
+        employeeStatuses={employeeStatusOptions || []}
       />
 
       {/* 6. Only when (Advanced Allocation Conditions) */}
@@ -651,9 +489,9 @@ export const LeaveAllocationTab: React.FC<LeaveAllocationTabProps> = ({
           <RuleConditionBuilder
             value={alloc.onlyWhen || alloc.only_when}
             onChange={(newGroup) => updateAlloc('onlyWhen', newGroup)}
-            departments={departments}
-            locations={locations}
-            grades={gradeOptions.map((g, i) => ({ id: i + 1, name: g }))}
+            departments={departments || []}
+            locations={locations || []}
+            grades={(gradeOptions || []).map((g, i) => ({ id: i + 1, name: g }))}
           />
         </CardContent>
       </Card>

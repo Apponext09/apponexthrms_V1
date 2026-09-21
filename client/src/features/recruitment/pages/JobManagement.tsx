@@ -209,12 +209,12 @@ export const JobManagement: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 space-y-6 max-w-full p-6 min-h-[calc(100vh-4rem)]">
+    <div className="recruitment-page flex-1 min-w-0 space-y-4">
       
       {/* ── Top Header Section ────────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card p-6 rounded-2xl border border-border/80 shadow-2xs relative">
+      <div className="recruitment-page-header flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card p-6 rounded-2xl border border-border/80 shadow-2xs relative">
         <div className="flex items-center gap-3.5 relative z-10">
-          <div className="w-11 h-11 rounded-2xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold shrink-0 border border-blue-500/20 shadow-xs">
+          <div className="w-11 h-11 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold shrink-0 border border-primary/20 shadow-xs">
             <Briefcase className="w-5 h-5" />
           </div>
           <div className="space-y-0.5">
@@ -273,15 +273,15 @@ export const JobManagement: React.FC = () => {
       </div>
 
       {/* ── Main Content Area ────────────────────────────────────────────────── */}
-      <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+      <Card className="bg-card border-border shadow-sm rounded-xl overflow-hidden">
         {/* Controls Toolbar: Tabs & Search */}
         <CardHeader className="p-5 border-b border-border/60 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-2 bg-muted/60 p-1 rounded-xl border border-border/60 w-fit">
+          <div className="recruitment-segments flex items-center gap-2 bg-muted/60 p-1 rounded-xl border border-border/60 w-fit">
             <button
               onClick={() => { setActiveTab('active'); setCurrentPage(1); }}
               className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
                 activeTab === 'active'
-                  ? 'bg-background text-foreground shadow-xs'
+                  ? 'bg-primary text-primary-foreground shadow-sm'
                   : 'text-muted-foreground hover:text-foreground'
               }`}
             >
@@ -292,7 +292,7 @@ export const JobManagement: React.FC = () => {
               onClick={() => { setActiveTab('closed'); setCurrentPage(1); }}
               className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
                 activeTab === 'closed'
-                  ? 'bg-background text-foreground shadow-xs'
+                  ? 'bg-primary text-primary-foreground shadow-sm'
                   : 'text-muted-foreground hover:text-foreground'
               }`}
             >
@@ -694,14 +694,34 @@ const CreateJobModal: React.FC<CreateJobModalProps> = ({ initialData, onClose, o
     queryKey: ['settings-departments-list'],
     queryFn: async () => {
       try {
-        const res = await apiClient.get('/settings/departments');
+        const res = await apiClient.get('/settings/departments', { params: { pageSize: 500 } });
         const raw = extractList(res);
-        return raw.map((d: any) => ({
+        const mapped = raw.map((d: any) => ({
           id: Number(d.id),
-          name: String(d.name || d.department_name || d.departmentName || ''),
+          name: String(d.name || d.department_name || d.departmentName || d.title || ''),
         })).filter((x: any) => x.id && x.name);
-      } catch {
-        return [];
+
+        if (mapped.length > 0) return mapped;
+
+        // Fallback to scope-masters
+        const scopeRes = await apiClient.get('/settings/scope-masters');
+        const scopeDepts = scopeRes.data?.data?.departments || [];
+        return scopeDepts.map((d: any) => ({
+          id: Number(d.id),
+          name: String(d.name || d.department_name || d.departmentName || d.title || ''),
+        })).filter((x: any) => x.id && x.name);
+      } catch (e) {
+        console.error('Failed to fetch /settings/departments:', e);
+        try {
+          const scopeRes = await apiClient.get('/settings/scope-masters');
+          const scopeDepts = scopeRes.data?.data?.departments || [];
+          return scopeDepts.map((d: any) => ({
+            id: Number(d.id),
+            name: String(d.name || d.department_name || d.departmentName || d.title || ''),
+          })).filter((x: any) => x.id && x.name);
+        } catch {
+          return [];
+        }
       }
     }
   });
@@ -758,7 +778,8 @@ const CreateJobModal: React.FC<CreateJobModalProps> = ({ initialData, onClose, o
     if (dbEmploymentTypes.length > 0) {
       setFormData(prev => ({
         ...prev,
-        employmentType: prev.employmentType || dbEmploymentTypes[0],
+        jobType: prev.jobType || dbEmploymentTypes[0],
+        employmentType: prev.employmentType || 'onsite',
       }));
     }
   }, [dbEmploymentTypes]);
@@ -866,19 +887,18 @@ const CreateJobModal: React.FC<CreateJobModalProps> = ({ initialData, onClose, o
         setIsFresher(fresherFlag);
       }
 
-      // 3. Map MRF employment type to Employment Type
+      // 3. Map MRF employment type
       const mrfEmpType = String(mrf.employment_type || mrf.employmentType || '').trim();
-      const matchedDb = mrfEmpType ? (dbEmploymentTypes.find(t => t.toLowerCase() === mrfEmpType.toLowerCase()) || mrfEmpType) : undefined;
 
       setFormData(prev => ({
         ...prev,
         mrfRequestId: mrf.id,
         jobTitle: posTitle || prev.jobTitle,
-        jobType: posTitle || prev.jobType || 'Full Time',
+        jobType: mrfEmpType || prev.jobType || 'full_time',
         jobDescription: mrf.job_description || mrf.jobDescription || prev.jobDescription,
         noOfPositions: Number(mrf.number_of_positions || mrf.numberOfPositions) || prev.noOfPositions || 1,
         departmentId: mrf.department_id || mrf.departmentId ? Number(mrf.department_id || mrf.departmentId) : prev.departmentId,
-        employmentType: matchedDb || prev.employmentType || dbEmploymentTypes[0] || '',
+        employmentType: prev.employmentType || 'onsite',
         minExperienceYears: minExp !== undefined ? minExp : prev.minExperienceYears,
         maxExperienceYears: maxExp !== undefined ? maxExp : prev.maxExperienceYears,
         experienceLevel: expLevel,
@@ -919,7 +939,8 @@ const CreateJobModal: React.FC<CreateJobModalProps> = ({ initialData, onClose, o
             }
             onSubmit({
               ...formData,
-              jobType: formData.jobTitle || formData.jobType || 'Full Time',
+              jobType: formData.jobType || 'full_time',
+              employmentType: formData.employmentType || 'onsite',
               expiryDate: deadline,
               aiSettings,
             });
@@ -1061,7 +1082,7 @@ const CreateJobModal: React.FC<CreateJobModalProps> = ({ initialData, onClose, o
                       onClick={() => {
                         setIsOtherPosition(false);
                         const fallbackPos = dbPositions[0] || '';
-                        setFormData(prev => ({ ...prev, jobTitle: fallbackPos, jobType: fallbackPos }));
+                        setFormData(prev => ({ ...prev, jobTitle: fallbackPos }));
                       }}
                       className="text-[11px] font-bold text-primary hover:underline cursor-pointer"
                     >
@@ -1077,9 +1098,9 @@ const CreateJobModal: React.FC<CreateJobModalProps> = ({ initialData, onClose, o
                       const val = e.target.value;
                       if (val === '__OTHER__') {
                         setIsOtherPosition(true);
-                        setFormData(prev => ({ ...prev, jobTitle: '', jobType: '' }));
+                        setFormData(prev => ({ ...prev, jobTitle: '' }));
                       } else {
-                        setFormData(prev => ({ ...prev, jobTitle: val, jobType: val }));
+                        setFormData(prev => ({ ...prev, jobTitle: val }));
                       }
                     }}
                     className="w-full px-3 py-2 border rounded-xl bg-background border-border text-xs font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary shadow-2xs h-9 cursor-pointer"
@@ -1103,7 +1124,7 @@ const CreateJobModal: React.FC<CreateJobModalProps> = ({ initialData, onClose, o
                     value={formData.jobTitle}
                     onChange={(e) => {
                       const val = e.target.value;
-                      setFormData(prev => ({ ...prev, jobTitle: val, jobType: val }));
+                      setFormData(prev => ({ ...prev, jobTitle: val }));
                     }}
                     className="bg-background border-border text-xs rounded-xl h-9"
                     required
@@ -1159,23 +1180,42 @@ const CreateJobModal: React.FC<CreateJobModalProps> = ({ initialData, onClose, o
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-foreground uppercase tracking-wider">Employement Type</label>
+                <label className="text-xs font-bold text-foreground uppercase tracking-wider">Job Type</label>
+                <select
+                  name="jobType"
+                  value={formData.jobType}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border rounded-xl bg-background border-border text-xs font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary shadow-2xs h-9"
+                >
+                  {dbEmploymentTypes.length > 0 ? (
+                    dbEmploymentTypes.map((type) => (
+                      <option key={type} value={type}>
+                        {type}
+                      </option>
+                    ))
+                  ) : (
+                    <>
+                      <option value="full_time">Full Time</option>
+                      <option value="part_time">Part Time</option>
+                      <option value="contract">Contract</option>
+                      <option value="internship">Internship</option>
+                    </>
+                  )}
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-foreground uppercase tracking-wider">Work Arrangement</label>
                 <select
                   name="employmentType"
                   value={formData.employmentType}
                   onChange={handleChange}
                   className="w-full px-3 py-2 border rounded-xl bg-background border-border text-xs font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary shadow-2xs h-9"
                 >
-                  {formData.employmentType && !dbEmploymentTypes.includes(formData.employmentType) && (
-                    <option value={formData.employmentType}>{formData.employmentType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</option>
-                  )}
-                  {dbEmploymentTypes.map((type) => (
-                    <option key={type} value={type}>
-                      {type}
-                    </option>
-                  ))}
+                  <option value="onsite">Onsite</option>
+                  <option value="remote">Remote</option>
+                  <option value="hybrid">Hybrid</option>
                 </select>
               </div>
               <div className="space-y-1.5">

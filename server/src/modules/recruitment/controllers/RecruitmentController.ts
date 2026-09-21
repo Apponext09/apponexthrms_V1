@@ -2019,38 +2019,6 @@ export class RecruitmentController {
     res.json({ success: true, data: result });
   });
 
-  // ==================== Job Update ====================
-
-  updateJob = asyncHandler(async (req: Request, res: Response) => {
-    const ctx = req.ctx!;
-    const { id } = req.params;
-    const validated = validate(req.body, updateJobSchema);
-
-    const updateData: any = {};
-    if (validated.jobTitle !== undefined) updateData.job_title = validated.jobTitle;
-    if (validated.jobDescription !== undefined) updateData.job_description = validated.jobDescription;
-    if (validated.departmentId !== undefined) updateData.department_id = validated.departmentId;
-    if (validated.designationId !== undefined) updateData.designation_id = validated.designationId;
-    if (validated.locationId !== undefined) updateData.location_id = validated.locationId;
-    if (validated.jobType !== undefined) updateData.job_type = validated.jobType;
-    if (validated.experienceLevel !== undefined) updateData.experience_level = validated.experienceLevel;
-    if (validated.minExperienceYears !== undefined) updateData.min_experience_years = validated.minExperienceYears;
-    if (validated.maxExperienceYears !== undefined) updateData.max_experience_years = validated.maxExperienceYears;
-    if (validated.minSalary !== undefined) updateData.min_salary = validated.minSalary;
-    if (validated.maxSalary !== undefined) updateData.max_salary = validated.maxSalary;
-    if (validated.currency !== undefined) updateData.currency = validated.currency;
-    if (validated.employmentType !== undefined) updateData.employment_type = validated.employmentType;
-    if (validated.noOfPositions !== undefined) updateData.no_of_positions = validated.noOfPositions;
-    if (validated.expiryDate !== undefined) updateData.expiry_date = validated.expiryDate;
-    if (validated.jobCode !== undefined) updateData.job_code = validated.jobCode;
-    if (validated.isInternal !== undefined) updateData.is_internal = validated.isInternal;
-    if (validated.isPublishedExternal !== undefined) updateData.is_published_external = validated.isPublishedExternal;
-
-    const job = await this.jobService.updateJob(ctx, parseInt(id, 10), updateData);
-
-    res.json({ success: true, data: job });
-  });
-
   // ==================== Interview Reschedule & Cancel ====================
 
   rescheduleInterview = asyncHandler(async (req: Request, res: Response) => {

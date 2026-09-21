@@ -765,7 +765,11 @@ export default function ProfilePage() {
 
           {/* TAB 3: DOCUMENTS & CERTIFICATES */}
           {activeTab === 'documents' && (
-            <EmployeeDocuments employeeId={resolvedEmpId} readOnly={isEmployeePortal} />
+            <EmployeeDocuments
+              employeeId={resolvedEmpId}
+              readOnly={isEmployeePortal}
+              canEdit={!isEmployeePortal || editUnlocked}
+            />
           )}
 
           {/* TAB 4: STATUTORY DETAILS */}

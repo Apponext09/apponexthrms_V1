@@ -20,6 +20,9 @@ import {
   Power,
   CreditCard,
   AlertTriangle,
+  Sparkles,
+  Zap,
+  Check,
   ExternalLink,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
@@ -50,16 +53,40 @@ export function SuperAdminOrganizationPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [passwordError, setPasswordError] = useState('');
+  const [provisionLoading, setProvisionLoading] = useState(false);
+  const [provisionError, setProvisionError] = useState('');
+
+  // Duplicate Organization Warning Modal State
+  const [duplicateOrgModalOpen, setDuplicateOrgModalOpen] = useState(false);
+  const [duplicateOrgMessage, setDuplicateOrgMessage] = useState('');
 
   // Edit Modal State
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingOrg, setEditingOrg] = useState<any>(null);
+  const [saveEditLoading, setSaveEditLoading] = useState(false);
+  const [saveEditError, setSaveEditError] = useState('');
 
   // Delete Confirmation Modal State
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [orgToDelete, setOrgToDelete] = useState<any>(null);
 
   const [organizations, setOrganizations] = useState<any[]>([]);
+  const [subscriptionPlans, setSubscriptionPlans] = useState<any[]>([]);
+  const [isAssignPlanModalOpen, setIsAssignPlanModalOpen] = useState(false);
+  const [selectedOrgForPlan, setSelectedOrgForPlan] = useState<any>(null);
+  const [selectedPlanId, setSelectedPlanId] = useState<number | null>(null);
+  const [assigningPlanLoading, setAssigningPlanLoading] = useState(false);
+
+  const fetchSubscriptionPlans = async () => {
+    try {
+      const res = await apiClient.get('/superadmin/subscriptions');
+      if (res.data?.data?.plans && Array.isArray(res.data.data.plans)) {
+        setSubscriptionPlans(res.data.data.plans);
+      }
+    } catch (err) {
+      console.error('Failed to fetch subscription plans:', err);
+    }
+  };
 
   const fetchOrganizations = async () => {
     try {
@@ -75,9 +102,11 @@ export function SuperAdminOrganizationPage() {
           phone: item.phone || '+91 9000000000',
           websiteUrl: item.websiteUrl || item.website_url || '',
           industry: item.industry || 'General Services',
-          plan: (item.planTier || item.plan_tier)
+          subscriptionPlanId: item.subscriptionPlanId || item.subscription_plan_id || null,
+          enabledModules: item.enabledModules || item.enabled_modules || null,
+          plan: item.subscriptionPlanName || (item.planTier || item.plan_tier
             ? String(item.planTier || item.plan_tier).charAt(0).toUpperCase() + String(item.planTier || item.plan_tier).slice(1)
-            : item.plan || 'Enterprise',
+            : item.plan || 'Enterprise'),
           status: item.status ? (String(item.status).toLowerCase() === 'active' ? 'Active' : 'Inactive') : 'Active',
           usersCount: item.usersCount || 12,
           createdDate: (item.createdAt || item.created_at) ? String(item.createdAt || item.created_at).split('T')[0] : '2026-07-12',
@@ -91,6 +120,7 @@ export function SuperAdminOrganizationPage() {
 
   useEffect(() => {
     fetchOrganizations();
+    fetchSubscriptionPlans();
   }, []);
 
   const [newOrg, setNewOrg] = useState({
@@ -110,12 +140,14 @@ export function SuperAdminOrganizationPage() {
   const handleCreateOrganization = async (e: React.FormEvent) => {
     e.preventDefault();
     setPasswordError('');
+    setProvisionError('');
 
     if (newOrg.password !== newOrg.confirmPassword) {
       setPasswordError('Password and Confirm Password do not match');
       return;
     }
 
+    setProvisionLoading(true);
     try {
       await apiClient.post('/superadmin/organizations', newOrg);
       await fetchOrganizations();
@@ -133,8 +165,26 @@ export function SuperAdminOrganizationPage() {
         plan: 'Professional',
         industry: '',
       });
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to provision organization:', err);
+      const errMsg =
+        err?.response?.data?.error?.message ||
+        err?.response?.data?.message ||
+        err?.message ||
+        'Failed to provision organization.';
+      setProvisionError(errMsg);
+
+      // Open duplicate popup if conflict
+      if (
+        err?.response?.status === 409 ||
+        errMsg.toLowerCase().includes('already exists') ||
+        errMsg.toLowerCase().includes('duplicate')
+      ) {
+        setDuplicateOrgMessage(errMsg);
+        setDuplicateOrgModalOpen(true);
+      }
+    } finally {
+      setProvisionLoading(false);
     }
   };
 
@@ -156,15 +206,45 @@ export function SuperAdminOrganizationPage() {
     }
   };
 
+  // Plan Assignment Handlers
+  const handleOpenAssignPlan = (org: any) => {
+    setSelectedOrgForPlan(org);
+    setSelectedPlanId(org.subscriptionPlanId || null);
+    setIsAssignPlanModalOpen(true);
+  };
+
+  const handleSaveAssignPlan = async () => {
+    if (!selectedOrgForPlan) return;
+    setAssigningPlanLoading(true);
+    try {
+      await apiClient.post(`/superadmin/subscriptions/assign-to-org/${selectedOrgForPlan.id}`, {
+        planId: selectedPlanId ? Number(selectedPlanId) : null,
+      });
+      await fetchOrganizations();
+      setIsAssignPlanModalOpen(false);
+      setSelectedOrgForPlan(null);
+    } catch (err) {
+      console.error('Failed to assign subscription plan:', err);
+    } finally {
+      setAssigningPlanLoading(false);
+    }
+  };
+
   // Edit Organization Handlers
   const handleOpenEdit = (org: any) => {
-    setEditingOrg({ ...org });
+    setEditingOrg({
+      ...org,
+      subscriptionPlanId: org.subscriptionPlanId || null,
+    });
+    setSaveEditError('');
     setIsEditModalOpen(true);
   };
 
   const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingOrg) return;
+    setSaveEditLoading(true);
+    setSaveEditError('');
 
     try {
       await apiClient.put(`/superadmin/organizations/${editingOrg.id}`, {
@@ -174,15 +254,20 @@ export function SuperAdminOrganizationPage() {
         location: editingOrg.location,
         email: editingOrg.email,
         phone: editingOrg.phone,
-        websiteUrl: editingOrg.websiteUrl,
+        websiteUrl: editingOrg.websiteUrl || '',
         plan: editingOrg.plan,
-        industry: editingOrg.industry,
+        subscriptionPlanId: editingOrg.subscriptionPlanId || null,
+        industry: editingOrg.industry || 'General Services',
       });
       await fetchOrganizations();
       setIsEditModalOpen(false);
       setEditingOrg(null);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to save organization edits:', err);
+      const errMsg = err?.response?.data?.error?.message || err?.response?.data?.message || 'Failed to save changes. Please check fields.';
+      setSaveEditError(errMsg);
+    } finally {
+      setSaveEditLoading(false);
     }
   };
 
@@ -402,6 +487,16 @@ export function SuperAdminOrganizationPage() {
                   <div className="flex items-center gap-1.5">
                     <Button
                       variant="outline"
+                      size="sm"
+                      onClick={() => handleOpenAssignPlan(org)}
+                      className="h-8 px-2.5 text-xs font-semibold gap-1 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/10 border-indigo-500/30 rounded-lg"
+                      title="Assign Subscription Plan"
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      Plan
+                    </Button>
+                    <Button
+                      variant="outline"
                       size="icon"
                       onClick={() => handleOpenEdit(org)}
                       className="h-8 w-8 text-muted-foreground hover:text-foreground dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-800 border-border dark:border-slate-700 rounded-lg"
@@ -445,6 +540,16 @@ export function SuperAdminOrganizationPage() {
           {passwordError && (
             <div className="p-3 bg-red-500/20 border border-red-500/40 rounded-xl text-xs text-red-600 dark:text-red-300 font-medium">
               ⚠️ {passwordError}
+            </div>
+          )}
+
+          {provisionError && (
+            <div className="p-3.5 bg-amber-500/15 dark:bg-amber-950/30 border border-amber-500/30 rounded-xl text-xs text-amber-700 dark:text-amber-300 font-medium flex items-start gap-2.5">
+              <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="font-bold">Cannot Create Organization</p>
+                <p className="text-[11px] text-muted-foreground dark:text-slate-300 mt-0.5">{provisionError}</p>
+              </div>
             </div>
           )}
 
@@ -621,9 +726,10 @@ export function SuperAdminOrganizationPage() {
                   value={newOrg.plan}
                   onChange={(e) => setNewOrg({ ...newOrg, plan: e.target.value })}
                 >
-                  <option value="Starter">Starter Plan</option>
-                  <option value="Professional">Professional Plan</option>
-                  <option value="Enterprise">Enterprise Plan</option>
+                  <option value="Enterprise">Full Access (Unrestricted)</option>
+                  {subscriptionPlans.map((sp: any) => (
+                    <option key={sp.id} value={sp.name}>{sp.name} ({sp.price})</option>
+                  ))}
                 </select>
               </div>
             </div>
@@ -663,6 +769,11 @@ export function SuperAdminOrganizationPage() {
 
           {editingOrg && (
             <form onSubmit={handleSaveEdit} className="space-y-4 pt-1">
+              {saveEditError && (
+                <div className="p-3 bg-red-500/15 border border-red-500/30 rounded-xl text-xs text-red-600 dark:text-red-300 font-medium">
+                  ⚠️ {saveEditError}
+                </div>
+              )}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="editOrgName" className="text-foreground dark:text-slate-200 text-xs font-semibold">
@@ -770,12 +881,25 @@ export function SuperAdminOrganizationPage() {
                   <select
                     id="editPlan"
                     className="flex h-9 w-full rounded-xl border border-border dark:border-slate-700 bg-background dark:bg-slate-800 px-3 py-1.5 text-xs text-foreground dark:text-white mt-1 focus:outline-none"
-                    value={editingOrg.plan}
-                    onChange={(e) => setEditingOrg({ ...editingOrg, plan: e.target.value })}
+                    value={editingOrg.subscriptionPlanId ? String(editingOrg.subscriptionPlanId) : 'Enterprise'}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val === 'Enterprise') {
+                        setEditingOrg({ ...editingOrg, plan: 'Enterprise', subscriptionPlanId: null });
+                      } else {
+                        const sp = subscriptionPlans.find((p: any) => String(p.id) === val);
+                        setEditingOrg({
+                          ...editingOrg,
+                          plan: sp ? sp.name : val,
+                          subscriptionPlanId: sp ? sp.id : Number(val) || null,
+                        });
+                      }
+                    }}
                   >
-                    <option value="Starter">Starter Plan</option>
-                    <option value="Professional">Professional Plan</option>
-                    <option value="Enterprise">Enterprise Plan</option>
+                    <option value="Enterprise">Full Access (Unrestricted)</option>
+                    {subscriptionPlans.map((sp: any) => (
+                      <option key={sp.id} value={String(sp.id)}>{sp.name} ({sp.price})</option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -789,8 +913,8 @@ export function SuperAdminOrganizationPage() {
                 >
                   Cancel
                 </Button>
-                <Button type="submit" className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl">
-                  Save Changes
+                <Button type="submit" disabled={saveEditLoading} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl">
+                  {saveEditLoading ? 'Saving...' : 'Save Changes'}
                 </Button>
               </div>
             </form>
@@ -825,6 +949,51 @@ export function SuperAdminOrganizationPage() {
             >
               Confirm Delete
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Organization Already Exists Warning Modal ── */}
+      <Dialog open={duplicateOrgModalOpen} onOpenChange={setDuplicateOrgModalOpen}>
+        <DialogContent className="bg-card dark:bg-slate-900 border-border dark:border-slate-800 text-foreground dark:text-white sm:max-w-[480px] rounded-2xl shadow-2xl p-6">
+          <div className="flex flex-col items-center text-center space-y-4">
+            <div className="w-14 h-14 rounded-2xl bg-amber-500/20 dark:bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-600 dark:text-amber-400 shadow-lg">
+              <AlertTriangle className="w-7 h-7" />
+            </div>
+
+            <div className="space-y-1">
+              <DialogTitle className="text-lg font-bold text-foreground dark:text-white">
+                Organization Already Exists
+              </DialogTitle>
+              <DialogDescription className="text-xs text-muted-foreground dark:text-slate-400">
+                A registered tenant organization with matching information was detected in the platform.
+              </DialogDescription>
+            </div>
+
+            <div className="w-full p-4 bg-amber-500/10 dark:bg-amber-950/30 border border-amber-500/30 rounded-xl text-left space-y-2">
+              <p className="text-xs font-semibold text-amber-700 dark:text-amber-300">
+                {duplicateOrgMessage || 'An organization with this Name, Email, Code, or Mobile Number already exists.'}
+              </p>
+              <p className="text-[11px] text-muted-foreground dark:text-slate-400 leading-relaxed">
+                💡 <span className="font-semibold text-foreground dark:text-slate-200">Recommended Action:</span> Please change the duplicated field (use a unique Organization Name, Admin Email, Code, or Mobile Number) to create a new organization, or modify the existing organization record.
+              </p>
+            </div>
+
+            <div className="flex w-full gap-2 pt-2">
+              <Button
+                variant="outline"
+                className="flex-1 rounded-xl border-border dark:border-slate-700 text-xs font-semibold"
+                onClick={() => setDuplicateOrgModalOpen(false)}
+              >
+                Dismiss
+              </Button>
+              <Button
+                className="flex-1 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow-md"
+                onClick={() => setDuplicateOrgModalOpen(false)}
+              >
+                Change Details
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

@@ -415,9 +415,9 @@ export const InterviewCalendarPage: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6 pb-12">
+    <div className="recruitment-page min-w-0 space-y-4 pb-6">
       {/* ── Header Banner ────────────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card p-6 rounded-2xl border border-border/80 shadow-2xs relative overflow-hidden">
+      <div className="recruitment-page-header flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card p-6 rounded-2xl border border-border/80 shadow-2xs relative overflow-hidden">
         <div className="flex items-center gap-3.5 relative z-10">
           <div className="w-11 h-11 rounded-2xl bg-primary/10 text-primary flex items-center justify-center font-bold shrink-0 border border-primary/20 shadow-xs">
             <Video className="w-5 h-5" />
@@ -483,7 +483,7 @@ export const InterviewCalendarPage: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
         
         {/* Card 1: Today's Schedule */}
-        <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+        <Card className="bg-card border-border shadow-sm rounded-xl overflow-hidden">
           <CardHeader className="flex flex-row items-center justify-between p-4 border-b border-border/60">
             <div className="flex items-center gap-2">
               <div className="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
@@ -544,7 +544,7 @@ export const InterviewCalendarPage: React.FC = () => {
         </Card>
 
         {/* Card 2: Upcoming Schedule */}
-        <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+        <Card className="bg-card border-border shadow-sm rounded-xl overflow-hidden">
           <CardHeader className="flex flex-row items-center justify-between p-4 border-b border-border/60">
             <div className="flex items-center gap-2">
               <div className="w-7 h-7 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center">
@@ -597,7 +597,7 @@ export const InterviewCalendarPage: React.FC = () => {
         </Card>
 
         {/* Card 3: Pending Feedback */}
-        <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+        <Card className="bg-card border-border shadow-sm rounded-xl overflow-hidden">
           <CardHeader className="flex flex-row items-center justify-between p-4 border-b border-border/60">
             <div className="flex items-center gap-2">
               <div className="w-7 h-7 rounded-lg bg-rose-500/10 text-rose-600 dark:text-rose-400 flex items-center justify-center">
@@ -652,7 +652,7 @@ export const InterviewCalendarPage: React.FC = () => {
       <div className="space-y-6">
 
         {/* Card 1: Today's Active Schedule & Next In Line */}
-        <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+        <Card className="bg-card border-border shadow-sm rounded-xl overflow-hidden">
           <CardHeader className="bg-muted/40 flex flex-row items-center justify-between py-4 px-6 border-b border-border/60">
             <CardTitle className="text-sm font-extrabold text-foreground flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse" />

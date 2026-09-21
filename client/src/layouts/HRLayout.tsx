@@ -1,3 +1,5 @@
+import { SectionRail } from '@/layouts/SectionNavigation';
+import { SectionTabs } from '@/layouts/SectionNavigation';
 import { useState, useEffect, useMemo } from 'react';
 import { Outlet, useLocation, useNavigate, NavLink } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -21,6 +23,9 @@ import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
 import { PortalSidebarBrand } from './PortalSidebarBrand';
 import { masterBuilderApi, CustomMasterItem } from '@/features/master-builder/api/masterBuilderApi';
+import { GlobalSearchButton } from '@/features/search/components/GlobalSearch';
+import { SidebarProfileMenu } from './SidebarProfileMenu';
+import { useSubscriptionStore } from '@/features/subscriptions/store/subscriptionStore';
 
 import {
   ChevronDown, ChevronRight, Menu, Sun, Moon, LogOut, Building2, Lock,
@@ -65,6 +70,7 @@ function mapToHRHref(href: string): string {
   if (href === '/' || href === '/dashboard') return '/hr/dashboard';
   if (href === '/employees') return '/hr/employees';
   if (href === '/employee-lifecycle') return '/hr/employee-lifecycle';
+  if (href === '/employee/lifecycle') return '/hr/lifecycle';
   if (href === '/org-structure') return '/hr/org-structure';
   if (href.startsWith('/recruitment')) return `/hr${href}`;
   if (href === '/attendance') return '/hr/attendance';
@@ -72,6 +78,9 @@ function mapToHRHref(href: string): string {
   if (href === '/attendance/locations') return '/hr/attendance/locations';
   if (href === '/attendance/break-logs') return '/hr/attendance/break-logs';
   if (href === '/attendance/face-punch') return '/hr/face-attendance';
+  if (href === '/employee/attendance') return '/hr/my-attendance';
+  if (href === '/employee/attendance-regularization') return '/hr/my-attendance-correction';
+  if (href === '/employee/shift-roster') return '/hr/my-shifts';
   if (href === '/attendance/shifts') return '/hr/attendance/shifts';
   if (href === '/attendance/roster-shifts') return '/hr/attendance/roster-shifts';
   if (href.startsWith('/leaves')) return `/hr${href}`;
@@ -127,6 +136,7 @@ export function HRLayout() {
   const { theme, setTheme } = useThemeStore();
   const { data: licensedFeatures } = useLicensedFeatures();
   const { attendanceMode, liveTrackingEnabled } = useAttendanceModuleSettings();
+  const { enabledModules } = useSubscriptionStore();
 
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -154,7 +164,7 @@ export function HRLayout() {
 
   // Compute HR visible sections derived from navigation.ts so cleanliness & tab order match CEO/Admin 1:1
   const hrSections = useMemo(() => {
-    const rawSections = getVisibleSections(roles, licensedFeatures, attendanceMode, liveTrackingEnabled);
+    const rawSections = getVisibleSections(roles, licensedFeatures, attendanceMode, liveTrackingEnabled, enabledModules);
     return rawSections.map((sec) => {
       const items = sec.items.map((item) => {
         const hrHref = mapToHRHref(item.href);
@@ -234,211 +244,17 @@ export function HRLayout() {
   const renderSidebarContent = () => (
     <div className="flex flex-col h-full select-none">
       {/* ── Brand Header (HR Panel Branding) ── */}
-      <PortalSidebarBrand open={sidebarOpen} portalLabel="HR Panel" />
+      <PortalSidebarBrand open={false} portalLabel="HR Panel" />
 
       {/* ── Navigation List (Exact same dropdown cleanliness & tab order as CEO/Admin) ── */}
-      <nav className="no-scrollbar flex-1 space-y-1 overflow-y-auto px-3 py-4">
-        {hrSections.map((section) => {
-          const isActive = section.items.some((item) =>
-            isPathActive(item.href, location.pathname, location.search) ||
-            (item.children && item.children.some((c) => isPathActive(c.href, location.pathname, location.search)))
-          );
-          const isExpanded = expandedSections[section.id] !== undefined
-            ? expandedSections[section.id]
-            : isActive;
-
-          return (
-            <Collapsible
-              key={section.id}
-              open={isExpanded}
-              onOpenChange={() => toggleSection(section.id, isExpanded)}
-              className="group"
-            >
-              {section.collapsible !== false ? (
-                <>
-                  <CollapsibleTrigger asChild>
-                    <button
-                      className={cn(
-                        'flex min-h-10 w-full items-center gap-3 rounded-lg px-3 py-2 text-[12px] font-semibold transition-colors',
-                        isActive
-                          ? 'text-primary font-semibold bg-primary/10 dark:bg-primary/15'
-                          : 'text-muted-foreground hover:bg-muted/70 hover:text-foreground'
-                      )}
-                      title={!sidebarOpen ? section.label : ''}
-                    >
-                      <span className="flex-shrink-0 text-muted-foreground transition-colors group-hover:text-foreground">
-                        {section.icon ? getIconComponent(section.icon) : getIconComponent(section.items[0]?.icon || 'LayoutDashboard')}
-                      </span>
-                      <AnimatePresence>
-                        {sidebarOpen && (
-                          <motion.span
-                            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                            transition={{ duration: 0.12 }}
-                            className="flex-1 overflow-hidden truncate text-left text-[12px] font-semibold tracking-tight uppercase"
-                          >
-                            {section.label}
-                          </motion.span>
-                        )}
-                      </AnimatePresence>
-                      {sidebarOpen && (
-                        <ChevronDown
-                          className={cn(
-                            'ml-auto size-3 flex-shrink-0 text-muted-foreground/60 transition-transform duration-200',
-                            isExpanded ? 'rotate-180' : ''
-                          )}
-                        />
-                      )}
-                    </button>
-                  </CollapsibleTrigger>
-
-                  <CollapsibleContent className={cn('mt-1 space-y-1', sidebarOpen ? 'ml-3 border-l border-border pl-3' : '')}>
-                    {section.items.map((item) => {
-                      const hasChildren = item.children && item.children.length > 0;
-                      const isChildActive = hasChildren && item.children!.some((c) => isPathActive(c.href, location.pathname, location.search));
-                      const itemActive = (isPathActive(item.href, location.pathname, location.search) && !hasChildren) || isChildActive;
-
-                      if (hasChildren) {
-                        return (
-                          <Collapsible key={item.name} defaultOpen={isChildActive} className="group/sub space-y-0.5">
-                            <CollapsibleTrigger asChild>
-                              <button
-                                className={cn(
-                                  'flex min-h-9 w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-[12px] transition-colors',
-                                  itemActive
-                                    ? 'text-primary font-semibold bg-primary/10 dark:bg-primary/15'
-                                    : 'text-muted-foreground hover:bg-muted/70 hover:text-foreground'
-                                )}
-                                title={!sidebarOpen ? item.name : ''}
-                              >
-                                <span className="flex-shrink-0">{getIconComponent(item.icon)}</span>
-                                <AnimatePresence>
-                                  {sidebarOpen && (
-                                    <motion.div
-                                      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                                      transition={{ duration: 0.12 }}
-                                      className="flex-1 text-left overflow-hidden flex items-center justify-between gap-1.5"
-                                    >
-                                      <span className="truncate">{item.name}</span>
-                                      <ChevronDown className="ml-auto size-3 flex-shrink-0 text-muted-foreground/60 transition-transform duration-200 group-data-[state=open]/sub:rotate-180" />
-                                    </motion.div>
-                                  )}
-                                </AnimatePresence>
-                              </button>
-                            </CollapsibleTrigger>
-
-                            <CollapsibleContent className={cn('mt-1 space-y-1', sidebarOpen ? 'ml-3 border-l border-border pl-3' : '')}>
-                              {item.children!.map((child) => {
-                                const childActive = isPathActive(child.href, location.pathname, location.search);
-                                return (
-                                  <NavLink
-                                    key={child.href}
-                                    to={child.href}
-                                    onClick={() => setMobileOpen(false)}
-                                    title={!sidebarOpen ? child.name : ''}
-                                    className={cn(
-                                      'flex min-h-9 w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-[12px] transition-colors',
-                                      childActive
-                                        ? 'portal-sidebar-active font-bold text-white dark:text-slate-950 shadow-2xs'
-                                        : 'text-muted-foreground hover:bg-muted/70 hover:text-foreground'
-                                    )}
-                                  >
-                                    <span className="flex-shrink-0">{getIconComponent(child.icon)}</span>
-                                    <AnimatePresence>
-                                      {sidebarOpen && (
-                                        <motion.div
-                                          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                                          transition={{ duration: 0.12 }}
-                                          className="flex-1 text-left overflow-hidden flex items-center gap-1.5"
-                                        >
-                                          <span className="truncate">{child.name}</span>
-                                          {child.badge && (
-                                            <Badge variant="secondary" className="text-[9px] px-1 py-0 ml-auto font-normal">
-                                              {child.badge}
-                                            </Badge>
-                                          )}
-                                        </motion.div>
-                                      )}
-                                    </AnimatePresence>
-                                  </NavLink>
-                                );
-                              })}
-                            </CollapsibleContent>
-                          </Collapsible>
-                        );
-                      }
-
-                      return (
-                        <NavLink
-                          key={item.href}
-                          to={item.href}
-                          onClick={() => setMobileOpen(false)}
-                          title={!sidebarOpen ? item.name : ''}
-                          className={cn(
-                            'flex min-h-9 w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-[12px] transition-colors',
-                            itemActive
-                              ? 'portal-sidebar-active font-bold text-white dark:text-slate-950 shadow-2xs'
-                              : 'text-muted-foreground hover:bg-muted/70 hover:text-foreground'
-                          )}
-                        >
-                          <span className="flex-shrink-0">{getIconComponent(item.icon)}</span>
-                          <AnimatePresence>
-                            {sidebarOpen && (
-                              <motion.div
-                                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                                transition={{ duration: 0.12 }}
-                                className="flex-1 text-left overflow-hidden flex items-center gap-1.5"
-                              >
-                                <span className="truncate">{item.name}</span>
-                                {item.badge && (
-                                  <Badge variant="secondary" className="text-[9px] px-1 py-0 ml-auto font-normal">
-                                    {item.badge}
-                                  </Badge>
-                                )}
-                              </motion.div>
-                            )}
-                          </AnimatePresence>
-                        </NavLink>
-                      );
-                    })}
-                  </CollapsibleContent>
-                </>
-              ) : (
-                <NavLink
-                  to={section.items[0].href}
-                  onClick={() => setMobileOpen(false)}
-                  title={!sidebarOpen ? section.label : ''}
-                  className={cn(
-                    'flex min-h-10 w-full items-center gap-3 rounded-lg px-3 py-2 text-[12px] transition-colors',
-                    isActive
-                      ? 'portal-sidebar-active font-bold text-white dark:text-slate-950 shadow-2xs'
-                      : 'text-muted-foreground hover:bg-muted/70 hover:text-foreground'
-                  )}
-                >
-                  <span className="flex-shrink-0">{getIconComponent(section.items[0].icon)}</span>
-                  <AnimatePresence>
-                    {sidebarOpen && (
-                      <motion.span
-                        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                        transition={{ duration: 0.12 }}
-                        className="font-medium overflow-hidden flex-1 text-left truncate"
-                      >
-                        {section.label}
-                      </motion.span>
-                    )}
-                  </AnimatePresence>
-                </NavLink>
-              )}
-            </Collapsible>
-          );
-        })}
-      </nav>
+      <SectionRail id="hr" groups={hrSections.map(section => ({ label: section.label, icon: ICON_REGISTRY[section.icon || section.items[0]?.icon] || LayoutDashboard, items: section.items.map(item => ({ ...item, icon: ICON_REGISTRY[item.icon] || LayoutDashboard, children: item.children?.map(child => ({ name: child.name, href: child.href, icon: ICON_REGISTRY[child.icon] || LayoutDashboard, isLocked: (child as any).isLocked })) })) }))} open={sidebarOpen} onNavigate={() => setMobileOpen(false)} />
 
       {/* ── User Footer ── */}
       <div className="flex-shrink-0 border-t border-border bg-card p-3">
+        <SidebarProfileMenu profilePath="/hr/profile" onLogout={handleLogout} onProfileNavigate={() => setMobileOpen(false)}>
         <div
-          onClick={() => navigate('/hr/profile')}
           className={cn(
-            'group flex min-h-14 cursor-pointer items-center gap-2.5 rounded-xl border p-2.5 transition-colors',
+            'group flex min-h-14 cursor-pointer items-center justify-center rounded-xl border p-2.5 transition-colors',
             'border-border bg-card hover:bg-muted',
             !sidebarOpen && 'justify-center'
           )}
@@ -458,7 +274,7 @@ export function HRLayout() {
             {sidebarOpen && (
               <motion.div
                 initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                className="flex-1 min-w-0 leading-tight"
+                className="hidden flex-1 min-w-0 leading-tight"
               >
                 <p className="text-[12px] font-bold text-foreground truncate group-hover:text-primary transition-colors">
                   {(() => {
@@ -476,17 +292,8 @@ export function HRLayout() {
             )}
           </AnimatePresence>
 
-          {sidebarOpen && (
-            <Button
-              variant="ghost" size="icon"
-              onClick={(e) => { e.stopPropagation(); handleLogout(); }}
-              className="h-6 w-6 rounded-lg text-muted-foreground/50 hover:text-rose-500 hover:bg-rose-500/10 flex-shrink-0 transition-colors"
-              title="Logout" aria-label="Log out"
-            >
-              <LogOut className="h-3 w-3" />
-            </Button>
-          )}
         </div>
+        </SidebarProfileMenu>
       </div>
     </div>
   );
@@ -494,7 +301,7 @@ export function HRLayout() {
   return (
     <div className="app-shell-reference flex h-dvh overflow-hidden bg-background">
       {/* ── Desktop Sidebar ── */}
-      <aside className={cn('role-portal-sidebar relative hidden h-dvh flex-shrink-0 flex-col overflow-hidden border-r border-border bg-card md:flex', sidebarOpen ? 'w-64' : 'w-[72px]')}>
+      <aside className={cn('role-portal-sidebar relative hidden h-dvh flex-shrink-0 flex-col overflow-hidden border-r border-border bg-card md:flex', sidebarOpen ? 'w-28' : 'w-[72px]')}>
         {!sidebarOpen && (
           <button
             onClick={() => setSidebarOpen(true)}
@@ -519,7 +326,7 @@ export function HRLayout() {
             <motion.aside
               initial={{ x: -260 }} animate={{ x: 0 }} exit={{ x: -260 }}
               transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
-              className="role-portal-sidebar fixed inset-y-0 left-0 z-50 w-64 border-r border-border bg-card shadow-2xl md:hidden"
+              className="role-portal-sidebar fixed inset-y-0 left-0 z-50 w-72 border-r border-border bg-card shadow-2xl md:hidden"
             >
               {renderSidebarContent()}
             </motion.aside>
@@ -548,8 +355,7 @@ export function HRLayout() {
           </Button>
 
           <div className="flex items-center gap-2">
-            <div className="h-2 w-2 rounded-full bg-primary" />
-            <span className="text-sm font-bold text-foreground hidden sm:block">HR Panel</span>
+            <span className="hidden truncate text-base font-extrabold tracking-tight text-foreground md:inline">APPONEXTHRMS</span>
             <span className="hidden md:inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full border border-primary/20 bg-primary/10 text-primary">
               {roleInfo.roleTitle} · {roleInfo.departmentName}
             </span>
@@ -558,42 +364,15 @@ export function HRLayout() {
           <div className="flex-1" />
 
           <div className="flex items-center gap-2">
-            <div className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs font-bold text-primary shadow-xs mr-1">
-              <Building2 className="w-3.5 h-3.5 text-primary" />
-              <span>{user?.organizationName || user?.organizationCode || (user as any)?.organization?.name || 'Organization'}</span>
-            </div>
-
+            <GlobalSearchButton />
             <Button variant="ghost" size="icon" onClick={() => setTheme(currentTheme === 'dark' ? 'light' : 'dark')} aria-label={currentTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
               {currentTheme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </Button>
 
             <NotificationBell className="size-8 rounded-lg" iconClassName="size-4" />
-
-            <div className="w-px h-5 bg-border mx-1" />
-
-            <button
-              onClick={() => navigate('/hr/profile')}
-              className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-muted/60 transition-colors"
-            >
-              <Avatar className="h-7 w-7 border border-primary/30">
-                <AvatarImage src={user?.avatarUrl} />
-                <AvatarFallback className="bg-primary text-white text-[10px] font-bold">
-                  {initials}
-                </AvatarFallback>
-              </Avatar>
-              <div className="hidden lg:block text-left leading-tight">
-                <p className="text-[12px] font-semibold text-foreground">{(() => {
-                  const fName = (user?.firstName || (user as any)?.first_name || '').trim();
-                  let lName = (user?.lastName || (user as any)?.last_name || '').trim();
-                  if (lName.toLowerCase() === 'user') lName = '';
-                  const full = `${fName} ${lName}`.trim();
-                  return full || fName || 'User';
-                })()}</p>
-                <p className="text-[10px] font-medium text-primary">{roleInfo.departmentName}</p>
-              </div>
-            </button>
           </div>
         </header>
+        <SectionTabs id="hr" />
 
         <main className="flex-1 overflow-auto">
           <div className="p-6 min-h-full">
@@ -602,7 +381,7 @@ export function HRLayout() {
         </main>
       </div>
       <NotificationDrawer />
-      <Toaster position="bottom-right" />
+      <Toaster position="top-right" />
     </div>
   );
 }

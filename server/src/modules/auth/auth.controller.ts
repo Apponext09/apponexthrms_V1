@@ -68,8 +68,14 @@ export class AuthController {
     const response: ApiResponse<any> = {
       success: true,
       data: {
-        user: result.user,
+        user: {
+          ...result.user,
+          enabledModules: (result as any).enabledModules,
+        },
         roles: result.roles,
+        enabledModules: (result as any).enabledModules,
+        accessToken: result.accessToken,
+        refreshToken: result.refreshToken,
       },
     };
 

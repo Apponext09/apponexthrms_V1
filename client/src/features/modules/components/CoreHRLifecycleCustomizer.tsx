@@ -70,8 +70,8 @@ export function CoreHRLifecycleCustomizer() {
     toast.success('Employee Lifecycle audit table customizations saved successfully!');
   };
 
-  const handleReset = () => {
-    if (confirm('Reset all Employee Lifecycle audit configurations to factory defaults?')) {
+  const handleReset = async () => {
+    if (await window.appConfirm('Reset all Employee Lifecycle audit configurations to factory defaults?')) {
       resetToDefaults();
       toast.info('Lifecycle configuration reset to defaults');
     }

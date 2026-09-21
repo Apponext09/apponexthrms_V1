@@ -41,6 +41,19 @@ export const EMP_MODULES: ModuleNode[] = [
     defaultEnabled: true,
   },
   {
+    id: 'emp_expenses',
+    name: 'Expense Claims',
+    description: 'Submit, track, and manage personal expense reimbursement claims',
+    iconName: 'ReceiptIndianRupee',
+    defaultEnabled: true,
+    children: [
+      { id: 'emp_expense_claims', name: 'Expense Claims', defaultEnabled: true },
+      { id: 'emp_travel_requests', name: 'Travel Requests', defaultEnabled: true },
+      { id: 'emp_travel_advances', name: 'Travel Advances', defaultEnabled: true },
+      { id: 'emp_mileage_claims', name: 'Mileage Claims', defaultEnabled: true },
+    ],
+  },
+  {
     id: 'emp_performance',
     name: 'My Performance & Goals',
     description: 'Track individual goals, self-reviews, and feedback',

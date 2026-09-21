@@ -175,7 +175,7 @@ export const AssessmentManagementPage: React.FC = () => {
 
   const handleDeleteQuestion = async (questionId: number) => {
     if (!selectedQuestionsAssessment) return;
-    if (!confirm('Are you sure you want to delete this question?')) return;
+    if (!await window.appConfirm('Are you sure you want to delete this question?')) return;
 
     try {
       await apiClient.delete(`/recruitment/assessments/${selectedQuestionsAssessment.id}/questions/${questionId}`);
@@ -510,11 +510,11 @@ export const AssessmentManagementPage: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 space-y-6 max-w-full overflow-hidden p-6 min-h-[calc(100vh-4rem)]">
+    <div className="recruitment-page flex-1 min-w-0 space-y-4">
       {/* ── Top Header Banner ────────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card p-6 rounded-2xl border border-border/80 shadow-2xs relative overflow-hidden">
+      <div className="recruitment-page-header flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card p-6 rounded-2xl border border-border/80 shadow-2xs relative overflow-hidden">
         <div className="flex items-center gap-3.5 relative z-10">
-          <div className="w-11 h-11 rounded-2xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center font-bold shrink-0 border border-purple-500/20 shadow-xs">
+          <div className="w-11 h-11 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold shrink-0 border border-primary/20 shadow-xs">
             <Code2 className="w-5 h-5" />
           </div>
           <div className="space-y-0.5">
@@ -536,7 +536,7 @@ export const AssessmentManagementPage: React.FC = () => {
 
       {/* ── Stats Cards ──────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+        <Card className="bg-card border-border shadow-sm rounded-xl overflow-hidden">
           <CardContent className="p-5 flex items-center justify-between">
             <div>
               <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Coding Tests</p>
@@ -549,7 +549,7 @@ export const AssessmentManagementPage: React.FC = () => {
           </CardContent>
         </Card>
 
-        <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+        <Card className="bg-card border-border shadow-sm rounded-xl overflow-hidden">
           <CardContent className="p-5 flex items-center justify-between">
             <div>
               <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">MCQ Tests</p>
@@ -562,7 +562,7 @@ export const AssessmentManagementPage: React.FC = () => {
           </CardContent>
         </Card>
 
-        <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+        <Card className="bg-card border-border shadow-sm rounded-xl overflow-hidden">
           <CardContent className="p-5 flex items-center justify-between">
             <div>
               <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Subjective Forms</p>
@@ -575,7 +575,7 @@ export const AssessmentManagementPage: React.FC = () => {
           </CardContent>
         </Card>
 
-        <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+        <Card className="bg-card border-border shadow-sm rounded-xl overflow-hidden">
           <CardContent className="p-5 flex items-center justify-between">
             <div>
               <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Hybrid Tests</p>
@@ -590,7 +590,7 @@ export const AssessmentManagementPage: React.FC = () => {
       </div>
 
       {/* ── Assessment Table ─────────────────────────────────────────────────── */}
-      <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+      <Card className="bg-card border-border shadow-sm rounded-xl overflow-hidden">
         <CardHeader className="flex flex-row items-center justify-between p-5 border-b border-border/60">
           <div>
             <CardTitle className="text-sm font-extrabold text-foreground flex items-center gap-2">

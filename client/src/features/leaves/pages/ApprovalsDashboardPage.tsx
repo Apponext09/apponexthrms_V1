@@ -24,7 +24,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
-import api from '@/lib/api';
+import { apiClient } from '@/config/api';
 import { useCompanyStore } from '@/features/settings/store/companyStore';
 import { 
   ResponsiveContainer, 
@@ -55,8 +55,12 @@ export function ApprovalsDashboardPage() {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const response = await api.get('/approvals/dashboard');
-        setData(response.data.data);
+        const response = await apiClient.get('/approvals/dashboard');
+        if (response.data?.success && response.data?.data) {
+          setData(response.data.data);
+        } else if (response.data) {
+          setData(response.data);
+        }
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
       } finally {
@@ -71,12 +75,12 @@ export function ApprovalsDashboardPage() {
   }
 
   try {
-    const kpiStats = data?.stats ? [
-      { title: 'Total Pending', value: data.stats.pending, icon: Clock, color: 'text-amber-500', bg: 'bg-amber-100' },
-      { title: 'Approved', value: data.stats.approved, icon: CheckCircle2, color: 'text-emerald-500', bg: 'bg-emerald-100' },
-      { title: 'Rejected', value: data.stats.rejected, icon: XCircle, color: 'text-rose-500', bg: 'bg-rose-100' },
-      { title: 'Escalated', value: data.stats.escalated, icon: AlertCircle, color: 'text-indigo-500', bg: 'bg-indigo-100' },
-    ] : [];
+    const kpiStats = [
+      { title: 'Total Pending', value: data?.stats?.pending ?? 0, icon: Clock, color: 'text-amber-500', bg: 'bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800' },
+      { title: 'Approved', value: data?.stats?.approved ?? 0, icon: CheckCircle2, color: 'text-emerald-500', bg: 'bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800' },
+      { title: 'Rejected', value: data?.stats?.rejected ?? 0, icon: XCircle, color: 'text-rose-500', bg: 'bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800' },
+      { title: 'Escalated', value: data?.stats?.escalated ?? 0, icon: AlertCircle, color: 'text-indigo-500', bg: 'bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800' },
+    ];
 
     const rawRoleBreakdown = data?.roleBreakdown || [];
     const aggregatedRoles: Record<string, number> = {};
@@ -136,12 +140,12 @@ export function ApprovalsDashboardPage() {
       document.body.removeChild(link);
     };
 
-    const statusPieData = data?.stats ? [
-      { name: 'Pending', value: data.stats.pending || 0, color: '#f59e0b' },
-      { name: 'Approved', value: data.stats.approved || 0, color: '#10b981' },
-      { name: 'Rejected', value: data.stats.rejected || 0, color: '#ef4444' },
-      { name: 'Escalated', value: data.stats.escalated || 0, color: '#6366f1' },
-    ].filter(item => item.value > 0) : [];
+    const statusPieData = [
+      { name: 'Pending', value: data?.stats?.pending || 0, color: '#f59e0b' },
+      { name: 'Approved', value: data?.stats?.approved || 0, color: '#10b981' },
+      { name: 'Rejected', value: data?.stats?.rejected || 0, color: '#ef4444' },
+      { name: 'Escalated', value: data?.stats?.escalated || 0, color: '#6366f1' },
+    ].filter(item => item.value > 0);
 
     const roleBarData = roleBreakdown.map(item => ({
       name: item.role,

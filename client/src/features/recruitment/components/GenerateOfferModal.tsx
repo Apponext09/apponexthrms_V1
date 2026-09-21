@@ -271,11 +271,12 @@ export const GenerateOfferModal: React.FC<GenerateOfferModalProps> = ({
       // 2. Fetch Locations / Branches from DB
       apiClient.get('/settings/locations')
         .then(res => {
-          const locs = res.data?.data?.items || res.data?.data || (Array.isArray(res.data) ? res.data : []);
+          const rawLocs = res.data?.data?.items || res.data?.data || (Array.isArray(res.data) ? res.data : []);
+          const locs = rawLocs.filter((l: any) => l.status !== 'inactive' && l.status !== 'Inactive' && l.is_active !== 'No' && l.isActive !== 'No');
           setLocations(locs);
           if (locs.length > 0 && !locationId) {
             setLocationId(String(locs[0].id));
-            setLocationName(locs[0].name || locs[0].location_name || 'Headquarters');
+            setLocationName(locs[0].name || locs[0].location_name || 'Office');
           }
         })
         .catch(() => {});

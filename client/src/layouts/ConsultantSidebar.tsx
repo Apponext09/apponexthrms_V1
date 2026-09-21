@@ -1,3 +1,4 @@
+import { SectionRail } from '@/layouts/SectionNavigation';
 import {
   LayoutDashboard,
   Clock,
@@ -16,6 +17,9 @@ import {
   Activity,
   Shield,
   ChevronDown,
+  GitBranch,
+  ScanFace,
+  RefreshCw,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState } from 'react';
@@ -25,66 +29,79 @@ import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import { PortalSidebarBrand } from '@/layouts/PortalSidebarBrand';
+import { SidebarProfileMenu } from '@/layouts/SidebarProfileMenu';
 
 // ── Violet accent constants ───────────────────────────────────────────────────
 const C = {
-  activeBg: 'bg-violet-600 dark:bg-violet-600',
+  activeBg: 'bg-primary',
   activeText: 'text-white',
-  hoverBg: 'hover:bg-violet-50 dark:hover:bg-violet-950/30',
-  hoverText: 'hover:text-violet-700 dark:hover:text-violet-400',
-  icon: 'text-violet-500',
+  hoverBg: 'hover:bg-muted', hoverText: 'hover:text-foreground', icon: 'text-primary',
   sectionLabel: 'text-muted-foreground',
-  avatarBg: 'bg-violet-600',
-  avatarBorder: 'border-violet-300 dark:border-violet-700',
+  avatarBg: 'bg-primary', avatarBorder: 'border-primary/30',
 };
+
+import { useSubscriptionStore } from '@/features/subscriptions/store/subscriptionStore';
 
 // ── Nav definitions ───────────────────────────────────────────────────────────
 const CONSULTANT_NAV = [
   {
     label: 'OVERVIEW',
+    subscriptionModule: null,
+    items: [{ name: 'My Dashboard', href: '/consultant/dashboard', icon: LayoutDashboard }],
+  },
+  {
+    label: 'EMPLOYEE CORE',
+    subscriptionModule: 'Core HR & Directory',
     items: [
-      { name: 'My Dashboard', href: '/consultant/dashboard', icon: LayoutDashboard },
-      { name: 'My Profile',   href: '/consultant/profile',   icon: User },
+      { name: 'My Lifecycle', href: '/consultant/lifecycle', icon: GitBranch },
+      { name: 'Org Structure', href: '/consultant/org-chart', icon: Building2 },
+      { name: 'ID Card', href: '/consultant/id-card', icon: Shield },
     ],
   },
   {
-    label: 'TIME & ATTENDANCE',
+    label: 'ATTENDANCE',
+    subscriptionModule: 'Attendance & Time Tracking',
     items: [
-      { name: 'Attendance',       href: '/consultant/attendance',       icon: Clock },
-      { name: 'Holiday Calendar', href: '/consultant/holiday-calendar', icon: Calendar },
+      { name: 'Face Punch', href: '/consultant/face-attendance', icon: ScanFace },
+      { name: 'My Attendance Log', href: '/consultant/attendance', icon: Clock },
+      { name: 'My Shifts', href: '/consultant/shift-roster', icon: Calendar },
+      { name: 'Attendance Correction', href: '/consultant/attendance-regularization', icon: RefreshCw },
     ],
   },
   {
     label: 'LEAVES',
+    subscriptionModule: 'Leave Management & Approvals',
     items: [
       { name: 'My Leaves', href: '/consultant/leaves', icon: Palmtree },
     ],
   },
   {
     label: 'EXPENSES',
+    subscriptionModule: 'Expense Management',
     items: [
       { name: 'Expense Claims',   href: '/consultant/expenses', icon: ReceiptIndianRupee },
-      { name: 'Travel Requests',  href: '/consultant/travel',   icon: Plane },
+      { name: 'Travel Requests',  href: '/consultant/travel-requests', icon: Plane },
+      { name: 'Travel Advances',  href: '/consultant/travel-advances', icon: CreditCard },
+      { name: 'Mileage Claims',   href: '/consultant/mileage-claims',  icon: Activity },
     ],
   },
   {
     label: 'PAYROLL',
+    subscriptionModule: 'Automated Payroll Processing',
     items: [
       { name: 'My Payslips', href: '/consultant/payslips', icon: CreditCard },
     ],
   },
   {
     label: 'DOCUMENTS',
-    items: [
-      { name: 'My Documents', href: '/consultant/documents', icon: BookOpen },
-      { name: 'ID Card',      href: '/consultant/id-card',   icon: Shield },
-    ],
+    subscriptionModule: 'Core HR & Directory',
+    items: [{ name: 'My Documents', href: '/consultant/documents', icon: BookOpen }],
   },
   {
     label: 'COMPANY',
+    subscriptionModule: null,
     items: [
       { name: 'Announcements', href: '/consultant/announcements', icon: Megaphone },
-      { name: 'Org Chart',     href: '/consultant/org-chart',     icon: Building2 },
     ],
   },
 ];
@@ -98,6 +115,7 @@ export function ConsultantSidebar({ open, onOpenChange }: ConsultantSidebarProps
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuthStore();
+  const { hasModule, isGatingEnabled } = useSubscriptionStore();
   const [openMenu, setOpenMenu] = useState<string | null>(null);
 
   const handleLogout = () => {
@@ -110,41 +128,31 @@ export function ConsultantSidebar({ open, onOpenChange }: ConsultantSidebarProps
   const isActive = (href: string) =>
     location.pathname === href || location.pathname.startsWith(href + '/');
 
+  const visibleNav = CONSULTANT_NAV.filter(sec => {
+    if (!isGatingEnabled || !sec.subscriptionModule) return true;
+    return hasModule(sec.subscriptionModule);
+  });
+
   return (
     <div
       className={cn(
         'flex h-full flex-col border-r border-border bg-card transition-all duration-300 ease-in-out',
-        open ? 'w-64' : 'w-[72px]'
+        open ? 'w-72 md:w-28' : 'w-[72px]'
       )}
     >
       {/* ── Brand ── */}
-      <PortalSidebarBrand open={open} portalLabel="Consultant Portal" />
+      <PortalSidebarBrand open={false} portalLabel="Consultant Portal" />
 
       {/* ── Nav ── */}
-      <nav className="no-scrollbar flex-1 space-y-1 overflow-y-auto px-3 py-4">
-        {CONSULTANT_NAV.map((section) => (
-          <div key={section.label}>
-            {section.label === 'OVERVIEW' ? (
-              <div className="space-y-0.5">
-                {section.items.map((item) => {
-                  const Icon = item.icon;
-                  const active = isActive(item.href);
-                  return <button key={item.href} onClick={() => navigate(item.href)} title={!open ? item.name : undefined} className={cn('group flex min-h-10 w-full items-center gap-3 rounded-lg px-3 py-2 text-[12px] font-semibold transition-all', active ? `${C.activeBg} ${C.activeText} shadow-sm` : `text-muted-foreground ${C.hoverBg} ${C.hoverText}`, !open && 'justify-center px-2')}><Icon size={16} className={cn('flex-shrink-0', active ? 'text-white' : C.icon)} />{open && <span className="truncate">{item.name}</span>}</button>;
-                })}
-              </div>
-            ) : (() => {
-              const SectionIcon = section.items[0].icon;
-              const hasActiveItem = section.items.some((item) => isActive(item.href));
-              const isOpen = openMenu === section.label || hasActiveItem;
-              return <div className="space-y-1"><button type="button" onClick={() => setOpenMenu(isOpen ? null : section.label)} title={!open ? section.label : undefined} className={cn('group flex min-h-10 w-full items-center justify-between rounded-lg px-3 py-2 text-[12px] font-semibold transition-colors', hasActiveItem ? 'bg-violet-600/10 text-violet-700 dark:text-violet-400' : `text-muted-foreground ${C.hoverBg} ${C.hoverText}`, !open && 'justify-center px-2')}><span className="flex items-center gap-3"><SectionIcon size={16} className={C.icon} />{open && <span>{section.label}</span>}</span>{open && <ChevronDown size={16} className={cn('transition-transform', isOpen && 'rotate-180')} />}</button>{open && isOpen && <div className="ml-3 space-y-1 border-l border-border pl-3">{section.items.map((item) => { const Icon = item.icon; const active = isActive(item.href); return <button key={item.href} onClick={() => navigate(item.href)} className={cn('flex min-h-9 w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs font-medium transition-colors', active ? `${C.activeBg} ${C.activeText} font-bold` : `text-muted-foreground ${C.hoverBg} ${C.hoverText}`)}><Icon size={14} className={active ? 'text-white' : C.icon} /><span className="truncate">{item.name}</span></button>; })}</div>}</div>;
-            })()}
-          </div>
-        ))}
-      </nav>
+      <SectionRail id="consultant" groups={visibleNav} open={open} onNavigate={() => { if (window.innerWidth < 768) onOpenChange(false); }} />
 
       {/* ── User Footer ── */}
       <div className="border-t border-border p-3">
-        <div className={cn('flex items-center gap-3', !open && 'justify-center')}>
+        <SidebarProfileMenu profilePath="/consultant/profile" onLogout={handleLogout} onProfileNavigate={() => { if (window.innerWidth < 768) onOpenChange(false); }}>
+        <div
+          className="flex cursor-pointer items-center justify-center rounded-xl border border-border bg-card p-2.5 transition-colors hover:bg-muted"
+          title="View Profile"
+        >
           <Avatar className={cn('h-8 w-8 flex-shrink-0 border-2', C.avatarBorder)}>
             <AvatarImage src={user?.avatarUrl} />
             <AvatarFallback className={cn('text-xs font-bold text-white', C.avatarBg)}>
@@ -157,7 +165,7 @@ export function ConsultantSidebar({ open, onOpenChange }: ConsultantSidebarProps
                 initial={{ opacity: 0, width: 0 }}
                 animate={{ opacity: 1, width: 'auto' }}
                 exit={{ opacity: 0, width: 0 }}
-                className="flex flex-1 items-center justify-between overflow-hidden"
+                className="hidden flex-1 items-center justify-between overflow-hidden"
               >
                 <div className="min-w-0">
                   <p className="truncate text-xs font-semibold text-foreground">
@@ -171,19 +179,11 @@ export function ConsultantSidebar({ open, onOpenChange }: ConsultantSidebarProps
                   </p>
                   <p className="truncate text-[10px] text-muted-foreground">Consultant</p>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7 flex-shrink-0 text-muted-foreground hover:text-destructive"
-                  onClick={handleLogout}
-                  title="Sign out"
-                >
-                  <LogOut size={13} />
-                </Button>
               </motion.div>
             )}
           </AnimatePresence>
         </div>
+        </SidebarProfileMenu>
       </div>
     </div>
   );

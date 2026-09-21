@@ -6,10 +6,10 @@ export { toast };
 export interface ToasterProps extends React.ComponentProps<typeof SonnerToaster> {}
 
 /**
- * Light-themed Toast Notifications Container
- * Positioned in the top-right corner with white backgrounds.
- * - Success: Green  | Error: Red  | Warning: Amber  | Info: Blue
- * Duration: 1500ms
+ * Toast Notifications Container
+ * - Position: top-right
+ * - Background: white only (no type-based colors)
+ * - Duration: 2000ms
  */
 export function Toaster({ position = 'top-right', ...props }: ToasterProps) {
   return (
@@ -19,39 +19,48 @@ export function Toaster({ position = 'top-right', ...props }: ToasterProps) {
       richColors={false}
       closeButton
       expand={false}
-      duration={1500}
+      duration={2000}
+      pauseWhenPageIsHidden
+      theme="light"
       className="toaster group"
+      style={
+        {
+          '--normal-bg': '#ffffff',
+          '--normal-text': '#111827',
+          '--normal-border': '#e5e7eb',
+          '--success-bg': '#ffffff',
+          '--success-text': '#111827',
+          '--success-border': '#e5e7eb',
+          '--error-bg': '#ffffff',
+          '--error-text': '#111827',
+          '--error-border': '#e5e7eb',
+          '--warning-bg': '#ffffff',
+          '--warning-text': '#111827',
+          '--warning-border': '#e5e7eb',
+          '--info-bg': '#ffffff',
+          '--info-text': '#111827',
+          '--info-border': '#e5e7eb',
+        } as React.CSSProperties
+      }
       toastOptions={{
         style: {
+          background: '#ffffff',
+          color: '#111827',
+          border: '1.5px solid #e5e7eb',
           borderRadius: '10px',
           padding: '12px 16px',
           fontSize: '13px',
           fontWeight: '600',
-          background: '#ffffff',
-          color: '#111827',
-          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.10), 0 1px 6px rgba(0, 0, 0, 0.06)',
-          border: '1.5px solid #e5e7eb',
-          opacity: 1,
+          boxShadow: '0 4px 20px rgba(0,0,0,0.10), 0 1px 6px rgba(0,0,0,0.06)',
         },
         classNames: {
           toast:
-            'group toast !bg-white !rounded-xl !p-4 !gap-3 !opacity-100 font-sans animate-in fade-in-0 slide-in-from-top-4 slide-in-from-right-4 duration-300 ease-out',
-          title: '!text-[13px] !font-bold tracking-tight',
-          description: '!text-[12px] mt-0.5 leading-snug font-medium opacity-80',
-          success:
-            '!text-[#15803d] !border-[#86efac]',
-          error:
-            '!text-[#be123c] !border-[#fda4af]',
-          warning:
-            '!text-[#b45309] !border-[#fcd34d]',
-          info:
-            '!text-[#1d4ed8] !border-[#93c5fd]',
-          actionButton:
-            '!bg-current !text-white font-bold text-xs rounded-lg px-3 py-1.5',
-          cancelButton:
-            '!bg-white !text-gray-500 font-bold text-xs rounded-lg px-3 py-1.5 border border-gray-200',
+            '!bg-white !text-gray-900 !border-gray-200 !rounded-xl',
+          title: '!text-[13px] !font-bold !text-gray-900',
+          description: '!text-[12px] !text-gray-500',
+          icon: '!text-gray-400',
           closeButton:
-            '!bg-white !border-gray-200 !text-gray-400 hover:!text-gray-700 hover:!bg-gray-50 transition-colors rounded-full',
+            '!bg-white !border-gray-200 !text-gray-400 hover:!text-gray-700 hover:!bg-gray-50 rounded-full',
         },
       }}
       {...props}

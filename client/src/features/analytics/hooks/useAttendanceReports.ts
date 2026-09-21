@@ -157,8 +157,10 @@ export function useAttendanceReportQuery(filters: AttendanceReportFilterParams |
       throw new Error('Failed to load attendance report data');
     },
     enabled: !!filters,
-    staleTime: 0,
-    refetchInterval: 5000,
+    staleTime: 30 * 1000,
+    // Reports are an explicit user action. Polling repeatedly reloaded the full
+    // report and placed unnecessary load on the attendance tables.
+    refetchOnWindowFocus: false,
   });
 }
 

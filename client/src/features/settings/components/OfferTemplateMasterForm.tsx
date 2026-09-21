@@ -1,4 +1,4 @@
-﻿import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   FileText, Plus, Search, Check, Trash2, Edit2, Eye,
   Building2, Copy, Sparkles, RefreshCw, CheckCircle2,
@@ -626,7 +626,7 @@ export const OfferTemplateMasterForm: React.FC<OfferTemplateMasterFormProps> = (
 
   const handleDelete = async () => {
     if (!selectedTemplate?.id) return;
-    if (!window.confirm(`Are you sure you want to delete template "${selectedTemplate.template_name}"?`)) return;
+    if (!await window.appConfirm(`Are you sure you want to delete template "${selectedTemplate.template_name}"?`)) return;
 
     try {
       await apiClient.delete(`/letters/templates/${selectedTemplate.id}`);

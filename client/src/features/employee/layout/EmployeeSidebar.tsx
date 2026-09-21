@@ -1,4 +1,5 @@
-import React from 'react';
+import { SectionRail } from '@/layouts/SectionNavigation';
+import React, { useState } from 'react';
 import {
   LayoutDashboard,
   Clock,
@@ -21,6 +22,7 @@ import {
   Briefcase,
   BookOpen,
   Shield,
+  Building2,
   Megaphone,
   Activity,
   Bot,
@@ -36,6 +38,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/features/auth/store/authStore';
+import { useSubscriptionStore } from '@/features/subscriptions/store/subscriptionStore';
 import { useEmployee } from '../hooks/useEmployees';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -43,8 +46,9 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
 import { PortalSidebarBrand } from '@/layouts/PortalSidebarBrand';
+import { SidebarProfileMenu } from '@/layouts/SidebarProfileMenu';
 
-interface EmployeeSidebarProps {
+export interface EmployeeSidebarProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
@@ -66,6 +70,7 @@ interface EmployeeNavItem {
 
 interface NavSection {
   label: string;
+  subscriptionModule?: string | null;
   items: EmployeeNavItem[];
 }
 
@@ -73,6 +78,20 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuthStore();
+  const { hasModule, isGatingEnabled } = useSubscriptionStore();
+
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
+    'EMPLOYEE CORE': true,
+    'ATTENDANCE': true,
+    'LEAVES': true,
+    'PAYROLL': true,
+    'LOAN MANAGEMENT': true,
+    'EXPENSE MANAGEMENT': true,
+    'LEARNING & ACADEMY (LMS)': true,
+    'DEVELOPMENT & ENGAGEMENT': true,
+    'CAREER & OPENINGS': true,
+    'TOOLS & SUPPORT': true,
+  });
 
   const employeeId = user?.employeeId || 0;
   const { employee } = useEmployee(employeeId);
@@ -86,16 +105,13 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
     navigate(href);
   };
 
+  const isDashboardActive = location.pathname === '/employee/dashboard' || location.pathname === '/employee';
+
   const navSections: NavSection[] = [
     {
       label: 'EMPLOYEE CORE',
+      subscriptionModule: 'Core HR & Directory',
       items: [
-        {
-          name: 'My profile',
-          href: '/employee/profile',
-          icon: User,
-          color: 'text-indigo-500',
-        },
         {
           name: 'My Lifecycle',
           href: '/employee/lifecycle',
@@ -108,10 +124,17 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
           icon: Shield,
           color: 'text-emerald-500',
         },
+        {
+          name: 'Org Structure',
+          href: '/employee/org-chart',
+          icon: Building2,
+          color: 'text-violet-500',
+        },
       ],
     },
     {
       label: 'ATTENDANCE',
+      subscriptionModule: 'Attendance & Time Tracking',
       items: [
         {
           name: 'Face Punch',
@@ -142,6 +165,7 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
     },
     {
       label: 'LEAVES',
+      subscriptionModule: 'Leave Management & Approvals',
       items: [
         {
           name: 'My Leaves',
@@ -159,6 +183,7 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
     },
     {
       label: 'PAYROLL',
+      subscriptionModule: 'Automated Payroll Processing',
       items: [
         {
           name: 'My Payslips',
@@ -182,6 +207,7 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
     },
     {
       label: 'LOAN MANAGEMENT',
+      subscriptionModule: 'Automated Payroll Processing',
       items: [
         {
           name: 'Loan Request',
@@ -193,6 +219,7 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
     },
     {
       label: 'EXPENSE MANAGEMENT',
+      subscriptionModule: 'Expense Management',
       items: [
         {
           name: 'My Expenses',
@@ -222,6 +249,7 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
     },
     {
       label: 'LEARNING & ACADEMY (LMS)',
+      subscriptionModule: 'Learning Management System',
       items: [
         {
           name: 'My Learning Hub',
@@ -245,6 +273,7 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
     },
     {
       label: 'DEVELOPMENT & ENGAGEMENT',
+      subscriptionModule: 'Performance & OKRs',
       items: [
         {
           name: 'Performance reviews',
@@ -310,6 +339,7 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
     },
     {
       label: 'CAREER & OPENINGS',
+      subscriptionModule: 'Recruitment & ATS',
       items: [
         {
           name: 'Internal Job Openings',
@@ -327,6 +357,7 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
     },
     {
       label: 'TOOLS & SUPPORT',
+      subscriptionModule: null,
       items: [
         {
           name: 'Helpdesk Tickets',
@@ -338,258 +369,61 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
           name: 'AI HR Assistant',
           href: '/employee/ai-assistant',
           icon: Bot,
-          color: 'text-violet-500',
-        },
-        {
-          name: 'My Approvals',
-          href: '/employee/approvals',
-          icon: CheckCircle2,
-          color: 'text-emerald-500',
-        },
-        {
-          name: 'Settings & Security',
-          href: '/employee/settings',
-          icon: Settings,
-          color: 'text-slate-500',
+          color: 'text-purple-500',
         },
       ],
     },
   ];
 
-  const userRoles = user?.roles || [];
-  const isTeamLead = userRoles.includes('team_lead') || userRoles.includes('reporting_manager') || userRoles.includes('hr_manager') || userRoles.includes('organization_admin');
-
-  const visibleSections = [...navSections];
-  if (isTeamLead) {
-    visibleSections.push({
-      label: 'TEAM WORKSPACE',
-      items: [
-        {
-          name: 'Team Dashboard',
-          href: '/team-lead/dashboard',
-          icon: Users,
-          color: 'text-indigo-500',
-        },
-        {
-          name: 'Team Payroll',
-          href: '/payroll/processing',
-          icon: CreditCard,
-          color: 'text-emerald-500',
-        },
-        {
-          name: 'Team Loans',
-          href: '/payroll/loans',
-          icon: Percent,
-          color: 'text-amber-500',
-        },
-        {
-          name: 'Team Payslips',
-          href: '/payroll/payslips',
-          icon: FileText,
-          color: 'text-blue-500',
-        },
-      ],
-    });
-  }
-
-  const [expandedSections, setExpandedSections] = React.useState<Record<string, boolean>>(() => {
-    const defaults: Record<string, boolean> = {
-      'EMPLOYEE CORE': true,
-      'ATTENDANCE': true,
-      'LEAVES': false,
-      'PAYROLL': false,
-      'LOAN MANAGEMENT': false,
-      'EXPENSE MANAGEMENT': false,
-      'TRAVEL MANAGEMENT': false,
-      'DEVELOPMENT & ENGAGEMENT': false,
-      'REFER AND EARN': false,
-      'TOOLS & SUPPORT': false,
-      'TEAM WORKSPACE': false,
-    };
-    for (const section of visibleSections) {
-      const hasActive = section.items.some(item =>
-        location.pathname === item.href || location.pathname.startsWith(item.href + '/')
-      );
-      if (hasActive) {
-        defaults[section.label] = true;
-      }
-    }
-    return defaults;
+  const visibleNavSections = navSections.filter(sec => {
+    if (!isGatingEnabled || !sec.subscriptionModule) return true;
+    return hasModule(sec.subscriptionModule);
   });
 
-  const employeeName = employee ? `${employee.firstName} ${employee.lastName}` : `${user?.firstName || 'Employee'} ${user?.lastName || ''}`;
+  const employeeName = employee
+    ? `${employee.firstName} ${employee.lastName}`
+    : `${user?.firstName || 'Employee'} ${user?.lastName || ''}`;
+
+  const employeeDesignation =
+    (typeof employee?.designation === 'object' ? (employee?.designation as any)?.name : employee?.designation) ||
+    user?.designation ||
+    'Team Member';
+  const employeeAvatar = employee?.avatarUrl || user?.avatarUrl;
+
   const getInitials = () => {
-    return employeeName.split(' ').map(w => w[0]).join('').toUpperCase() || 'EMP';
+    if (employee) {
+      return `${employee.firstName?.[0] || ''}${employee.lastName?.[0] || ''}`.toUpperCase() || 'E';
+    }
+    return `${user?.firstName?.[0] || ''}${user?.lastName?.[0] || ''}`.toUpperCase() || 'E';
   };
 
-  const isDashboardActive = location.pathname === '/employee/dashboard';
-
   return (
-    <aside className={cn('role-portal-sidebar flex h-dvh flex-col overflow-hidden border-r border-border bg-card text-card-foreground select-none', open ? 'w-64' : 'w-[72px]')}>
-      {/* Header Logo Banner */}
-      <PortalSidebarBrand open={open} portalLabel="Employee Self Service" />
+    <aside
+      className={cn(
+        'portal-sidebar h-dvh flex flex-col justify-between border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-all duration-300 select-none overflow-hidden',
+        open ? 'w-72 md:w-28' : 'w-20'
+      )}
+    >
+      <div className="flex flex-col flex-1 min-h-0">
+        {/* Brand Header */}
+        <PortalSidebarBrand open={false} portalLabel="Employee Self Service" />
 
-      {/* Navigation List */}
-      <nav className="no-scrollbar flex-1 space-y-1 overflow-y-auto px-3 py-4">
-        {/* SEPARATE STANDALONE DASHBOARD LINK */}
-        <div className="pb-1">
-          <button
-            onClick={() => handleItemClick('/employee/dashboard', 'Dashboard')}
-            title={!open ? 'Dashboard' : ''}
-            className={cn(
-              'group relative flex min-h-10 w-full items-center gap-3 rounded-xl px-3 py-2.5 text-xs font-bold transition-all',
-              !open && 'justify-center px-2',
-              isDashboardActive
-                ? 'portal-sidebar-active font-extrabold text-white dark:text-slate-950 shadow-sm'
-                : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-            )}
-          >
-            <LayoutDashboard className={cn('size-4 flex-shrink-0', isDashboardActive ? 'text-white dark:text-slate-950' : 'text-violet-500')} />
-
-            <AnimatePresence>
-              {open && (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.2 }}
-                  className="flex-1 text-left overflow-hidden"
-                >
-                  <span className="truncate">Dashboard</span>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </button>
-        </div>
-
-        {visibleSections.map((section, idx) => {
-          const isExpanded = !open || !!expandedSections[section.label];
-          return (
-            <div key={idx} className="space-y-1 pt-1">
-              {open ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setExpandedSections((prev: Record<string, boolean>) => ({
-                      ...prev,
-                      [section.label]: !prev[section.label]
-                    }));
-                  }}
-                  className="group flex w-full items-center justify-between px-3 py-1 text-[10px] font-black uppercase text-muted-foreground hover:text-foreground tracking-wider"
-                >
-                  <span>{section.label}</span>
-                  <ChevronRight className={cn(
-                    "h-3 w-3 text-muted-foreground/60 transition-transform duration-200 group-hover:text-foreground",
-                    isExpanded ? "rotate-90" : ""
-                  )} />
-                </button>
-              ) : (
-                <div className="px-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70 text-center">
-                  •••
-                </div>
-              )}
-
-              {isExpanded && (
-                <div className="space-y-1 mt-1">
-                  {section.items.map((item) => {
-                    const isActive = location.pathname === item.href || location.pathname.startsWith(item.href + '/');
-                    const Icon = item.icon;
-                    const hasSubItems = item.subItems && item.subItems.length > 0;
-
-                    if (hasSubItems && open) {
-                      return (
-                        <Collapsible key={item.href} defaultOpen={isActive} className="space-y-1">
-                          <CollapsibleTrigger asChild>
-                            <button
-                              className={cn(
-                                'group flex min-h-10 w-full items-center justify-between rounded-lg px-3 py-2 text-[12px] font-semibold transition-colors',
-                                isActive
-                                  ? 'bg-primary/10 text-primary'
-                                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                              )}
-                            >
-                              <div className="flex items-center gap-3">
-                                <Icon className="size-4 flex-shrink-0" />
-                                <span className="text-xs font-semibold">{item.name}</span>
-                              </div>
-                              <ChevronRight className="h-3.5 w-3.5 transition-transform duration-200 group-data-[state=open]:rotate-90 text-muted-foreground" />
-                            </button>
-                          </CollapsibleTrigger>
-
-                          <CollapsibleContent className="ml-3 space-y-1 border-l border-border pl-3">
-                            {item.subItems?.map((sub) => {
-                              const SubIcon = sub.icon;
-                              const isSubActive = location.pathname === sub.href;
-                              return (
-                                <button
-                                  key={sub.href}
-                                  onClick={() => handleItemClick(sub.href, sub.name)}
-                                  className={cn(
-                                    'flex min-h-9 w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs transition-colors',
-                                    isSubActive
-                                      ? 'portal-sidebar-active font-bold text-white dark:text-slate-950'
-                                      : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                                  )}
-                                >
-                                  <SubIcon className="size-3.5 flex-shrink-0" />
-                                  <span>{sub.name}</span>
-                                </button>
-                              );
-                            })}
-                          </CollapsibleContent>
-                        </Collapsible>
-                      );
-                    }
-
-                    return (
-                      <button
-                        key={item.name + item.href}
-                        onClick={() => handleItemClick(item.href, item.name)}
-                        title={!open ? item.name : ''}
-                        className={cn(
-                          'group relative flex min-h-10 w-full items-center gap-3 rounded-lg px-3 py-2 text-xs font-medium transition-colors',
-                          !open && 'justify-center px-2',
-                          isActive
-                            ? 'portal-sidebar-active font-semibold text-white dark:text-slate-950'
-                            : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                        )}
-                      >
-                        <Icon className={cn('size-4 flex-shrink-0', isActive ? 'text-white dark:text-slate-950' : 'text-muted-foreground')} />
-
-                        <AnimatePresence>
-                          {open && (
-                            <motion.div
-                              initial={{ opacity: 0 }}
-                              animate={{ opacity: 1 }}
-                              exit={{ opacity: 0 }}
-                              transition={{ duration: 0.2 }}
-                              className="flex-1 text-left overflow-hidden flex items-center justify-between"
-                            >
-                              <span className="truncate">{item.name}</span>
-                              {item.badge && (
-                                <Badge variant="secondary" className="text-[9px] px-1.5 py-0 bg-violet-100 dark:bg-violet-950 text-violet-700 dark:text-violet-300">
-                                  {item.badge}
-                                </Badge>
-                              )}
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </nav>
+        {/* Navigation List */}
+          <SectionRail id="employee" groups={[{ label: 'Dashboard', icon: LayoutDashboard, items: [{ name: 'Dashboard', href: '/employee/dashboard', icon: LayoutDashboard }] }, ...visibleNavSections.map(section => ({ ...section, icon: section.items[0]?.icon }))]} open={open} onNavigate={() => { if (window.innerWidth < 768) onOpenChange(false); }} />
+      </div>
 
       {/* Employee User Card Footer */}
       <div className="flex-shrink-0 border-t border-border bg-card p-3">
-        <div className={cn('flex min-h-14 items-center rounded-xl border border-border bg-card p-2.5', open ? 'justify-between' : 'justify-center')}>
+        <SidebarProfileMenu profilePath="/employee/profile" onLogout={handleLogout} onProfileNavigate={() => { if (window.innerWidth < 768) onOpenChange(false); }}>
+        <div
+          className={cn(
+            'flex min-h-14 cursor-pointer items-center justify-center rounded-xl border border-border bg-card p-2.5 hover:bg-muted transition-colors'
+          )}
+          title="View Profile"
+        >
           <div className="flex min-w-0 items-center gap-2.5 overflow-hidden">
             <Avatar className="size-9 flex-shrink-0 border border-primary/30 shadow-soft-xs">
-              <AvatarImage src={employee?.avatarUrl || user?.avatarUrl} />
+              <AvatarImage src={employeeAvatar} />
               <AvatarFallback className="bg-primary text-xs font-bold text-primary-foreground">
                 {getInitials()}
               </AvatarFallback>
@@ -601,7 +435,7 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
                   transition={{ duration: 0.2 }}
-                  className="overflow-hidden text-left"
+                  className="hidden overflow-hidden text-left"
                 >
                   <p className="text-xs font-bold text-foreground truncate">{employeeName}</p>
                   <p className="text-[10px] text-muted-foreground truncate">{user?.email || 'employee@apponext.com'}</p>
@@ -610,19 +444,8 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
             </AnimatePresence>
           </div>
 
-          {open && (
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleLogout}
-              className="size-7 flex-shrink-0 rounded-lg text-muted-foreground hover:bg-rose-500/10 hover:text-rose-600"
-              title="Logout"
-              aria-label="Log out"
-            >
-              <LogOut className="size-3.5" />
-            </Button>
-          )}
         </div>
+        </SidebarProfileMenu>
       </div>
     </aside>
   );

@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -90,7 +90,7 @@ export function CreateHolidayCalendarModal({
         : [];
 
       setCompanies(compList);
-      setLocations(locList);
+      setLocations(locList.filter((l: any) => l.status !== 'inactive' && l.status !== 'Inactive' && l.is_active !== 'No' && l.isActive !== 'No'));
 
       // Default company if not selected
       if (!companyId && compList.length > 0) {

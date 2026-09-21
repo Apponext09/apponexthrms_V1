@@ -193,11 +193,11 @@ export const CareerPortalCustomizationPage: React.FC = () => {
   const currentColorObj = COLOR_PALETTES.find((c) => c.value === settings.primaryColor) || COLOR_PALETTES[0];
 
   return (
-    <div className="flex-1 space-y-6 max-w-full overflow-hidden p-6 min-h-[calc(100vh-4rem)]">
+    <div className="recruitment-page flex-1 min-w-0 space-y-4">
       {/* ── Top Header Banner ────────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card p-6 rounded-2xl border border-border/80 shadow-2xs relative overflow-hidden">
+      <div className="recruitment-page-header flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card p-6 rounded-2xl border border-border/80 shadow-2xs relative overflow-hidden">
         <div className="flex items-center gap-3.5 relative z-10">
-          <div className="w-11 h-11 rounded-2xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center font-bold shrink-0 border border-purple-500/20 shadow-xs">
+          <div className="w-11 h-11 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold shrink-0 border border-primary/20 shadow-xs">
             <Palette className="w-5 h-5" />
           </div>
           <div className="space-y-0.5">
@@ -240,12 +240,12 @@ export const CareerPortalCustomizationPage: React.FC = () => {
       </div>
 
       {/* ── Tabs Navigation ──────────────────────────────────────────────────── */}
-      <div className="flex items-center gap-1.5 bg-muted/60 p-1.5 rounded-2xl border border-border/80 overflow-x-auto">
+      <div className="recruitment-segments flex items-center gap-1.5 bg-muted/60 p-1.5 rounded-2xl border border-border/80 overflow-x-auto">
         <button
           onClick={() => setActiveTab('branding')}
           className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
             activeTab === 'branding'
-              ? 'bg-background text-foreground shadow-xs'
+              ? 'bg-primary text-primary-foreground shadow-sm'
               : 'text-muted-foreground hover:text-foreground'
           }`}
         >
@@ -256,7 +256,7 @@ export const CareerPortalCustomizationPage: React.FC = () => {
           onClick={() => setActiveTab('visibility')}
           className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
             activeTab === 'visibility'
-              ? 'bg-background text-foreground shadow-xs'
+              ? 'bg-primary text-primary-foreground shadow-sm'
               : 'text-muted-foreground hover:text-foreground'
           }`}
         >
@@ -267,7 +267,7 @@ export const CareerPortalCustomizationPage: React.FC = () => {
           onClick={() => setActiveTab('fields')}
           className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
             activeTab === 'fields'
-              ? 'bg-background text-foreground shadow-xs'
+              ? 'bg-primary text-primary-foreground shadow-sm'
               : 'text-muted-foreground hover:text-foreground'
           }`}
         >
@@ -278,7 +278,7 @@ export const CareerPortalCustomizationPage: React.FC = () => {
           onClick={() => setActiveTab('footer')}
           className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
             activeTab === 'footer'
-              ? 'bg-background text-foreground shadow-xs'
+              ? 'bg-primary text-primary-foreground shadow-sm'
               : 'text-muted-foreground hover:text-foreground'
           }`}
         >

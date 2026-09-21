@@ -26,6 +26,7 @@ import {
 } from '../../hooks/useOTRules';
 import { AccordionSection } from './AccordionSection';
 import { EligibilityPanel } from './EligibilityPanel';
+import { HelpHint } from '../HelpHint';
 
 // ── Schema Definition ────────────────────────────────────────────────────────
 const dayConfigSchema = z.object({
@@ -321,8 +322,16 @@ export const OTRuleForm: React.FC<OTRuleFormProps> = ({ ruleId, onSaved, onCance
           
           {/* OT Rule Name */}
           <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
-            <label className="md:col-span-4 text-xs font-bold text-foreground">
+            <label className="md:col-span-4 text-xs font-bold text-foreground flex items-center gap-0.5">
               OT Rule Name <span className="text-rose-500">*</span>
+              <HelpHint
+                title="OT Rule Name"
+                description="A unique name to identify this Overtime policy. It will appear in reports, payslips, and employee notifications."
+                example="e.g. 'Standard OT Policy', 'Field Staff OT', 'Holiday OT Rule'"
+                titleMr="ओव्हरटाइम नियमाचे नाव"
+                descriptionMr="या ओव्हरटाइम धोरणाला ओळखण्यासाठी एक अनोखे नाव. हे अहवाल, पे-स्लिप आणि कर्मचारी सूचनांमध्ये दिसेल."
+                exampleMr="उदा. 'मानक OT धोरण', 'फील्ड स्टाफ OT', 'सुट्टी OT नियम'"
+              />
             </label>
             <div className="md:col-span-8">
               <Controller
@@ -342,8 +351,16 @@ export const OTRuleForm: React.FC<OTRuleFormProps> = ({ ruleId, onSaved, onCance
 
           {/* Title in case of change */}
           <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
-            <label className="md:col-span-4 text-xs font-bold text-foreground">
+            <label className="md:col-span-4 text-xs font-bold text-foreground flex items-center gap-0.5">
               Title In Case Of Change
+              <HelpHint
+                title="Title In Case Of Change"
+                description="An alternative display title shown to employees when the OT rule is dynamically changed or overridden for a specific event or period."
+                example="If the standard rule changes for a festival week, set a special title like 'Festival OT — December'"
+                titleMr="बदल झाल्यास शीर्षक"
+                descriptionMr="जेव्हा OT नियम एखाद्या विशेष कालावधीसाठी बदलला जातो तेव्हा कर्मचाऱ्यांना दाखवले जाणारे वैकल्पिक शीर्षक."
+                exampleMr="सणासुदीच्या आठवड्यात नियम बदलल्यास 'सण OT — डिसेंबर' असे विशेष शीर्षक द्या."
+              />
             </label>
             <div className="md:col-span-8">
               <Controller
@@ -362,8 +379,18 @@ export const OTRuleForm: React.FC<OTRuleFormProps> = ({ ruleId, onSaved, onCance
 
           {/* Period */}
           <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
-            <label className="md:col-span-4 text-xs font-bold text-foreground">
+            <label className="md:col-span-4 text-xs font-bold text-foreground flex items-center gap-0.5">
               Period
+              <HelpHint
+                title="OT Calculation Period"
+                description="Defines whether overtime is calculated on a daily basis or accumulated over the entire week."
+                effect="Daily: OT starts after the daily shift hours are exceeded. Weekly: OT is only counted if total week hours exceed the weekly limit."
+                example="Daily period: If shift is 8h and employee works 10h, 2h OT is credited that day. Weekly: OT only after 40+ hours in the week."
+                titleMr="OT गणना कालावधी"
+                descriptionMr="ओव्हरटाइम दररोज मोजला जाईल की संपूर्ण आठवड्यात एकत्रित मोजला जाईल हे ठरवते."
+                effectMr="दैनिक: शिफ्टचे तास ओलांडल्यावर लगेच OT मोजला जातो. साप्ताहिक: आठवड्यातील एकूण तास मर्यादा ओलांडल्यावरच OT मिळतो."
+                exampleMr="दैनिक: 8 तासांची शिफ्ट असल्यास 10 तास काम केल्यावर 2 तास OT त्याच दिवशी. साप्ताहिक: 40+ तासांनंतरच OT."
+              />
             </label>
             <div className="md:col-span-8">
               <Controller
@@ -399,8 +426,18 @@ export const OTRuleForm: React.FC<OTRuleFormProps> = ({ ruleId, onSaved, onCance
 
           {/* Shift Type */}
           <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
-            <label className="md:col-span-4 text-xs font-bold text-foreground">
+            <label className="md:col-span-4 text-xs font-bold text-foreground flex items-center gap-0.5">
               Shift Type
+              <HelpHint
+                title="Shift Type"
+                description="Determines how overtime is measured relative to the shift schedule."
+                effect="Time Bound: OT is only counted before or after the defined shift start/end times. Flexible Shift: OT is measured from actual first punch — no fixed boundary."
+                example="Time Bound: Shift 9AM-6PM, punch at 7PM = 1hr OT. Flexible: Punch in 8AM, punch out 7PM = 11hrs total, OT beyond 8hrs standard."
+                titleMr="शिफ्ट प्रकार"
+                descriptionMr="शिफ्ट वेळापत्रकाच्या तुलनेत ओव्हरटाइम कसा मोजला जातो हे ठरवते."
+                effectMr="वेळ-बद्ध: फक्त ठरलेल्या शिफ्टच्या आधी/नंतरचा वेळ OT म्हणून मोजला जातो. लवचिक: प्रत्यक्ष पहिल्या पंचपासून एकूण वेळ मोजला जातो."
+                exampleMr="वेळ-बद्ध: शिफ्ट 9AM-6PM, 7PM ला पंच = 1 तास OT. लवचिक: 8AM ते 7PM = 11 तास, 8 तासांपेक्षा जास्त = OT."
+              />
             </label>
             <div className="md:col-span-8">
               <Controller
@@ -437,8 +474,18 @@ export const OTRuleForm: React.FC<OTRuleFormProps> = ({ ruleId, onSaved, onCance
           {/* Daily Max OT Limit (Shown only when Period is Daily) */}
           {periodValue === 'daily' && (
             <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
-              <label className="md:col-span-4 text-xs font-bold text-foreground">
+              <label className="md:col-span-4 text-xs font-bold text-foreground flex items-center gap-0.5">
                 Daily Max OT Limit
+                <HelpHint
+                  title="Daily Max OT Limit"
+                  description="The maximum overtime hours/minutes an employee can earn in a single day. Any OT beyond this cap is NOT credited."
+                  effect="Excess OT beyond the cap will be ignored for pay calculation. Use this to prevent runaway OT costs."
+                  example="Cap = 4 hours: Employee works 14 hours (6h OT) but only 4 hours OT will be paid."
+                  titleMr="दैनिक कमाल OT मर्यादा"
+                  descriptionMr="एका दिवसात कर्मचारी जास्तीत जास्त किती OT मिळवू शकतो. या मर्यादेपेक्षा जास्त OT जमा होणार नाही."
+                  effectMr="मर्यादेपेक्षा जास्त OT वेतन गणनेत विचारात घेतला जाणार नाही. OT खर्च नियंत्रणात ठेवण्यासाठी वापरा."
+                  exampleMr="मर्यादा = 4 तास: कर्मचारी 14 तास काम करतो (6 तास OT) पण फक्त 4 तास OT दिला जाईल."
+                />
               </label>
               <div className="md:col-span-8 flex items-center gap-2">
                 <Controller
@@ -472,8 +519,18 @@ export const OTRuleForm: React.FC<OTRuleFormProps> = ({ ruleId, onSaved, onCance
           {/* Weekly Max OT Limit (Shown only when Period is Weekly) */}
           {periodValue === 'weekly' && (
             <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
-              <label className="md:col-span-4 text-xs font-bold text-foreground">
+              <label className="md:col-span-4 text-xs font-bold text-foreground flex items-center gap-0.5">
                 Weekly Max OT Limit
+                <HelpHint
+                  title="Weekly Max OT Limit"
+                  description="The maximum overtime hours/minutes an employee can accumulate in a full calendar week. Any OT beyond this is not credited."
+                  effect="Prevents excessive weekly OT claims. Resets every Monday (or as per the company's week start setting)."
+                  example="Cap = 16 hours/week: Even if employee works 25h OT in a week, only 16h will be paid."
+                  titleMr="साप्ताहिक कमाल OT मर्यादा"
+                  descriptionMr="संपूर्ण कॅलेंडर आठवड्यात कर्मचारी जास्तीत जास्त किती OT जमा करू शकतो."
+                  effectMr="आठवड्यात जास्त OT दावे रोखतो. प्रत्येक सोमवारी रीसेट होतो (कंपनीच्या आठवडा सुरुवात सेटिंगनुसार)."
+                  exampleMr="मर्यादा = 16 तास/आठवडा: कर्मचारी 25 तास OT केला तरी फक्त 16 तास दिले जातील."
+                />
               </label>
               <div className="md:col-span-8 flex items-center gap-2">
                 <Controller
@@ -506,8 +563,18 @@ export const OTRuleForm: React.FC<OTRuleFormProps> = ({ ruleId, onSaved, onCance
 
           {/* Auto OT Approve */}
           <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-start border-t border-border/60 pt-4">
-            <label className="md:col-span-4 text-xs font-bold text-foreground pt-1">
+            <label className="md:col-span-4 text-xs font-bold text-foreground pt-1 flex items-center gap-0.5">
               Auto OT Approve
+              <HelpHint
+                title="Auto OT Approve"
+                description="When ON, overtime requests within the defined min-max time window are automatically approved without manager intervention."
+                effect="ON: OT within time window auto-approved instantly. OFF: OT must be manually approved by Team Lead or Manager."
+                example="Min: 00:30, Max: 04:00 — Any OT between 30 mins and 4 hours is auto-approved. OT above 4 hours needs manual approval."
+                titleMr="OT स्वयंचलित मंजुरी"
+                descriptionMr="चालू असल्यास, ठरलेल्या वेळ मर्यादेत केलेला ओव्हरटाइम व्यवस्थापकाच्या हस्तक्षेपाशिवाय आपोआप मंजूर होतो."
+                effectMr="चालू: वेळ मर्यादेतील OT त्वरित मंजूर. बंद: OT साठी टीम लीड किंवा व्यवस्थापकाची मॅन्युअल मंजुरी आवश्यक."
+                exampleMr="किमान: 00:30, कमाल: 04:00 — 30 मिनिटे ते 4 तासांदरम्यानचा OT आपोआप मंजूर. 4 तासांपेक्षा जास्त OT मॅन्युअल मंजुरी आवश्यक."
+              />
             </label>
             <div className="md:col-span-8 space-y-3">
               <Controller
@@ -592,8 +659,18 @@ export const OTRuleForm: React.FC<OTRuleFormProps> = ({ ruleId, onSaved, onCance
           <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
             <Sparkles className="w-3.5 h-3.5 stroke-[2.5]" />
           </div>
-          <h3 className="text-sm font-bold text-foreground">
+          <h3 className="text-sm font-bold text-foreground flex items-center gap-1">
             Eligibility Mapping
+            <HelpHint
+              title="Eligibility Mapping"
+              description="Defines which employees this OT Rule applies to. Only employees matching ALL selected filters (Location, Department, Grade, Type, Shift, Status) will be governed by this rule."
+              effect="If no filters are selected, the rule applies to ALL employees. Adding filters narrows the scope to matching employees only."
+              example="Select 'Sales Dept' + 'Grade A' → Only Grade A employees in the Sales department will follow this OT policy."
+              titleMr="पात्रता मॅपिंग"
+              descriptionMr="हा OT नियम कोणत्या कर्मचाऱ्यांना लागू होतो हे ठरवते. निवडलेल्या सर्व फिल्टर्सशी (स्थान, विभाग, ग्रेड, प्रकार, शिफ्ट, स्थिती) जुळणाऱ्या कर्मचाऱ्यांनाच हा नियम लागू होईल."
+              effectMr="कोणतेही फिल्टर नसल्यास नियम सर्व कर्मचाऱ्यांना लागू होतो. फिल्टर जोडल्यास फक्त जुळणाऱ्या कर्मचाऱ्यांपुरता मर्यादित होतो."
+              exampleMr="'विक्री विभाग' + 'ग्रेड A' निवडल्यास → फक्त विक्री विभागातील ग्रेड A कर्मचाऱ्यांना हे OT धोरण लागू होईल."
+            />
           </h3>
         </div>
 

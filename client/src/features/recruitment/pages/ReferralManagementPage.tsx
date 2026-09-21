@@ -116,7 +116,7 @@ export const ReferralManagementPage: React.FC = () => {
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('Are you sure you want to delete this referral?')) return;
+    if (!await window.appConfirm('Are you sure you want to delete this referral?')) return;
     await deleteReferralMutation.mutateAsync(id);
   };
 
@@ -135,9 +135,9 @@ export const ReferralManagementPage: React.FC = () => {
   const rewardPaidCount = referrals.filter((r: any) => r.status === 'reward_paid' || r.referral_status === 'reward_paid').length;
 
   return (
-    <div className="flex-1 space-y-6 max-w-full overflow-hidden p-6 min-h-[calc(100vh-4rem)]">
+    <div className="recruitment-page flex-1 min-w-0 space-y-4">
       {/* ── Top Header Banner ────────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card p-6 rounded-2xl border border-border/80 shadow-2xs relative overflow-hidden">
+      <div className="recruitment-page-header flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card p-6 rounded-2xl border border-border/80 shadow-2xs relative overflow-hidden">
         <div className="flex items-center gap-3.5 relative z-10">
           <div className="w-11 h-11 rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold shrink-0 border border-emerald-500/20 shadow-xs">
             <NotebookPen className="w-5 h-5" />
@@ -164,7 +164,7 @@ export const ReferralManagementPage: React.FC = () => {
 
       {/* ── KPI Stats Widgets ─────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+        <Card className="bg-card border-border shadow-sm rounded-xl overflow-hidden">
           <CardContent className="p-5 flex items-center justify-between">
             <div>
               <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Total Referrals</p>
@@ -176,7 +176,7 @@ export const ReferralManagementPage: React.FC = () => {
           </CardContent>
         </Card>
 
-        <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+        <Card className="bg-card border-border shadow-sm rounded-xl overflow-hidden">
           <CardContent className="p-5 flex items-center justify-between">
             <div>
               <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Hired from Referrals</p>
@@ -188,7 +188,7 @@ export const ReferralManagementPage: React.FC = () => {
           </CardContent>
         </Card>
 
-        <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+        <Card className="bg-card border-border shadow-sm rounded-xl overflow-hidden">
           <CardContent className="p-5 flex items-center justify-between">
             <div>
               <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Rewards Paid</p>
@@ -202,7 +202,7 @@ export const ReferralManagementPage: React.FC = () => {
       </div>
 
       {/* ── Table Container ──────────────────────────────────────────────────── */}
-      <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+      <Card className="bg-card border-border shadow-sm rounded-xl overflow-hidden">
         <CardContent className="p-0">
           <div className="w-full overflow-x-auto">
             <Table className="min-w-[900px] border-collapse">

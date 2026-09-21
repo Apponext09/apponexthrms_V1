@@ -1274,7 +1274,9 @@ export function EmployeeCreateModal({
                           onChange={(e) => handleFieldChange('locationId', e.target.value)}
                         >
                           <option value="">-- Select Branch / Location --</option>
-                          {locationsData?.data?.map((loc: any) => (
+                          {(locationsData?.data || locationsData?.items || [])
+                            ?.filter((loc: any) => loc.status !== 'inactive' && loc.status !== 'Inactive' && loc.is_active !== 'No' && loc.isActive !== 'No')
+                            ?.map((loc: any) => (
                             <option key={loc.id} value={loc.id}>
                               {loc.name || loc.location_name || loc.title} {loc.code ? `(${loc.code})` : ''}
                             </option>

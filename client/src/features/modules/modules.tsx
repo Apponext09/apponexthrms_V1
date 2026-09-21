@@ -364,6 +364,8 @@ export function ModuleManagementPage(): JSX.Element {
     if (param === 'manager') return 'manager';
     if (param === 'team-lead' || param === 'tl') return 'tl';
     if (param === 'employee' || param === 'emp') return 'emp';
+    if (param === 'intern') return 'intern';
+    if (param === 'consultant') return 'consultant';
     return 'ceo';
   };
 
@@ -491,8 +493,8 @@ export function ModuleManagementPage(): JSX.Element {
   };
 
   // Reset to default state
-  const handleResetDefault = () => {
-    if (confirm(`Reset all ${roleInfo.title} module settings back to default?`)) {
+  const handleResetDefault = async () => {
+    if (await window.appConfirm(`Reset all ${roleInfo.title} module settings back to default?`)) {
       const defaultRoleMap = getDefaultStateForRole(activeRole);
       setModulesState((prev) => ({ ...prev, [activeRole]: defaultRoleMap }));
       setHasUnsavedChanges(true);

@@ -80,9 +80,11 @@ router.get('/scope-masters', asyncHandler(async (req: Request, res: Response) =>
       }
 
       if (req.ctx?.organizationId && (await db.schema.hasColumn(table, 'organization_id'))) {
-        builder = builder.where(function () {
-          this.where('organization_id', req.ctx?.organizationId).orWhereNull('organization_id');
-        });
+        builder = builder.where('organization_id', req.ctx.organizationId);
+      }
+
+      if (req.ctx?.companyId && (await db.schema.hasColumn(table, 'company_id'))) {
+        builder = builder.where('company_id', req.ctx.companyId);
       }
 
       // Dynamically detect existing ID column (prioritize primary key id)
@@ -371,9 +373,10 @@ router.get('/scope-masters', asyncHandler(async (req: Request, res: Response) =>
     if (hasSalaryComps) {
       let q = db('salary_components').whereNull('deleted_at');
       if (req.ctx?.organizationId && (await db.schema.hasColumn('salary_components', 'organization_id'))) {
-        q = q.where(function () {
-          this.where('organization_id', req.ctx?.organizationId).orWhereNull('organization_id');
-        });
+        q = q.where('organization_id', req.ctx.organizationId);
+      }
+      if (req.ctx?.companyId && (await db.schema.hasColumn('salary_components', 'company_id'))) {
+        q = q.where('company_id', req.ctx.companyId);
       }
       const hasCompName = await db.schema.hasColumn('salary_components', 'component_name');
       const hasName = await db.schema.hasColumn('salary_components', 'name');
@@ -918,6 +921,9 @@ router.get('/locations', asyncHandler(async (req: Request, res: Response) => {
   const ctx = req.ctx!;
   const page = parseInt(req.query.page as string) || 1;
   const pageSize = parseInt(req.query.pageSize as string) || 500;
+  const status = req.query.status as string;
+  const all = req.query.all as string;
+  const includeInactive = req.query.includeInactive as string;
 
   const db = getKnex();
   const offset = (page - 1) * pageSize;
@@ -928,6 +934,19 @@ router.get('/locations', asyncHandler(async (req: Request, res: Response) => {
 
   if (ctx.companyId) {
     query = query.where('company_id', ctx.companyId);
+  }
+
+  if (status === 'inactive' || status === 'Inactive') {
+    query = query.where(function () {
+      this.where('status', 'inactive').orWhere('is_active', 'No');
+    });
+  } else if (status !== 'all' && status !== 'All' && all !== 'true' && includeInactive !== 'true') {
+    // Default to only active locations for all dropdowns & master lookups
+    query = query.where(function () {
+      this.where('status', 'active').orWhere('is_active', 'Yes');
+    }).where(function () {
+      this.whereNot('status', 'inactive').whereNot('is_active', 'No');
+    });
   }
 
   const locations = await query
@@ -1042,14 +1061,19 @@ router.get('/departments', asyncHandler(async (req: Request, res: Response) => {
     .whereNull('deleted_at');
 
   if (ctx.companyId) {
-    const cIdNum = Number(ctx.companyId);
-    const cIdStr = String(ctx.companyId);
+    const cid = Number(ctx.companyId);
     query = query.where((builder) => {
-      builder.where('company_id', cIdNum)
-        .orWhereRaw("JSON_CONTAINS(company_ids, ?)", [JSON.stringify(cIdNum)])
-        .orWhereRaw("JSON_CONTAINS(company_ids, ?)", [JSON.stringify(cIdStr)])
+      builder.where('company_id', cid)
         .orWhereNull('company_id')
-        .orWhereNull('company_ids');
+        .orWhere('company_ids', 'like', `%"${cid}"%`)
+        .orWhere('company_ids', 'like', `%[${cid}]%`)
+        .orWhere('company_ids', 'like', `%,${cid},%`)
+        .orWhere('company_ids', 'like', `%,${cid}]%`)
+        .orWhere('company_ids', 'like', `%[${cid},%`)
+        .orWhere('company_ids', 'like', `%${cid}%`)
+        .orWhereNull('company_ids')
+        .orWhere('company_ids', '')
+        .orWhere('company_ids', '[]');
     });
   }
 
@@ -1225,12 +1249,47 @@ router.post('/departments', asyncHandler(async (req: Request, res: Response) => 
   const ctx = req.ctx!;
   const db = getKnex();
 
-  const name = req.body.name || req.body.departmentName || 'Department';
-  const code = req.body.code || req.body.departmentCode || `DEPT-${Math.floor(100 + Math.random() * 900)}`;
+  const name = String(req.body.name || req.body.departmentName || '').trim();
+  const code = String(req.body.code || req.body.departmentCode || '').trim().toUpperCase();
+  if (!name || !code) {
+    res.status(400).json({ success: false, message: 'Department name and code are required' });
+    return;
+  }
+
+  const requestedCompanyIds = parseDeptCompanyIds(
+    req.body.companyIds ?? req.body.company_ids,
+    req.body.companyId ?? req.body.company_id
+  );
+  let companyId = ctx.companyId || requestedCompanyIds[0] || null;
+  if (!companyId) {
+    const parentCompany = await db('company')
+      .where('organization_id', ctx.organizationId)
+      .where((builder) => builder.where('is_parent', 1).orWhere('is_parent', true))
+      .whereNull('deleted_at')
+      .first('company_id');
+    companyId = parentCompany?.company_id || null;
+  }
+  if (!companyId) {
+    res.status(400).json({ success: false, message: 'A company must be selected before creating a department' });
+    return;
+  }
+
+  const duplicate = await db('departments')
+    .where('organization_id', ctx.organizationId)
+    .whereNull('deleted_at')
+    .where((builder) => {
+      builder.whereRaw('LOWER(name) = ?', [name.toLowerCase()])
+        .orWhereRaw('LOWER(code) = ?', [code.toLowerCase()]);
+    })
+    .first('id');
+  if (duplicate) {
+    res.status(409).json({ success: false, message: 'A department with this name or code already exists' });
+    return;
+  }
+
   const email = req.body.email || req.body.departmentMail || null;
   const colour = req.body.colour || req.body.color || '#00b4d8';
   const description = req.body.description || null;
-  const companyId = req.body.companyId || req.body.company_id || ctx.companyId || null;
   const isActive = req.body.isActive || req.body.is_active || 'Yes';
   const status = (isActive === 'No' || isActive === 'inactive') ? 'inactive' : 'active';
 
@@ -1253,8 +1312,9 @@ router.post('/departments', asyncHandler(async (req: Request, res: Response) => 
   }
 
   // Build insert payload — always include all extended fields
-  const rawCompanyIds = req.body.companyIds !== undefined ? req.body.companyIds : req.body.company_ids;
-  const companyIdsArray = parseDeptCompanyIds(rawCompanyIds, companyId);
+  const companyIdsArray = requestedCompanyIds.length > 0
+    ? requestedCompanyIds
+    : [Number(companyId)];
 
   const rawCompanyEmails = req.body.companyEmails ?? req.body.company_emails ?? req.body.defaultEmails;
   const companyEmailsJson = (rawCompanyEmails && typeof rawCompanyEmails === 'object')
@@ -1417,8 +1477,32 @@ const handleUpdateDepartment = asyncHandler(async (req: Request, res: Response) 
   const db = getKnex();
   const id = Number(req.params.id);
 
-  const name = req.body.name || req.body.departmentName;
-  const code = req.body.code || req.body.departmentCode;
+  const rawName = req.body.name ?? req.body.departmentName;
+  const rawCode = req.body.code ?? req.body.departmentCode;
+  const name = rawName !== undefined ? String(rawName).trim() : undefined;
+  const code = rawCode !== undefined ? String(rawCode).trim().toUpperCase() : undefined;
+  if ((name !== undefined && !name) || (code !== undefined && !code)) {
+    res.status(400).json({ success: false, message: 'Department name and code cannot be blank' });
+    return;
+  }
+  if (name || code) {
+    const duplicate = await db('departments')
+      .where('organization_id', ctx.organizationId)
+      .whereNull('deleted_at')
+      .whereNot('id', id)
+      .where((builder) => {
+        if (name) builder.whereRaw('LOWER(name) = ?', [name.toLowerCase()]);
+        if (code) {
+          if (name) builder.orWhereRaw('LOWER(code) = ?', [code.toLowerCase()]);
+          else builder.whereRaw('LOWER(code) = ?', [code.toLowerCase()]);
+        }
+      })
+      .first('id');
+    if (duplicate) {
+      res.status(409).json({ success: false, message: 'A department with this name or code already exists' });
+      return;
+    }
+  }
   const email = req.body.email;         // undefined = not sent, null/'' = clear it
   const colour = req.body.colour || req.body.color;
   const description = req.body.description;
@@ -1461,13 +1545,20 @@ const handleUpdateDepartment = asyncHandler(async (req: Request, res: Response) 
     updatePayload.status = (isActive === 'No' || isActive === 'inactive') ? 'inactive' : 'active';
   }
 
-  // Company IDs
-  const rawCompanyIds = req.body.companyIds !== undefined ? req.body.companyIds : req.body.company_ids;
-  const rawCompanyId  = req.body.companyId  !== undefined ? req.body.companyId  : req.body.company_id;
-  if (rawCompanyIds !== undefined || rawCompanyId !== undefined) {
-    const companyIdsArray = parseDeptCompanyIds(rawCompanyIds, rawCompanyId);
-    updatePayload.company_ids = companyIdsArray.length > 0 ? JSON.stringify(companyIdsArray) : null;
-    updatePayload.company_id  = companyIdsArray.length > 0 ? companyIdsArray[0] : (rawCompanyId ? Number(rawCompanyId) : null);
+  // Company mappings must come from the submitted form. Previously this used
+  // only the current company context, which discarded all selected mappings
+  // whenever a department was updated.
+  const hasCompanyMapping = req.body.companyIds !== undefined
+    || req.body.company_ids !== undefined
+    || req.body.companyId !== undefined
+    || req.body.company_id !== undefined;
+  if (hasCompanyMapping) {
+    const companyIds = parseDeptCompanyIds(
+      req.body.companyIds ?? req.body.company_ids,
+      req.body.companyId ?? req.body.company_id
+    );
+    updatePayload.company_ids = JSON.stringify(companyIds);
+    updatePayload.company_id = companyIds[0] ?? null;
   }
 
   // Company emails
@@ -1551,6 +1642,7 @@ router.delete('/departments/:id', asyncHandler(async (req: Request, res: Respons
 
   const count = await db('departments')
     .where({ id, organization_id: ctx.organizationId })
+    .modify((builder) => { if (ctx.companyId) builder.where('company_id', ctx.companyId); })
     .delete();
 
   if (!count) {
@@ -1776,6 +1868,180 @@ router.get('/org-settings', asyncHandler(async (req: Request, res: Response) => 
   }
   if (settingsMap['auto_checkout_buffer_minutes'] === undefined) {
     settingsMap['auto_checkout_buffer_minutes'] = 0;
+  }
+
+  // Default values for Attendance Adjustment Configuration
+  if (settingsMap['att_adj_window_days'] === undefined) {
+    settingsMap['att_adj_window_days'] = 5;
+  }
+  if (settingsMap['att_adj_max_per_month'] === undefined) {
+    settingsMap['att_adj_max_per_month'] = 3;
+  }
+  if (settingsMap['late_tolerance_minutes'] === undefined) {
+    settingsMap['late_tolerance_minutes'] = 15;
+  }
+  if (settingsMap['half_day_deduction_late_count'] === undefined) {
+    settingsMap['half_day_deduction_late_count'] = 3;
+  }
+
+  // Default values for Credit Hour / Comp-Off Configuration
+  if (settingsMap['credit_min_hours'] === undefined) {
+    settingsMap['credit_min_hours'] = 2;
+  }
+  if (settingsMap['credit_half_day_hours'] === undefined) {
+    settingsMap['credit_half_day_hours'] = 4;
+  }
+  if (settingsMap['credit_validity_days'] === undefined) {
+    settingsMap['credit_validity_days'] = 60;
+  }
+  if (settingsMap['credit_max_accumulation'] === undefined) {
+    settingsMap['credit_max_accumulation'] = 10;
+  }
+  if (settingsMap['credit_encashable'] === undefined) {
+    settingsMap['credit_encashable'] = true;
+  }
+
+  // Default values for Notification Channels
+  if (settingsMap['notif_channel_email'] === undefined) {
+    settingsMap['notif_channel_email'] = true;
+  }
+  if (settingsMap['notif_channel_in_app'] === undefined) {
+    settingsMap['notif_channel_in_app'] = true;
+  }
+  if (settingsMap['notif_channel_sms'] === undefined) {
+    settingsMap['notif_channel_sms'] = false;
+  }
+  if (settingsMap['notif_channel_whatsapp'] === undefined) {
+    settingsMap['notif_channel_whatsapp'] = false;
+  }
+
+  // Default values for Form Types
+  if (settingsMap['custom_form_types'] === undefined) {
+    settingsMap['custom_form_types'] = [
+      { id: 1, name: 'Medical Certificate', code: 'MED_CERT', mandatory: true },
+      { id: 2, name: 'Expense Receipt', code: 'EXP_RCPT', mandatory: true },
+      { id: 3, name: 'Address Proof', code: 'ADDR_PRF', mandatory: false },
+      { id: 4, name: 'Relieving Letter', code: 'REL_LTR', mandatory: false }
+    ];
+  }
+
+  // Default values for User Configuration
+  if (settingsMap['password_min_length'] === undefined) {
+    settingsMap['password_min_length'] = 8;
+  }
+  if (settingsMap['session_timeout_minutes'] === undefined) {
+    settingsMap['session_timeout_minutes'] = 30;
+  }
+  if (settingsMap['mfa_enforced'] === undefined) {
+    settingsMap['mfa_enforced'] = true;
+  }
+
+  // Default values for Config Master Parameters
+  if (settingsMap['config_master_params'] === undefined) {
+    settingsMap['config_master_params'] = [
+      { key: 'ORG_FISCAL_YEAR_START', value: '04-01', desc: 'Fiscal year start date (MM-DD)' },
+      { key: 'MAX_FILE_UPLOAD_MB', value: '10', desc: 'Maximum attachment file size in MB' },
+      { key: 'DEFAULT_TIMEZONE', value: 'Asia/Kolkata', desc: 'System timezone string' },
+      { key: 'CURRENCY_SYMBOL', value: '₹', desc: 'Default currency symbol' }
+    ];
+  }
+
+  // Default values for General Setting
+  if (settingsMap['company_display_name'] === undefined) {
+    settingsMap['company_display_name'] = '';
+  }
+  if (settingsMap['default_timezone'] === undefined) {
+    settingsMap['default_timezone'] = 'Asia/Kolkata';
+  }
+  if (settingsMap['leave_approval_levels'] === undefined) {
+    settingsMap['leave_approval_levels'] = 2;
+  }
+
+  // Default values for IP Whitelisting
+  if (settingsMap['ip_restriction_enabled'] === undefined) {
+    settingsMap['ip_restriction_enabled'] = false;
+  }
+  if (settingsMap['ip_whitelist_rules'] === undefined) {
+    settingsMap['ip_whitelist_rules'] = [
+      { id: 1, ip: '192.168.1.1', desc: 'Main Office Gateway' },
+      { id: 2, ip: '10.0.0.0/24', desc: 'Corporate VPN Subnet' }
+    ];
+  }
+
+  // Default values for Over Time Access
+  if (settingsMap['ot_pre_approval_required'] === undefined) {
+    settingsMap['ot_pre_approval_required'] = true;
+  }
+  if (settingsMap['ot_max_hours_per_day'] === undefined) {
+    settingsMap['ot_max_hours_per_day'] = 4;
+  }
+  if (settingsMap['ot_max_hours_per_month'] === undefined) {
+    settingsMap['ot_max_hours_per_month'] = 40;
+  }
+
+  // Default values for Notice Period
+  if (settingsMap['notice_period_days'] === undefined) {
+    settingsMap['notice_period_days'] = 30;
+  }
+  if (settingsMap['probation_notice_days'] === undefined) {
+    settingsMap['probation_notice_days'] = 15;
+  }
+  if (settingsMap['notice_buyout_allowed'] === undefined) {
+    settingsMap['notice_buyout_allowed'] = true;
+  }
+
+  // Default values for Field Allowance
+  if (settingsMap['field_duty_daily_allowance'] === undefined) {
+    settingsMap['field_duty_daily_allowance'] = 500;
+  }
+  if (settingsMap['per_km_reimbursement_rate'] === undefined) {
+    settingsMap['per_km_reimbursement_rate'] = 12;
+  }
+
+  // Default values for Roles & Permission matrix
+  if (settingsMap['role_permissions_matrix'] === undefined) {
+    settingsMap['role_permissions_matrix'] = {
+      organization_admin: {
+        'employee.view': true,
+        'employee.edit': true,
+        'payroll.process': true,
+        'attendance.approve': true,
+        'leaves.approve': true,
+        'settings.edit': true
+      },
+      hr: {
+        'employee.view': true,
+        'employee.edit': true,
+        'payroll.process': true,
+        'attendance.approve': true,
+        'leaves.approve': true,
+        'settings.edit': false
+      },
+      department_head: {
+        'employee.view': true,
+        'employee.edit': false,
+        'payroll.process': false,
+        'attendance.approve': true,
+        'leaves.approve': true,
+        'settings.edit': false
+      },
+      team_lead: {
+        'employee.view': true,
+        'employee.edit': false,
+        'payroll.process': false,
+        'attendance.approve': true,
+        'leaves.approve': true,
+        'settings.edit': false
+      },
+      employee: {
+        'employee.view': false,
+        'employee.edit': false,
+        'payroll.process': false,
+        'attendance.approve': false,
+        'leaves.approve': false,
+        'settings.edit': false
+      }
+    };
   }
 
   res.json({ success: true, data: settingsMap });
@@ -3287,7 +3553,12 @@ router.get('/late-deduction-policies/eligibility-data', asyncHandler(async (req:
   // 1. Fetch locations
   const locations = await db('locations')
     .where('organization_id', ctx.organizationId)
-    .whereNull('deleted_at');
+    .whereNull('deleted_at')
+    .where(function () {
+      this.where('status', 'active').orWhere('is_active', 'Yes');
+    })
+    .whereNot('status', 'inactive')
+    .whereNot('is_active', 'No');
 
   // 2. Fetch departments
   const departments = await db('departments')
@@ -3949,7 +4220,12 @@ router.get('/org-locations', asyncHandler(async (req: Request, res: Response) =>
   // 1. Fetch locations from master locations table
   let locQuery = db('locations')
     .where('organization_id', ctx.organizationId)
-    .whereNull('deleted_at');
+    .whereNull('deleted_at')
+    .where(function () {
+      this.where('status', 'active').orWhere('is_active', 'Yes');
+    })
+    .whereNot('status', 'inactive')
+    .whereNot('is_active', 'No');
 
   if (ctx.companyId) {
     locQuery = locQuery.where('company_id', ctx.companyId);
@@ -4058,6 +4334,7 @@ router.delete('/companies/:id', asyncHandler((req, res) => companyCtrl.delete(re
         table.bigIncrements('id').primary();
         table.string('uuid', 36).notNullable().unique();
         table.bigInteger('organization_id').unsigned().notNullable().index();
+        table.bigInteger('company_id').unsigned().notNullable().index();
         table.string('name', 150).notNullable();
         table.enum('break_type', ['Manual', 'Auto']).notNullable().defaultTo('Manual');
         table.string('biometric_device', 100).nullable();
@@ -4072,6 +4349,23 @@ router.delete('/companies/:id', asyncHandler((req, res) => companyCtrl.delete(re
         table.index(['organization_id', 'is_active']);
       });
       console.log('[Settings] ✅ Created table: breaks');
+    } else if (!await db.schema.hasColumn('breaks', 'company_id')) {
+      await db.schema.alterTable('breaks', (table) => {
+        table.bigInteger('company_id').unsigned().nullable().index().after('organization_id');
+      });
+      const organizations = await db('breaks').whereNull('company_id').distinct('organization_id');
+      for (const row of organizations) {
+        let companyQuery = db('company')
+          .where('organization_id', row.organization_id)
+          .whereNull('deleted_at');
+        if (await db.schema.hasColumn('company', 'is_parent')) {
+          companyQuery = companyQuery.orderBy('is_parent', 'desc');
+        }
+        const company = await companyQuery.orderBy('company_id', 'asc').first('company_id');
+        if (company?.company_id) {
+          await db('breaks').where('organization_id', row.organization_id).whereNull('company_id').update({ company_id: company.company_id });
+        }
+      }
     }
   } catch (err) {
     console.error('[Settings] ❌ Failed to create breaks table:', err);
@@ -4420,9 +4714,5 @@ router.get('/id-card/active-template', asyncHandler((req, res) => idCardCtrl.res
 router.post('/id-card/upload-asset', asyncHandler((req, res) => idCardCtrl.uploadAsset(req, res)));
 
 export default router;
-
-
-
-
 
 

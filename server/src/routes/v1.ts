@@ -123,7 +123,15 @@ router.get('/reports/options', async (req: Request, res: Response) => {
     const [departments, designations, locations] = await Promise.all([
       db('departments').where({ organization_id: orgId }).whereNull('deleted_at').select('id', 'name', 'code'),
       db('designations').where({ organization_id: orgId }).whereNull('deleted_at').select('id', 'name', 'code'),
-      db('locations').where({ organization_id: orgId }).whereNull('deleted_at').select('id', 'name', 'code', 'city'),
+      db('locations')
+        .where({ organization_id: orgId })
+        .whereNull('deleted_at')
+        .where(function () {
+          this.where('status', 'active').orWhere('is_active', 'Yes');
+        })
+        .whereNot('status', 'inactive')
+        .whereNot('is_active', 'No')
+        .select('id', 'name', 'code', 'city'),
     ]);
 
     res.json({

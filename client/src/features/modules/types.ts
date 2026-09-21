@@ -3,6 +3,8 @@ import { HR_MODULES } from './hr_modules/hr';
 import { MANAGER_MODULES } from './manager_modules/manager';
 import { TL_MODULES } from './tl_modules/tl';
 import { EMP_MODULES } from './emp_modules/emp';
+import { INTERN_MODULES } from './intern_modules/intern';
+import { CONSULTANT_MODULES } from './consultant_modules/consultant';
 
 export interface ModuleNode {
   id: string;
@@ -14,7 +16,7 @@ export interface ModuleNode {
   children?: ModuleNode[];
 }
 
-export type RoleType = 'ceo' | 'hr' | 'manager' | 'tl' | 'emp';
+export type RoleType = 'ceo' | 'hr' | 'manager' | 'tl' | 'emp' | 'intern' | 'consultant';
 
 export interface RoleModulesMap {
   [nodeId: string]: boolean;
@@ -28,6 +30,8 @@ export const ROLE_MODULES: Record<RoleType, ModuleNode[]> = {
   manager: MANAGER_MODULES,
   tl: TL_MODULES,
   emp: EMP_MODULES,
+  intern: INTERN_MODULES,
+  consultant: CONSULTANT_MODULES,
 };
 
 export const ROLE_LABELS: Record<RoleType, { title: string; subtitle: string; iconName: string; color: string }> = {
@@ -61,6 +65,18 @@ export const ROLE_LABELS: Record<RoleType, { title: string; subtitle: string; ic
     iconName: 'User',
     color: 'bg-purple-600 text-white',
   },
+  intern: {
+    title: 'Intern',
+    subtitle: 'Internship self-service and expense claims',
+    iconName: 'GraduationCap',
+    color: 'bg-amber-600 text-white',
+  },
+  consultant: {
+    title: 'Consultant',
+    subtitle: 'Consultant self-service and expense claims',
+    iconName: 'Briefcase',
+    color: 'bg-violet-600 text-white',
+  },
 };
 
 const STORAGE_KEY = 'apponext_module_management_state_v1';
@@ -87,6 +103,8 @@ export function getDefaultModulesState(): ModulesStateMap {
     manager: getDefaultStateForRole('manager'),
     tl: getDefaultStateForRole('tl'),
     emp: getDefaultStateForRole('emp'),
+    intern: getDefaultStateForRole('intern'),
+    consultant: getDefaultStateForRole('consultant'),
   };
 }
 
@@ -101,6 +119,8 @@ export function loadModulesState(): ModulesStateMap {
       manager: { ...getDefaultStateForRole('manager'), ...(parsed.manager || {}) },
       tl: { ...getDefaultStateForRole('tl'), ...(parsed.tl || {}) },
       emp: { ...getDefaultStateForRole('emp'), ...(parsed.emp || {}) },
+      intern: { ...getDefaultStateForRole('intern'), ...(parsed.intern || {}) },
+      consultant: { ...getDefaultStateForRole('consultant'), ...(parsed.consultant || {}) },
     };
   } catch (e) {
     console.warn('[Modules] Failed to load modules state from localStorage:', e);

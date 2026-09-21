@@ -10,16 +10,29 @@ export class LocationController {
   }
 
   async list(req: Request, res: Response): Promise<void> {
-    const { page, pageSize, sortBy, sortOrder, search, type, status } = req.query;
+    const { page, pageSize, sortBy, sortOrder, search, type, status, all, includeInactive } = req.query;
+    
+    // If status is explicitly passed as 'all' or all=true, do not filter by status.
+    // If status is passed as 'inactive', filter inactive.
+    // Otherwise, default to 'active' only!
+    let statusFilter: string | undefined = undefined;
+    if (status === 'all' || status === 'All' || all === 'true' || includeInactive === 'true') {
+      statusFilter = undefined;
+    } else if (status === 'inactive' || status === 'Inactive') {
+      statusFilter = 'inactive';
+    } else {
+      statusFilter = 'active';
+    }
+
     const result = await this.locationService.listLocations(req.ctx!, {
       page: page ? parseInt(page as string) : 1,
-      pageSize: pageSize ? parseInt(pageSize as string) : 20,
+      pageSize: pageSize ? parseInt(pageSize as string) : 500,
       sortBy: (sortBy as string) || 'created_at',
       sortOrder: (sortOrder as 'asc' | 'desc') || 'desc',
       search: search as string,
       filters: {
         ...(type && { type }),
-        ...(status && { status }),
+        ...(statusFilter && { status: statusFilter }),
       },
     });
 

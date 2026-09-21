@@ -7,4 +7,7 @@ router.get('/', superAdminSubscriptionController.getSubscriptions);
 router.post('/', superAdminSubscriptionController.createPlan);
 router.put('/:id', superAdminSubscriptionController.updatePlan);
 
+/** POST /superadmin/subscriptions/assign-to-org/:orgId  Body: { planId: number | null } */
+router.post('/assign-to-org/:orgId', superAdminSubscriptionController.assignPlanToOrg);
+
 export default router;

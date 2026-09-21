@@ -429,7 +429,7 @@ export function DynamicMasterView({ masterIdOrCode, onManageFields }: DynamicMas
   const handleDeleteRecord = async (e: React.MouseEvent, recordId: number) => {
     e.stopPropagation();
     if (!master) return;
-    if (!confirm('Are you sure you want to delete this record?')) return;
+    if (!await window.appConfirm('Are you sure you want to delete this record?')) return;
 
     try {
       await masterBuilderApi.deleteRecord(master.id, recordId);
@@ -439,7 +439,7 @@ export function DynamicMasterView({ masterIdOrCode, onManageFields }: DynamicMas
         initNewRecord();
       }
     } catch (err: any) {
-      alert(err?.response?.data?.message || err?.message || 'Failed to delete record');
+      window.appAlert(err?.response?.data?.message || err?.message || 'Failed to delete record');
     }
   };
 

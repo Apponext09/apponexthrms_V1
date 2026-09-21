@@ -1,4 +1,4 @@
-﻿import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Search,
   UserPlus,
@@ -172,7 +172,7 @@ export function ResourcePlanMasterForm({ onCancel, onSave }: ResourcePlanMasterF
 
   const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!window.confirm('Are you sure you want to delete this resource plan?')) return;
+    if (!await window.appConfirm('Are you sure you want to delete this resource plan?')) return;
     try {
       const res = await apiClient.delete(`/settings/resource-plans/${id}`);
       if (res.data?.success) {
