@@ -1,3 +1,4 @@
+import { SectionTabs } from '@/layouts/SectionNavigation';
 import { useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { EmployeeSidebar } from './EmployeeSidebar';
@@ -14,7 +15,6 @@ import { NotificationBell } from '@/features/notifications/components/Notificati
 import { useThemeStore } from '@/features/settings/store/themeStore';
 import { Toaster } from '@/components/ui/toast';
 import { useEmployeeLocationTracker } from '@/features/Livetracking';
-import { LiveDateTimeDisplay } from '@/components/LiveDateTimeDisplay';
 import { GlobalSearchButton } from '@/features/search/components/GlobalSearch';
 
 export function EmployeeLayout() {
@@ -110,12 +110,11 @@ export function EmployeeLayout() {
             >
               {sidebarOpen ? <PanelLeftClose className="size-4" /> : <PanelLeftOpen className="size-4" />}
             </Button>
-            <h1 className="truncate text-balance text-base font-extrabold text-foreground md:text-lg">{getPageTitle()}</h1>
+            <span className="hidden truncate text-base font-extrabold tracking-tight text-foreground md:inline">APPONEXTHRMS</span>
           </div>
 
           <div className="flex items-center gap-2">
-            <div className="hidden xl:block"><GlobalSearchButton /></div>
-            <LiveDateTimeDisplay />
+            <GlobalSearchButton />
             {/* Dark & Light Mode Theme Toggle Button */}
             <Button
               variant="ghost"
@@ -136,6 +135,7 @@ export function EmployeeLayout() {
             <NotificationBell className="size-9 rounded-lg border border-border bg-card" iconClassName="size-4" />
           </div>
         </header>
+        <SectionTabs id="employee" />
 
         {/* Page Content Viewport */}
         <main className="app-shell-scroll flex-1 overflow-auto p-4 md:p-6">

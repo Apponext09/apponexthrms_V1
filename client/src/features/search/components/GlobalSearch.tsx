@@ -559,6 +559,7 @@ export function GlobalSearch() {
 export function GlobalSearchButton() {
   const [inlineQuery, setInlineQuery] = useState("");
   const [inlineOpen, setInlineOpen] = useState(false);
+  const [mobileExpanded, setMobileExpanded] = useState(false);
   const inlineNavigate = useNavigate();
   const { user } = useAuthStore();
   const role = String(
@@ -770,7 +771,30 @@ export function GlobalSearchButton() {
     )
     .slice(0, 6);
   return (
-    <div className="relative w-[min(16rem,calc(100vw-2rem))] max-w-full">
+    <div className={cn(
+      "relative",
+      mobileExpanded
+        ? "fixed inset-x-3 top-2 z-[70] sm:static sm:z-auto sm:w-[min(16rem,calc(100vw-2rem))]"
+        : "w-9 sm:w-[min(16rem,calc(100vw-2rem))]"
+    )}>
+      {!mobileExpanded && (
+        <button
+          type="button"
+          onClick={() => setMobileExpanded(true)}
+          className="flex size-9 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground hover:bg-muted sm:hidden"
+          aria-label="Open search"
+        >
+          <Search className="size-4" />
+        </button>
+      )}
+      {mobileExpanded && (
+        <button
+          type="button"
+          className="fixed inset-0 -z-10 bg-black/30 sm:hidden"
+          onClick={() => { setMobileExpanded(false); setInlineOpen(false); }}
+          aria-label="Close search"
+        />
+      )}
       <Search className="pointer-events-none absolute left-3 top-1/2 z-10 size-4 -translate-y-1/2 text-muted-foreground" />
       <Input
         value={inlineQuery}
@@ -780,8 +804,22 @@ export function GlobalSearchButton() {
           setInlineOpen(true);
         }}
         placeholder="Search modules..."
-        className="h-9 w-full border-border bg-muted/50 pl-9 text-sm"
+        autoFocus={mobileExpanded}
+        className={cn(
+          "h-9 w-full border-border bg-card pl-9 pr-9 text-sm sm:bg-muted/50 sm:pr-3",
+          !mobileExpanded && "hidden sm:block"
+        )}
       />
+      {mobileExpanded && (
+        <button
+          type="button"
+          onClick={() => { setMobileExpanded(false); setInlineOpen(false); setInlineQuery(""); }}
+          className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground sm:hidden"
+          aria-label="Close search"
+        >
+          <X className="size-4" />
+        </button>
+      )}
       {inlineOpen && inlineQuery && (
         <div className="absolute right-0 top-10 z-50 w-full overflow-hidden rounded-lg border border-border bg-card py-1 shadow-lg">
           {inlineResults.length ? (
@@ -792,6 +830,7 @@ export function GlobalSearchButton() {
                   inlineNavigate(item.href);
                   setInlineQuery("");
                   setInlineOpen(false);
+                  setMobileExpanded(false);
                 }}
                 className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-muted"
               >
