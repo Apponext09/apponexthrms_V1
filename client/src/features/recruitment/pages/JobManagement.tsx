@@ -73,7 +73,7 @@ export const JobManagement: React.FC = () => {
     const status = String(job.status || '').toLowerCase();
     if (status === 'closed' || status === 'archived') return true;
     const deadline = String(job.expiryDate || job.expiry_date || '').slice(0, 10);
-    return Boolean(deadline && deadline <= todayDate);
+    return Boolean(deadline && deadline < todayDate);
   };
 
   // Filter Data

@@ -108,3 +108,7 @@ server/test_*.js
 # Vite transient config-load artifacts
 *.timestamp-*.mjs
 *.zip
+
+.kilo
+.claude
+.agents

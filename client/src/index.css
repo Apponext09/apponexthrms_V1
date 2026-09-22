@@ -397,61 +397,37 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
   background: transparent !important;
 }
 
-/* Visible Custom Scrollbars */
-.visible-scrollbar,
-.custom-scrollbar {
+/* Custom Slim Sidebar Scrollbar (Matching module primary color, zero intrusive spacing) */
+.sidebar-scrollbar {
   -ms-overflow-style: auto !important;
   scrollbar-width: thin !important;
+  scrollbar-color: hsl(var(--primary) / 0.45) transparent !important;
 }
 
-.visible-scrollbar::-webkit-scrollbar,
-.custom-scrollbar::-webkit-scrollbar {
+.sidebar-scrollbar::-webkit-scrollbar {
   display: block !important;
-  width: 6px !important;
-  height: 6px !important;
+  width: 3.5px !important;
+  height: 3.5px !important;
 }
 
-.visible-scrollbar::-webkit-scrollbar-track,
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.05);
-  border-radius: 8px;
+.sidebar-scrollbar::-webkit-scrollbar-track {
+  background: transparent !important;
 }
 
-.visible-scrollbar::-webkit-scrollbar-thumb,
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(99, 102, 241, 0.4);
-  border-radius: 8px;
+.sidebar-scrollbar::-webkit-scrollbar-thumb {
+  background: hsl(var(--primary) / 0.45) !important;
+  border-radius: 9999px !important;
 }
 
-.visible-scrollbar::-webkit-scrollbar-thumb:hover,
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(99, 102, 241, 0.7);
-}
-
-/* APPONEXT HRMS login */
-.hrms-login-page {
-  --brand-navy: #082d68;
-  --brand-blue: #075cc9;
-  --brand-cyan: #0d9bd7;
-  --brand-green: #62b52c;
-  --brand-orange: #ff8a00;
-  --brand-ink: #0a1733;
-  --brand-copy: #40577c;
-  min-height: 100dvh;
-  padding: clamp(14px, 1.2vw, 22px);
-  color: var(--brand-ink);
-  color-scheme: light;
-  background:
-    radial-gradient(circle at 69% 43%, rgba(13, 155, 215, 0.1), transparent 27%),
-    linear-gradient(135deg, #f8fbff 0%, #edf5ff 48%, #f6faff 100%);
-  font-family: 'Inter', sans-serif;
-  overflow: hidden;
+.sidebar-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--primary) / 0.85) !important;
 }
 
 .hrms-login-shell {
   position: relative;
   display: grid;
   grid-template-columns: minmax(0, 0.98fr) minmax(510px, 1.02fr);
+
   gap: 24px;
   width: min(100%, 1152px);
   height: calc(100dvh - clamp(28px, 2.4vw, 44px));

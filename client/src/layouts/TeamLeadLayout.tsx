@@ -43,18 +43,18 @@ const C = {
 
 const TEAM_LEAD_NAV = [
   {
-    label: 'OVERVIEW',
+    label: 'Dashboard',
     subscriptionModule: null,
     items: [
       { name: 'Dashboard', href: '/team-lead/dashboard', icon: LayoutDashboard },
     ],
   },
   {
-    label: 'EMPLOYEE CORE',
+    label: 'CoreHR',
     subscriptionModule: 'Core HR & Directory',
     items: [
       {
-        name: 'Employee Core',
+        name: 'CoreHR',
         href: '/team-lead/dashboard',
         icon: Users,
         subItems: [
@@ -67,7 +67,7 @@ const TEAM_LEAD_NAV = [
     ],
   },
   {
-    label: 'LEAVES',
+    label: 'Leaves',
     subscriptionModule: 'Leave Management & Approvals',
     items: [
       {
@@ -83,7 +83,7 @@ const TEAM_LEAD_NAV = [
     ],
   },
   {
-    label: 'ATTENDANCE',
+    label: 'Attendance',
     subscriptionModule: 'Attendance & Time Tracking',
     items: [
       {
@@ -101,7 +101,7 @@ const TEAM_LEAD_NAV = [
     ],
   },
   {
-    label: 'PAYROLL',
+    label: 'Payroll',
     subscriptionModule: 'Automated Payroll Processing',
     items: [
       {
@@ -116,11 +116,11 @@ const TEAM_LEAD_NAV = [
     ],
   },
   {
-    label: 'LOAN MGMT',
+    label: 'Loans',
     subscriptionModule: 'Automated Payroll Processing',
     items: [
       {
-        name: 'Loan Mgmt',
+        name: 'Loans',
         href: '/team-lead/loans',
         icon: Percent,
         subItems: [
@@ -130,11 +130,11 @@ const TEAM_LEAD_NAV = [
     ],
   },
   {
-    label: 'EXPENSE',
+    label: 'Expenses',
     subscriptionModule: 'Expense Management',
     items: [
       {
-        name: 'Expense',
+        name: 'Expenses',
         href: '/team-lead/expenses/approvals',
         icon: FileText,
         subItems: [
@@ -148,7 +148,7 @@ const TEAM_LEAD_NAV = [
     ],
   },
   {
-    label: 'PERFORMANCE',
+    label: 'Performance',
     subscriptionModule: 'Performance & OKRs',
     items: [
       {
@@ -164,7 +164,7 @@ const TEAM_LEAD_NAV = [
     ],
   },
   {
-    label: 'RECRUITMENT',
+    label: 'Recruitment',
     subscriptionModule: 'Recruitment & ATS',
     items: [
       {
@@ -179,11 +179,11 @@ const TEAM_LEAD_NAV = [
     ],
   },
   {
-    label: 'APPROVALS & GOVERNANCE',
+    label: 'Approvals',
     subscriptionModule: null,
     items: [
       {
-        name: 'Approvals & Governance',
+        name: 'Approvals',
         href: '/team-lead/approvals',
         icon: Shield,
         subItems: [
@@ -254,27 +254,31 @@ function TeamLeadSidebarNavContent({
       <SectionRail id="team_lead" groups={visibleNav.map(section => ({ ...section, label: section.items.length === 1 && (section.items[0] as any).subItems ? section.items[0].name : section.label, icon: section.items[0]?.icon }))} open={sidebarOpen} onNavigate={() => setMobileOpen(false)} />
 
       {/* ── User footer ── */}
-      <div className="flex-shrink-0 border-t border-border bg-white p-3 dark:bg-slate-950">
+      <div className="flex-shrink-0 border-t border-border bg-white p-2 dark:bg-slate-950">
         <SidebarProfileMenu profilePath="/team-lead/profile" onLogout={handleLogout} onProfileNavigate={() => setMobileOpen(false)}>
-        <div
-          className={cn(
-            'group mx-auto flex size-12 cursor-pointer items-center justify-center rounded-xl border p-1.5 transition-colors',
-            'border-border bg-card hover:bg-muted',
-            !sidebarOpen && 'justify-center'
-          )}
-          title="View Profile"
-        >
-          <div className="relative flex-shrink-0">
-            <Avatar className={cn('size-9 border shadow-soft-xs', C.avatarBorder)}>
-              <AvatarImage src={user?.avatarUrl} />
-              <AvatarFallback className={cn(C.avatarBg, 'text-white font-bold text-[10px]')}>
-                {initials}
-              </AvatarFallback>
-            </Avatar>
-            <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 bg-emerald-500 border-2 border-card rounded-full" />
+          <div className="flex flex-col items-center justify-center cursor-pointer group">
+            <div
+              className={cn(
+                'mx-auto flex size-11 items-center justify-center rounded-xl border p-0.5 transition-colors',
+                'border-border bg-card hover:bg-muted',
+                !sidebarOpen && 'justify-center'
+              )}
+              title="View Team Lead Profile"
+            >
+              <div className="relative flex-shrink-0">
+                <Avatar className={cn('size-10 border shadow-soft-xs', C.avatarBorder)}>
+                  <AvatarImage src={user?.avatarUrl || (user as any)?.avatar || (user as any)?.profile_picture} alt="Profile" />
+                  <AvatarFallback className={cn(C.avatarBg, 'text-white font-bold text-xs')}>
+                    {initials}
+                  </AvatarFallback>
+                </Avatar>
+                <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 bg-emerald-500 border-2 border-card rounded-full" />
+              </div>
+            </div>
+            <span className="text-[8.5px] font-bold tracking-tight text-primary text-center leading-tight truncate max-w-[68px] mt-1">
+              Team Lead Portal
+            </span>
           </div>
-
-        </div>
         </SidebarProfileMenu>
       </div>
     </div>
