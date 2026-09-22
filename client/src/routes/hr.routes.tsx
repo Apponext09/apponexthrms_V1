@@ -9,9 +9,12 @@ const SettingsLayout = lazy(() => import('../features/settings/pages/SettingsLay
 // ── Lazy Imports ──────────────────────────────────────────────────────────────
 const EmployeeListPage = lazy(() => import('../features/employee/pages/EmployeeListPage').then(m => ({ default: m.EmployeeListPage })));
 const EmployeeProfilePage = lazy(() => import('../features/employee/pages/EmployeeProfilePage').then(m => ({ default: m.EmployeeProfilePage })));
+const ProfilePage = lazy(() => import('../features/employee/portal-pages/ProfilePage'));
+const HRDashboardPage = lazy(() => import('../features/HR/Dashboard/HRDashboardPage').then(m => ({ default: m.HRDashboardPage })));
 const EmployeeEditPage = lazy(() => import('../features/employee/pages/EmployeeEditPage').then(m => ({ default: m.EmployeeEditPage })));
 const EmployeeLifecyclePage = lazy(() => import('../features/HR/EmployeeLifecycle/EmployeeLifecyclePage'));
 const MyLifecyclePage = lazy(() => import('../features/employee/pages/MyLifecyclePage').then(m => ({ default: m.MyLifecyclePage })));
+const IDCardPage = lazy(() => import('../features/employee/portal-pages/IDCardPage'));
 const OrgStructurePage = lazy(() => import('../features/org-structure/pages/OrgStructurePage').then(m => ({ default: m.OrgStructurePage })));
 const PayrollDashboard = lazy(() => import('../features/payroll/pages/PayrollDashboard').then(m => ({ default: m.PayrollDashboard })));
 const PayrollSettingsPage = lazy(() => import('../features/payroll/pages/PayrollSettingsPage').then(m => ({ default: m.PayrollSettingsPage })));
@@ -158,13 +161,17 @@ export const hrRoutes = (
     }
   >
     <Route path="/hr" element={<Navigate to="/hr/dashboard" replace />} />
-    {/* HR and Admin share one dashboard. Keep this legacy HR URL as an alias
-        so existing bookmarks land on the same admin experience. */}
-    <Route path="/hr/dashboard" element={<Navigate to="/dashboard" replace />} />
-    <Route path="/hr/profile" element={<EmployeeProfilePage />} />
-    <Route path="/hr/my-profile" element={<EmployeeProfilePage />} />
+    {/* Keep HR within its own portal shell. Redirecting to /dashboard mounted
+        the CEO/admin shell, causing the wrong profile and navigation context. */}
+    <Route path="/hr/dashboard" element={<HRDashboardPage />} />
+    {/* HR self-profile deliberately shares the employee self-service profile UI.
+        The component grants direct editing to HR but retains employee locks for
+        standard employee accounts. */}
+    <Route path="/hr/profile" element={<ProfilePage />} />
+    <Route path="/hr/my-profile" element={<ProfilePage />} />
     <Route path="/hr/lifecycle" element={<MyLifecyclePage />} />
     <Route path="/hr/lifecycle/*" element={<MyLifecyclePage />} />
+    <Route path="/hr/id-card" element={<IDCardPage />} />
 
     {/* People & Employee Lifecycle */}
     <Route path="/hr/employees" element={<EmployeeListPage />} />

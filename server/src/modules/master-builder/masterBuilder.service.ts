@@ -1712,6 +1712,36 @@ export class MasterBuilderService {
 
   // ─── Dynamic Master Records ─────────────────────────────────────────────
 
+  /**
+   * getKnex().postProcessResponse recursively camelCases every key — including the keys
+   * INSIDE the `data` JSON blob, which corrupts snake_case field keys (status_name ->
+   * statusName) on read. Always pull the raw JSON text and parse it ourselves.
+   */
+  private parseRecordData(raw: any): Record<string, any> {
+    if (raw === null || raw === undefined) return {};
+    if (typeof raw === 'string') {
+      try { return JSON.parse(raw); } catch { return {}; }
+    }
+    return raw;
+  }
+
+  private async getRecordById(recordId: number) {
+    const row: any = await this.db('custom_master_records')
+      .where('id', recordId)
+      .select('*', this.db.raw('CAST(`data` AS CHAR) AS data_text'))
+      .first();
+    if (!row) return null;
+    return {
+      id: row.id,
+      uuid: row.uuid,
+      recordCode: row.recordCode || row.record_code,
+      status: row.status,
+      data: this.parseRecordData(row.dataText || row.data_text),
+      createdAt: row.createdAt || row.created_at,
+      updatedAt: row.updatedAt || row.updated_at,
+    };
+  }
+
   async listRecords(orgId: number, companyId: number | undefined, masterId: number, options: { search?: string; status?: string; page?: number; limit?: number }) {
     // Load master to detect if it is a system master
     const master = await this.db('custom_masters').where('id', masterId).first();
@@ -1725,20 +1755,27 @@ export class MasterBuilderService {
     const limit = options.limit || 50;
     const offset = (page - 1) * limit;
 
-    let query = this.db('custom_master_records')
-      .where('organization_id', orgId)
-      .where('master_id', masterId)
-      .whereNull('deleted_at');
-    if (companyId) query = query.where('company_id', companyId);
+    const baseQuery = () => {
+      let q = this.db('custom_master_records')
+        .where('organization_id', orgId)
+        .where('master_id', masterId)
+        .whereNull('deleted_at');
+      if (companyId) q = q.where('company_id', companyId);
+      if (options.status && options.status !== 'all') {
+        q = q.where('status', options.status);
+      }
+      return q;
+    };
+    const withData = (q: any) => q.select('*', this.db.raw('CAST(`data` AS CHAR) AS data_text'));
 
     const mapRow = (r: any) => ({
       id: r.id,
       uuid: r.uuid,
-      recordCode: r.recordCode,
+      recordCode: r.recordCode || r.record_code,
       status: r.status,
-      data: this.parseRecordData(r.dataText),
-      createdAt: r.createdAt,
-      updatedAt: r.updatedAt,
+      data: this.parseRecordData(r.dataText || r.data_text),
+      createdAt: r.createdAt || r.created_at,
+      updatedAt: r.updatedAt || r.updated_at,
     });
 
     const hasSearch = Boolean(options.search && options.search.trim());

@@ -25,7 +25,9 @@ interface IDCardPageProps {
 
 export const IDCardPage: React.FC<IDCardPageProps> = ({ employeeId }) => {
   const { user } = useAuthStore();
-  const { employee, refetch } = useEmployee(employeeId || (user as any)?.employeeId || (user as any)?.id || 'me');
+  // For a self-service card, let the API resolve the authenticated user's linked
+  // employee record. A user's account ID is not necessarily their employee ID.
+  const { employee, refetch } = useEmployee(employeeId ?? 'me');
   const { data: activeTemplate, refetch: refetchTemplate } = useActiveIdCardTemplate(
     typeof employeeId === 'number' ? employeeId : undefined
   );
@@ -87,7 +89,7 @@ export const IDCardPage: React.FC<IDCardPageProps> = ({ employeeId }) => {
     }
 
     const fetchPersonalInfo = async () => {
-      const idToFetch = typeof employeeId === 'number' ? employeeId : user?.id;
+      const idToFetch = typeof employeeId === 'number' ? employeeId : employee?.id;
       if (!idToFetch) return;
       try {
         const res = await apiClient.get(`/employees/${idToFetch}/personal-info`);
@@ -105,14 +107,14 @@ export const IDCardPage: React.FC<IDCardPageProps> = ({ employeeId }) => {
   // Log ID card generation event to DB API
   useEffect(() => {
     const logIssuance = async () => {
-      const idToFetch = typeof employeeId === 'number' ? employeeId : user?.id;
+      const idToFetch = typeof employeeId === 'number' ? employeeId : employee?.id;
       if (!idToFetch) return;
       try {
         await apiClient.post(`/employees/${idToFetch}/id-card/issue`);
       } catch (err) {}
     };
     logIssuance();
-  }, [employeeId, user]);
+  }, [employee, employeeId]);
 
   const empCode = currentEmployee?.employeeCode || (user as any)?.employeeCode || (user as any)?.employee_code || (user?.id ? `EMP${String(user.id).padStart(3, '0')}` : '');
 

@@ -21,8 +21,8 @@ export function DashboardPage() {
     ['organization_admin', 'ceo', 'hr_admin', 'hr_manager', 'hr', 'super_admin'].includes(accessRole);
 
   if (!isAdmin) {
-    if (roles.includes('finance') || accessRole === 'finance') {
-      return <Navigate to="/finance/reports" replace />;
+    if (roles.includes('finance') || roles.includes('finance_manager') || ['finance', 'finance_manager'].includes(accessRole)) {
+      return <Navigate to="/finance/dashboard" replace />;
     }
     if (roles.includes('manager') || roles.includes('department_head') || ['manager', 'department_head'].includes(accessRole)) {
       return <Navigate to="/manager/dashboard" replace />;
