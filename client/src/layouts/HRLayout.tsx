@@ -71,6 +71,7 @@ function mapToHRHref(href: string): string {
   if (href === '/employees') return '/hr/employees';
   if (href === '/employee-lifecycle') return '/hr/employee-lifecycle';
   if (href === '/employee/lifecycle') return '/hr/lifecycle';
+  if (href === '/employee/id-card') return '/hr/id-card';
   if (href === '/org-structure') return '/hr/org-structure';
   if (href.startsWith('/recruitment')) return `/hr${href}`;
   if (href === '/attendance') return '/hr/attendance';

@@ -3,23 +3,10 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Calendar, Info, Palmtree, Landmark, Building2, CalendarDays } from 'lucide-react';
-import { apiClient } from '@/lib/api';
-import { cn } from '@/lib/utils';
-
-export interface UpcomingHoliday {
-  id: number;
-  holidayName?: string;
-  holiday_name?: string;
-  holidayDate?: string;
-  holiday_date?: string;
-  holidayType?: 'national' | 'regional' | 'company' | 'restricted';
-  holiday_type?: 'national' | 'regional' | 'company' | 'restricted';
-  isOptional?: boolean;
-  is_optional?: boolean;
-}
+import { fetchEmployeeHolidays, type EmployeeHoliday } from '../holidayData';
 
 export function UpcomingHolidaysWidget() {
-  const [holidays, setHolidays] = useState<UpcomingHoliday[]>([]);
+  const [holidays, setHolidays] = useState<EmployeeHoliday[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -28,10 +15,14 @@ export function UpcomingHolidaysWidget() {
     const fetchHolidays = async () => {
       try {
         setLoading(true);
-        // Using limit=5 to ensure we don't break the UI with too many rows
-        const res = await apiClient.get('/settings/holidays/upcoming?limit=5');
-        if (mounted && res.data?.success) {
-          setHolidays(res.data.data || []);
+        const list = await fetchEmployeeHolidays();
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const upcoming = list
+          .filter((holiday) => new Date(`${holiday.holidayDate}T00:00:00`).getTime() >= today.getTime())
+          .sort((a, b) => a.holidayDate.localeCompare(b.holidayDate));
+        if (mounted) {
+          setHolidays(upcoming);
           setError(null);
         }
       } catch (err: any) {
@@ -50,7 +41,7 @@ export function UpcomingHolidaysWidget() {
   const getDaysDiff = (dateStr: string) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const holidayDate = new Date(dateStr);
+    const holidayDate = new Date(`${dateStr}T00:00:00`);
     holidayDate.setHours(0, 0, 0, 0);
 
     const diffTime = holidayDate.getTime() - today.getTime();
@@ -75,7 +66,7 @@ export function UpcomingHolidaysWidget() {
   };
 
   const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
+    const date = new Date(`${dateStr}T00:00:00`);
     return {
       full: date.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' }),
       day: date.toLocaleDateString('en-US', { weekday: 'long' })
@@ -120,14 +111,14 @@ export function UpcomingHolidaysWidget() {
         ) : (
           <div className="divide-y divide-border/60">
             {holidays.map(holiday => {
-              const rawDate = holiday.holidayDate || holiday.holiday_date || '';
+              const rawDate = holiday.holidayDate;
               const diffDays = getDaysDiff(rawDate);
               const isPast = diffDays < 0;
               const { full: dateFormatted, day: dayName } = formatDate(rawDate);
               
-              const hType = holiday.holidayType || holiday.holiday_type || 'company';
-              const hName = holiday.holidayName || holiday.holiday_name;
-              const isOpt = holiday.isOptional ?? holiday.is_optional ?? false;
+              const hType = holiday.holidayType;
+              const hName = holiday.holidayName;
+              const isOpt = holiday.isOptional;
 
               return (
                 <div key={holiday.id} className={`p-3 sm:p-3.5 flex items-center justify-between transition-colors hover:bg-muted/30 ${isPast ? 'opacity-50' : ''}`}>

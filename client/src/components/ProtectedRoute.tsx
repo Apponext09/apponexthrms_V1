@@ -91,8 +91,7 @@ export function ProtectedRoute({
 
         // If current page requires specific roles, verify user still has them
         if (allowedRoles && allowedRoles.length > 0) {
-          const userRoles = currentUser.roles || [];
-          if (!hasAnyRole(userRoles, allowedRoles)) {
+          if (!hasAnyRole(getEffectiveRoles(currentUser), allowedRoles)) {
             window.location.href = '/unauthorized?' + new Date().getTime();
           }
         }
@@ -118,8 +117,7 @@ export function ProtectedRoute({
       }
 
       if (allowedRoles && allowedRoles.length > 0) {
-        const userRoles = currentUser.roles || [];
-        if (!hasAnyRole(userRoles, allowedRoles)) {
+        if (!hasAnyRole(getEffectiveRoles(currentUser), allowedRoles)) {
           window.location.href = '/unauthorized?' + new Date().getTime();
         }
       }
