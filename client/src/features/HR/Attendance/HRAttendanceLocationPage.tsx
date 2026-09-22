@@ -313,7 +313,7 @@ export const HRAttendanceLocationPage: React.FC = () => {
           className={`h-9 rounded-lg text-xs font-semibold gap-1.5 ${
             activeTab === 'mapping'
               ? 'bg-blue-600 text-white shadow-sm hover:bg-blue-700'
-              : 'text-muted-foreground hover:bg-white hover:text-foreground'
+              : 'text-muted-foreground hover:bg-white hover:text-foreground dark:hover:bg-muted'
           }`}
         >
           <UserCheck className="w-3.5 h-3.5" />
@@ -328,7 +328,7 @@ export const HRAttendanceLocationPage: React.FC = () => {
           className={`h-9 rounded-lg text-xs font-semibold gap-1.5 ${
             activeTab === 'geofences'
               ? 'bg-blue-600 text-white shadow-sm hover:bg-blue-700'
-              : 'text-muted-foreground hover:bg-white hover:text-foreground'
+              : 'text-muted-foreground hover:bg-white hover:text-foreground dark:hover:bg-muted'
           }`}
         >
           <MapPin className="w-3.5 h-3.5" />

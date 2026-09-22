@@ -30,24 +30,11 @@ import { useAuthStore } from '@/features/auth/store/authStore';
 
 // ─── Design tokens (light-blue / white / navy) ───────────────────────────────
 const tokens = {
-  pageBg:       '#EEF4FB',   // very light blue wash
-  cardBg:       '#FFFFFF',
-  border:       '#C9DCF3',
-  borderLight:  '#DDEAF8',
-  navy:         '#1E3A5F',
-  navyMid:      '#2D537A',
-  bluePrimary:  '#2563EB',
-  blueHover:    '#1D4ED8',
-  blueLight:    '#DBEAFE',
-  blueMid:      '#93C5FD',
-  muted:        '#5A7FA8',
-  mutedLight:   '#8AAECF',
-  success:      '#059669',
-  successBg:    '#D1FAE5',
-  danger:       '#DC2626',
-  dangerBg:     '#FEE2E2',
-  shadow:       '0 1px 4px 0 rgba(30,58,95,0.07)',
-  shadowMd:     '0 2px 12px 0 rgba(30,58,95,0.10)',
+  pageBg: 'var(--elp-page-bg)', cardBg: 'var(--elp-card-bg)', border: 'var(--elp-border)', borderLight: 'var(--elp-border-light)',
+  navy: 'var(--elp-foreground)', navyMid: 'var(--elp-foreground-muted)', bluePrimary: '#2563EB', blueHover: '#1D4ED8',
+  blueLight: 'var(--elp-accent-bg)', blueMid: 'var(--elp-accent-border)', muted: 'var(--elp-muted)', mutedLight: 'var(--elp-muted-light)', mutedBg: 'var(--elp-muted-bg)',
+  success: '#059669', successBg: 'var(--elp-success-bg)', danger: '#DC2626', dangerBg: 'var(--elp-danger-bg)',
+  shadow: 'var(--elp-shadow)', shadowMd: 'var(--elp-shadow-md)',
 };
 
 // ─── Inline style helpers ─────────────────────────────────────────────────────
@@ -133,6 +120,8 @@ export function EmployeeListPage() {
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
         .elp-root * { font-family: 'Plus Jakarta Sans', system-ui, sans-serif; box-sizing: border-box; }
+        .elp-root { --elp-page-bg:#EEF4FB; --elp-card-bg:#fff; --elp-border:#C9DCF3; --elp-border-light:#DDEAF8; --elp-foreground:#1E3A5F; --elp-foreground-muted:#2D537A; --elp-muted:#5A7FA8; --elp-muted-light:#8AAECF; --elp-muted-bg:#F0F6FF; --elp-accent-bg:#DBEAFE; --elp-accent-border:#93C5FD; --elp-success-bg:#D1FAE5; --elp-danger-bg:#FEE2E2; --elp-shadow:0 1px 4px 0 rgba(30,58,95,.07); --elp-shadow-md:0 2px 12px 0 rgba(30,58,95,.10); }
+        .dark .elp-root { --elp-page-bg:hsl(var(--background)); --elp-card-bg:hsl(var(--card)); --elp-border:hsl(var(--border)); --elp-border-light:hsl(var(--border)); --elp-foreground:hsl(var(--foreground)); --elp-foreground-muted:hsl(var(--muted-foreground)); --elp-muted:hsl(var(--muted-foreground)); --elp-muted-light:hsl(var(--muted-foreground)); --elp-muted-bg:hsl(var(--muted)); --elp-accent-bg:hsl(var(--muted)); --elp-accent-border:hsl(var(--border)); --elp-success-bg:rgba(5,150,105,.16); --elp-danger-bg:rgba(220,38,38,.16); --elp-shadow:0 1px 4px rgba(0,0,0,.18); --elp-shadow-md:0 2px 12px rgba(0,0,0,.28); }
 
         .elp-btn-primary {
           display: inline-flex; align-items: center; gap: 6px;
@@ -146,7 +135,7 @@ export function EmployeeListPage() {
 
         .elp-btn-outline {
           display: inline-flex; align-items: center; gap: 6px;
-          background: #fff; color: ${tokens.navyMid};
+          background: ${tokens.cardBg}; color: ${tokens.navyMid};
           border: 1px solid ${tokens.border}; border-radius: 8px;
           padding: 0 14px; height: 34px; font-size: 12.5px; font-weight: 600;
           cursor: pointer; transition: all 0.15s;
@@ -164,12 +153,12 @@ export function EmployeeListPage() {
         .elp-input {
           width: 100%; height: 36px; font-size: 12.5px;
           border: 1px solid ${tokens.border}; border-radius: 8px;
-          background: #F8FAFD; color: ${tokens.navy};
+          background: ${tokens.cardBg}; color: ${tokens.navy};
           padding: 0 32px 0 36px;
           outline: none; transition: border-color 0.15s, box-shadow 0.15s;
           font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
         }
-        .elp-input:focus { border-color: ${tokens.bluePrimary}; box-shadow: 0 0 0 3px rgba(37,99,235,0.12); background: #fff; }
+        .elp-input:focus { border-color: ${tokens.bluePrimary}; box-shadow: 0 0 0 3px rgba(37,99,235,0.12); background: ${tokens.cardBg}; }
         .elp-input::placeholder { color: ${tokens.mutedLight}; }
 
         .elp-filter-pill {
@@ -187,7 +176,7 @@ export function EmployeeListPage() {
         .elp-page-btn {
           display: inline-flex; align-items: center; justify-content: center;
           width: 30px; height: 30px; border-radius: 7px;
-          border: 1px solid ${tokens.border}; background: #fff;
+          border: 1px solid ${tokens.border}; background: ${tokens.cardBg};
           font-size: 12px; font-weight: 600; color: ${tokens.navyMid};
           cursor: pointer; transition: all 0.13s;
         }
@@ -196,7 +185,7 @@ export function EmployeeListPage() {
 
         .elp-select {
           height: 30px; border: 1px solid ${tokens.border}; border-radius: 7px;
-          background: #fff; color: ${tokens.navy}; font-size: 12px; font-weight: 600;
+          background: ${tokens.cardBg}; color: ${tokens.navy}; font-size: 12px; font-weight: 600;
           padding: 0 8px; cursor: pointer; outline: none;
           font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
         }
@@ -229,7 +218,7 @@ export function EmployeeListPage() {
               )}
 
               {orgLocation && (
-                <span style={{ ...pillBase, color: tokens.muted, background: '#F0F6FF', borderColor: tokens.borderLight }}>
+                <span style={{ ...pillBase, color: tokens.muted, background: tokens.mutedBg, borderColor: tokens.borderLight }}>
                   <MapPin size={10} strokeWidth={2.2} style={{ color: tokens.bluePrimary }} />
                   {orgLocation}
                 </span>
