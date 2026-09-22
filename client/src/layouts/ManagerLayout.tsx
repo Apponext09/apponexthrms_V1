@@ -45,18 +45,18 @@ const C = {
 
 const MANAGER_NAV = [
   {
-    label: 'OVERVIEW',
+    label: 'Dashboard',
     subscriptionModule: null,
     items: [
       { name: 'Dashboard', href: '/manager/dashboard', icon: LayoutDashboard },
     ],
   },
   {
-    label: 'EMPLOYEE CORE',
+    label: 'CoreHR',
     subscriptionModule: 'Core HR & Directory',
     items: [
       {
-        name: 'Employee Core',
+        name: 'CoreHR',
         href: '/manager/dashboard',
         icon: Users,
         subItems: [
@@ -69,7 +69,7 @@ const MANAGER_NAV = [
     ],
   },
   {
-    label: 'LEAVES',
+    label: 'Leaves',
     subscriptionModule: 'Leave Management & Approvals',
     items: [
       {
@@ -85,7 +85,7 @@ const MANAGER_NAV = [
     ],
   },
   {
-    label: 'ATTENDANCE',
+    label: 'Attendance',
     subscriptionModule: 'Attendance & Time Tracking',
     items: [
       {
@@ -104,7 +104,7 @@ const MANAGER_NAV = [
     ],
   },
   {
-    label: 'PAYROLL',
+    label: 'Payroll',
     subscriptionModule: 'Automated Payroll Processing',
     items: [
       {
@@ -119,11 +119,11 @@ const MANAGER_NAV = [
     ],
   },
   {
-    label: 'LOAN MGMT',
+    label: 'Loans',
     subscriptionModule: 'Automated Payroll Processing',
     items: [
       {
-        name: 'Loan Mgmt',
+        name: 'Loans',
         href: '/manager/loans',
         icon: Percent,
         subItems: [
@@ -133,11 +133,11 @@ const MANAGER_NAV = [
     ],
   },
   {
-    label: 'EXPENSE',
+    label: 'Expenses',
     subscriptionModule: 'Expense Management',
     items: [
       {
-        name: 'Expense',
+        name: 'Expenses',
         href: '/manager/expenses/approvals',
         icon: FileText,
         subItems: [
@@ -151,7 +151,7 @@ const MANAGER_NAV = [
     ],
   },
   {
-    label: 'PERFORMANCE',
+    label: 'Performance',
     subscriptionModule: 'Performance & OKRs',
     items: [
       {
@@ -167,7 +167,7 @@ const MANAGER_NAV = [
     ],
   },
   {
-    label: 'RECRUITMENT',
+    label: 'Recruitment',
     subscriptionModule: 'Recruitment & ATS',
     items: [
       {
@@ -183,11 +183,11 @@ const MANAGER_NAV = [
     ],
   },
   {
-    label: 'APPROVALS & GOVERNANCE',
+    label: 'Approvals',
     subscriptionModule: null,
     items: [
       {
-        name: 'Approvals & Governance',
+        name: 'Approvals',
         href: '/manager/approvals',
         icon: Shield,
         subItems: [
@@ -258,20 +258,28 @@ function ManagerSidebarNavContent({
       <SectionRail id="manager" groups={visibleNav.map(section => ({ ...section, label: section.items.length === 1 && (section.items[0] as any).subItems ? section.items[0].name : section.label, icon: section.items[0]?.icon }))} open={sidebarOpen} onNavigate={() => setMobileOpen(false)} />
 
       {/* ── User footer ── */}
+<<<<<<< HEAD
       <div className="flex-shrink-0 border-t border-border bg-card p-3">
         <SidebarProfileMenu profilePath="/manager/profile" onLogout={handleLogout} onProfileNavigate={() => setMobileOpen(false)}>
         <div
           className={cn(
             'group flex min-h-14 cursor-pointer items-center justify-center rounded-xl border p-2.5 transition-colors',
+=======
+      <div className="flex-shrink-0 border-t border-border bg-white p-2 dark:bg-slate-950">
+        <SidebarProfileMenu profilePath="/manager/profile" onLogout={handleLogout} onProfileNavigate={() => setMobileOpen(false)}>
+        <div
+          className={cn(
+            'group mx-auto flex size-11 cursor-pointer items-center justify-center rounded-xl border p-0.5 transition-colors',
+>>>>>>> 28ed9bc7 (Fixed sidebar UI)
             'border-border bg-card hover:bg-muted',
             !sidebarOpen && 'justify-center'
           )}
           title="View Profile"
         >
           <div className="relative flex-shrink-0">
-            <Avatar className={cn('size-9 border shadow-soft-xs', C.avatarBorder)}>
-              <AvatarImage src={user?.avatarUrl} />
-              <AvatarFallback className={cn(C.avatarBg, 'text-white font-bold text-[10px]')}>
+            <Avatar className={cn('size-10 border shadow-soft-xs', C.avatarBorder)}>
+              <AvatarImage src={user?.avatarUrl || (user as any)?.avatar || (user as any)?.profile_picture} alt="Profile" />
+              <AvatarFallback className={cn(C.avatarBg, 'text-white font-bold text-xs')}>
                 {initials}
               </AvatarFallback>
             </Avatar>

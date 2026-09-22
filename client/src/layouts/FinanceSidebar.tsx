@@ -51,56 +51,56 @@ const C = {
 // -- Nav definitions ------------------------------------------------------------
 const FINANCE_NAV = [
   {
-    label: "OVERVIEW",
+    label: "Overview",
     items: [
       { name: "Dashboard", href: "/finance/dashboard", icon: LayoutDashboard },
     ],
   },
   {
-    label: "EXPENSE & DISBURSAL",
+    label: "Expenses",
     items: [
-      { name: "Finance Verification",     href: "/finance/expenses/verification",   icon: FileCheck2 },
-      { name: "Payment Cycle Reports",   href: "/finance/expenses/reimbursements", icon: CreditCard },
-      { name: "Travel Advances",          href: "/finance/expenses/travel-advances", icon: IndianRupee },
-      { name: "Expense Approvals",        href: "/finance/expenses/approvals",      icon: CheckCircle2 },
-      { name: "Expense Reports",          href: "/finance/expenses/reports",        icon: LineChart },
+      { name: "Verification",     href: "/finance/expenses/verification",   icon: FileCheck2 },
+      { name: "Reimbursements",   href: "/finance/expenses/reimbursements", icon: CreditCard },
+      { name: "Advances",          href: "/finance/expenses/travel-advances", icon: IndianRupee },
+      { name: "Approvals",        href: "/finance/expenses/approvals",      icon: CheckCircle2 },
+      { name: "Reports",          href: "/finance/expenses/reports",        icon: LineChart },
     ],
   },
   {
-    label: "EMPLOYEE CORE",
+    label: "CoreHR",
     items: [
-      { name: "My Lifecycle", href: "/finance/lifecycle", icon: GitBranch },
-      { name: "Org Structure", href: "/finance/org-chart", icon: Building2 },
-      { name: "ID Card", href: "/finance/id-card", icon: ShieldCheck },
+      { name: "Lifecycle", href: "/finance/lifecycle", icon: GitBranch },
+      { name: "Structure", href: "/finance/org-chart", icon: Building2 },
+      { name: "Identity", href: "/finance/id-card", icon: ShieldCheck },
     ],
   },
   {
-    label: "ATTENDANCE",
+    label: "Attendance",
     items: [
-      { name: "Face Punch", href: "/finance/face-punch", icon: Scan },
-      { name: "My Attendance Log", href: "/finance/attendance", icon: Clock },
-      { name: "My Shifts", href: "/finance/shift-roster", icon: Calendar },
-      { name: "Attendance Correction", href: "/finance/attendance-regularization", icon: RefreshCw },
+      { name: "FacePunch", href: "/finance/face-punch", icon: Scan },
+      { name: "Logs", href: "/finance/attendance", icon: Clock },
+      { name: "Shifts", href: "/finance/shift-roster", icon: Calendar },
+      { name: "Correction", href: "/finance/attendance-regularization", icon: RefreshCw },
     ],
   },
   {
-    label: "FINANCE & AUDIT",
+    label: "Finance",
     items: [
-      { name: "Financial Reports", href: "/finance/reports",   icon: FileBarChart },
-      { name: "Approval Inbox",    href: "/finance/approvals", icon: CheckSquare },
+      { name: "Reports", href: "/finance/reports",   icon: FileBarChart },
+      { name: "Approvals", href: "/finance/approvals", icon: CheckSquare },
     ],
   },
   {
-    label: "MY SELF SERVICE",
+    label: "SelfService",
     items: [
-      { name: "My Leaves",        href: "/finance/leaves",           icon: Palmtree },
-      { name: "My Payslips",      href: "/finance/payslips",         icon: DollarSign },
-      { name: "Holiday Calendar", href: "/finance/holiday-calendar", icon: Calendar },
-      { name: "My Documents",     href: "/finance/documents",        icon: FileBarChart },
+      { name: "Leaves",        href: "/finance/leaves",           icon: Palmtree },
+      { name: "Payslips",      href: "/finance/payslips",         icon: DollarSign },
+      { name: "Holidays", href: "/finance/holiday-calendar", icon: Calendar },
+      { name: "Documents",     href: "/finance/documents",        icon: FileBarChart },
     ],
   },
   {
-    label: "ORGANISATION",
+    label: "Company",
     items: [
       { name: "Announcements", href: "/finance/announcements", icon: Megaphone },
     ],
@@ -142,15 +142,22 @@ export function FinanceSidebar({ open, onOpenChange }: FinanceSidebarProps) {
       <SectionRail id="finance" groups={FINANCE_NAV} open={open} onNavigate={() => { if (window.innerWidth < 768) onOpenChange(false); }} />
 
       {/* -- User Footer -- */}
+<<<<<<< HEAD
       <div className="border-t border-border p-3">
         <SidebarProfileMenu profilePath="/finance/profile" onLogout={handleLogout} onProfileNavigate={() => { if (window.innerWidth < 768) onOpenChange(false); }}>
         <div
           className="flex cursor-pointer items-center justify-center rounded-xl border border-border bg-card p-2.5 transition-colors hover:bg-muted"
+=======
+      <div className="border-t border-border bg-white p-2 dark:bg-slate-950">
+        <SidebarProfileMenu profilePath="/finance/profile" onLogout={handleLogout} onProfileNavigate={() => { if (window.innerWidth < 768) onOpenChange(false); }}>
+        <div
+          className="mx-auto flex size-11 cursor-pointer items-center justify-center rounded-xl border border-border bg-white p-0.5 transition-colors hover:bg-muted dark:bg-slate-950"
+>>>>>>> 28ed9bc7 (Fixed sidebar UI)
           title="View Profile"
         >
-          <Avatar className={cn('h-8 w-8 flex-shrink-0 border-2', C.avatarBorder)}>
-            <AvatarImage src={user?.avatarUrl} />
-            <AvatarFallback className={cn('text-xs font-bold text-white', C.avatarBg)}>
+          <Avatar className={cn("size-10 flex-shrink-0 border-2", C.avatarBorder)}>
+            <AvatarImage src={user?.avatarUrl || (user as any)?.avatar || (user as any)?.profile_picture} alt="Profile" />
+            <AvatarFallback className={cn("text-xs font-bold text-white", C.avatarBg)}>
               {initials}
             </AvatarFallback>
           </Avatar>

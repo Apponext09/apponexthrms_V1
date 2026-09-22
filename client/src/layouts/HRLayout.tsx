@@ -251,20 +251,28 @@ export function HRLayout() {
       <SectionRail id="hr" groups={hrSections.map(section => ({ label: section.label, icon: ICON_REGISTRY[section.icon || section.items[0]?.icon] || LayoutDashboard, items: section.items.map(item => ({ ...item, icon: ICON_REGISTRY[item.icon] || LayoutDashboard, children: item.children?.map(child => ({ name: child.name, href: child.href, icon: ICON_REGISTRY[child.icon] || LayoutDashboard, isLocked: (child as any).isLocked })) })) }))} open={sidebarOpen} onNavigate={() => setMobileOpen(false)} />
 
       {/* ── User Footer ── */}
+<<<<<<< HEAD
       <div className="flex-shrink-0 border-t border-border bg-card p-3">
         <SidebarProfileMenu profilePath="/hr/profile" onLogout={handleLogout} onProfileNavigate={() => setMobileOpen(false)}>
         <div
           className={cn(
             'group flex min-h-14 cursor-pointer items-center justify-center rounded-xl border p-2.5 transition-colors',
+=======
+      <div className="flex-shrink-0 border-t border-border bg-white p-2 dark:bg-slate-950">
+        <SidebarProfileMenu profilePath="/hr/profile" onLogout={handleLogout} onProfileNavigate={() => setMobileOpen(false)}>
+        <div
+          className={cn(
+            'group mx-auto flex size-11 cursor-pointer items-center justify-center rounded-xl border p-0.5 transition-colors',
+>>>>>>> 28ed9bc7 (Fixed sidebar UI)
             'border-border bg-card hover:bg-muted',
             !sidebarOpen && 'justify-center'
           )}
           title="View Profile"
         >
           <div className="relative flex-shrink-0">
-            <Avatar className="size-9 border border-primary/30 bg-primary shadow-soft-xs">
-              <AvatarImage src={user?.avatarUrl} />
-              <AvatarFallback className="bg-primary text-white font-bold text-[10px]">
+            <Avatar className="size-10 border border-primary/30 bg-primary shadow-soft-xs">
+              <AvatarImage src={user?.avatarUrl || (user as any)?.avatar || (user as any)?.profile_picture} alt="Profile" />
+              <AvatarFallback className="bg-primary text-white font-bold text-xs">
                 {initials}
               </AvatarFallback>
             </Avatar>
@@ -298,6 +306,7 @@ export function HRLayout() {
       </div>
     </div>
   );
+
 
   return (
     <div className="app-shell-reference flex h-dvh overflow-hidden bg-background">

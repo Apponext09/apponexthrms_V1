@@ -307,14 +307,18 @@ export function Sidebar({ open, onOpenChange, onNavigate }: SidebarProps) {
         <SectionRail id="admin" groups={finalSections.map(section => ({ label: section.label, icon: ICON_REGISTRY[section.icon || section.items[0]?.icon] || LayoutDashboard, items: section.items.map(item => ({ ...item, icon: ICON_REGISTRY[item.icon] || LayoutDashboard, children: item.children?.map(child => ({ name: child.name, href: child.href, icon: ICON_REGISTRY[child.icon] || LayoutDashboard, isLocked: (child as any).isLocked })) })) }))} open={open} onNavigate={onNavigate} />
 
         {/* User Card & Platform Admin Footer */}
+<<<<<<< HEAD
         <div className="flex-shrink-0 space-y-2 border-t border-border bg-card p-3">
+=======
+        <div className="flex-shrink-0 space-y-1.5 border-t border-border bg-white p-2 dark:bg-slate-950">
+>>>>>>> 28ed9bc7 (Fixed sidebar UI)
           {roles.includes('super_admin') && (
             <>
               <button
                 onClick={() => navigate('/platform-admin')}
                 title={!open ? 'Platform Administration' : ''}
                 className={cn(
-                  'flex min-h-9 w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-[12px] font-semibold transition-colors',
+                  'flex min-h-8 w-full items-center gap-2 rounded-lg px-2 py-1.5 text-[11px] font-semibold transition-colors',
                   location.pathname.startsWith('/platform-admin')
                     ? 'bg-primary/10 text-primary font-semibold'
                     : 'text-muted-foreground hover:bg-muted hover:text-foreground'
@@ -334,13 +338,18 @@ export function Sidebar({ open, onOpenChange, onNavigate }: SidebarProps) {
           >
           <div
             className={cn(
+<<<<<<< HEAD
               'group flex min-h-14 cursor-pointer items-center justify-center rounded-xl border p-2.5 transition-colors',
+=======
+              'group mx-auto flex size-11 cursor-pointer items-center justify-center rounded-xl border p-0.5 transition-colors',
+>>>>>>> 28ed9bc7 (Fixed sidebar UI)
               location.pathname.startsWith('/settings/company-profile') || location.pathname.startsWith('/superadmin/profile')
                 ? 'bg-primary/10 border-primary/30 text-primary shadow-2xs'
                 : 'bg-card hover:bg-muted/80 border-border/60'
             )}
             title="Click to view Admin Profile"
           >
+<<<<<<< HEAD
             {(() => {
               const roleInfo = getUserRoleAndDept(user);
               return (
@@ -372,10 +381,19 @@ export function Sidebar({ open, onOpenChange, onNavigate }: SidebarProps) {
               );
             })()}
 
+=======
+            <Avatar className="size-10 flex-shrink-0 border border-primary/30 shadow-soft-xs">
+              <AvatarImage src={user?.avatarUrl || (user as any)?.avatar || (user as any)?.profile_picture || (user as any)?.profilePicture} alt="Profile" />
+              <AvatarFallback className="bg-primary text-primary-foreground font-bold text-xs">
+                {getInitials()}
+              </AvatarFallback>
+            </Avatar>
+>>>>>>> 28ed9bc7 (Fixed sidebar UI)
           </div>
           </SidebarProfileMenu>
         </div>
       </div>
+
 
       {/* Locked Feature Dialog */}
       <Dialog open={lockedItemDialogOpen} onOpenChange={setLockedItemDialogOpen}>
