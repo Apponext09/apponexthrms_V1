@@ -57,28 +57,19 @@ import {
 
 // ─── Design tokens — consistent with EmployeeListPage ────────────────────────
 const T = {
-  pageBg: "#EEF4FB",
-  card: "#FFFFFF",
-  border: "#C9DCF3",
-  borderLight: "#DDEAF8",
-  navy: "#1E3A5F",
-  navyMid: "#2D537A",
+  pageBg: "var(--elc-page-bg)", card: "var(--elc-card-bg)", border: "var(--elc-border)", borderLight: "var(--elc-border-light)",
+  navy: "var(--elc-foreground)", navyMid: "var(--elc-foreground-muted)",
   blue: "#2563EB",
   blueHover: "#1D4ED8",
-  blueLight: "#DBEAFE",
-  blueMid: "#93C5FD",
-  muted: "#5A7FA8",
-  mutedLight: "#8AAECF",
-  mutedBg: "#F0F6FF",
+  blueLight: "var(--elc-accent-bg)", blueMid: "var(--elc-accent-border)", muted: "var(--elc-muted)", mutedLight: "var(--elc-muted-light)", mutedBg: "var(--elc-muted-bg)",
   success: "#059669",
-  successBg: "#D1FAE5",
+  successBg: "var(--elc-success-bg)",
   warn: "#D97706",
-  warnBg: "#FEF3C7",
+  warnBg: "var(--elc-warn-bg)",
   danger: "#DC2626",
-  dangerBg: "#FEE2E2",
+  dangerBg: "var(--elc-danger-bg)",
   dangerMid: "#FECACA",
-  shadow: "0 1px 4px 0 rgba(30,58,95,0.07)",
-  shadowMd: "0 2px 12px 0 rgba(30,58,95,0.10)",
+  shadow: "var(--elc-shadow)", shadowMd: "var(--elc-shadow-md)",
 };
 
 // ─── Shared style objects ─────────────────────────────────────────────────────
@@ -362,7 +353,7 @@ const BtnOutline = ({ children, onClick, style = {}, danger = false }: any) => (
       display: "inline-flex",
       alignItems: "center",
       gap: 6,
-      background: "#fff",
+      background: T.card,
       color: danger ? T.danger : T.navyMid,
       border: `1px solid ${danger ? T.dangerMid : T.border}`,
       borderRadius: 8,
@@ -905,6 +896,8 @@ export default function EmployeeLifecyclePage() {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
         .elc * { font-family:'Plus Jakarta Sans',system-ui,sans-serif; box-sizing:border-box; }
+        .elc { --elc-page-bg:#EEF4FB; --elc-card-bg:#fff; --elc-border:#C9DCF3; --elc-border-light:#DDEAF8; --elc-foreground:#1E3A5F; --elc-foreground-muted:#2D537A; --elc-muted:#5A7FA8; --elc-muted-light:#8AAECF; --elc-muted-bg:#F0F6FF; --elc-accent-bg:#DBEAFE; --elc-accent-border:#93C5FD; --elc-success-bg:#D1FAE5; --elc-warn-bg:#FEF3C7; --elc-danger-bg:#FEE2E2; --elc-shadow:0 1px 4px rgba(30,58,95,.07); --elc-shadow-md:0 2px 12px rgba(30,58,95,.10); }
+        .dark .elc { --elc-page-bg:hsl(var(--background)); --elc-card-bg:hsl(var(--card)); --elc-border:hsl(var(--border)); --elc-border-light:hsl(var(--border)); --elc-foreground:hsl(var(--foreground)); --elc-foreground-muted:hsl(var(--muted-foreground)); --elc-muted:hsl(var(--muted-foreground)); --elc-muted-light:hsl(var(--muted-foreground)); --elc-muted-bg:hsl(var(--muted)); --elc-accent-bg:hsl(var(--muted)); --elc-accent-border:hsl(var(--border)); --elc-success-bg:rgba(5,150,105,.16); --elc-warn-bg:rgba(217,119,6,.16); --elc-danger-bg:rgba(220,38,38,.16); --elc-shadow:0 1px 4px rgba(0,0,0,.18); --elc-shadow-md:0 2px 12px rgba(0,0,0,.28); }
 
         /* Tab bar */
         .elc-tabbar { display:flex; background:${T.card}; border:1px solid ${T.border}; border-radius:10px; padding:4px; gap:3px; }
@@ -942,7 +935,7 @@ export default function EmployeeLifecyclePage() {
           font-family:'Plus Jakarta Sans',system-ui,sans-serif; outline:none;
           transition:border-color 0.15s,box-shadow 0.15s;
         }
-        .elc-input:focus { border-color:${T.blue}; box-shadow:0 0 0 3px rgba(37,99,235,0.12); background:#fff; }
+        .elc-input:focus { border-color:${T.blue}; box-shadow:0 0 0 3px rgba(37,99,235,0.12); background:${T.card}; }
         .elc-input::placeholder { color:${T.mutedLight}; }
 
         /* Filter pill */
@@ -2358,7 +2351,7 @@ export default function EmployeeLifecyclePage() {
                   style={{
                     borderBottom: `1px solid ${T.border}`,
                     padding: "0 20px",
-                    background: "#fff",
+                    background: T.card,
                   }}
                 >
                   <div className="elc-dtab-bar">
