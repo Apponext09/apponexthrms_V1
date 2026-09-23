@@ -333,7 +333,7 @@ export const LiveTrackingDashboardPage: React.FC = () => {
 
   return (
     <div
-      className="live-tracking-root -m-4 flex min-h-[calc(100dvh-10rem)] flex-col gap-4 bg-[#F2F7FD] p-4 text-[#0B2545] sm:-m-6 sm:p-6 lg:h-[calc(100dvh-9rem)] lg:min-h-[44rem] lg:overflow-hidden dark:bg-background dark:text-foreground"
+      className="live-tracking-root -m-4 flex min-h-[calc(100dvh-10rem)] flex-col gap-4 bg-[#F2F7FD] p-4 text-[#0B2545] sm:-m-6 sm:p-6 lg:min-h-[calc(100dvh-9rem)] dark:bg-background dark:text-foreground"
       style={{
         fontFamily: "'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif",
       }}

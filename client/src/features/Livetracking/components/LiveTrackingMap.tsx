@@ -276,16 +276,21 @@ const MAP_STYLE: maplibregl.StyleSpecification = {
         'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png',
       ],
       tileSize: 256,
+      // OSM only serves tiles up to z19 — capping the SOURCE here makes MapLibre
+      // over-zoom (upscale) the last available tile beyond that instead of
+      // fetching non-existent tiles.
+      maxzoom: 19,
       attribution: '&copy; OpenStreetMap contributors',
     },
   },
   layers: [
     {
+      // NOTE: no `maxzoom` on the LAYER — a layer-level maxzoom stops the layer
+      // from rendering at all past that zoom (blank map), unlike a source maxzoom
+      // which just triggers over-zoom. Keep this layer active at every zoom level.
       id: 'osm-base-layer',
       type: 'raster',
       source: 'osm-tiles',
-      minzoom: 0,
-      maxzoom: 19,
     },
   ],
 };

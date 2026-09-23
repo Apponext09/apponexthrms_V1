@@ -137,9 +137,12 @@ export function useLiveTrackingSocket({
         prev.map((emp) => {
           if (emp.employee_id !== event.employee_id) return emp;
 
-          // Use routed trail from server
-          const routedTrail = event.routedTrail || [];
-          const updatedBreaks = detectBreakPoints(routedTrail);
+          // Defensive: never let an update SHRINK today's line — a stale/partial
+          // broadcast (e.g. right after a socket reconnect) should never erase an
+          // already-drawn portion of the route, so always keep the longer trail.
+          const incoming = event.routedTrail || [];
+          const routedTrail = incoming.length >= (emp.routeTrail?.length || 0) ? incoming : emp.routeTrail;
+          const updatedBreaks = detectBreakPoints(routedTrail || []);
 
           return {
             ...emp,
