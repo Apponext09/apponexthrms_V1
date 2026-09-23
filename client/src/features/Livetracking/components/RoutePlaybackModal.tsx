@@ -160,7 +160,7 @@ function interpolateRoutePoints(rawPoints: RoutePoint[], stepsPerSegment = 20): 
 interface PlaybackMapProps {
   interpolatedRoute: RoutePoint[];
   rawRoute: RoutePoint[];
-  playedPath: RoutePoint[];
+  playIndex: number;
   currentPoint: RoutePoint | undefined;
   destinationClusters: DestinationCluster[];
   employeeName: string;
@@ -200,7 +200,7 @@ const PLAYBACK_MAP_STYLE: maplibregl.StyleSpecification = {
 const PlaybackMap: React.FC<PlaybackMapProps> = ({
   interpolatedRoute,
   rawRoute,
-  playedPath,
+  playIndex,
   currentPoint,
   destinationClusters,
   employeeName,
@@ -211,6 +211,14 @@ const PlaybackMap: React.FC<PlaybackMapProps> = ({
   const mapLoadedRef = useRef(false);
   const markersRef = useRef<maplibregl.Marker[]>([]);
   const playerMarkerRef = useRef<maplibregl.Marker | null>(null);
+
+  // Incrementally-built played-path buffer — avoids re-slicing/re-mapping the
+  // whole interpolatedRoute array on every ~15-40ms animation tick, which was
+  // the actual cause of the line lagging behind the marker on longer routes
+  // (a full day's history can interpolate into tens of thousands of points).
+  const playedCoordsRef = useRef<[number, number][]>([]);
+  const lastPlayIndexRef = useRef<number>(-1);
+  const lastRouteRef = useRef<RoutePoint[] | null>(null);
 
   // Keep the latest route in a ref so the map's 'load' handler (registered once,
   // on mount) can fit to it even if the route finishes loading AFTER the map's
@@ -357,15 +365,36 @@ const PlaybackMap: React.FC<PlaybackMapProps> = ({
   // ── Update played path (called on every playIndex tick) ───────────────
   useEffect(() => {
     if (!mapLoadedRef.current || !mapRef.current) return;
+
+    // New route loaded (date/employee changed) — reset the incremental buffer.
+    if (lastRouteRef.current !== interpolatedRoute) {
+      playedCoordsRef.current = [];
+      lastPlayIndexRef.current = -1;
+      lastRouteRef.current = interpolatedRoute;
+    }
+
+    if (playIndex < lastPlayIndexRef.current) {
+      // Scrubbed/seeked backward — rebuild once instead of trying to "un-append".
+      playedCoordsRef.current = interpolatedRoute
+        .slice(0, playIndex + 1)
+        .map((p) => [p.longitude, p.latitude] as [number, number]);
+    } else {
+      for (let i = lastPlayIndexRef.current + 1; i <= playIndex && i < interpolatedRoute.length; i++) {
+        const p = interpolatedRoute[i];
+        if (p) playedCoordsRef.current.push([p.longitude, p.latitude]);
+      }
+    }
+    lastPlayIndexRef.current = playIndex;
+
     (mapRef.current.getSource('played-path') as maplibregl.GeoJSONSource | undefined)?.setData({
       type: 'Feature',
       geometry: {
         type: 'LineString',
-        coordinates: playedPath.map((p) => [p.longitude, p.latitude]),
+        coordinates: playedCoordsRef.current,
       },
       properties: {},
     } as any);
-  }, [playedPath]);
+  }, [playIndex, interpolatedRoute]);
 
   // ── Move animated player marker ───────────────────────────────────────
   useEffect(() => {
@@ -574,7 +603,6 @@ export const RoutePlaybackModal: React.FC<Props> = ({ employee, onClose }) => {
   }, [rawRoute]);
 
   const currentPoint = interpolatedRoute[playIndex] || interpolatedRoute[0];
-  const playedPath = interpolatedRoute.slice(0, playIndex + 1);
 
   // Date navigation
   const shiftDate = (days: number) => {
@@ -647,7 +675,7 @@ export const RoutePlaybackModal: React.FC<Props> = ({ employee, onClose }) => {
           <PlaybackMap
             interpolatedRoute={interpolatedRoute}
             rawRoute={rawRoute}
-            playedPath={playedPath}
+            playIndex={playIndex}
             currentPoint={currentPoint}
             destinationClusters={destinationClusters}
             employeeName={employee.name}
