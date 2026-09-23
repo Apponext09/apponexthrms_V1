@@ -451,15 +451,26 @@ export class MasterBuilderService {
     // Data query (SELECT *)
     let query = this.db(table).select('*');
     if (hasDeletedAt) query = query.whereNull('deleted_at') as any;
-    if (hasOrgCol) query = query.where('organization_id', orgId);
-    if (hasCompanyCol && companyId) query = query.where('company_id', companyId);
+    if (hasOrgCol) {
+      query = query.where((b: any) => {
+        b.where('organization_id', orgId).orWhereNull('organization_id');
+      }) as any;
+    }
+    if (hasCompanyCol && companyId && table !== 'company') {
+      query = query.where('company_id', companyId);
+    }
 
     // Count query — MUST be built separately, never clone a SELECT * query with COUNT()
-    // because MySQL's only_full_group_by rejects mixing SELECT * with aggregates.
     let countQuery = this.db(table).count(`${idCol} as cnt`);
     if (hasDeletedAt) countQuery = countQuery.whereNull('deleted_at') as any;
-    if (hasOrgCol) countQuery = countQuery.where('organization_id', orgId);
-    if (hasCompanyCol && companyId) countQuery = countQuery.where('company_id', companyId) as any;
+    if (hasOrgCol) {
+      countQuery = countQuery.where((b: any) => {
+        b.where('organization_id', orgId).orWhereNull('organization_id');
+      }) as any;
+    }
+    if (hasCompanyCol && companyId && table !== 'company') {
+      countQuery = countQuery.where('company_id', companyId) as any;
+    }
 
     if (options.status && options.status !== 'all') {
       const hasStatusCol = await this.hasColumn(table, 'status');
@@ -474,8 +485,15 @@ export class MasterBuilderService {
 
     const rows = await query.orderBy(idCol, 'desc').limit(limit).offset(offset);
 
+    const getRowId = (r: any) =>
+      r[idCol] ??
+      r[idCol.replace(/_([a-z0-9])/g, (_: any, g: string) => g.toUpperCase())] ??
+      r.id ??
+      r.companyId ??
+      r.company_id;
+
     // Load extended data for all returned rows
-    const refIds = rows.map((r: any) => r[idCol]);
+    const refIds = rows.map((r: any) => getRowId(r)).filter((id: any) => id !== undefined && id !== null);
     const extDataMap: Record<number, Record<string, any>> = {};
     if (refIds.length > 0) {
       const extRows = await this.db('custom_master_extended_data')
@@ -504,19 +522,24 @@ export class MasterBuilderService {
       for (const f of fields) {
         const colMap = f.column_map || f.columnMap;
         const fKey = f.field_key || f.fieldKey;
-        if (colMap && r[colMap] !== undefined) {
-          coreData[fKey] = r[colMap];
+        if (colMap) {
+          const colCamel = colMap.replace(/_([a-z0-9])/g, (_: any, g: string) => g.toUpperCase());
+          const val = r[colMap] !== undefined ? r[colMap] : r[colCamel];
+          if (val !== undefined) {
+            coreData[fKey] = val;
+          }
         }
       }
-      const extraData = extDataMap[r[idCol]] || {};
+      const rowId = getRowId(r);
+      const extraData = (rowId !== undefined && extDataMap[rowId]) || {};
       return {
-        id: r[idCol],
-        uuid: r.uuid || String(r[idCol]),
-        recordCode: r.code || r.record_code || null,
+        id: rowId,
+        uuid: r.uuid || (rowId ? String(rowId) : undefined),
+        recordCode: r.code || r.recordCode || r.record_code || null,
         status: r.status || 'Active',
         data: { ...rawData, ...coreData, ...extraData },
-        createdAt: r.created_at,
-        updatedAt: r.updated_at,
+        createdAt: r.createdAt || r.created_at,
+        updatedAt: r.updatedAt || r.updated_at,
       };
     });
 
@@ -727,6 +750,7 @@ export class MasterBuilderService {
    * Helper: format a real-table row into DynamicRecordItem shape
    */
   private formatSystemRecord(row: any, idCol: string, extraData: Record<string, any>, fields: any[]) {
+    if (!row) return null;
     const rawData: Record<string, any> = {};
     for (const [col, val] of Object.entries(row)) {
       rawData[col] = val;
@@ -739,18 +763,28 @@ export class MasterBuilderService {
     for (const f of fields) {
       const colMap = f.column_map || f.columnMap;
       const fKey = f.field_key || f.fieldKey;
-      if (colMap && row[colMap] !== undefined) {
-        coreData[fKey] = row[colMap];
+      if (colMap) {
+        const colCamel = colMap.replace(/_([a-z0-9])/g, (_, g) => g.toUpperCase());
+        const val = row[colMap] !== undefined ? row[colMap] : row[colCamel];
+        if (val !== undefined) {
+          coreData[fKey] = val;
+        }
       }
     }
+    const rowId =
+      row[idCol] ??
+      row[idCol.replace(/_([a-z0-9])/g, (_, g) => g.toUpperCase())] ??
+      row.id ??
+      row.companyId ??
+      row.company_id;
     return {
-      id: row[idCol],
-      uuid: row.uuid || String(row[idCol]),
-      recordCode: row.code || null,
+      id: rowId,
+      uuid: row.uuid || (rowId ? String(rowId) : undefined),
+      recordCode: row.code || row.recordCode || row.record_code || null,
       status: row.status || 'Active',
       data: { ...rawData, ...coreData, ...extraData },
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
+      createdAt: row.createdAt || row.created_at,
+      updatedAt: row.updatedAt || row.updated_at,
     };
   }
 
@@ -1636,9 +1670,26 @@ export class MasterBuilderService {
 
   // ─── Choice Lists ───────────────────────────────────────────────────────
 
+  private parseChoiceListOptions(row: any): Array<{ label: string; value: string; color?: string }> {
+    const raw = row.options || row.optionsJson || row.options_json;
+    if (!raw) return [];
+    if (Array.isArray(raw)) return raw;
+    if (typeof raw === 'string') {
+      try {
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
+    }
+    return [];
+  }
+
   async listChoiceLists(orgId: number) {
     const rows = await this.db('custom_master_choice_lists')
-      .where('organization_id', orgId)
+      .where((b: any) => {
+        b.where('organization_id', orgId).orWhereNull('organization_id');
+      })
       .orderBy('name', 'asc');
 
     return rows.map((r: any) => ({
@@ -1647,20 +1698,32 @@ export class MasterBuilderService {
       name: r.name,
       code: r.code,
       description: r.description,
-      options: typeof (r.optionsJson || r.options_json) === 'string' ? JSON.parse(r.optionsJson || r.options_json) : (r.optionsJson || r.options_json || []),
+      options: this.parseChoiceListOptions(r),
       status: r.status,
       createdAt: r.createdAt || r.created_at,
     }));
   }
 
-  async createChoiceList(orgId: number, payload: ChoiceListPayload) {
+  async createChoiceList(orgId: number, payload: any) {
+    const rawOptions = payload.optionsJson !== undefined ? payload.optionsJson : payload.options;
+    let optionsArray: any[] = [];
+    if (Array.isArray(rawOptions)) {
+      optionsArray = rawOptions;
+    } else if (typeof rawOptions === 'string') {
+      try {
+        optionsArray = JSON.parse(rawOptions);
+      } catch {
+        optionsArray = [];
+      }
+    }
+
     const [id] = await this.db('custom_master_choice_lists').insert({
       uuid: uuidv4(),
       organization_id: orgId,
-      name: payload.name.trim(),
-      code: payload.code.trim().toLowerCase().replace(/[^a-z0-9_]/g, '_'),
+      name: (payload.name || '').trim(),
+      code: (payload.code || payload.name || '').trim().toLowerCase().replace(/[^a-z0-9_]/g, '_'),
       description: payload.description || null,
-      options_json: JSON.stringify(payload.optionsJson || []),
+      options_json: JSON.stringify(optionsArray),
       status: payload.status || 'Active',
     });
     const r: any = await this.db('custom_master_choice_lists').where('id', id).first();
@@ -1670,18 +1733,32 @@ export class MasterBuilderService {
       name: r.name,
       code: r.code,
       description: r.description,
-      options: typeof (r.optionsJson || r.options_json) === 'string' ? JSON.parse(r.optionsJson || r.options_json) : (r.optionsJson || r.options_json || []),
+      options: this.parseChoiceListOptions(r),
       status: r.status,
       createdAt: r.createdAt || r.created_at,
     };
   }
 
-  async updateChoiceList(orgId: number, id: number, payload: Partial<ChoiceListPayload>) {
+  async updateChoiceList(orgId: number, id: number, payload: any) {
     const updateData: any = { updated_at: new Date() };
     if (payload.name !== undefined) updateData.name = payload.name;
     if (payload.code !== undefined) updateData.code = payload.code;
     if (payload.description !== undefined) updateData.description = payload.description;
-    if (payload.optionsJson !== undefined) updateData.options_json = JSON.stringify(payload.optionsJson);
+
+    const rawOptions = payload.optionsJson !== undefined ? payload.optionsJson : payload.options;
+    if (rawOptions !== undefined) {
+      let optionsArray: any[] = [];
+      if (Array.isArray(rawOptions)) {
+        optionsArray = rawOptions;
+      } else if (typeof rawOptions === 'string') {
+        try {
+          optionsArray = JSON.parse(rawOptions);
+        } catch {
+          optionsArray = [];
+        }
+      }
+      updateData.options_json = JSON.stringify(optionsArray);
+    }
     if (payload.status !== undefined) updateData.status = payload.status;
 
     await this.db('custom_master_choice_lists')
@@ -1696,7 +1773,7 @@ export class MasterBuilderService {
       name: r.name,
       code: r.code,
       description: r.description,
-      options: typeof (r.optionsJson || r.options_json) === 'string' ? JSON.parse(r.optionsJson || r.options_json) : (r.optionsJson || r.options_json || []),
+      options: this.parseChoiceListOptions(r),
       status: r.status,
       createdAt: r.createdAt || r.created_at,
     };
@@ -1912,16 +1989,70 @@ export class MasterBuilderService {
       }
     }
 
-    // 3. Validate custom rules
+    // 3. Validate custom rules (supports Numbers, Dates, Strings, and Conditions)
     for (const r of rules) {
       const valA = data[r.fieldA];
       const valB = r.fieldB ? data[r.fieldB] : r.customValue;
 
-      if (valA !== undefined && valB !== undefined) {
-        if (r.operator === '==' && String(valA) !== String(valB)) {
-          errors.push(r.errorMessage || `${r.fieldA} must equal ${r.fieldB || r.customValue}`);
-        } else if (r.operator === '!=' && String(valA) === String(valB)) {
-          errors.push(r.errorMessage || `${r.fieldA} cannot equal ${r.fieldB || r.customValue}`);
+      if (r.operator === 'required_if') {
+        const isBConditionMet = valB !== undefined && valB !== null && String(valB).trim() !== '' && valB !== false;
+        const isAEmpty = valA === undefined || valA === null || String(valA).trim() === '';
+        if (isBConditionMet && isAEmpty) {
+          errors.push(r.errorMessage || `${r.fieldA} is required when ${r.fieldB || 'condition'} is provided.`);
+        }
+        continue;
+      }
+
+      if (valA !== undefined && valA !== null && valA !== '' && valB !== undefined && valB !== null && valB !== '') {
+        const numA = Number(valA);
+        const numB = Number(valB);
+        const isBothNumeric = !isNaN(numA) && !isNaN(numB) && typeof valA !== 'boolean' && typeof valB !== 'boolean';
+
+        const dateA = new Date(valA).getTime();
+        const dateB = new Date(valB).getTime();
+        const isBothDate = !isBothNumeric && !isNaN(dateA) && !isNaN(dateB) && String(valA).includes('-') && String(valB).includes('-');
+
+        let isViolated = false;
+        if (r.operator === '==') {
+          isViolated = String(valA).trim().toLowerCase() !== String(valB).trim().toLowerCase();
+        } else if (r.operator === '!=') {
+          isViolated = String(valA).trim().toLowerCase() === String(valB).trim().toLowerCase();
+        } else if (r.operator === '>=') {
+          if (isBothNumeric) {
+            isViolated = !(numA >= numB);
+          } else if (isBothDate) {
+            isViolated = !(dateA >= dateB);
+          } else {
+            isViolated = !(String(valA) >= String(valB));
+          }
+        } else if (r.operator === '<=') {
+          if (isBothNumeric) {
+            isViolated = !(numA <= numB);
+          } else if (isBothDate) {
+            isViolated = !(dateA <= dateB);
+          } else {
+            isViolated = !(String(valA) <= String(valB));
+          }
+        } else if (r.operator === '>') {
+          if (isBothNumeric) {
+            isViolated = !(numA > numB);
+          } else if (isBothDate) {
+            isViolated = !(dateA > dateB);
+          } else {
+            isViolated = !(String(valA) > String(valB));
+          }
+        } else if (r.operator === '<') {
+          if (isBothNumeric) {
+            isViolated = !(numA < numB);
+          } else if (isBothDate) {
+            isViolated = !(dateA < dateB);
+          } else {
+            isViolated = !(String(valA) < String(valB));
+          }
+        }
+
+        if (isViolated) {
+          errors.push(r.errorMessage || `${r.fieldA} must satisfy condition (${r.operator}) with ${r.fieldB || r.customValue}`);
         }
       }
     }
@@ -2058,11 +2189,15 @@ export class MasterBuilderService {
     entity: string
   ): Promise<Array<{ label: string; value: string | number; meta?: Record<string, any> }>> {
     const db = this.db;
+    const normEntity = (entity || '').toLowerCase().replace(/-/g, '_').trim();
 
-    switch (entity) {
+    switch (normEntity) {
+      case 'company':
       case 'companies': {
         const rows = await db('company')
-          .where('organization_id', orgId)
+          .where((b: any) => {
+            b.where('organization_id', orgId).orWhereNull('organization_id');
+          })
           .whereNull('deleted_at')
           .orderBy('name', 'asc')
           .select('company_id as id', 'name', 'code');
@@ -2073,43 +2208,45 @@ export class MasterBuilderService {
         }));
       }
 
+      case 'department':
       case 'departments': {
         const query = db('departments')
+          .where('organization_id', orgId)
           .whereNull('deleted_at')
           .orderBy('name', 'asc')
           .select('id', 'name', 'code');
-        if (companyId) query.where('company_id', companyId);
-        else query.where('organization_id', orgId);
         const rows = await query;
         return rows.map((r: any) => ({ label: r.name, value: r.id, meta: { code: r.code } }));
       }
 
+      case 'designation':
       case 'designations': {
         const query = db('designations')
-          .whereNull('deleted_at')
-          .orderBy('title', 'asc')
-          .select('id', db.raw("COALESCE(title, name) as label_col"), 'code');
-        if (companyId) query.where('company_id', companyId);
-        else query.where('organization_id', orgId);
-        const rows = await query;
-        return rows.map((r: any) => ({ label: r.label_col || r.title || r.name, value: r.id }));
-      }
-
-      case 'locations': {
-        const query = db('locations')
+          .where('organization_id', orgId)
           .whereNull('deleted_at')
           .orderBy('name', 'asc')
           .select('id', 'name', 'code');
-        if (companyId) query.where('company_id', companyId);
-        else query.where('organization_id', orgId);
         const rows = await query;
-        return rows.map((r: any) => ({ label: r.name, value: r.id }));
+        return rows.map((r: any) => ({ label: r.name, value: r.id, meta: { code: r.code } }));
       }
 
+      case 'location':
+      case 'locations': {
+        const query = db('locations')
+          .where('organization_id', orgId)
+          .whereNull('deleted_at')
+          .orderBy('name', 'asc')
+          .select('id', 'name', 'code');
+        const rows = await query;
+        return rows.map((r: any) => ({ label: r.name, value: r.id, meta: { code: r.code } }));
+      }
+
+      case 'employee':
       case 'employees': {
         const query = db('employees as e')
           .leftJoin('employee_profiles as ep', 'e.id', 'ep.employee_id')
           .whereNull('e.deleted_at')
+          .where('e.organization_id', orgId)
           .orderByRaw("CONCAT(e.first_name, ' ', COALESCE(e.last_name, '')) ASC")
           .select(
             'e.id',
@@ -2117,7 +2254,6 @@ export class MasterBuilderService {
             db.raw("CONCAT(e.first_name, ' ', COALESCE(e.last_name, '')) as full_name")
           );
         if (companyId) query.where('e.company_id', companyId);
-        else query.where('e.organization_id', orgId);
         const rows = await query;
         return rows.map((r: any) => ({
           label: `${r.full_name}${r.employee_code ? ` (${r.employee_code})` : ''}`,
@@ -2125,54 +2261,47 @@ export class MasterBuilderService {
         }));
       }
 
+      case 'grade':
       case 'grades':
       case 'employee_status':
-      case 'employment_type': {
-        // These are custom masters — fetch their records
+      case 'employment_type':
+      case 'emp_type': {
         const codeMap: Record<string, string> = {
+          grade: 'grade',
           grades: 'grade',
           employee_status: 'employee-status',
           employment_type: 'emp-type',
+          emp_type: 'emp-type',
         };
-        const masterCode = codeMap[entity];
+        const masterCode = codeMap[normEntity] || normEntity;
         const master = await db('custom_masters')
           .where('organization_id', orgId)
           .where('code', masterCode)
           .whereNull('deleted_at')
           .first();
 
-        if (!master) return [];
-
-        // Try system masters first
-        const sysDef = this.SYSTEM_MASTER_MAP?.[masterCode];
-        if (sysDef) {
-          try {
-            const rows = await db(sysDef.systemTable)
-              .where('organization_id', orgId)
-              .whereNull('deleted_at')
-              .orderBy(sysDef.systemNameColumn, 'asc')
-              .select(sysDef.systemIdColumn + ' as id', sysDef.systemNameColumn + ' as name', 'code');
-            return rows.map((r: any) => ({ label: r.name, value: r.code || r.id }));
-          } catch {}
+        if (master) {
+          const res = await this.listRecords(orgId, companyId, master.id, { limit: 100 });
+          return (res.records || []).map((r: any) => {
+            const label =
+              r.data?.name ||
+              r.data?.grade_name ||
+              r.data?.gradeName ||
+              r.data?.status_name ||
+              r.data?.statusName ||
+              r.data?.type_name ||
+              r.data?.typeName ||
+              r.recordCode ||
+              Object.values(r.data || {})[0] ||
+              `Record #${r.id}`;
+            return { label: String(label), value: String(label) };
+          });
         }
-
-        // Fallback: custom_master_records
-        const records = await db('custom_master_records')
-          .where('master_id', master.id)
-          .where('organization_id', orgId)
-          .where('status', 'Active')
-          .whereNull('deleted_at')
-          .orderBy('record_code', 'asc')
-          .select('id', 'record_code', 'data');
-        return records.map((r: any) => {
-          const data = typeof r.data === 'string' ? JSON.parse(r.data) : r.data || {};
-          const label = data.name || data.title || r.record_code || `Record #${r.id}`;
-          return { label, value: r.record_code || r.id };
-        });
+        return [];
       }
 
       default:
-        throw new Error(`Unknown db_lookup entity: "${entity}". Supported: companies, departments, designations, locations, employees, grades, employee_status, employment_type`);
+        return [];
     }
   }
 

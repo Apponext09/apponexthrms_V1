@@ -101,9 +101,9 @@ const FIXED_KPI_PATHS: Record<string, string> = {
 // ─── Optional KPI paths ───────────────────────────────────────────────────────
 const OPTIONAL_KPI_PATHS: Record<string, string> = {
   openJobs: '/recruitment/jobs',
-  pendingApprovals: '/leaves/approvals',
-  newHires: '/recruitment/offers',
-  onLeaveToday: '/approvals/dashboard',
+  pendingApprovals: '/approvals/dashboard',
+  newHires: '/employees',
+  onLeaveToday: '/attendance',
   reportingOfficers: '/org-structure',
 };
 
@@ -307,7 +307,16 @@ export function OrgAdminDashboard() {
 
       {/* ── Optional KPI Row ── */}
       {activeOptionalKpis.length > 0 && (
-        <section aria-label="Additional KPI metrics" className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <section
+          aria-label="Additional KPI metrics"
+          className={`grid grid-cols-1 gap-4 sm:grid-cols-2 ${
+            activeOptionalKpis.length === 5
+              ? 'md:grid-cols-3 lg:grid-cols-5'
+              : activeOptionalKpis.length === 3
+              ? 'lg:grid-cols-3'
+              : 'lg:grid-cols-4'
+          }`}
+        >
           {activeOptionalKpis.map(({ id, icon: Icon, label, value, path }) => (
             <Card
               key={id}

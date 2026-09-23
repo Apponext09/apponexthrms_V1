@@ -609,15 +609,22 @@ Hiring Panel & HR Team
 
       if (hiredApps.length > 0) {
         let totalDays = 0;
+        let validCount = 0;
         for (const app of hiredApps) {
           const appliedDate = new Date(app.applied_at || app.appliedAt || app.created_at || app.createdAt);
           const endDate = new Date(app.updated_at || app.updatedAt || new Date());
-          const days = Math.max(0, Math.floor((endDate.getTime() - appliedDate.getTime()) / (1000 * 60 * 60 * 24)));
-          totalDays += days;
+          if (!isNaN(appliedDate.getTime()) && !isNaN(endDate.getTime())) {
+            const diffDays = Math.max(0, Math.round((endDate.getTime() - appliedDate.getTime()) / (1000 * 60 * 60 * 24)));
+            totalDays += Math.max(1, diffDays);
+            validCount++;
+          }
         }
-        avgTimeToHire = Math.round(totalDays / hiredApps.length);
+        avgTimeToHire = validCount > 0 ? Math.round(totalDays / validCount) : 0;
       }
-    } catch (e) {}
+    } catch (e) {
+      console.warn('Error calculating avgTimeToHire:', e);
+      avgTimeToHire = 0;
+    }
 
     const stats = {
       totalOpenJobs,
@@ -629,7 +636,7 @@ Hiring Panel & HR Team
       offerCount: stageCounts.offer,
       hiredCount: stageCounts.hired,
       rejectedCount: stageCounts.rejected,
-      timeToHire: avgTimeToHire || (funnel.hired > 0 ? 14 : 0),
+      timeToHire: avgTimeToHire,
       conversionRate: conversions.appliedToHired,
     };
 

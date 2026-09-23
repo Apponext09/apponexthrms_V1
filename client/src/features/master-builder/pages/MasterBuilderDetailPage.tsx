@@ -19,7 +19,8 @@ import {
   Table as TableIcon,
   CheckCircle2,
   AlertCircle,
-  Inbox
+  Inbox,
+  Info
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -99,12 +100,16 @@ export function MasterBuilderDetailPage() {
   const [rCustomValue, setRCustomValue] = useState('');
   const [rErrorMessage, setRErrorMessage] = useState('');
   const [rIsActive, setRIsActive] = useState(true);
+  const [showRuleInfo, setShowRuleInfo] = useState(false);
+  const [showModalRuleInfo, setShowModalRuleInfo] = useState(false);
 
   // Autofill Modal state
   const [isAutofillModalOpen, setIsAutofillModalOpen] = useState(false);
   const [afLookupField, setAfLookupField] = useState('');
   const [afSourceField, setAfSourceField] = useState('');
   const [afTargetField, setAfTargetField] = useState('');
+  const [showAutofillInfo, setShowAutofillInfo] = useState(false);
+  const [showModalAutofillInfo, setShowModalAutofillInfo] = useState(false);
 
   const loadMaster = async () => {
     if (!masterId) return;
@@ -149,12 +154,124 @@ export function MasterBuilderDetailPage() {
   }, [master?.fields, selectedFieldId]);
 
   const lookupFields = useMemo(() => {
-    return (master?.fields || []).filter((f: any) => (f.fieldType || f.field_type) === 'lookup');
+    return (master?.fields || []).filter((f: any) => {
+      const ft = f.fieldType || f.field_type;
+      return ft === 'lookup' || ft === 'db_lookup' || Boolean(f.lookupMasterId || f.lookup_master_id);
+    });
   }, [master?.fields]);
 
   const existingSections = useMemo(() => {
     return (master?.fields || []).filter((f: any) => (f.fieldType || f.field_type) === 'section');
   }, [master?.fields]);
+
+  const availableSourceFields = useMemo(() => {
+    if (!afLookupField) return [];
+    const selectedLf = lookupFields.find(
+      (f: any) => (f.fieldKey || f.field_key) === afLookupField
+    );
+    if (!selectedLf) return [];
+
+    const targetMasterId = Number(
+      selectedLf.lookupMasterId ||
+      selectedLf.lookup_master_id ||
+      selectedLf.optionsJson?.lookupMasterId ||
+      selectedLf.options_json?.lookupMasterId
+    );
+    const targetCode = (
+      selectedLf.optionsJson?.lookupMasterCode ||
+      selectedLf.options_json?.lookupMasterCode ||
+      selectedLf.fieldKey ||
+      selectedLf.field_key ||
+      ''
+    ).toLowerCase();
+
+    // 1. If target is Company or Ref
+    if (
+      targetCode === 'company' ||
+      targetCode === 'ref' ||
+      selectedLf.fieldKey === 'ref' ||
+      selectedLf.fieldName?.toLowerCase() === 'company' ||
+      targetMasterId === allMasters.find((m) => m.code === 'company')?.id
+    ) {
+      return [
+        { label: 'Company Name (name)', key: 'name' },
+        { label: 'Employer Name (employer_name)', key: 'employer_name' },
+        { label: 'Establishment Code (code)', key: 'code' },
+        { label: 'Address Line 1 (address_line_1)', key: 'address_line_1' },
+        { label: 'Address Line 2 (address_line_2)', key: 'address_line_2' },
+        { label: 'Country (country)', key: 'country' },
+        { label: 'State (state)', key: 'state' },
+        { label: 'City (city)', key: 'city' },
+        { label: 'ZIP / Postal Code (zip_code)', key: 'zip_code' },
+        { label: 'PAN / TIN Number (pan_tin)', key: 'pan_tin' },
+        { label: 'Official Email (email)', key: 'email' },
+        { label: 'Contact Number (contact_number)', key: 'contact_number' },
+        { label: 'Class of Establishment (class_of_establishment)', key: 'class_of_establishment' },
+        { label: 'Company Logo (logo)', key: 'logo' },
+      ];
+    }
+
+    // 2. If target is a Custom Master in allMasters
+    if (targetMasterId) {
+      const foundMaster = allMasters.find((m) => m.id === targetMasterId);
+      if (foundMaster?.fields?.length) {
+        return foundMaster.fields
+          .filter((f: any) => (f.fieldType || f.field_type) !== 'section')
+          .map((f: any) => ({
+            label: `${f.fieldName || f.field_name} (${f.fieldKey || f.field_key})`,
+            key: f.fieldKey || f.field_key,
+          }));
+      }
+    }
+
+    // 3. If DB Lookup entity (e.g. grades, departments, designations, locations)
+    const entity = (selectedLf.optionsJson?.dbLookupEntity || selectedLf.fieldKey || '').toLowerCase();
+    if (entity.includes('grade')) {
+      return [
+        { label: 'Grade Name (name)', key: 'name' },
+        { label: 'Grade Code (code)', key: 'code' },
+        { label: 'Record ID (id)', key: 'id' },
+      ];
+    }
+    if (entity.includes('department')) {
+      return [
+        { label: 'Department Name (name)', key: 'name' },
+        { label: 'Department Code (code)', key: 'code' },
+        { label: 'Record ID (id)', key: 'id' },
+      ];
+    }
+    if (entity.includes('designation')) {
+      return [
+        { label: 'Designation Title (name)', key: 'name' },
+        { label: 'Designation Code (code)', key: 'code' },
+        { label: 'Record ID (id)', key: 'id' },
+      ];
+    }
+    if (entity.includes('location')) {
+      return [
+        { label: 'Location Name (name)', key: 'name' },
+        { label: 'Location Code (code)', key: 'code' },
+        { label: 'City (city)', key: 'city' },
+        { label: 'State (state)', key: 'state' },
+        { label: 'Country (country)', key: 'country' },
+        { label: 'Record ID (id)', key: 'id' },
+      ];
+    }
+
+    // Fallback standard fields
+    return [
+      { label: 'Name (name)', key: 'name' },
+      { label: 'Code (code)', key: 'code' },
+      { label: 'City (city)', key: 'city' },
+      { label: 'State (state)', key: 'state' },
+      { label: 'Country (country)', key: 'country' },
+      { label: 'Email (email)', key: 'email' },
+      { label: 'Phone / Contact (contact_number)', key: 'contact_number' },
+      { label: 'PAN Number (pan_tin)', key: 'pan_tin' },
+      { label: 'Address (address_line_1)', key: 'address_line_1' },
+      { label: 'Record ID (id)', key: 'id' },
+    ];
+  }, [afLookupField, lookupFields, allMasters]);
 
   // Field Handlers
   const handleOpenFieldModal = (field?: any) => {
@@ -169,9 +286,10 @@ export function MasterBuilderDetailPage() {
       setFShowInTable(Boolean(field.showInTable ?? field.show_in_table ?? true));
       setFHelpText(field.helpText || field.help_text || '');
       setFPlaceholder(field.placeholder || '');
-      setFDefaultValue(field.defaultValue || field.default_value || '');
-      setFChoiceListId(field.choiceListId || field.choice_list_id);
-      setFLookupMasterId(field.lookupMasterId || field.lookup_master_id);
+      const rawClId = field.choiceListId || field.choice_list_id;
+      setFChoiceListId(rawClId ? Number(rawClId) : undefined);
+      const rawLmId = field.lookupMasterId || field.lookup_master_id;
+      setFLookupMasterId(rawLmId ? Number(rawLmId) : undefined);
       const opts = field.optionsJson || (field as any).options_json || {};
       setFDbLookupEntity(opts.dbLookupEntity || '');
       setFColSpan(opts.colSpan || 2);
@@ -285,8 +403,24 @@ export function MasterBuilderDetailPage() {
       if (fType === 'image' || fType === 'file') {
         builtOptionsJson.fileAccept = fFileAccept;
       }
-      if (fType === 'gender') {
-        builtOptionsJson.genderOptions = fGenderOptions.filter(Boolean);
+      if (fType === 'lookup' && fLookupMasterId) {
+        const targetMaster = allMasters.find((m) => m.id === fLookupMasterId);
+        builtOptionsJson.lookupMasterId = fLookupMasterId;
+        if (targetMaster) {
+          builtOptionsJson.lookupMasterCode = targetMaster.code;
+          builtOptionsJson.lookupMasterName = targetMaster.name;
+        }
+      }
+      if (fType === 'choice' && fChoiceListId) {
+        const targetCl = choiceLists.find((cl) => cl.id === fChoiceListId);
+        builtOptionsJson.choiceListId = fChoiceListId;
+        if (targetCl) {
+          builtOptionsJson.choiceListCode = targetCl.code;
+          builtOptionsJson.choiceListName = targetCl.name;
+        }
+      }
+      if (fType === 'db_lookup' && fDbLookupEntity) {
+        builtOptionsJson.dbLookupEntity = fDbLookupEntity;
       }
 
       const fieldPayload = {
@@ -419,20 +553,34 @@ export function MasterBuilderDetailPage() {
   };
 
   // Autofill Handlers
+  const handleOpenAutofillModal = () => {
+    const firstLf = lookupFields[0];
+    const initialLfKey = firstLf ? (firstLf.fieldKey || firstLf.field_key || '') : '';
+    setAfLookupField(initialLfKey);
+    const nonLookupFields = (master?.fields || []).filter((f: any) => {
+      const ft = f.fieldType || f.field_type;
+      return ft !== 'lookup' && ft !== 'section';
+    });
+    setAfTargetField(nonLookupFields[0]?.fieldKey || nonLookupFields[0]?.field_key || '');
+    setAfSourceField('');
+    setIsAutofillModalOpen(true);
+  };
+
   const handleSaveAutofill = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!afLookupField || !afSourceField || !afTargetField) return;
+    if (!afLookupField || !afSourceField.trim() || !afTargetField) return;
     try {
       await masterBuilderApi.addAutofillMapping(masterId, {
         lookupFieldKey: afLookupField,
-        sourceFieldKey: afSourceField,
+        sourceFieldKey: afSourceField.trim(),
         targetFieldKey: afTargetField,
         isActive: true,
       });
       setIsAutofillModalOpen(false);
+      setAfSourceField('');
       loadMaster();
     } catch (err: any) {
-      window.appAlert('Failed to add autofill mapping');
+      window.appAlert(err?.response?.data?.message || err?.message || 'Failed to add autofill mapping');
     }
   };
 
@@ -783,18 +931,82 @@ export function MasterBuilderDetailPage() {
       {/* Tab 2: AUTOFILL MAPPINGS (Image 4) */}
       {activeTab === 'autofill' && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">
-              Fill fields from the record a Lookup points at.
-            </p>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <p className="text-sm text-muted-foreground">
+                Fill fields from the record a Lookup points at.
+              </p>
+              <button
+                type="button"
+                onClick={() => setShowAutofillInfo((prev) => !prev)}
+                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border transition-colors ${
+                  showAutofillInfo
+                    ? 'bg-primary text-primary-foreground border-primary'
+                    : 'bg-primary/10 text-primary border-primary/20 hover:bg-primary/20'
+                }`}
+                title="How autofill mappings work"
+              >
+                <Info className="h-3.5 w-3.5" />
+                <span>How it works</span>
+              </button>
+            </div>
             <Button
-              onClick={() => setIsAutofillModalOpen(true)}
+              onClick={handleOpenAutofillModal}
               disabled={lookupFields.length === 0}
-              className="gap-2"
+              className="gap-2 bg-primary font-semibold"
             >
               <Plus className="h-4 w-4" /> Add mapping
             </Button>
           </div>
+
+          {showAutofillInfo && (
+            <div className="p-4 rounded-xl border border-sky-200 bg-sky-50/80 dark:bg-sky-950/30 dark:border-sky-800 text-xs space-y-3 shadow-xs">
+              <div className="flex items-center justify-between font-bold text-sky-900 dark:text-sky-300">
+                <span className="flex items-center gap-2 text-sm">
+                  <Info className="h-4 w-4 text-sky-600 dark:text-sky-400" /> Autofill Mappings Guide & Real-World Examples
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowAutofillInfo(false)}
+                  className="text-muted-foreground hover:text-foreground text-xs font-semibold"
+                >
+                  ✕ Close Guide
+                </button>
+              </div>
+              <p className="text-muted-foreground leading-relaxed">
+                Autofill automatically copies related data when a user picks an option in a <strong>Lookup / Reference</strong> dropdown.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+                <div className="p-3 rounded-lg bg-background border border-border space-y-1.5 shadow-xs">
+                  <div className="flex items-center gap-1.5 font-bold text-foreground">
+                    <span>🏢</span>
+                    <span>Company / Vendor Autofill</span>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground leading-snug">
+                    When selecting <strong className="text-foreground">Company</strong> in a lookup &rarr; auto-populates <strong className="text-foreground">City, State, Country, PAN Number, or Address</strong>.
+                  </p>
+                </div>
+                <div className="p-3 rounded-lg bg-background border border-border space-y-1.5 shadow-xs">
+                  <div className="flex items-center gap-1.5 font-bold text-foreground">
+                    <span>📍</span>
+                    <span>Location / Branch Autofill</span>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground leading-snug">
+                    When selecting <strong className="text-foreground">Branch / Location</strong> &rarr; auto-fills <strong className="text-foreground">City, State, and Office Code</strong>.
+                  </p>
+                </div>
+                <div className="p-3 rounded-lg bg-background border border-border space-y-1.5 shadow-xs">
+                  <div className="flex items-center gap-1.5 font-bold text-foreground">
+                    <span>👥</span>
+                    <span>Manager / Employee Autofill</span>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground leading-snug">
+                    When picking <strong className="text-foreground">Reporting Manager</strong> &rarr; auto-fills <strong className="text-foreground">Department and Manager Email</strong>.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {lookupFields.length === 0 ? (
             <div className="border border-dashed border-border rounded-xl p-12 text-center bg-card/40 space-y-3">
@@ -803,7 +1015,7 @@ export function MasterBuilderDetailPage() {
               </div>
               <h3 className="font-bold text-foreground">Add a Lookup field first</h3>
               <p className="text-xs text-muted-foreground max-w-md mx-auto leading-relaxed">
-                Autofill copies values off the record a Lookup field points at — for example a Pincode field that fills in City and State. Add a Lookup field to this master and it will show up here.
+                Autofill copies values off the record a Lookup field points at — for example a Company field that fills in City and PAN. Add a Lookup field to this master and it will show up here.
               </p>
             </div>
           ) : (
@@ -814,13 +1026,16 @@ export function MasterBuilderDetailPage() {
                 </div>
               ) : (
                 master.autofillMappings.map((af) => (
-                  <div key={af.id} className="p-4 flex items-center justify-between">
+                  <div key={af.id} className="p-4 flex items-center justify-between hover:bg-muted/30 transition-colors">
                     <div className="space-y-1">
-                      <span className="font-semibold text-sm text-foreground">
-                        {af.lookupFieldKey}.{af.sourceFieldKey} → {af.targetFieldKey}
-                      </span>
-                      <p className="text-xs text-muted-foreground">
-                        Copies {af.sourceFieldKey} from referenced record into {af.targetFieldKey}
+                      <div className="flex items-center gap-2">
+                        <Zap className="h-4 w-4 text-amber-500 shrink-0" />
+                        <span className="font-semibold text-sm text-foreground">
+                          {af.lookupFieldKey}.{af.sourceFieldKey} &rarr; {af.targetFieldKey}
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground pl-6">
+                        When <strong>{af.lookupFieldKey}</strong> is chosen, copies <strong>{af.sourceFieldKey}</strong> into <strong>{af.targetFieldKey}</strong>
                       </p>
                     </div>
                     <Button
@@ -828,6 +1043,7 @@ export function MasterBuilderDetailPage() {
                       size="icon"
                       onClick={() => handleDeleteAutofill(af.id)}
                       className="text-destructive hover:bg-destructive/10"
+                      title="Delete mapping"
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -843,13 +1059,91 @@ export function MasterBuilderDetailPage() {
       {activeTab === 'rules' && (
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-            <p className="text-sm text-muted-foreground">
-              Checks across two fields, run every time a record is saved.
-            </p>
+            <div className="flex items-center gap-2">
+              <p className="text-sm text-muted-foreground">
+                Checks across two fields, run every time a record is saved.
+              </p>
+              <button
+                type="button"
+                onClick={() => setShowRuleInfo((prev) => !prev)}
+                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border transition-colors ${
+                  showRuleInfo
+                    ? 'bg-primary text-primary-foreground border-primary'
+                    : 'bg-primary/10 text-primary border-primary/20 hover:bg-primary/20'
+                }`}
+                title="How validation rules work"
+              >
+                <Info className="h-3.5 w-3.5" />
+                <span>How it works</span>
+              </button>
+            </div>
             <Button onClick={() => handleOpenRuleModal()} className="gap-2 bg-primary font-semibold">
               <Plus className="h-4 w-4" /> Add rule
             </Button>
           </div>
+
+          {showRuleInfo && (
+            <div className="p-4 rounded-xl border border-sky-200 bg-sky-50/80 dark:bg-sky-950/30 dark:border-sky-800 text-xs space-y-3 shadow-xs">
+              <div className="flex items-center justify-between font-bold text-sky-900 dark:text-sky-300">
+                <span className="flex items-center gap-2 text-sm">
+                  <Info className="h-4 w-4 text-sky-600 dark:text-sky-400" /> Validation Rules Guide & Examples
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowRuleInfo(false)}
+                  className="text-muted-foreground hover:text-foreground text-xs"
+                >
+                  ✕ Close Guide
+                </button>
+              </div>
+              <p className="text-muted-foreground leading-relaxed">
+                Validation rules prevent users from submitting invalid data by comparing two fields (or a field with a static value).
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 pt-1">
+                <div className="p-3 rounded-lg bg-background border border-border space-y-1.5 shadow-xs">
+                  <div className="flex items-center gap-1.5 font-bold text-foreground">
+                    <span>🔢</span>
+                    <span>Numeric / Currency</span>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground leading-snug">
+                    <strong className="text-foreground font-semibold">Max Salary &ge; Min Salary</strong><br />
+                    Ensures upper limit or budget isn't lower than the minimum limit.
+                  </p>
+                </div>
+                <div className="p-3 rounded-lg bg-background border border-border space-y-1.5 shadow-xs">
+                  <div className="flex items-center gap-1.5 font-bold text-foreground">
+                    <span>📅</span>
+                    <span>Date Ranges</span>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground leading-snug">
+                    <strong className="text-foreground font-semibold">End Date &ge; Start Date</strong><br />
+                    Compares calendar dates chronologically so end date is after start date.
+                  </p>
+                </div>
+                <div className="p-3 rounded-lg bg-background border border-border space-y-1.5 shadow-xs">
+                  <div className="flex items-center gap-1.5 font-bold text-foreground">
+                    <span>🔤</span>
+                    <span>Text & Strings</span>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground leading-snug">
+                    <strong className="text-foreground font-semibold">Confirm Email == Email</strong><br />
+                    <strong className="text-foreground font-semibold">Alt Phone != Phone</strong><br />
+                    Validates text matches or ensures fields are distinct.
+                  </p>
+                </div>
+                <div className="p-3 rounded-lg bg-background border border-border space-y-1.5 shadow-xs">
+                  <div className="flex items-center gap-1.5 font-bold text-foreground">
+                    <span>⚡</span>
+                    <span>Required If</span>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground leading-snug">
+                    <strong className="text-foreground font-semibold">GST No (If Registered)</strong><br />
+                    Field A becomes mandatory only when Field B contains a value.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="border border-border rounded-xl bg-card divide-y divide-border/60 overflow-hidden shadow-sm">
             {master.validationRules?.length === 0 ? (
@@ -1449,10 +1743,74 @@ export function MasterBuilderDetailPage() {
 
       {/* Validation Rule Modal */}
       <Dialog open={isRuleModalOpen} onOpenChange={setIsRuleModalOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>{editingRule ? 'Edit Validation Rule' : 'Add Validation Rule'}</DialogTitle>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader className="flex flex-row items-center justify-between space-y-0 pb-1">
+            <div className="flex items-center gap-2">
+              <DialogTitle>{editingRule ? 'Edit Validation Rule' : 'Add Validation Rule'}</DialogTitle>
+              <button
+                type="button"
+                onClick={() => setShowModalRuleInfo((prev) => !prev)}
+                className={`p-1 rounded-full transition-colors ${
+                  showModalRuleInfo
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:bg-muted hover:text-primary'
+                }`}
+                title="How validation rules work (Click to view examples)"
+              >
+                <Info className="h-4 w-4" />
+              </button>
+            </div>
           </DialogHeader>
+
+          {showModalRuleInfo && (
+            <div className="p-3.5 rounded-xl border border-sky-200 bg-sky-50/90 dark:bg-sky-950/40 dark:border-sky-800 text-xs space-y-2.5">
+              <div className="flex items-center justify-between font-bold text-sky-900 dark:text-sky-300">
+                <span className="flex items-center gap-1.5">
+                  <Info className="h-4 w-4 text-sky-600 dark:text-sky-400" /> How Validation Rules Work
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowModalRuleInfo(false)}
+                  className="text-muted-foreground hover:text-foreground text-xs font-semibold"
+                >
+                  ✕ Close
+                </button>
+              </div>
+              <p className="text-muted-foreground leading-relaxed">
+                Rules check values across two fields before saving. Works for <strong>all data types</strong>:
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+                <div className="p-2 rounded-lg bg-background border border-border space-y-0.5">
+                  <span className="font-bold text-foreground block">🔢 Numeric (Amounts / CTC)</span>
+                  <p className="text-muted-foreground">
+                    <strong className="text-foreground">Max Salary &ge; Min Salary</strong><br />
+                    Upper amount cannot be less than minimum amount.
+                  </p>
+                </div>
+                <div className="p-2 rounded-lg bg-background border border-border space-y-0.5">
+                  <span className="font-bold text-foreground block">📅 Dates (Date Range)</span>
+                  <p className="text-muted-foreground">
+                    <strong className="text-foreground">End Date &ge; Start Date</strong><br />
+                    Ensures end date is chronologically after start date.
+                  </p>
+                </div>
+                <div className="p-2 rounded-lg bg-background border border-border space-y-0.5">
+                  <span className="font-bold text-foreground block">🔤 Text / String (Match)</span>
+                  <p className="text-muted-foreground">
+                    <strong className="text-foreground">Confirm Email == Email</strong><br />
+                    Validates that both fields match exactly.
+                  </p>
+                </div>
+                <div className="p-2 rounded-lg bg-background border border-border space-y-0.5">
+                  <span className="font-bold text-foreground block">⚡ Required If (Condition)</span>
+                  <p className="text-muted-foreground">
+                    <strong className="text-foreground">GST No</strong> (If <strong>Registered</strong>)<br />
+                    Field A is required only when Field B has a value.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
           <form onSubmit={handleSaveRule} className="space-y-4">
             <div className="space-y-1.5">
@@ -1528,6 +1886,193 @@ export function MasterBuilderDetailPage() {
               </Button>
               <Button type="submit">
                 {editingRule ? 'Update Rule' : 'Save Rule'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Autofill Mapping Modal */}
+      <Dialog open={isAutofillModalOpen} onOpenChange={setIsAutofillModalOpen}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader className="flex flex-row items-center justify-between space-y-0 pb-1">
+            <div className="flex items-center gap-2">
+              <DialogTitle>Add Autofill Mapping</DialogTitle>
+              <button
+                type="button"
+                onClick={() => setShowModalAutofillInfo((prev) => !prev)}
+                className={`p-1 rounded-full transition-colors ${
+                  showModalAutofillInfo
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:bg-muted hover:text-primary'
+                }`}
+                title="How autofill mappings work (Click to view examples)"
+              >
+                <Info className="h-4 w-4" />
+              </button>
+            </div>
+          </DialogHeader>
+
+          {showModalAutofillInfo && (
+            <div className="p-3.5 rounded-xl border border-sky-200 bg-sky-50/90 dark:bg-sky-950/40 dark:border-sky-800 text-xs space-y-2.5">
+              <div className="flex items-center justify-between font-bold text-sky-900 dark:text-sky-300">
+                <span className="flex items-center gap-1.5">
+                  <Info className="h-4 w-4 text-sky-600 dark:text-sky-400" /> How Autofill Mappings Work
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowModalAutofillInfo(false)}
+                  className="text-muted-foreground hover:text-foreground text-xs font-semibold"
+                >
+                  ✕ Close
+                </button>
+              </div>
+              <p className="text-muted-foreground leading-relaxed">
+                When a user selects an option in the <strong>Lookup Field</strong>, the system automatically pulls the <strong>Source Field</strong> from the chosen record and fills it into your <strong>Target Field</strong> in this master.
+              </p>
+              <div className="p-2.5 rounded-lg bg-background border border-border text-[11px] space-y-1">
+                <span className="font-bold text-foreground">💡 Real Example:</span>
+                <p className="text-muted-foreground leading-relaxed">
+                  • <strong>1. Lookup Field:</strong> Ref (Company)<br />
+                  • <strong>2. Source Field:</strong> city<br />
+                  • <strong>3. Target Field in this form:</strong> City<br />
+                  <em>&rarr; Selecting "Kosqu Technolab" will immediately populate the City field!</em>
+                </p>
+              </div>
+            </div>
+          )}
+
+          <form onSubmit={handleSaveAutofill} className="space-y-4">
+            {/* 1. Lookup Field */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-foreground">1. When this Lookup field is selected *</label>
+              <select
+                value={afLookupField}
+                onChange={(e) => {
+                  const newLf = e.target.value;
+                  setAfLookupField(newLf);
+                  setAfSourceField('');
+                }}
+                required
+                className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary font-medium"
+              >
+                <option value="">-- Select Lookup Field --</option>
+                {lookupFields.map((f: any) => (
+                  <option key={f.id} value={f.fieldKey || f.field_key}>
+                    {f.fieldName || f.field_name} ({f.fieldKey || f.field_key})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* 2. Source Field */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-foreground flex items-center justify-between">
+                <span>2. Pull this Source Field from referenced record *</span>
+                <span className="text-[10px] text-muted-foreground">{availableSourceFields.length} fields available</span>
+              </label>
+
+              <select
+                value={afSourceField}
+                onChange={(e) => {
+                  const newSource = e.target.value;
+                  setAfSourceField(newSource);
+                  // Auto-pair target field if target has same key/name
+                  const matchingTarget = (master?.fields || []).find((f: any) => {
+                    const k = f.fieldKey || f.field_key || '';
+                    const n = f.fieldName || f.field_name || '';
+                    return (
+                      k.toLowerCase() === newSource.toLowerCase() ||
+                      n.toLowerCase() === newSource.toLowerCase() ||
+                      k.toLowerCase().includes(newSource.toLowerCase())
+                    );
+                  });
+                  if (matchingTarget) {
+                    setAfTargetField(matchingTarget.fieldKey || matchingTarget.field_key);
+                  }
+                }}
+                required
+                className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary font-medium"
+              >
+                <option value="">-- Select Source Field from Referenced Master --</option>
+                {availableSourceFields.map((sf) => (
+                  <option key={sf.key} value={sf.key}>
+                    {sf.label}
+                  </option>
+                ))}
+              </select>
+
+              {/* Quick field chips */}
+              <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                <span className="text-[10px] text-muted-foreground font-semibold">Quick select:</span>
+                {availableSourceFields.slice(0, 7).map((sf) => (
+                  <button
+                    key={sf.key}
+                    type="button"
+                    onClick={() => {
+                      setAfSourceField(sf.key);
+                      const matchingTarget = (master?.fields || []).find((f: any) => {
+                        const k = f.fieldKey || f.field_key || '';
+                        const n = f.fieldName || f.field_name || '';
+                        return (
+                          k.toLowerCase() === sf.key.toLowerCase() ||
+                          n.toLowerCase() === sf.key.toLowerCase()
+                        );
+                      });
+                      if (matchingTarget) {
+                        setAfTargetField(matchingTarget.fieldKey || matchingTarget.field_key);
+                      }
+                    }}
+                    className={`px-2 py-0.5 rounded text-[10px] border transition-colors ${
+                      afSourceField === sf.key
+                        ? 'bg-primary text-primary-foreground border-primary font-bold'
+                        : 'border-border bg-muted/50 hover:bg-primary/10 hover:text-primary hover:border-primary/30'
+                    }`}
+                  >
+                    {sf.key}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 3. Target Field */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-foreground">3. Auto-populate into this Target Field in this form *</label>
+              <select
+                value={afTargetField}
+                onChange={(e) => setAfTargetField(e.target.value)}
+                required
+                className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                <option value="">-- Select Target Field in this Master --</option>
+                {(master?.fields || [])
+                  .filter((f: any) => (f.fieldType || f.field_type) !== 'section')
+                  .map((f: any) => (
+                    <option key={f.id} value={f.fieldKey || f.field_key}>
+                      {f.fieldName || f.field_name} ({f.fieldKey || f.field_key})
+                    </option>
+                  ))}
+              </select>
+            </div>
+
+            {/* Preview Box */}
+            {afLookupField && afSourceField && afTargetField && (
+              <div className="p-3 rounded-lg border border-primary/20 bg-primary/5 text-xs text-foreground space-y-1">
+                <span className="font-bold text-primary flex items-center gap-1">
+                  <Zap className="h-3.5 w-3.5 text-amber-500" /> Mapping Preview:
+                </span>
+                <p className="text-muted-foreground">
+                  Selecting <strong>{afLookupField}</strong> will copy <strong>{afSourceField}</strong> &rarr; <strong>{afTargetField}</strong>
+                </p>
+              </div>
+            )}
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setIsAutofillModalOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={!afLookupField || !afSourceField || !afTargetField}>
+                Save Mapping
               </Button>
             </DialogFooter>
           </form>

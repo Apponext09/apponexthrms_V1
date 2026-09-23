@@ -1,5 +1,6 @@
 import { getKnex } from '../../db/knex';
 import type { TenantContext } from '../../db/types';
+import { approvalRepository } from '../approvals/repositories/ApprovalRepository';
 
 export interface AdminDashboardStats {
   companyInfo: {
@@ -344,18 +345,15 @@ export class AdminDashboardService {
     }
 
     // ── Open Job Postings ─────────────────────────────────────────────────────
-    // Matches the "Open Positions" KPI on /recruitment/jobs:
-    // COUNT jobs WHERE status = 'published' (active open postings only).
+    // Matches active open/published job postings
     let openJobs = 0;
     try {
       const hasJobsTable = await db.schema.hasTable('jobs');
       if (hasJobsTable) {
         let openJobsQuery = db('jobs')
           .whereNull('deleted_at')
-          .where('status', 'published'); // only 'published' = open on the jobs page
+          .whereIn('status', ['published', 'active', 'open', 'Published', 'Active', 'Open']);
         if (targetCompanyId) {
-          // Older job records are tied to a company through their location rather
-          // than a direct company_id column.
           const hasJobCompanyId = await db.schema.hasColumn('jobs', 'company_id');
           if (hasJobCompanyId) {
             openJobsQuery = openJobsQuery.where('company_id', targetCompanyId);
@@ -376,113 +374,71 @@ export class AdminDashboardService {
     }
 
     // ── Pending Approvals (Approval Inbox total) ──────────────────────────────
-    // Matches the Approval Inbox count on /approvals/dashboard.
     let pendingApprovals = 0;
     try {
-      // 1. leave_applications — submitted or any pending variant
-      let laQuery = db('leave_applications as la')
-        .whereNull('la.deleted_at')
-        .whereIn('la.status', ['submitted', 'pending', 'pending_manager', 'pending_hr', 'pending_hr_override', 'pending_team_lead', 'escalated']);
-      if (targetCompanyId) {
-        laQuery = laQuery
-          .join('employees as e', 'la.employee_id', 'e.id')
-          .where('e.company_id', targetCompanyId)
-          .whereNull('e.deleted_at');
-      } else {
-        laQuery = laQuery.where('la.organization_id', organizationId);
-      }
-      const [laRow] = await laQuery.count('* as count');
-      pendingApprovals += Number(laRow?.count || 0);
-
-      // 2. attendance_regularizations
-      try {
-        let arQuery = db('attendance_regularizations as ar')
-          .whereNull('ar.deleted_at')
-          .where(function () {
-            this.where('ar.status', 'like', 'pending%')
-              .orWhere('ar.status', 'submitted');
-          });
-        if (targetCompanyId) {
-          arQuery = arQuery
-            .join('employees as e', 'ar.employee_id', 'e.id')
-            .where('e.company_id', targetCompanyId)
-            .whereNull('e.deleted_at');
-        } else {
-          arQuery = arQuery.where('ar.organization_id', organizationId);
-        }
-        const [arRow] = await arQuery.count('* as count');
-        pendingApprovals += Number(arRow?.count || 0);
-      } catch (e) {}
-
-      // 3. workflow_approvals — non-duplicate modules
-      let workflowApprovalQuery = db('workflow_approvals as wa')
-        .whereNull('wa.deleted_at')
-        .where(function () {
-          this.where('wa.status', 'like', 'Pending%')
-            .orWhere('wa.status', 'like', 'pending%')
-            .orWhereIn('wa.status', ['submitted', 'escalated']);
-        })
-        .whereNotIn('wa.module_type', ['Leave', 'leave', 'leaves', 'Attendance', 'attendance']);
-
-      if (targetCompanyId) {
-        workflowApprovalQuery = workflowApprovalQuery
-          .join('employees as workflow_applicant', 'wa.applicant_id', 'workflow_applicant.id')
-          .where('workflow_applicant.company_id', targetCompanyId)
-          .whereNull('workflow_applicant.deleted_at');
-      } else {
-        workflowApprovalQuery = workflowApprovalQuery.where('wa.organization_id', organizationId);
-      }
-      const [waRow] = await workflowApprovalQuery.count('* as count');
-      pendingApprovals += Number(waRow?.count || 0);
-
-      // 4. expense_claims
-      try {
-        let ecQuery = db('expense_claims as ec')
-          .whereNull('ec.deleted_at')
-          .whereIn('ec.status', ['submitted', 'pending', 'pending_manager', 'pending_finance', 'pending_hr']);
-        if (targetCompanyId) {
-          ecQuery = ecQuery
-            .join('employees as e', 'ec.employee_id', 'e.id')
-            .where('e.company_id', targetCompanyId)
-            .whereNull('e.deleted_at');
-        } else {
-          ecQuery = ecQuery.where('ec.organization_id', organizationId);
-        }
-        const [ecRow] = await ecQuery.count('* as count');
-        pendingApprovals += Number(ecRow?.count || 0);
-      } catch (e) {}
+      const approvalStats = await approvalRepository.getDashboardStats(organizationId, {
+        companyId: targetCompanyId || undefined,
+      });
+      pendingApprovals = Number(approvalStats.pending || 0) + Number(approvalStats.escalated || 0);
     } catch (err) {
+      console.warn('[AdminDashboardService] pendingApprovals calculation error:', err);
       pendingApprovals = 0;
     }
 
-    // New hires are employees who actually joined this calendar month, not offers.
+    // ── New Hires This Month ──────────────────────────────────────────────────
+    // Employees who actually joined this calendar month, excluding CEO/Admin user
     let newHires = 0;
     try {
       const now = new Date();
-      const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString().slice(0, 10);
-      const nextMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1)).toISOString().slice(0, 10);
+      const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+      const nextMonthDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+      const nextMonthStart = `${nextMonthDate.getFullYear()}-${String(nextMonthDate.getMonth() + 1).padStart(2, '0')}-01`;
+
       let newHireQuery = db('employees')
-          .whereNull('deleted_at')
-          .where('date_of_joining', '>=', monthStart)
-          .where('date_of_joining', '<', nextMonthStart);
-      newHireQuery = targetCompanyId
-        ? newHireQuery.where('company_id', targetCompanyId)
-        : newHireQuery.where('organization_id', organizationId);
+        .whereNull('employees.deleted_at')
+        .whereNotExists(function () {
+          this.select('ceo_user.id')
+            .from('users as ceo_user')
+            .join('user_roles as ceo_user_role', 'ceo_user_role.user_id', 'ceo_user.id')
+            .join('roles as ceo_role', 'ceo_role.id', 'ceo_user_role.role_id')
+            .whereRaw('ceo_user.employee_id = employees.id')
+            .whereIn('ceo_role.code', ['ceo', 'organization_admin', 'super_admin']);
+        })
+        .where(function () {
+          this.where(function () {
+            this.where('employees.date_of_joining', '>=', monthStart)
+              .andWhere('employees.date_of_joining', '<', nextMonthStart);
+          }).orWhere(function () {
+            this.whereNull('employees.date_of_joining')
+              .andWhere('employees.created_at', '>=', monthStart)
+              .andWhere('employees.created_at', '<', nextMonthStart);
+          });
+        });
+
+      if (targetCompanyId) {
+        newHireQuery = newHireQuery.where('employees.company_id', targetCompanyId);
+      } else {
+        newHireQuery = newHireQuery.where('employees.organization_id', organizationId);
+      }
       const [newHireRow] = await newHireQuery.count('* as count');
       newHires = Number(newHireRow?.count || 0);
+
+      // If new hires calculation exceeds headcount due to dates, cap it to total active headcount
+      if (totalHeadcount > 0 && newHires > totalHeadcount) {
+        newHires = totalHeadcount;
+      }
     } catch (err) {
       newHires = 0;
     }
 
     // ── On Leave Today (Approved leaves only) ─────────────────────────────────
-    // Count distinct employees with an APPROVED leave application that covers today.
-    // Status must be exactly 'approved' — no other statuses.
+    // Count distinct employees with an APPROVED leave application covering today
     let onLeaveToday = 0;
+    const localNow = new Date();
+    const todayStr = `${localNow.getFullYear()}-${String(localNow.getMonth() + 1).padStart(2, '0')}-${String(localNow.getDate()).padStart(2, '0')}`;
     try {
-      const todayStr = new Date().toISOString().slice(0, 10);
       const hasLadTable = await db.schema.hasTable('leave_application_dates');
       if (hasLadTable) {
-        // Precise: join leave_application_dates to get exact per-day granularity
         let ladQuery = db('leave_applications as la')
           .join('leave_application_dates as lad', 'lad.application_id', 'la.id')
           .whereNull('la.deleted_at')
@@ -496,8 +452,6 @@ export class AdminDashboardService {
         const [ladRow] = await ladQuery.countDistinct('la.employee_id as count');
         onLeaveToday = Number(ladRow?.count || 0);
       } else {
-        // Fallback for the current leave schema: application_start_date <= today
-        // <= application_end_date, approved only.
         let ltQuery = db('leave_applications')
           .whereNull('deleted_at')
           .where('status', 'approved')
@@ -515,115 +469,137 @@ export class AdminDashboardService {
       onLeaveToday = 0;
     }
 
-    // Total monthly gross outlay. Assigned salary structures are the payroll
-    // source of truth; retain legacy compensation/payslip sources as fallbacks.
+    // ── Est. Monthly Payroll Cost ─────────────────────────────────────────────
+    // Total monthly gross outlay across assigned salary structures, payroll runs,
+    // employee compensation, or base salary fields.
     let monthlyPayrollCost = 0;
     try {
+      // 1. Direct assigned salary structures
       const hasSalaryStructures = await db.schema.hasTable('salary_structures');
-      const hasStructureGross = hasSalaryStructures && await db.schema.hasColumn('salary_structures', 'gross_monthly');
-      const hasStructureCtc = hasSalaryStructures && await db.schema.hasColumn('salary_structures', 'annual_ctc');
-
-      if (hasStructureGross || hasStructureCtc) {
+      if (hasSalaryStructures) {
         let structureOutlayQuery = db('salary_structures as ss')
           .join('employees as e', 'ss.employee_id', 'e.id')
           .whereNull('ss.deleted_at')
           .whereNull('e.deleted_at')
+          .where(function () {
+            this.where('ss.status', 'active').orWhere('ss.status', 'Active').orWhereNull('ss.status');
+          })
           .whereIn('e.status', ['active', 'probation', 'confirmed', 'onboarding', 'Active']);
+
         if (targetCompanyId) {
           structureOutlayQuery = structureOutlayQuery.where('e.company_id', targetCompanyId);
         } else {
           structureOutlayQuery = structureOutlayQuery.where('e.organization_id', organizationId);
         }
-        const grossExpression = hasStructureGross && hasStructureCtc
-          ? 'COALESCE(NULLIF(ss.gross_monthly, 0), ss.annual_ctc / 12, 0)'
-          : hasStructureGross ? 'COALESCE(ss.gross_monthly, 0)' : 'COALESCE(ss.annual_ctc / 12, 0)';
-        const structureOutlayRow = await structureOutlayQuery
-          .select(db.raw(`COALESCE(SUM(${grossExpression}), 0) as total`))
-          .first() as { total?: number | string } | undefined;
+
+        const [structureOutlayRow] = await structureOutlayQuery.select(
+          db.raw(
+            'COALESCE(SUM(COALESCE(NULLIF(ss.gross_monthly, 0), NULLIF(ss.annual_ctc, 0) / 12, NULLIF(ss.net_take_home, 0), NULLIF(ss.basic_monthly, 0), 0)), 0) as total'
+          )
+        );
         monthlyPayrollCost = Number(structureOutlayRow?.total || 0);
       }
 
-      const hasGrossSalary = await db.schema.hasColumn('employees', 'gross_salary');
-      const hasAnnualCtc = await db.schema.hasColumn('employees', 'annual_ctc');
-
-      if (monthlyPayrollCost === 0 && (hasGrossSalary || hasAnnualCtc)) {
-        let grossOutlayQuery = db('employees as e')
-          .whereNull('e.deleted_at')
-          .whereIn('e.status', ['active', 'probation', 'confirmed', 'onboarding', 'Active']);
-
-        if (targetCompanyId) {
-          grossOutlayQuery = grossOutlayQuery.where('e.company_id', targetCompanyId);
-        } else {
-          grossOutlayQuery = grossOutlayQuery.where('e.organization_id', organizationId);
+      // 2. Latest finalized / processed payroll run
+      if (monthlyPayrollCost === 0) {
+        const hasPayrollRuns = await db.schema.hasTable('payroll_runs');
+        if (hasPayrollRuns) {
+          let prQuery = db('payroll_runs')
+            .whereNull('deleted_at')
+            .whereNotIn('status', ['cancelled', 'deleted'])
+            .orderBy('run_month', 'desc');
+          if (targetCompanyId) prQuery = prQuery.where('company_id', targetCompanyId);
+          else prQuery = prQuery.where('organization_id', organizationId);
+          const latestRun = await prQuery.first();
+          if (latestRun) {
+            monthlyPayrollCost = Number(latestRun.total_gross_pay || latestRun.total_net_pay || latestRun.total_cost || 0);
+          }
         }
-
-        const grossExpression = hasGrossSalary && hasAnnualCtc
-          ? 'COALESCE(NULLIF(e.gross_salary, 0), e.annual_ctc / 12, 0)'
-          : hasGrossSalary
-            ? 'COALESCE(e.gross_salary, 0)'
-            : 'COALESCE(e.annual_ctc / 12, 0)';
-        const grossOutlayRow = await grossOutlayQuery
-          .select(db.raw(`COALESCE(SUM(${grossExpression}), 0) as total`))
-          .first() as { total?: number | string } | undefined;
-        monthlyPayrollCost = Number(grossOutlayRow?.total || 0);
       }
 
-      const hasCompTable = await db.schema.hasTable('employee_compensation');
-      if (monthlyPayrollCost === 0 && hasCompTable) {
-        let compQuery = db('employee_compensation as ec')
-          .join('employees as e', 'ec.employee_id', 'e.id')
-          .whereNull('ec.deleted_at')
-          .whereNull('e.deleted_at')
-          .whereIn('e.status', ['active', 'probation', 'confirmed', 'onboarding', 'Active']);
-
-        if (targetCompanyId) {
-          compQuery = compQuery.where('e.company_id', targetCompanyId);
-        } else {
-          compQuery = compQuery.where('e.organization_id', organizationId);
+      // 3. Processed payroll run employee items
+      if (monthlyPayrollCost === 0) {
+        const hasPRE = await db.schema.hasTable('payroll_run_employees');
+        if (hasPRE) {
+          let preQuery = db('payroll_run_employees as pre')
+            .join('payroll_runs as pr', 'pre.payroll_run_id', 'pr.id')
+            .whereNull('pr.deleted_at')
+            .whereNotIn('pr.status', ['cancelled', 'deleted']);
+          if (targetCompanyId) preQuery = preQuery.where('pr.company_id', targetCompanyId);
+          else preQuery = preQuery.where('pr.organization_id', organizationId);
+          const [sumPre] = await preQuery.select(db.raw('COALESCE(SUM(COALESCE(NULLIF(pre.total_earnings, 0), pre.net_salary, 0)), 0) as total'));
+          if (sumPre?.total) monthlyPayrollCost = Number(sumPre.total);
         }
-
-        const [sumRow] = await compQuery.sum('ec.base_salary as total');
-        monthlyPayrollCost = Number(sumRow?.total || 0);
       }
 
+      // 4. Employee compensation table
+      if (monthlyPayrollCost === 0) {
+        const hasComp = await db.schema.hasTable('employee_compensation');
+        if (hasComp) {
+          let compQuery = db('employee_compensation as ec')
+            .join('employees as e', 'ec.employee_id', 'e.id')
+            .whereNull('ec.deleted_at')
+            .whereNull('e.deleted_at');
+          if (targetCompanyId) compQuery = compQuery.where('e.company_id', targetCompanyId);
+          else compQuery = compQuery.where('e.organization_id', organizationId);
+          const [sumComp] = await compQuery.sum('ec.base_salary as total');
+          if (sumComp?.total) monthlyPayrollCost = Number(sumComp.total);
+        }
+      }
+
+      // 5. Direct salary columns on employees table
+      if (monthlyPayrollCost === 0) {
+        const hasGrossSalary = await db.schema.hasColumn('employees', 'gross_salary');
+        const hasAnnualCtc = await db.schema.hasColumn('employees', 'annual_ctc');
+        const hasBasicSalary = await db.schema.hasColumn('employees', 'basic_salary');
+        const hasSalary = await db.schema.hasColumn('employees', 'salary');
+
+        const colExpressions = [
+          hasGrossSalary ? 'NULLIF(e.gross_salary, 0)' : null,
+          hasAnnualCtc ? 'NULLIF(e.annual_ctc, 0) / 12' : null,
+          hasBasicSalary ? 'NULLIF(e.basic_salary, 0)' : null,
+          hasSalary ? 'NULLIF(e.salary, 0)' : null,
+        ].filter(Boolean);
+
+        if (colExpressions.length > 0) {
+          let empSalQuery = db('employees as e')
+            .whereNull('e.deleted_at')
+            .whereIn('e.status', ['active', 'probation', 'confirmed', 'onboarding', 'Active']);
+          if (targetCompanyId) empSalQuery = empSalQuery.where('e.company_id', targetCompanyId);
+          else empSalQuery = empSalQuery.where('e.organization_id', organizationId);
+
+          const [empSalRow] = await empSalQuery.select(
+            db.raw(`COALESCE(SUM(COALESCE(${colExpressions.join(', ')}, 0)), 0) as total`)
+          );
+          if (empSalRow?.total) monthlyPayrollCost = Number(empSalRow.total);
+        }
+      }
+
+      // 6. Payslips table fallback
       if (monthlyPayrollCost === 0) {
         const hasPayslips = await db.schema.hasTable('payslips');
         if (hasPayslips) {
-          const now = new Date();
-          const currentPayrollMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
-            .toISOString()
-            .slice(0, 10);
-          let payslipQuery = db('payslips')
-            .whereNull('deleted_at')
-            .where('payslip_month', currentPayrollMonth);
+          let payslipQuery = db('payslips').whereNull('deleted_at');
           if (targetCompanyId) {
             const hasCompanyId = await db.schema.hasColumn('payslips', 'company_id');
-            if (hasCompanyId) {
-              payslipQuery = payslipQuery.where('company_id', targetCompanyId);
-            } else {
-              // Legacy payslips are scoped through the employee relationship.
+            if (hasCompanyId) payslipQuery = payslipQuery.where('company_id', targetCompanyId);
+            else {
               payslipQuery = payslipQuery
-                .join('employees as payslip_employee', 'payslips.employee_id', 'payslip_employee.id')
-                .where('payslip_employee.company_id', targetCompanyId)
-                .whereNull('payslip_employee.deleted_at');
+                .join('employees as pe', 'payslips.employee_id', 'pe.id')
+                .where('pe.company_id', targetCompanyId)
+                .whereNull('pe.deleted_at');
             }
           } else {
             payslipQuery = payslipQuery.where('organization_id', organizationId);
           }
-
-          const hasGrossSalary = await db.schema.hasColumn('payslips', 'gross_salary');
-          const hasNetSalary = await db.schema.hasColumn('payslips', 'net_salary');
-          const colToSum = hasGrossSalary ? 'gross_salary' : (hasNetSalary ? 'net_salary' : null);
-
-          if (colToSum) {
-            const [payRow] = await payslipQuery.sum(`${colToSum} as total`);
-            if (payRow?.total) {
-              monthlyPayrollCost = Number(payRow.total);
-            }
-          }
+          const [payRow] = await payslipQuery.select(
+            db.raw('COALESCE(SUM(COALESCE(NULLIF(gross_salary, 0), net_salary, 0)), 0) as total')
+          );
+          if (payRow?.total) monthlyPayrollCost = Number(payRow.total);
         }
       }
     } catch (err) {
+      console.warn('[AdminDashboardService] monthlyPayrollCost calculation error:', err);
       monthlyPayrollCost = 0;
     }
 
@@ -636,23 +612,29 @@ export class AdminDashboardService {
       for (let i = 5; i >= 0; i--) {
         const targetMonthDate = new Date(now.getFullYear(), now.getMonth() - i + 1, 0); // last day of month
         const monthLabel = monthNames[targetMonthDate.getMonth()];
-        const cutoffIso = targetMonthDate.toISOString().slice(0, 10);
+        const cutoffIso = `${targetMonthDate.getFullYear()}-${String(targetMonthDate.getMonth() + 1).padStart(2, '0')}-${String(targetMonthDate.getDate()).padStart(2, '0')}`;
 
         let trendQuery = db('employees')
-          .where(function () {
-            this.whereNull('deleted_at').orWhere('deleted_at', '>', targetMonthDate);
+          .whereNull('employees.deleted_at')
+          .whereNotExists(function () {
+            this.select('ceo_user.id')
+              .from('users as ceo_user')
+              .join('user_roles as ceo_user_role', 'ceo_user_role.user_id', 'ceo_user.id')
+              .join('roles as ceo_role', 'ceo_role.id', 'ceo_user_role.role_id')
+              .whereRaw('ceo_user.employee_id = employees.id')
+              .whereIn('ceo_role.code', ['ceo', 'organization_admin', 'super_admin']);
           })
           .where(function () {
-            this.where('date_of_joining', '<=', cutoffIso)
+            this.where('employees.date_of_joining', '<=', cutoffIso)
               .orWhere(function () {
-                this.whereNull('date_of_joining').andWhere('created_at', '<=', targetMonthDate);
+                this.whereNull('employees.date_of_joining').andWhere('employees.created_at', '<=', `${cutoffIso} 23:59:59`);
               });
           });
 
         if (targetCompanyId) {
-          trendQuery = trendQuery.where('company_id', targetCompanyId);
+          trendQuery = trendQuery.where('employees.company_id', targetCompanyId);
         } else {
-          trendQuery = trendQuery.where('organization_id', organizationId);
+          trendQuery = trendQuery.where('employees.organization_id', organizationId);
         }
 
         const [trendRow] = await trendQuery.count('* as count');
@@ -756,7 +738,6 @@ export class AdminDashboardService {
     }
 
     // ── 6. REAL ATTENDANCE ANALYTICS ──────────────────────────────────────────
-    const todayStr = new Date().toISOString().slice(0, 10);
     let attendanceAnalytics = {
       today: {
         present: 0,
@@ -777,7 +758,11 @@ export class AdminDashboardService {
         let attTodayQuery = db('attendance_records as ar')
           .join('employees as e', 'ar.employee_id', 'e.id')
           .whereNull('e.deleted_at')
-          .where('ar.check_in_date', todayStr);
+          .where(function () {
+            this.where('ar.check_in_date', todayStr)
+              .orWhereRaw("DATE(ar.check_in_time) = ?", [todayStr])
+              .orWhereRaw("DATE(ar.created_at) = ?", [todayStr]);
+          });
 
         if (targetCompanyId) {
           attTodayQuery = attTodayQuery.where('e.company_id', targetCompanyId);
@@ -831,13 +816,16 @@ export class AdminDashboardService {
         for (let i = 6; i >= 0; i--) {
           const d = new Date();
           d.setDate(d.getDate() - i);
-          const dateStr = d.toISOString().slice(0, 10);
+          const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
           const dayName = dayLabels[d.getDay()];
 
           let dayQ = db('attendance_records as ar')
             .join('employees as e', 'ar.employee_id', 'e.id')
             .whereNull('e.deleted_at')
-            .where('ar.check_in_date', dateStr);
+            .where(function () {
+              this.where('ar.check_in_date', dateStr)
+                .orWhereRaw("DATE(ar.check_in_time) = ?", [dateStr]);
+            });
 
           if (targetCompanyId) dayQ = dayQ.where('e.company_id', targetCompanyId);
           else dayQ = dayQ.where('ar.organization_id', organizationId);
