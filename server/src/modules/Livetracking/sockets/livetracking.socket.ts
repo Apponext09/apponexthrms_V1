@@ -131,6 +131,21 @@ interface SocketState {
 
 const socketState = new Map<string, SocketState>();
 
+/** Reject out-of-range / null-island / non-finite coordinates (spoofed or garbage GPS data) */
+function isValidLatLng(lat: unknown, lng: unknown): boolean {
+  return (
+    typeof lat === 'number' &&
+    typeof lng === 'number' &&
+    Number.isFinite(lat) &&
+    Number.isFinite(lng) &&
+    lat >= -90 &&
+    lat <= 90 &&
+    lng >= -180 &&
+    lng <= 180 &&
+    !(lat === 0 && lng === 0)
+  );
+}
+
 /** Haversine distance between two coordinates in meters */
 function haversineDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371000;
@@ -155,6 +170,9 @@ export class LiveTrackingSocket {
     const nsp = this.io.of('/live-tracking');
 
     // ── JWT Auth middleware on socket connection ──────────────────────────────
+    // A missing/invalid token is REJECTED, not defaulted to user 1 / org 1 —
+    // that fallback previously let anyone connect and read/pollute org 1's
+    // live tracking feed with an unauthenticated or malformed token.
     nsp.use((socket: Socket, next) => {
       try {
         const token =
@@ -162,23 +180,28 @@ export class LiveTrackingSocket {
           (socket.handshake.query?.token as string | undefined) ||
           (socket.handshake.headers['authorization'] as string | undefined)?.replace('Bearer ', '');
 
+        if (!token) {
+          next(new Error('Authentication required'));
+          return;
+        }
+
         let claims: any;
-        if (token) {
-          try {
-            claims = verifyToken(token);
-          } catch {
-            const { decodeToken } = require('../../../common/lib/jwt');
-            claims = decodeToken(token);
-          }
+        try {
+          claims = verifyToken(token);
+        } catch {
+          next(new Error('Invalid or expired token'));
+          return;
         }
-        if (!claims) {
-          claims = { sub: '1', oid: '1' };
+
+        if (!claims?.sub || !claims?.oid) {
+          next(new Error('Invalid token claims'));
+          return;
         }
+
         (socket as any)._claims = claims;
         next();
       } catch (err: any) {
-        (socket as any)._claims = { sub: '1', oid: '1' };
-        next();
+        next(new Error('Authentication failed'));
       }
     });
 
@@ -245,7 +268,7 @@ export class LiveTrackingSocket {
         if (!employeeId) return;
 
         const { latitude, longitude } = payload;
-        if (typeof latitude !== 'number' || typeof longitude !== 'number') return;
+        if (!isValidLatLng(latitude, longitude)) return;
 
         try {
           const state = socketState.get(socket.id)!;
