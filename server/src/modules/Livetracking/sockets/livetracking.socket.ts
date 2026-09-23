@@ -100,9 +100,13 @@ interface KalmanAxis {
 function kalmanUpdate(
   state: KalmanAxis,
   measurement: number,
-  Q = 0.0001, // process noise
-  R = 3        // measurement noise
+  measurementAccuracy: number | null | undefined,
+  Q = 0.0001 // process noise
 ): KalmanAxis {
+  // Weight measurement noise by the GPS-reported accuracy (metres) — a coarse
+  // fix was previously blended with the same trust as a precise GPS lock,
+  // which could visibly drag an accurate fix off target.
+  const R = Math.max(1, (measurementAccuracy ?? 15) / 5);
   const predictedErr = state.errorCovariance + Q;
   const K = predictedErr / (predictedErr + R); // Kalman gain
   return {
@@ -155,6 +159,18 @@ function haversineDistance(lat1: number, lng1: number, lat2: number, lng2: numbe
     Math.sin(dLat / 2) ** 2 +
     Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+/** ~8 km/h — below this we treat movement as on-foot/stationary, not a vehicle */
+const VEHICLE_SPEED_THRESHOLD_MPS = 2.2;
+
+/** Estimate instantaneous speed (m/s) from the socket's last known point when the
+ * browser didn't report GeolocationCoordinates.speed (common indoors / low accuracy). */
+function estimateSpeedMps(state: SocketState, lat: number, lng: number, nowMs: number): number | null {
+  if (state.lastLat == null || state.lastLng == null || !state.lastBreadcrumbAt) return null;
+  const dtSec = (nowMs - state.lastBreadcrumbAt) / 1000;
+  if (dtSec <= 0) return null;
+  return haversineDistance(state.lastLat, state.lastLng, lat, lng) / dtSec;
 }
 
 export class LiveTrackingSocket {
@@ -304,24 +320,37 @@ export class LiveTrackingSocket {
             state.kalmanLat = { estimate: latitude, errorCovariance: 1 };
             state.kalmanLng = { estimate: longitude, errorCovariance: 1 };
           } else {
-            state.kalmanLat = kalmanUpdate(state.kalmanLat, latitude);
-            state.kalmanLng = kalmanUpdate(state.kalmanLng, longitude);
+            state.kalmanLat = kalmanUpdate(state.kalmanLat, latitude, payload.accuracy);
+            state.kalmanLng = kalmanUpdate(state.kalmanLng, longitude, payload.accuracy);
           }
           smoothLat = state.kalmanLat.estimate;
           smoothLng = state.kalmanLng.estimate;
 
-          // ── OSRM Road Snap (non-blocking, max 3s timeout, 60s cache) ──────────
+          // ── Smart OSRM Road Snap (non-blocking, max 3s timeout, 60s cache) ─────
+          // Only snap onto the nearest DRIVING road when the employee looks like
+          // they're actually in a vehicle — snapping every fix unconditionally
+          // used to drag on-foot movement (walking into a building, a market,
+          // a pedestrian area) up to 50m onto the nearest road, making field
+          // visits look inaccurate. Below vehicle speed, use the raw Kalman-
+          // smoothed GPS fix as-is.
           let broadcastLat = smoothLat;
           let broadcastLng = smoothLng;
           let wasSnapped = false;
 
-          try {
-            const snapped = await snapToRoad(smoothLat, smoothLng);
-            broadcastLat = snapped.latitude;
-            broadcastLng = snapped.longitude;
-            wasSnapped = snapped.snapped;
-          } catch {
-            // OSRM unavailable — use Kalman-smoothed coords
+          const reportedSpeed =
+            typeof payload.speed === 'number' && Number.isFinite(payload.speed) ? payload.speed : null;
+          const impliedSpeed = reportedSpeed ?? estimateSpeedMps(state, smoothLat, smoothLng, now);
+          const looksLikeVehicle = impliedSpeed != null && impliedSpeed >= VEHICLE_SPEED_THRESHOLD_MPS;
+
+          if (looksLikeVehicle) {
+            try {
+              const snapped = await snapToRoad(smoothLat, smoothLng);
+              broadcastLat = snapped.latitude;
+              broadcastLng = snapped.longitude;
+              wasSnapped = snapped.snapped;
+            } catch {
+              // OSRM unavailable — use Kalman-smoothed coords
+            }
           }
 
           // Always update the live snapshot with road-snapped coordinates
