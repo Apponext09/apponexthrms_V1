@@ -69,6 +69,11 @@ function isStaleSignal(
   }
 }
 
+/** An employee currently online with GPS on — eligible for default map focus */
+function isActiveEmployee(emp: LiveEmployee): boolean {
+  return emp.connection_status === "ONLINE" && emp.location_status === "ON";
+}
+
 function isCheckedInEmployee(rawEmp: any): boolean {
   const dept = (rawEmp.department || "").toLowerCase();
   if (dept === "hr" || dept === "human resources") return false;
@@ -272,7 +277,9 @@ export const LiveTrackingDashboardPage: React.FC = () => {
         ) {
           return prev;
         }
-        return enrichedData[0] || null;
+        // Default focus: prefer a currently active (online + GPS on) employee.
+        // If nobody is active, leave selection empty so the map falls back to Navi Mumbai.
+        return enrichedData.find(isActiveEmployee) || null;
       });
     } catch {
       // Ignore background poll errors quietly

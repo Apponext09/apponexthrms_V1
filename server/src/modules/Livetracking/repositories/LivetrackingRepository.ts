@@ -136,6 +136,16 @@ export class LivetrackingRepository {
   }
 
   // -------------------------------------------------------
+  // Get a single employee's own live snapshot (self-only view)
+  // -------------------------------------------------------
+  async getLiveLocationForEmployee(
+    ctx: TenantContext,
+    employeeId: number
+  ): Promise<LiveEmployeeSnapshot[]> {
+    return this._buildLiveQuery(ctx).where('e.id', employeeId);
+  }
+
+  // -------------------------------------------------------
   // Get live snapshots for a Manager/Team Lead's reporting team
   // (multi-tier: direct reports + their team members)
   // -------------------------------------------------------
