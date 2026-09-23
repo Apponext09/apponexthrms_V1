@@ -1,3 +1,4 @@
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Camera,
   Scan,
@@ -306,7 +307,7 @@ export function MyAttendanceFaceTab({
 
   const stopCamera = () => {
     if (stream) {
-      stream.getTracks().forEach((track) => track.stop());
+      stream.getTracks().forEach((track: any) => track.stop());
       setStream(null);
     }
     setIsCameraActive(false);

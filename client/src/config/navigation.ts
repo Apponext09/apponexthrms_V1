@@ -135,7 +135,6 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         href: '/live-tracking',
         icon: 'Navigation',
         minRoles: ['organization_admin', 'hr_manager', 'department_head'],
-        requiresLiveTracking: true,
       },
       {
         name: 'Location Management & Mapping',

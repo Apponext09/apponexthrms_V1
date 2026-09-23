@@ -279,6 +279,36 @@ class AppErrorBoundary extends Component<
 //   );
 // }
 
+function AuthInitializer({ children }: { children: React.ReactNode }) {
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    useThemeStore.getState();
+
+    const token = localStorage.getItem('accessToken');
+    if (token && !useAuthStore.getState().user) {
+      useAuthStore.getState().fetchCurrentUser()
+        .catch((err) => {
+          console.warn('[AuthInitializer] Failed to fetch current user:', err);
+          if (err?.response?.status === 401 || err?.status === 401) {
+            useAuthStore.getState().logout();
+          }
+        })
+        .finally(() => {
+          setIsLoading(false);
+        });
+    } else {
+      setIsLoading(false);
+    }
+  }, []);
+
+  if (isLoading && Boolean(localStorage.getItem('accessToken')) && !useAuthStore.getState().user) {
+    return <LoadingScreen />;
+  }
+
+  return <>{children}</>;
+}
+
 /**
  * BreakOverlayProvider — syncs break state from DB and renders overlay at root.
  * Mounted at root so the overlay persists across ALL route navigations.
@@ -300,11 +330,11 @@ export default function App() {
     <AppErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <BrowserRouter>
-          {/* <ThemeProvider> */}
-          <BreakOverlayProvider>
-            <AppRoutes />
-          </BreakOverlayProvider>
-          {/* </ThemeProvider> */}
+          <AuthInitializer>
+            <BreakOverlayProvider>
+              <AppRoutes />
+            </BreakOverlayProvider>
+          </AuthInitializer>
         </BrowserRouter>
       </QueryClientProvider>
     </AppErrorBoundary>

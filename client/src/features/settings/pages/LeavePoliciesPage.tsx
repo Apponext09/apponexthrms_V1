@@ -1909,8 +1909,8 @@ export function LeavePoliciesPage() {
       return null;
     };
 
-    const onlyWhenGender = extractGenderFromOnlyWhen(formData.allocation?.onlyWhen || formData.allocation?.only_when)
-      || extractGenderFromOnlyWhen(formData.application?.onlyWhen || formData.application?.only_when);
+    const onlyWhenGender = extractGenderFromOnlyWhen(formData.allocation?.onlyWhen || (formData.allocation as any)?.only_when)
+      || extractGenderFromOnlyWhen(formData.application?.onlyWhen || (formData.application as any)?.only_when);
 
     const resolvedGender = onlyWhenGender || (formData.allocation.gender || 'all').toLowerCase();
 

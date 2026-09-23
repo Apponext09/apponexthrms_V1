@@ -12,7 +12,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 
-const SOCKET_URL = (import.meta as any).env.VITE_SOCKET_URL || 'http://localhost:5000';
+const SOCKET_URL = (import.meta as any).env.VITE_SOCKET_URL || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5001');
 const MIN_DISTANCE_METERS = 0; // 0 meters — emit on every 2.5s tick for continuous live streaming
 const FORCE_PING_INTERVAL_MS = 2_500; // 2.5 seconds automatic high-frequency emission
 const MAX_ACCEPTABLE_ACCURACY_METERS = 10000; // Support laptop Wi-Fi/IP geolocation

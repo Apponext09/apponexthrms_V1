@@ -41,7 +41,7 @@ const LeaveBalancePage = lazy(() => import('./features/leaves/pages/LeaveBalance
 const LeaveEncashmentPage = lazy(() => import('./features/leaves/pages/LeaveEncashmentPage').then(m => ({ default: m.LeaveEncashmentPage })));
 const ApprovalInboxPage = lazy(() => import('./features/leaves/pages/ApprovalInboxPage').then(m => ({ default: m.ApprovalInboxPage })));
 const CustomReportBuilder = lazy(() => import('./features/leaves/pages/CustomReportBuilder').then(m => ({ default: m.CustomReportBuilder })));
-const BurnoutRiskDashboard = lazy(() => import('./features/HR/pages/BurnoutRiskDashboard').then(m => ({ default: m.BurnoutRiskDashboard })));
+const BurnoutRiskDashboard = lazy(() => import('./features/hr/pages/BurnoutRiskDashboard').then(m => ({ default: m.BurnoutRiskDashboard })));
 const EmployeeRequestsPage = lazy(() => import('./features/HR/requests/EmployeeRequestsPage').then(m => ({ default: m.EmployeeRequestsPage })));
 const PayrollDashboard = lazy(() => import('./features/payroll/pages/PayrollDashboard').then(m => ({ default: m.PayrollDashboard })));
 const PayslipViewer = lazy(() => import('./features/payroll/pages/PayslipViewer').then(m => ({ default: m.PayslipViewer })));
@@ -222,11 +222,10 @@ function RootRedirect() {
     return <PageLoader />;
   }
 
-  if (!isAuthenticated && !hasStoredAccessToken()) {
-    return <Navigate to="/login" replace />;
-  }
-
-  if (!user) {
+  if (!isAuthenticated || !user) {
+    if (!hasStoredAccessToken()) {
+      return <Navigate to="/login" replace />;
+    }
     return <PageLoader />;
   }
 

@@ -1054,7 +1054,7 @@ const TakeAssessmentPageInner: React.FC = () => {
                     height="100%"
                     language={LANGUAGE_OPTIONS.find(l => l.value === selectedLanguage)?.monacoId || 'javascript'}
                     value={codeValue}
-                    onChange={(val) => handleAnswerChange(activeQNum, val || '')}
+                    onChange={(val: any) => handleAnswerChange(activeQNum, val || '')}
                     theme="vs-dark"
                     options={{
                       fontSize: 13,

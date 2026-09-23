@@ -757,20 +757,24 @@ export default function LeavePage() {
   };
 
   // Processed Balances array (handles backend properties & defaults)
-  const employeeContext = useMemo(() => ({
-    ...(user || {}),
-    ...(employee || {}),
-    gender: (employee?.gender || (user as any)?.gender || (user as any)?.personal_info?.gender || '').toString().trim().toLowerCase(),
-    marital_status: ((employee as any)?.marital_status || (employee as any)?.maritalStatus || (user as any)?.marital_status || (user as any)?.maritalStatus || '').toString().trim().toLowerCase(),
-    current_department_id: employee?.current_department_id || employee?.currentDepartmentId || (user as any)?.department_id || (user as any)?.departmentId,
-    current_location_id: employee?.current_location_id || employee?.currentLocationId || (user as any)?.location_id || (user as any)?.locationId,
-    current_grade_id: employee?.current_grade_id || employee?.currentGradeId || (employee as any)?.grade_id || (employee as any)?.gradeId,
-    current_designation_id: employee?.current_designation_id || employee?.currentDesignationId || (employee as any)?.designation_id || (employee as any)?.designationId,
-    employment_type: (employee?.employment_type || employee?.employmentType || '').toString(),
-    status: (employee?.status || '').toString(),
-    date_of_joining: employee?.date_of_joining || employee?.dateOfJoining,
-    date_of_confirmation: employee?.date_of_confirmation || employee?.dateOfConfirmation || (employee as any)?.confirmation_date || (employee as any)?.confirmationDate,
-  }), [user, employee]);
+  const employeeContext = useMemo(() => {
+    const empAny = (employee || {}) as any;
+    const usrAny = (user || {}) as any;
+    return {
+      ...usrAny,
+      ...empAny,
+      gender: (empAny.gender || usrAny.gender || usrAny.personal_info?.gender || '').toString().trim().toLowerCase(),
+      marital_status: (empAny.marital_status || empAny.maritalStatus || usrAny.marital_status || usrAny.maritalStatus || '').toString().trim().toLowerCase(),
+      current_department_id: empAny.current_department_id || empAny.currentDepartmentId || usrAny.department_id || usrAny.departmentId,
+      current_location_id: empAny.current_location_id || empAny.currentLocationId || usrAny.location_id || usrAny.locationId,
+      current_grade_id: empAny.current_grade_id || empAny.currentGradeId || empAny.grade_id || empAny.gradeId,
+      current_designation_id: empAny.current_designation_id || empAny.currentDesignationId || empAny.designation_id || empAny.designationId,
+      employment_type: (empAny.employment_type || empAny.employmentType || '').toString(),
+      status: (empAny.status || '').toString(),
+      date_of_joining: empAny.date_of_joining || empAny.dateOfJoining,
+      date_of_confirmation: empAny.date_of_confirmation || empAny.dateOfConfirmation || empAny.confirmation_date || empAny.confirmationDate,
+    };
+  }, [user, employee]);
 
   const displayBalances = balances.filter(b => {
     const code = getBalStr(b, 'leave_code', 'leaveCode', '').toUpperCase();
@@ -791,7 +795,7 @@ export default function LeavePage() {
         }
       : bAny;
 
-    return isLeaveTypeApplicableForGender(mergedItem, employeeContext);
+    return isLeaveTypeApplicableForGender(mergedItem, employeeContext as any);
   }).map(b => {
     const quotaFallback = parseFloat(String((b as any).annual_quota ?? (b as any).annualQuota ?? 0)) || 0;
     const total = getBalNum(b, 'allocated_balance', 'allocatedBalance', quotaFallback);
@@ -809,7 +813,7 @@ export default function LeavePage() {
   });
 
   const allLeaveTypes = leaveTypes.filter(t => {
-    return isLeaveTypeApplicableForGender(t, employeeContext);
+    return isLeaveTypeApplicableForGender(t, employeeContext as any);
   });
 
   // Stats Calculations
@@ -878,8 +882,8 @@ export default function LeavePage() {
                     leave_code: t.leave_code || t.leaveCode,
                     available_balance: t.default_allowance_days || t.defaultAllowanceDays || 0,
                   })))
-                    .filter((b) => isLeaveTypeApplicableForGender(b, employeeContext))
-                    .map((b) => {
+                    .filter((b: any) => isLeaveTypeApplicableForGender(b, employeeContext as any))
+                    .map((b: any) => {
                       const name = b.leave_name || b.leaveName || 'Leave';
                       const code = b.leave_code || b.leaveCode || 'PTO';
                       const targetId = b.leave_type_id || b.leaveTypeId || b.id;
