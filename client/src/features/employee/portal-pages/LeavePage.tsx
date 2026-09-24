@@ -771,6 +771,26 @@ export default function LeavePage() {
   };
 
   // Processed Balances array (handles backend properties & defaults)
+<<<<<<< HEAD
+  const employeeContext = useMemo(() => {
+    const empAny = (employee || {}) as any;
+    const usrAny = (user || {}) as any;
+    return {
+      ...usrAny,
+      ...empAny,
+      gender: (empAny.gender || usrAny.gender || usrAny.personal_info?.gender || '').toString().trim().toLowerCase(),
+      marital_status: (empAny.marital_status || empAny.maritalStatus || usrAny.marital_status || usrAny.maritalStatus || '').toString().trim().toLowerCase(),
+      current_department_id: empAny.current_department_id || empAny.currentDepartmentId || usrAny.department_id || usrAny.departmentId,
+      current_location_id: empAny.current_location_id || empAny.currentLocationId || usrAny.location_id || usrAny.locationId,
+      current_grade_id: empAny.current_grade_id || empAny.currentGradeId || empAny.grade_id || empAny.gradeId,
+      current_designation_id: empAny.current_designation_id || empAny.currentDesignationId || empAny.designation_id || empAny.designationId,
+      employment_type: (empAny.employment_type || empAny.employmentType || '').toString(),
+      status: (empAny.status || '').toString(),
+      date_of_joining: empAny.date_of_joining || empAny.dateOfJoining,
+      date_of_confirmation: empAny.date_of_confirmation || empAny.dateOfConfirmation || empAny.confirmation_date || empAny.confirmationDate,
+    };
+  }, [user, employee]);
+=======
   const employeeContext = useMemo(() => ({
     ...(user || {}),
     ...(employee || {}),
@@ -786,6 +806,7 @@ export default function LeavePage() {
     date_of_confirmation: (employee as any)?.date_of_confirmation || (employee as any)?.dateOfConfirmation || (employee as any)?.confirmation_date || (employee as any)?.confirmationDate,
     dateOfBirth: employee?.dateOfBirth ?? (user as any)?.dateOfBirth ?? undefined,
   }), [user, employee]);
+>>>>>>> b13431884f6e3fb77d4463ab4da204cadac8faca
 
   const displayBalances = balances.filter(b => {
     const code = getBalStr(b, 'leave_code', 'leaveCode', '').toUpperCase();
@@ -806,7 +827,7 @@ export default function LeavePage() {
         }
       : bAny;
 
-    return isLeaveTypeApplicableForGender(mergedItem, employeeContext);
+    return isLeaveTypeApplicableForGender(mergedItem, employeeContext as any);
   }).map(b => {
     const quotaFallback = parseFloat(String((b as any).annual_quota ?? (b as any).annualQuota ?? 0)) || 0;
     const total = getBalNum(b, 'allocated_balance', 'allocatedBalance', quotaFallback);
@@ -825,7 +846,7 @@ export default function LeavePage() {
   });
 
   const allLeaveTypes = leaveTypes.filter(t => {
-    return isLeaveTypeApplicableForGender(t, employeeContext);
+    return isLeaveTypeApplicableForGender(t, employeeContext as any);
   });
 
   // Stats Calculations
@@ -894,7 +915,11 @@ export default function LeavePage() {
                     leave_code: t.leave_code || t.leaveCode,
                     available_balance: t.default_allowance_days || t.defaultAllowanceDays || 0,
                   })))
+<<<<<<< HEAD
+                    .filter((b: any) => isLeaveTypeApplicableForGender(b, employeeContext as any))
+=======
                     .filter((b) => isLeaveTypeApplicableForGender(b, employeeContext))
+>>>>>>> b13431884f6e3fb77d4463ab4da204cadac8faca
                     .map((b: any) => {
                       const name = b.leave_name || b.leaveName || 'Leave';
                       const code = b.leave_code || b.leaveCode || 'PTO';

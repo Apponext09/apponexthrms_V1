@@ -74,7 +74,11 @@ export function ApplyLeavePage() {
   const selectedBalance = balances.find((b: any) => String(b.leave_type_id || b.leaveTypeId) === formData.leaveTypeId);
   const isRuleRestricted = selectedBalance ? !isLeaveTypeApplicableForGender(selectedBalance, employeeContext) : false;
   const isGenderRestricted = isRuleRestricted;
+<<<<<<< HEAD
+  const leaveGender = (selectedBalance as any)?.applicable_gender || (selectedBalance as any)?.applicableGender || '';
+=======
   const leaveGender = (selectedBalance as any)?.applicable_gender || (selectedBalance as any)?.applicableGender || (selectedBalance as any)?.gender || 'specific';
+>>>>>>> b13431884f6e3fb77d4463ab4da204cadac8faca
 
   const isProbationUser = employee?.status === 'probation' || (employee?.probationEndDate && new Date(employee.probationEndDate) > new Date());
   const isProbationRestricted = isProbationUser && Boolean(selectedBalance?.probation_excluded || selectedBalance?.probationExcluded);
@@ -431,5 +435,6 @@ export function ApplyLeavePage() {
         </div>
       </div>
     </div>
+  </div>
   );
 }
