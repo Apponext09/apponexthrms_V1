@@ -2,8 +2,9 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Search, Building2, Briefcase, User, Clock,
-  ArrowLeft, FileText, ExternalLink, Image, FileUp,
-  GraduationCap, Users, ChevronRight, Sparkles, X, ChevronDown, Calendar
+  ArrowLeft, FileText, ExternalLink, FileUp,
+  GraduationCap, Users, ChevronRight, Sparkles, X, ChevronDown, Calendar,
+  AlertCircle, AlertTriangle, CheckCircle2, Loader2, Info
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuthStore } from '@/features/auth/store/authStore';
@@ -45,6 +46,7 @@ export const JobReferencePage: React.FC = () => {
   const [currentModal, setCurrentModal] = useState<ModalType>(null);
   const [loading, setLoading] = useState(true);
   const [openingsLoading, setOpeningsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Filter state
   const [filterData, setFilterData] = useState<FilterData>({ departments: [], designations: [], employmentTypes: [] });
@@ -93,17 +95,14 @@ export const JobReferencePage: React.FC = () => {
 
   // File upload refs
   const resumeInputRef = useRef<HTMLInputElement>(null);
-  const signatureInputRef = useRef<HTMLInputElement>(null);
   const directResumeInputRef = useRef<HTMLInputElement>(null);
 
   const [uploadedResumeName, setUploadedResumeName] = useState('');
-  const [uploadedSignatureName, setUploadedSignatureName] = useState('');
   const [uploadedResumeBase64, setUploadedResumeBase64] = useState<string | null>(null);
-  const [uploadedSignatureBase64, setUploadedSignatureBase64] = useState<string | null>(null);
 
   const [statusModal, setStatusModal] = useState<{
     isOpen: boolean;
-    type: 'success' | 'error';
+    type: 'success' | 'error' | 'warning';
     title: string;
     message: string;
   }>({
@@ -282,7 +281,7 @@ export const JobReferencePage: React.FC = () => {
     setCurrentModal('main');
   };
 
-  const activeMrfId = applyTargetMrf?.mr_number || requestId || '';
+  const activeMrfId = applyTargetMrf?.mr_number || applyTargetMrf?.id || requestId || '';
 
   const handleReferExisting = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -329,48 +328,127 @@ export const JobReferencePage: React.FC = () => {
 
   const handleSaveRegistration = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!candidateForm.name.trim()) {
-      toast.error('Candidate Name is required');
+
+    // 1. Full Name Validation
+    const trimmedName = candidateForm.name.trim();
+    if (!trimmedName || trimmedName.length < 2) {
+      toast.error('Candidate Full Name is required (minimum 2 characters)');
+      setStatusModal({
+        isOpen: true,
+        type: 'warning',
+        title: 'Validation: Full Name Required',
+        message: 'Please enter a valid candidate full name with at least 2 characters before submitting.',
+      });
       return;
     }
-    if (isFieldRequired('emailId', true) && !candidateForm.emailId.trim()) {
-      toast.error('Candidate Email ID is required');
+
+    // 2. Email Address Validation
+    const trimmedEmail = candidateForm.emailId.trim();
+    if (!trimmedEmail) {
+      toast.error('Email Address is mandatory');
+      setStatusModal({
+        isOpen: true,
+        type: 'warning',
+        title: 'Validation: Email Address Required',
+        message: 'Please enter your email address so we can contact you regarding your application status.',
+      });
       return;
     }
-    if (isFieldRequired('resume', true) && !uploadedResumeBase64) {
-      toast.error('Resume is a required field! Please upload candidate resume file.');
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(trimmedEmail)) {
+      toast.error('Invalid Email Address format');
+      setStatusModal({
+        isOpen: true,
+        type: 'warning',
+        title: 'Validation: Invalid Email Format',
+        message: 'Please provide a valid email format (e.g., candidate@example.com).',
+      });
       return;
     }
-    if (isFieldRequired('signature', true) && !uploadedSignatureBase64) {
-      toast.error('Signature is a required field! Please upload candidate signature image.');
+
+    // 3. Contact Number Validation
+    if (candidateForm.contactNumber.trim()) {
+      const cleanPhone = candidateForm.contactNumber.replace(/[\s\-\+\(\)]/g, '');
+      if (cleanPhone.length < 7 || !/^\d+$/.test(cleanPhone)) {
+        toast.error('Invalid Contact Number. Please enter a valid phone number.');
+        setStatusModal({
+          isOpen: true,
+          type: 'warning',
+          title: 'Validation: Invalid Phone Number',
+          message: 'Contact number should contain at least 7 digits (e.g., +91 9876543210).',
+        });
+        return;
+      }
+    }
+
+    // 4. Resume File Validation (Mandatory Document)
+    if (!uploadedResumeBase64) {
+      toast.error('Candidate Resume document is required!');
+      setStatusModal({
+        isOpen: true,
+        type: 'warning',
+        title: 'Validation: Resume Upload Required',
+        message: 'Please upload your candidate resume file (PDF, DOC, or DOCX, max 5 MB) before submitting your application.',
+      });
       return;
     }
+
+    // 5. Configurable Field Validations
     if (isFieldRequired('dateOfBirth') && !candidateForm.dateOfBirth) {
       toast.error('Date of Birth is a required field');
+      setStatusModal({
+        isOpen: true,
+        type: 'warning',
+        title: 'Validation: Date of Birth Required',
+        message: 'Please select your Date of Birth.',
+      });
       return;
     }
-    if (isFieldRequired('qualification') && !candidateForm.qualification) {
-      toast.error('Qualification is a required field');
+    if (isFieldRequired('qualification') && !candidateForm.qualification.trim()) {
+      toast.error('Highest Qualification is a required field');
+      setStatusModal({
+        isOpen: true,
+        type: 'warning',
+        title: 'Validation: Qualification Required',
+        message: 'Please provide your highest academic or professional qualification.',
+      });
       return;
     }
-    if (isFieldRequired('skills') && !candidateForm.skills) {
-      toast.error('Skills is a required field');
+    if (isFieldRequired('skills') && !candidateForm.skills.trim()) {
+      toast.error('Key Skills is a required field');
+      setStatusModal({
+        isOpen: true,
+        type: 'warning',
+        title: 'Validation: Key Skills Required',
+        message: 'Please enter key technical or professional skills (comma separated).',
+      });
       return;
     }
+
+    setIsSubmitting(true);
     try {
+      const effectiveOrgId = mrfData?.organizationId || mrfData?.organization_id || user?.organizationId || 1;
+      const targetPosition = applyTargetMrf?.position_title || mrfData?.position_title || positionTitle || 'QA Engineer';
+
       const response = await apiClient.post(`/public/job-reference/${activeMrfId}/apply`, {
         ...candidateForm,
+        name: trimmedName,
+        emailId: trimmedEmail,
+        positionTitle: targetPosition,
+        position: targetPosition,
+        source: 'External',
+        organizationId: effectiveOrgId,
         resumeUrl: uploadedResumeBase64 || undefined,
-        signatureUrl: uploadedSignatureBase64 || undefined,
-        referringEmployeeId: user?.employeeId || undefined,
+        referringEmployeeId: undefined,
       });
+
       if (response.data?.success) {
         toast.success('Application submitted successfully!');
         setStatusModal({
           isOpen: true,
           type: 'success',
-          title: 'Application Saved Successfully!',
-          message: 'Your candidate details, resume, and signature have been saved and registered into the system database.',
+          title: 'Application Submitted Successfully!',
+          message: `Congratulations! Your job application for "${targetPosition}" has been received and added to Candidate Management. Our HR recruitment team will review your profile shortly.`,
         });
         setCurrentModal(null);
         setCandidateForm({
@@ -381,28 +459,28 @@ export const JobReferencePage: React.FC = () => {
           skills: '', comments: ''
         });
         setUploadedResumeName('');
-        setUploadedSignatureName('');
         setUploadedResumeBase64(null);
-        setUploadedSignatureBase64(null);
       } else {
-        const msg = response.data?.message || 'Failed to save registration';
+        const msg = response.data?.message || response.data?.error || 'Failed to submit application';
         toast.error(msg);
         setStatusModal({
           isOpen: true,
           type: 'error',
-          title: 'Registration Error',
+          title: 'Application Submission Notice',
           message: msg,
         });
       }
     } catch (err: any) {
-      const errMsg = formatApiError(err, 'Server error while saving application');
-      toast.error(`Application Error: ${errMsg}`);
+      const errMsg = formatApiError(err, 'Unable to submit your application. Please verify your form details and try again.');
+      toast.error(`Application Notice: ${errMsg}`);
       setStatusModal({
         isOpen: true,
         type: 'error',
-        title: 'Application Submission Failed',
+        title: 'Application Notice',
         message: errMsg,
       });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -410,12 +488,25 @@ export const JobReferencePage: React.FC = () => {
     const files = e.target.files;
     if (files && files.length > 0) {
       const file = files[0];
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error('Resume file size exceeds 5 MB limit. Please select a smaller file.');
+        setStatusModal({
+          isOpen: true,
+          type: 'warning',
+          title: 'File Size Exceeded',
+          message: 'The selected resume file is larger than 5 MB. Please select a PDF, DOC, or DOCX file under 5 MB.',
+        });
+        return;
+      }
       setUploadedResumeName(file.name);
       const reader = new FileReader();
       reader.onload = (event) => {
         setUploadedResumeBase64(event.target?.result as string);
-        toast.success(`Resume "${file.name}" attached successfully! Please fill candidate details.`);
+        toast.success(`Resume "${file.name}" attached successfully! Please fill your candidate details.`);
         setCurrentModal('new_form');
+      };
+      reader.onerror = () => {
+        toast.error('Failed to read resume file. Please try again.');
       };
       reader.readAsDataURL(file);
     }
@@ -425,6 +516,16 @@ export const JobReferencePage: React.FC = () => {
     const files = e.target.files;
     if (files && files.length > 0) {
       const file = files[0];
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error('Resume file size exceeds 5 MB limit. Please select a smaller file.');
+        setStatusModal({
+          isOpen: true,
+          type: 'warning',
+          title: 'File Size Exceeded',
+          message: 'The selected resume file is larger than 5 MB. Please select a PDF, DOC, or DOCX file under 5 MB.',
+        });
+        return;
+      }
       setUploadedResumeName(file.name);
       const reader = new FileReader();
       reader.onload = (event) => {
@@ -433,23 +534,6 @@ export const JobReferencePage: React.FC = () => {
       };
       reader.onerror = () => {
         toast.error("Failed to read resume file");
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const handleSignatureChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (files && files.length > 0) {
-      const file = files[0];
-      setUploadedSignatureName(file.name);
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        setUploadedSignatureBase64(event.target?.result as string);
-        toast.success(`Signature "${file.name}" loaded successfully!`);
-      };
-      reader.onerror = () => {
-        toast.error("Failed to read signature file");
       };
       reader.readAsDataURL(file);
     }
@@ -1482,18 +1566,18 @@ export const JobReferencePage: React.FC = () => {
                     <h3 className="font-bold text-slate-800 uppercase tracking-wider text-[11px]">Required Documents</h3>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="w-full">
                     {/* Resume Upload Card */}
                     {isFieldEnabled('resume') && (
-                      <div className="p-4 rounded-2xl border border-slate-200/90 bg-slate-50/50 flex flex-col justify-between space-y-3">
+                      <div className="p-4 rounded-2xl border-2 border-dashed border-indigo-200/80 bg-gradient-to-br from-indigo-50/40 via-white to-slate-50/50 flex flex-col justify-between space-y-3 hover:border-indigo-400/80 transition-all">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             <FileText className="w-4 h-4 text-indigo-600" />
                             <span className="font-bold text-slate-800 text-xs">
-                              Candidate Resume {isFieldRequired('resume', true) && <span className="text-rose-500">*</span>}
+                              Candidate Resume <span className="text-rose-500 font-extrabold">*</span>
                             </span>
                           </div>
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-600">
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100/80 text-indigo-700">
                             PDF, DOC, DOCX
                           </span>
                         </div>
@@ -1506,64 +1590,31 @@ export const JobReferencePage: React.FC = () => {
                           onChange={handleResumeChange}
                         />
 
-                        <button
-                          type="button"
-                          onClick={() => resumeInputRef.current?.click()}
-                          className={`w-full h-10 rounded-xl flex items-center justify-center gap-2 text-xs font-bold transition-all cursor-pointer border shadow-2xs ${
-                            uploadedResumeName
-                              ? 'bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100'
-                              : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
-                          }`}
-                        >
-                          <FileUp className="w-4 h-4" />
-                          {uploadedResumeName ? 'Change Resume' : 'Upload Resume File'}
-                        </button>
+                        <div className="flex flex-col sm:flex-row items-center gap-3">
+                          <button
+                            type="button"
+                            onClick={() => resumeInputRef.current?.click()}
+                            className={`w-full sm:w-auto px-6 h-10 rounded-xl flex items-center justify-center gap-2 text-xs font-bold transition-all cursor-pointer border shadow-xs ${
+                              uploadedResumeName
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100'
+                                : 'bg-indigo-600 text-white border-indigo-600 hover:bg-indigo-700 shadow-indigo-200'
+                            }`}
+                          >
+                            <FileUp className="w-4 h-4" />
+                            {uploadedResumeName ? 'Change Resume File' : 'Upload Resume File'}
+                          </button>
 
-                        <p className="text-[11px] text-slate-400 truncate font-medium">
-                          {uploadedResumeName ? `✓ ${uploadedResumeName}` : 'Max file size 5 MB'}
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Signature Upload Card */}
-                    {isFieldEnabled('signature') && (
-                      <div className="p-4 rounded-2xl border border-slate-200/90 bg-slate-50/50 flex flex-col justify-between space-y-3">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <Image className="w-4 h-4 text-purple-600" />
-                            <span className="font-bold text-slate-800 text-xs">
-                              Candidate Signature {isFieldRequired('signature', true) && <span className="text-rose-500">*</span>}
-                            </span>
-                          </div>
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-600">
-                            PNG, JPG
-                          </span>
+                          {uploadedResumeName ? (
+                            <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-100/70 text-emerald-800 text-xs font-medium w-full truncate">
+                              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                              <span className="truncate font-semibold">{uploadedResumeName}</span>
+                            </div>
+                          ) : (
+                            <p className="text-[11px] text-slate-400 font-medium">
+                              Attach your latest resume (Max file size: 5 MB)
+                            </p>
+                          )}
                         </div>
-
-                        <input
-                          type="file"
-                          ref={signatureInputRef}
-                          className="hidden"
-                          accept="image/*"
-                          onChange={handleSignatureChange}
-                        />
-
-                        <button
-                          type="button"
-                          onClick={() => signatureInputRef.current?.click()}
-                          className={`w-full h-10 rounded-xl flex items-center justify-center gap-2 text-xs font-bold transition-all cursor-pointer border shadow-2xs ${
-                            uploadedSignatureName
-                              ? 'bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100'
-                              : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
-                          }`}
-                        >
-                          <Image className="w-4 h-4" />
-                          {uploadedSignatureName ? 'Change Signature' : 'Upload Signature Image'}
-                        </button>
-
-                        <p className="text-[11px] text-slate-400 truncate font-medium">
-                          {uploadedSignatureName ? `✓ ${uploadedSignatureName}` : 'Max file size 1 MB'}
-                        </p>
                       </div>
                     )}
                   </div>
@@ -1589,19 +1640,30 @@ export const JobReferencePage: React.FC = () => {
               <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex items-center justify-between flex-shrink-0">
                 <button
                   type="button"
+                  disabled={isSubmitting}
                   onClick={() => { setCurrentModal(null); setApplyTargetMrf(null); }}
-                  className="px-5 py-2.5 rounded-xl text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-200/70 transition-colors cursor-pointer"
+                  className="px-5 py-2.5 rounded-xl text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-200/70 transition-colors cursor-pointer disabled:opacity-50"
                 >
                   Cancel
                 </button>
 
                 <button
                   type="submit"
+                  disabled={isSubmitting}
                   style={{ backgroundColor: portalSettings?.primaryColor || '#4f46e5' }}
-                  className="inline-flex items-center gap-2 px-8 py-2.5 text-white text-xs font-bold rounded-xl shadow-md hover:opacity-90 active:scale-95 transition-all cursor-pointer"
+                  className="inline-flex items-center gap-2 px-8 py-2.5 text-white text-xs font-bold rounded-xl shadow-md hover:opacity-90 active:scale-95 transition-all cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  Submit Application
-                  <ChevronRight className="w-4 h-4" />
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Submitting Application...
+                    </>
+                  ) : (
+                    <>
+                      Submit Application
+                      <ChevronRight className="w-4 h-4" />
+                    </>
+                  )}
                 </button>
               </div>
 
@@ -1612,44 +1674,59 @@ export const JobReferencePage: React.FC = () => {
 
       {/* Dynamic Status & Error Popup Modal */}
       {statusModal.isOpen && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 dark:border-slate-800 text-center relative">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/70 backdrop-blur-md p-4 animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-md w-full p-6 sm:p-7 shadow-2xl border border-slate-100 dark:border-slate-800 text-center relative animate-in zoom-in-95 duration-200">
             <button
               onClick={() => setStatusModal(prev => ({ ...prev, isOpen: false }))}
-              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors p-1 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800"
+              aria-label="Close"
             >
               <X className="w-5 h-5" />
             </button>
 
-            <div className={`mx-auto w-16 h-16 rounded-full flex items-center justify-center mb-4 ${
+            <div className={`mx-auto w-16 h-16 rounded-2xl flex items-center justify-center mb-4 shadow-sm ${
               statusModal.type === 'success'
-                ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400'
-                : 'bg-rose-100 text-rose-600 dark:bg-rose-950/50 dark:text-rose-400'
+                ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400 ring-8 ring-emerald-50 dark:ring-emerald-950/30'
+                : statusModal.type === 'warning'
+                ? 'bg-amber-100 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400 ring-8 ring-amber-50 dark:ring-amber-950/30'
+                : 'bg-rose-100 text-rose-600 dark:bg-rose-950/60 dark:text-rose-400 ring-8 ring-rose-50 dark:ring-rose-950/30'
             }`}>
               {statusModal.type === 'success' ? (
-                <Sparkles className="w-8 h-8" />
+                <CheckCircle2 className="w-9 h-9" />
+              ) : statusModal.type === 'warning' ? (
+                <AlertTriangle className="w-9 h-9" />
               ) : (
-                <X className="w-8 h-8" />
+                <AlertCircle className="w-9 h-9" />
               )}
             </div>
 
-            <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
+            <h3 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white mb-2 tracking-tight">
               {statusModal.title}
             </h3>
 
-            <p className="text-sm text-slate-600 dark:text-slate-300 mb-6 leading-relaxed">
-              {statusModal.message}
-            </p>
+            <div className={`p-4 rounded-2xl mb-6 text-left border ${
+              statusModal.type === 'success'
+                ? 'bg-emerald-50/70 border-emerald-200 text-emerald-900'
+                : statusModal.type === 'warning'
+                ? 'bg-amber-50/70 border-amber-200 text-amber-900'
+                : 'bg-rose-50/70 border-rose-200 text-rose-900'
+            }`}>
+              <p className="text-xs sm:text-sm font-medium leading-relaxed">
+                {statusModal.message}
+              </p>
+            </div>
 
             <button
               onClick={() => setStatusModal(prev => ({ ...prev, isOpen: false }))}
-              className={`w-full py-3 px-4 rounded-xl font-medium text-white shadow-lg transition-all cursor-pointer ${
+              className={`w-full py-3 px-5 rounded-xl font-bold text-xs sm:text-sm text-white shadow-lg transition-all cursor-pointer ${
                 statusModal.type === 'success'
-                  ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/20'
-                  : 'bg-rose-600 hover:bg-rose-700 shadow-rose-500/20'
+                  ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/25'
+                  : statusModal.type === 'warning'
+                  ? 'bg-amber-600 hover:bg-amber-700 shadow-amber-500/25'
+                  : 'bg-rose-600 hover:bg-rose-700 shadow-rose-500/25'
               }`}
             >
-              Close Window
+              {statusModal.type === 'success' ? 'Great, Close Window' : 'Understood, Check Details'}
             </button>
           </div>
         </div>

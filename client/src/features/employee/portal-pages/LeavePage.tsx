@@ -136,6 +136,7 @@ export default function LeavePage() {
   const [emergencyContact, setEmergencyContact] = useState<string>('');
   const [attachedFile, setAttachedFile] = useState<File | null>(null);
   const [attachedFileName, setAttachedFileName] = useState<string>('');
+  const [acknowledgeLOP, setAcknowledgeLOP] = useState<boolean>(false);
 
   // Dynamic published holiday calendar & weekly-off rules
   const [holidaysList, setHolidaysList] = useState<any[]>([]);
@@ -153,6 +154,7 @@ export default function LeavePage() {
   const allowQuarterDayLeave = true;
   const [sickLeaveDocThreshold, setSickLeaveDocThreshold] = useState<number>(3);
   const [isBackupPersonEnabled, setIsBackupPersonEnabled] = useState<boolean>(true);
+  const [leaveClubbingRules, setLeaveClubbingRules] = useState<any[]>([]);
 
   // Mock team members with dynamic loading fallback
   const [teamMembers, setTeamMembers] = useState<any[]>([
@@ -216,9 +218,14 @@ export default function LeavePage() {
         setEncashments(encashRes.data.data);
       }
       if (orgLeaveSettingsRes.data?.data) {
-        const rawBP = orgLeaveSettingsRes.data.data.enable_backup_person ?? orgLeaveSettingsRes.data.data.enableBackupPerson;
+        const rawData = orgLeaveSettingsRes.data.data;
+        const rawBP = rawData.enable_backup_person ?? rawData.enableBackupPerson;
         if (rawBP !== undefined && rawBP !== null) {
           setIsBackupPersonEnabled(Boolean(rawBP));
+        }
+        const rules = rawData.leaveClubbingRules ?? rawData.leave_clubbing_rules;
+        if (Array.isArray(rules)) {
+          setLeaveClubbingRules(rules);
         }
       }
 
@@ -619,17 +626,21 @@ export default function LeavePage() {
     const leaveCode = selectedTypeObj ? (selectedTypeObj.leave_code || selectedTypeObj.leaveCode || '').toUpperCase() : '';
     const leaveName = selectedTypeObj ? (selectedTypeObj.leave_name || selectedTypeObj.leaveName || 'Leave Category') : 'Leave Category';
 
-    // Balance validation (except LOP)
+    // Balance validation & Merged/Pooled Leave Check
     const selectedDisplayBalance = displayBalances.find(b => String(b.leave_type_id || b.leaveTypeId || b.id) === String(leaveTypeId));
     const availableBalance = selectedDisplayBalance ? (typeof selectedDisplayBalance.available_balance === 'number' ? selectedDisplayBalance.available_balance : parseFloat(selectedDisplayBalance.available_balance as string) || 0) : 0;
     const balanceAfter = availableBalance - totalDays;
 
-    if (balanceAfter < 0 && leaveCode !== 'LOP') {
-      if (leaveCode !== 'SL') {
-        const proceed = await window.appConfirm(
-          `Your current balance for this leave is ${availableBalance.toFixed(2)} days, and you are requesting ${totalDays.toFixed(2)} days. Your balance will become ${balanceAfter.toFixed(2)} days. Do you want to proceed?`
-        );
-        if (!proceed) return;
+    const poolId = selectedTypeObj?.pool_from_leave_type_id || selectedTypeObj?.poolFromLeaveTypeId || selectedDisplayBalance?.pool_from_leave_type_id || selectedDisplayBalance?.poolFromLeaveTypeId;
+    const pooledBalObj = poolId ? displayBalances.find(b => String(b.leave_type_id || b.id) === String(poolId)) : null;
+    const poolAvailable = pooledBalObj ? (typeof pooledBalObj.available_balance === 'number' ? pooledBalObj.available_balance : parseFloat(pooledBalObj.available_balance as string) || 0) : 0;
+    const combinedAvailable = availableBalance + poolAvailable;
+    const isPooledCovered = poolId && combinedAvailable >= totalDays;
+
+    if (balanceAfter < 0 && leaveCode !== 'LOP' && !isPooledCovered) {
+      if (!acknowledgeLOP) {
+        toast.error('Insufficient leave balance. Please switch to an available category or accept the Loss of Pay (LOP) salary deduction notice.');
+        return;
       }
     }
 
@@ -808,11 +819,14 @@ export default function LeavePage() {
 
     return isLeaveTypeApplicableForGender(mergedItem, employeeContext);
   }).map(b => {
+    const matchingType = leaveTypes.find(t => String(t.id) === String(b.leave_type_id || b.leaveTypeId || b.id)) as any;
     const quotaFallback = parseFloat(String((b as any).annual_quota ?? (b as any).annualQuota ?? 0)) || 0;
     const total = getBalNum(b, 'allocated_balance', 'allocatedBalance', quotaFallback);
     const consumed = getBalNum(b, 'consumed_balance', 'consumedBalance', 0);
     const pending = getBalNum(b, 'pending_approval_balance', 'pendingApprovalBalance', 0);
-    const isAllowNeg = Boolean(b.allow_negative_balance || b.allowNegativeBalance);
+    const isAllowNeg = Boolean(b.allow_negative_balance || b.allowNegativeBalance || matchingType?.allow_negative_balance || matchingType?.allowNegativeBalance);
+    const poolFromId = b.pool_from_leave_type_id ?? b.poolFromLeaveTypeId ?? matchingType?.pool_from_leave_type_id ?? matchingType?.poolFromLeaveTypeId ?? null;
+    const negAction = b.negative_balance_action ?? b.negativeBalanceAction ?? matchingType?.negative_balance_action ?? matchingType?.negativeBalanceAction ?? null;
     // Balance is only deducted when approved (consumed). Pending, Rejected, and Cancelled requests do not deduct balance.
     const calculatedAvail = isAllowNeg ? (total - consumed) : Math.max(0, total - consumed);
     return {
@@ -820,7 +834,11 @@ export default function LeavePage() {
       allocated_balance: total,
       consumed_balance: consumed,
       pending_approval_balance: pending,
-      available_balance: calculatedAvail
+      available_balance: calculatedAvail,
+      pool_from_leave_type_id: poolFromId,
+      poolFromLeaveTypeId: poolFromId,
+      negative_balance_action: negAction,
+      allow_negative_balance: isAllowNeg,
     };
   });
 
@@ -883,30 +901,39 @@ export default function LeavePage() {
                 <label className="text-xs font-bold text-foreground block mb-1">Leave Category</label>
                 <select
                   value={leaveTypeId}
-                  onChange={(e) => setLeaveTypeId(e.target.value)}
+                  onChange={(e) => {
+                    setLeaveTypeId(e.target.value);
+                    setAcknowledgeLOP(false);
+                  }}
                   className="w-full h-10 px-3.5 text-xs bg-muted/50 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-foreground font-semibold"
                 >
                   <option value="">Select Leave Category...</option>
-                  {(displayBalances.length > 0 ? displayBalances : allLeaveTypes.map((t: any) => ({
-                    id: t.id,
-                    leave_type_id: t.id,
-                    leave_name: t.leave_name || t.leaveName,
-                    leave_code: t.leave_code || t.leaveCode,
-                    available_balance: t.default_allowance_days || t.defaultAllowanceDays || 0,
-                  })))
-                    .filter((b) => isLeaveTypeApplicableForGender(b, employeeContext))
-                    .map((b: any) => {
-                      const name = b.leave_name || b.leaveName || 'Leave';
-                      const code = b.leave_code || b.leaveCode || 'PTO';
-                      const targetId = b.leave_type_id || b.leaveTypeId || b.id;
-                      const avail = b.available_balance ?? b.availableBalance ?? 0;
+                  {allLeaveTypes.map((t: any) => {
+                    const targetId = t.id;
+                    const balanceItem = displayBalances.find((b: any) => String(b.leave_type_id || b.leaveTypeId || b.id) === String(targetId));
+                    const avail = balanceItem
+                      ? (typeof balanceItem.available_balance === 'number' ? balanceItem.available_balance : parseFloat(balanceItem.available_balance as string) || 0)
+                      : (t.default_allowance_days || t.defaultAllowanceDays || 0);
+                    const name = t.leave_name || t.leaveName || 'Leave';
+                    const code = t.leave_code || t.leaveCode || 'PTO';
+                    const poolId = t.pool_from_leave_type_id || t.poolFromLeaveTypeId || balanceItem?.pool_from_leave_type_id || balanceItem?.poolFromLeaveTypeId;
+                    const poolType = poolId ? allLeaveTypes.find((x: any) => String(x.id) === String(poolId)) : null;
 
-                      return (
-                        <option key={targetId} value={targetId}>
-                          {name} ({code}) - Allowance: {avail} days
-                        </option>
-                      );
-                    })}
+                    let statusSuffix = '';
+                    if (avail > 0) {
+                      statusSuffix = `${avail} days left`;
+                    } else if (poolType) {
+                      statusSuffix = `0 days left (Auto-pools from ${poolType.leave_name || poolType.leaveName})`;
+                    } else {
+                      statusSuffix = `0 days left (Exhausted / LOP)`;
+                    }
+
+                    return (
+                      <option key={targetId} value={targetId}>
+                        {name} {code ? `(${code})` : ''} - {statusSuffix}
+                      </option>
+                    );
+                  })}
                 </select>
                 {(displayBalances.length === 0 && allLeaveTypes.length === 0) && (
                   <p className="text-[11px] font-medium text-amber-500 mt-1.5 flex items-center gap-1">
@@ -1104,7 +1131,7 @@ export default function LeavePage() {
                 );
               })()}
 
-              {/* Balance Live Preview Info Box */}
+              {/* Balance Live Preview Info Box & Smart Guidance */}
               {leaveTypeId && (
                 (() => {
                   const selectedDisplayBalance = displayBalances.find(b => String(b.leave_type_id || b.leaveTypeId || b.id) === String(leaveTypeId));
@@ -1114,40 +1141,173 @@ export default function LeavePage() {
 
                   const selectedTypeObj = allLeaveTypes.find(t => String(t.id) === String(leaveTypeId));
                   const leaveCode = selectedTypeObj ? (selectedTypeObj.leave_code || selectedTypeObj.leaveCode || '').toUpperCase() : '';
+                  const leaveName = selectedTypeObj ? (selectedTypeObj.leave_name || selectedTypeObj.leaveName || 'Leave Category') : 'Leave Category';
                   const isLOP = leaveCode === 'LOP';
 
+                  // Pool / Merged Leave Detection
+                  const poolId = selectedTypeObj?.pool_from_leave_type_id || selectedTypeObj?.poolFromLeaveTypeId || selectedDisplayBalance?.pool_from_leave_type_id || selectedDisplayBalance?.poolFromLeaveTypeId;
+                  const poolType = poolId ? (allLeaveTypes.find((x: any) => String(x.id) === String(poolId)) || displayBalances.find((b: any) => String(b.leave_type_id || b.id) === String(poolId))) : null;
+                  const poolBalanceItem = poolId ? displayBalances.find((b: any) => String(b.leave_type_id || b.id) === String(poolId)) : null;
+                  const poolAvailable = poolBalanceItem ? (typeof poolBalanceItem.available_balance === 'number' ? poolBalanceItem.available_balance : parseFloat(poolBalanceItem.available_balance as string) || 0) : 0;
+                  const poolName = poolType?.leave_name || poolType?.leaveName || poolBalanceItem?.leave_name || poolBalanceItem?.name || 'Merged Leave';
+
+                  const daysFromPrimary = Math.min(Math.max(0, availableBalance), totalDays);
+                  const excessNeeded = Math.max(0, totalDays - daysFromPrimary);
+                  const pooledDaysDeducted = poolId ? Math.min(excessNeeded, poolAvailable) : 0;
+                  const remainingShortfall = Math.max(0, excessNeeded - pooledDaysDeducted);
+                  const isPooledCovered = Boolean(poolId && excessNeeded > 0 && remainingShortfall === 0);
+
+                  // Check which alternate leaves are permitted by Admin via Clubbing Rules OR Policy Pooling:
+                  const clubbedNames = new Set<string>();
+                  if (Array.isArray(leaveClubbingRules) && leaveClubbingRules.length > 0) {
+                    leaveClubbingRules.forEach((rule: any) => {
+                      const rTypes: string[] = Array.isArray(rule.leaveTypes) ? rule.leaveTypes : [];
+                      const matchesCurrent = rTypes.some(t => 
+                        t.toLowerCase() === leaveName.toLowerCase() || 
+                        (leaveCode && t.toLowerCase() === leaveCode.toLowerCase())
+                      );
+                      if (matchesCurrent) {
+                        rTypes.forEach(t => {
+                          if (t.toLowerCase() !== leaveName.toLowerCase() && (!leaveCode || t.toLowerCase() !== leaveCode.toLowerCase())) {
+                            clubbedNames.add(t.toLowerCase());
+                          }
+                        });
+                      }
+                    });
+                  }
+
+                  // An alternate category is ONLY suggested if it is in an Admin-defined clubbing rule or direct policy pool
+                  const permittedAlternateLeaves = displayBalances.filter(b => {
+                    if (String(b.leave_type_id || b.id) === String(leaveTypeId)) return false;
+                    const bAvail = typeof b.available_balance === 'number' ? b.available_balance : parseFloat(b.available_balance as string) || 0;
+                    if (bAvail <= 0) return false;
+                    
+                    const bName = (b.leave_name || b.leaveName || '').toLowerCase();
+                    const bCode = (b.leave_code || b.leaveCode || '').toLowerCase();
+                    const isClubbed = clubbedNames.has(bName) || (bCode && clubbedNames.has(bCode));
+                    const isDirectPool = poolId && String(b.leave_type_id || b.id) === String(poolId);
+                    return isClubbed || isDirectPool;
+                  });
+
                   return (
-                    <div className="space-y-2">
-                      <div className="p-3.5 rounded-lg bg-muted/30 border border-border/70 flex flex-col gap-1.5 text-xs">
+                    <div className="space-y-3">
+                      {/* Quota & Deduction Card */}
+                      <div className="p-3.5 rounded-2xl bg-muted/40 border border-border/80 flex flex-col gap-2 text-xs">
                         <div className="flex justify-between items-center text-muted-foreground">
-                          <span>Available Quota:</span>
+                          <span className="flex items-center gap-1.5 font-medium">
+                            <span className="w-2 h-2 rounded-full bg-violet-500"></span>
+                            Selected Category Quota ({leaveName}):
+                          </span>
                           <span className="font-bold text-foreground font-mono">{availableBalance.toFixed(2)} Days</span>
                         </div>
+
+                        {poolId && poolType && (
+                          <div className="flex justify-between items-center text-muted-foreground">
+                            <span className="flex items-center gap-1.5 font-medium text-indigo-600 dark:text-indigo-400">
+                              <span className="w-2 h-2 rounded-full bg-indigo-500"></span>
+                              Merged Balance ({poolName}):
+                            </span>
+                            <span className="font-bold text-indigo-600 dark:text-indigo-400 font-mono">{poolAvailable.toFixed(2)} Days</span>
+                          </div>
+                        )}
+
                         <div className="flex justify-between items-center text-muted-foreground">
-                          <span>Requesting Duration:</span>
+                          <span className="flex items-center gap-1.5 font-medium">
+                            <span className="w-2 h-2 rounded-full bg-primary"></span>
+                            Requested Duration:
+                          </span>
                           <span className="font-bold text-primary font-mono">{totalDays.toFixed(2)} Days</span>
                         </div>
-                        <div className="flex justify-between items-center border-t pt-1.5 mt-0.5 text-muted-foreground">
-                          <span className="font-bold">Estimated Balance After:</span>
-                          <span className={`font-mono font-bold ${balanceAfter < 0 ? 'text-rose-500' : 'text-emerald-500'}`}>
-                            {balanceAfter.toFixed(2)} Days
+
+                        <div className="flex justify-between items-center border-t border-border/60 pt-2 mt-0.5 text-muted-foreground">
+                          <span className="font-bold text-foreground">Estimated Balance After:</span>
+                          <span className={`font-mono font-black text-sm ${balanceAfter < 0 && !isPooledCovered ? 'text-rose-500' : 'text-emerald-500'}`}>
+                            {balanceAfter < 0 ? (isPooledCovered ? `0.00 Days (+${pooledDaysDeducted.toFixed(1)}d from ${poolName})` : `${balanceAfter.toFixed(2)} Days`) : `${balanceAfter.toFixed(2)} Days`}
                           </span>
                         </div>
                       </div>
 
-                      {/* Insufficient / Warning Messages */}
-                      {balanceAfter < 0 && (
-                        isLOP ? (
-                          <div className="p-3 rounded-xl border border-amber-500/20 bg-amber-500/5 flex items-start gap-2 text-[11px] text-amber-600 dark:text-amber-400 font-medium">
-                            <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
-                            <span>Notice: Unpaid Leave (LOP) allows negative balances. This request will result in salary deductions.</span>
+                      {/* Scenario 1: Normal Sufficient Balance */}
+                      {balanceAfter >= 0 && (
+                        <div className="p-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/5 flex items-center gap-2.5 text-xs text-emerald-700 dark:text-emerald-300 font-medium">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                          <span>Paid Quota Available: <strong>{totalDays.toFixed(1)} days</strong> will be deducted directly from your <strong>{leaveName}</strong> balance.</span>
+                        </div>
+                      )}
+
+                      {/* Scenario 2: Merged / Pooled Leave Active (Full or Partial) */}
+                      {balanceAfter < 0 && poolId && poolAvailable > 0 && (
+                        <div className="p-3.5 rounded-2xl border border-indigo-500/30 bg-indigo-500/10 space-y-2 text-xs">
+                          <div className="flex items-center gap-2 text-indigo-700 dark:text-indigo-300 font-black">
+                            <ShieldCheck className="w-4 h-4 text-indigo-600 shrink-0" />
+                            <span>Merged / Pooled Leave Policy Active</span>
                           </div>
-                        ) : (
-                          <div className="p-3 rounded-xl border border-rose-500/20 bg-rose-500/5 flex items-start gap-2 text-[11px] text-rose-600 dark:text-rose-400 font-medium animate-pulse">
-                            <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
-                            <span>Error: Insufficient balance. You cannot submit this request.</span>
+                          <p className="text-[11px] text-indigo-900/90 dark:text-indigo-200 leading-relaxed font-medium">
+                            Primary category <strong>{leaveName}</strong> has {availableBalance.toFixed(1)} days left. The excess <strong>{pooledDaysDeducted.toFixed(1)} days</strong> will be automatically deducted from your merged <strong>{poolName}</strong> balance (Remaining: {(poolAvailable - pooledDaysDeducted).toFixed(1)} days).
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Scenario 3: Balance 0 or Deficit (No pool or pool exhausted) */}
+                      {balanceAfter < 0 && !isPooledCovered && !isLOP && (
+                        <div className="space-y-2.5">
+                          {/* Admin-Configured Clubbed Leaves Suggestion Box */}
+                          {permittedAlternateLeaves.length > 0 && (
+                            <div className="p-3.5 rounded-2xl border border-amber-500/30 bg-amber-500/10 space-y-2 text-xs">
+                              <div className="flex items-center gap-1.5 font-black text-amber-700 dark:text-amber-300">
+                                <Sparkles className="w-4 h-4 text-amber-600 shrink-0" />
+                                <span>Clubbed Leaves Available (Configured by Organization Policy):</span>
+                              </div>
+                              <p className="text-[11px] text-amber-800/90 dark:text-amber-200/90 font-medium">
+                                As per organization leave clubbing rules, you can combine or switch to the following permitted leave categories:
+                              </p>
+                              <div className="flex flex-wrap gap-1.5 pt-1">
+                                {permittedAlternateLeaves.map((alt: any) => {
+                                  const altId = alt.leave_type_id || alt.leaveTypeId || alt.id;
+                                  const altName = alt.leave_name || alt.leaveName || 'Leave';
+                                  const altCode = alt.leave_code || alt.leaveCode || '';
+                                  const altAvail = alt.available_balance ?? alt.availableBalance ?? 0;
+                                  return (
+                                    <button
+                                      key={altId}
+                                      type="button"
+                                      onClick={() => {
+                                        setLeaveTypeId(String(altId));
+                                        setAcknowledgeLOP(false);
+                                      }}
+                                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-card hover:bg-muted text-foreground border border-border shadow-xs hover:border-violet-500 text-[11px] font-bold transition-all cursor-pointer"
+                                    >
+                                      <span>👉 Switch to <strong>{altName} {altCode ? `(${altCode})` : ''}</strong></span>
+                                      <span className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 text-[10px] px-1.5 py-0.5 rounded-md font-mono font-extrabold">{altAvail}d left</span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Loss of Pay (LOP) Warning & Acknowledgement */}
+                          <div className="p-3.5 rounded-2xl border border-rose-500/30 bg-rose-500/5 space-y-2.5 text-xs">
+                            <div className="flex items-center gap-2 font-black text-rose-600 dark:text-rose-400">
+                              <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0" />
+                              <span>Loss of Pay (LOP) - Salary Deduction Notice</span>
+                            </div>
+                            <p className="text-[11px] text-rose-900/80 dark:text-rose-200/80 leading-relaxed font-medium">
+                              Your available quota for <strong>{selectedTypeObj?.leave_name || 'this leave'}</strong> is insufficient ({availableBalance.toFixed(1)} days left). Proceeding with this request will mark the deficit of <strong>{Math.abs(remainingShortfall || balanceAfter).toFixed(1)} days</strong> as <strong>Unpaid Leave (Loss of Pay)</strong> and will be deducted from your monthly salary.
+                            </p>
+                            <label className="flex items-start gap-2.5 p-2.5 rounded-xl bg-card border border-rose-500/30 cursor-pointer text-xs font-bold text-foreground hover:bg-rose-500/5 transition-all">
+                              <input
+                                type="checkbox"
+                                checked={acknowledgeLOP}
+                                onChange={(e) => setAcknowledgeLOP(e.target.checked)}
+                                className="mt-0.5 h-4 w-4 rounded border-border text-rose-600 focus:ring-rose-500 cursor-pointer"
+                              />
+                              <span className="text-[11px] leading-snug">
+                                I understand and agree to proceed as <strong>Unpaid Leave (LOP)</strong> with salary deduction for <strong>{Math.abs(remainingShortfall || balanceAfter).toFixed(1)} days</strong>.
+                              </span>
+                            </label>
                           </div>
-                        )
+                        </div>
                       )}
                     </div>
                   );
@@ -1244,21 +1404,60 @@ export default function LeavePage() {
                 >
                   Cancel
                 </Button>
-                <Button
-                  type="submit"
-                  disabled={submitting}
-                  className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs h-9 px-5 rounded-lg gap-1.5 shadow-2xs disabled:opacity-50"
-                >
-                  {submitting ? (
-                    <>
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" /> Submitting...
-                    </>
-                  ) : (
-                    <>
-                      <PlusCircle className="w-3.5 h-3.5" /> Submit for Approval
-                    </>
-                  )}
-                </Button>
+                {(() => {
+                  const selectedDisplayBalance = displayBalances.find(b => String(b.leave_type_id || b.leaveTypeId || b.id) === String(leaveTypeId));
+                  const availableBalance = selectedDisplayBalance ? (typeof selectedDisplayBalance.available_balance === 'number' ? selectedDisplayBalance.available_balance : parseFloat(selectedDisplayBalance.available_balance as string) || 0) : 0;
+                  const totalDays = computedTotalRequestedDays();
+                  const balanceAfter = availableBalance - totalDays;
+                  const selectedTypeObj = allLeaveTypes.find(t => String(t.id) === String(leaveTypeId));
+                  const leaveCode = selectedTypeObj ? (selectedTypeObj.leave_code || selectedTypeObj.leaveCode || '').toUpperCase() : '';
+                  const isLOP = leaveCode === 'LOP';
+
+                  const poolId = selectedTypeObj?.pool_from_leave_type_id || selectedTypeObj?.poolFromLeaveTypeId || selectedDisplayBalance?.pool_from_leave_type_id || selectedDisplayBalance?.poolFromLeaveTypeId;
+                  const poolBalanceItem = poolId ? displayBalances.find(b => String(b.leave_type_id || b.id) === String(poolId)) : null;
+                  const poolAvailable = poolBalanceItem ? (typeof poolBalanceItem.available_balance === 'number' ? poolBalanceItem.available_balance : parseFloat(poolBalanceItem.available_balance as string) || 0) : 0;
+                  const combinedAvailable = availableBalance + poolAvailable;
+                  const isPooledCovered = Boolean(poolId && combinedAvailable >= totalDays);
+
+                  const isDeficit = balanceAfter < 0 && !isLOP && !isPooledCovered;
+                  const isBlocked = isDeficit && !acknowledgeLOP;
+
+                  return (
+                    <Button
+                      type="submit"
+                      disabled={submitting || isBlocked || !leaveTypeId || !startDate || !endDate}
+                      className={`font-bold text-xs h-9 px-5 rounded-lg gap-1.5 shadow-2xs disabled:opacity-50 transition-all ${
+                        isDeficit && acknowledgeLOP
+                          ? 'bg-amber-600 hover:bg-amber-700 text-white'
+                          : isPooledCovered
+                          ? 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                          : 'bg-primary hover:bg-primary/90 text-primary-foreground'
+                      }`}
+                    >
+                      {submitting ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" /> Submitting...
+                        </>
+                      ) : isBlocked ? (
+                        <>
+                          <Ban className="w-3.5 h-3.5" /> Insufficient Balance (Accept LOP to Submit)
+                        </>
+                      ) : isDeficit && acknowledgeLOP ? (
+                        <>
+                          <AlertTriangle className="w-3.5 h-3.5" /> Submit as Unpaid Leave (LOP)
+                        </>
+                      ) : isPooledCovered ? (
+                        <>
+                          <ShieldCheck className="w-3.5 h-3.5" /> Submit for Approval (Auto-Pooled)
+                        </>
+                      ) : (
+                        <>
+                          <PlusCircle className="w-3.5 h-3.5" /> Submit for Approval
+                        </>
+                      )}
+                    </Button>
+                  );
+                })()}
               </div>
             </form>
           </DialogContent>
@@ -1434,14 +1633,19 @@ export default function LeavePage() {
           ) : (
             <div className="space-y-3">
               {filteredApplications.slice(0, visibleHistoryCount).map((app) => {
-                const cleanDateStr = (str?: string) => {
+                const formatDateDDMMYYYY = (str?: string) => {
                   if (!str) return '';
-                  if (str.includes('T')) return str.split('T')[0];
-                  return str;
+                  const clean = str.includes('T') ? str.split('T')[0] : str;
+                  const parts = clean.split('-');
+                  if (parts.length === 3) {
+                    const [y, m, d] = parts;
+                    if (y.length === 4) return `${d}/${m}/${y}`;
+                  }
+                  return clean;
                 };
 
-                const startDate = cleanDateStr(app.application_start_date || app.applicationStartDate || app.from_date) || '2026-07-10';
-                const endDate = cleanDateStr(app.application_end_date || app.applicationEndDate || app.to_date) || '2026-07-11';
+                const startDate = formatDateDDMMYYYY(app.application_start_date || app.applicationStartDate || app.from_date) || '10/07/2026';
+                const endDate = formatDateDDMMYYYY(app.application_end_date || app.applicationEndDate || app.to_date) || '11/07/2026';
                 const days = app.total_days ?? app.totalDays ?? app.duration_days ?? 1;
                 const leaveCode = app.leave_code || app.leaveCode || 'PTO';
                 const leaveName = app.leave_name || app.leaveName || `Leave #${app.leave_type_id || app.leaveTypeId || 1}`;
@@ -1591,7 +1795,7 @@ export default function LeavePage() {
                       </div>
                       <span>•</span>
                       <div>
-                        Date: <span className="font-semibold text-foreground">{new Date(e.encashment_date || e.encashmentDate).toLocaleDateString()}</span>
+                        Date: <span className="font-semibold text-foreground">{new Date(e.encashment_date || e.encashmentDate).toLocaleDateString('en-GB')}</span>
                       </div>
                     </div>
 

@@ -220,6 +220,7 @@ export class LeaveApprovalService {
             });
         }
 
+        const approverNote = (comment && comment.trim()) || 'Leave request approved.';
         await trx('leave_applications')
           .where('id', applicationId)
           .update({
@@ -230,6 +231,7 @@ export class LeaveApprovalService {
             l2_approval_date: isFinalApproval ? new Date() : undefined,
             approved_by: isFinalApproval ? approverId : undefined,
             approval_date: isFinalApproval ? new Date() : undefined,
+            admin_notes: approverNote,
           });
 
         const appLopDays = application.lop_days || (application as any).lopDays;
@@ -258,7 +260,7 @@ export class LeaveApprovalService {
           approver_id: approverEmployeeId,
           status: 'approved',
           approval_date: new Date(),
-          comments: comment || null,
+          comments: approverNote,
         });
       });
     }
@@ -687,7 +689,91 @@ export class LeaveApprovalService {
    * Get approval history for application
    */
   async getApprovalHistory(ctx: TenantContext, applicationId: number) {
-    return this.approvalRepo.getForApplication(ctx, applicationId);
+    const db = getKnex();
+    // 1. Fetch from leave_approvals table joined with approver info
+    const approvals = await db('leave_approvals as la')
+      .leftJoin('users as u', 'la.approver_id', 'u.id')
+      .leftJoin('employees as e', 'u.employee_id', 'e.id')
+      .leftJoin('employees as e_direct', 'la.approver_id', 'e_direct.id')
+      .leftJoin('designations as des', function() {
+        this.on('e.designation_id', '=', 'des.id')
+          .orOn('e_direct.designation_id', '=', 'des.id');
+      })
+      .where('la.leave_application_id', applicationId)
+      .where('la.organization_id', ctx.organizationId)
+      .select(
+        'la.*',
+        db.raw('COALESCE(e.first_name, e_direct.first_name) as approver_first_name'),
+        db.raw('COALESCE(e.last_name, e_direct.last_name) as approver_last_name'),
+        db.raw('COALESCE(e.employee_code, e_direct.employee_code) as approver_employee_code'),
+        'des.name as approver_designation',
+        'u.email as approver_email'
+      )
+      .groupBy('la.id')
+      .orderBy('la.id', 'asc');
+
+    if (approvals && approvals.length > 0) {
+      return approvals.map((app: any) => {
+        const approverName = `${app.approver_first_name || ''} ${app.approver_last_name || ''}`.trim() || app.approver_email || 'Authorized Approver';
+        return {
+          id: app.id,
+          approval_level: app.approval_level || 1,
+          approval_date: app.approval_date || app.created_at,
+          created_at: app.created_at,
+          status: app.status || app.approval_action || 'approved',
+          comments: app.comments || app.approval_comments || app.rejection_reason || app.admin_notes || (app.status === 'rejected' ? 'Application was rejected.' : 'Application approved.'),
+          rejection_reason: app.rejection_reason || (app.status === 'rejected' ? app.comments : null),
+          approver_name: approverName,
+          approver_code: app.approver_employee_code || '',
+          approver_role: app.approver_designation || app.approver_role || 'Manager / Reviewer'
+        };
+      });
+    }
+
+    // 2. Fallback: query leave_applications directly if no records in leave_approvals
+    const application = await db('leave_applications as lapp')
+      .leftJoin('users as u', 'lapp.approved_by', 'u.id')
+      .leftJoin('employees as e', 'u.employee_id', 'e.id')
+      .leftJoin('employees as e_direct', 'lapp.approved_by', 'e_direct.id')
+      .leftJoin('designations as des', function() {
+        this.on('e.designation_id', '=', 'des.id')
+          .orOn('e_direct.designation_id', '=', 'des.id');
+      })
+      .where('lapp.id', applicationId)
+      .where('lapp.organization_id', ctx.organizationId)
+      .select(
+        'lapp.*',
+        db.raw('COALESCE(e.first_name, e_direct.first_name) as approver_first_name'),
+        db.raw('COALESCE(e.last_name, e_direct.last_name) as approver_last_name'),
+        db.raw('COALESCE(e.employee_code, e_direct.employee_code) as approver_employee_code'),
+        'des.name as approver_designation',
+        'u.email as approver_email'
+      )
+      .groupBy('lapp.id')
+      .first();
+
+    if (application && ['approved', 'rejected', 'cancelled', 'pending_hr_override'].includes((application.status || '').toLowerCase())) {
+      const isRejected = (application.status || '').toLowerCase() === 'rejected';
+      const approverName = `${application.approver_first_name || ''} ${application.approver_last_name || ''}`.trim() || application.approver_email || (isRejected ? 'Reviewing Authority' : 'Manager / HR');
+      const commentText = isRejected 
+        ? (application.rejection_reason || 'Application was rejected by reviewing authority.')
+        : (application.admin_notes || 'Leave application approved.');
+
+      return [{
+        id: application.id,
+        approval_level: 1,
+        approval_date: application.approval_date || application.updated_at || application.created_at,
+        created_at: application.created_at,
+        status: application.status,
+        comments: commentText,
+        rejection_reason: application.rejection_reason,
+        approver_name: approverName,
+        approver_code: application.approver_employee_code || '',
+        approver_role: application.approver_designation || 'Reviewing Authority'
+      }];
+    }
+
+    return [];
   }
 
   /**

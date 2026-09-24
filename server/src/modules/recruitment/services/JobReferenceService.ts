@@ -5,6 +5,7 @@ import { ReferralRepository } from '../repositories/ReferralRepository';
 import { MrfRequestRepository } from '../repositories/MrfRequestRepository';
 import type { JobReferenceApplyInput } from '../types/mrf';
 import type { TenantContext } from '../../../db/types';
+import { AppError, ConflictError } from '../../../common/errors';
 import { v4 as uuidv4 } from 'uuid';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -660,6 +661,8 @@ export class JobReferenceService {
     const effectiveEmail = (input.emailId && input.emailId.trim())
       || `${(input.name || 'candidate').toLowerCase().replace(/[^a-z0-9]/g, '')}_${Date.now()}@applied.portal`;
 
+    const candSource = input.source || (referringEmployeeId ? 'Referral' : 'External');
+
     // 1. Check if candidate already exists
     let candidate = await db('candidates')
       .where('organization_id', organizationId)
@@ -695,7 +698,8 @@ export class JobReferenceService {
           comments: input.comments || null,
           resume_url: resumePath,
           signature_url: signaturePath,
-          source: referringEmployeeId ? 'Referral' : 'Direct Apply',
+          status: 'applied',
+          source: candSource,
           created_by: referringEmployeeId || 1,
           updated_by: referringEmployeeId || 1,
         });
@@ -723,6 +727,7 @@ export class JobReferenceService {
         university: input.university || candidate.university,
         skills: input.skills || candidate.skills,
         comments: input.comments || candidate.comments,
+        source: candSource,
       };
       if (resumePath) updateData.resume_url = resumePath;
       if (signaturePath) updateData.signature_url = signaturePath;
@@ -733,7 +738,6 @@ export class JobReferenceService {
     // 2. Resolve or create Job record linked to this MRF or Job
     let job: any = null;
     try {
-      // First check if mrfId is already a direct job ID
       job = await db('jobs')
         .where('organization_id', organizationId)
         .where('id', mrfId)
@@ -746,33 +750,45 @@ export class JobReferenceService {
           .first();
       }
     } catch {
-      // mrf_request_id column may not exist, try without it
       job = null;
+    }
+
+    // Determine the precise position title
+    let resolvedTitle = input.positionTitle || input.position || '';
+    if (!resolvedTitle || resolvedTitle.trim().toLowerCase() === 'position') {
+      const mrf = await db('mrf_requests').where('id', mrfId).first().catch(() => null);
+      if (mrf) {
+        resolvedTitle = mrf.position_title || (mrf as any).positionTitle || mrf.job_title || mrf.title;
+      }
+      if (!resolvedTitle && job) {
+        resolvedTitle = job.job_title || (job as any).jobTitle || job.position_title || job.title;
+      }
+      if (!resolvedTitle) {
+        resolvedTitle = 'QA Engineer';
+      }
     }
 
     if (!job) {
       try {
-        const mrf = await db('mrf_requests').where('id', mrfId).first();
-        const resolvedTitle = mrf?.position_title || (mrf as any)?.positionTitle || (mrf as any)?.title || (mrf as any)?.job_title || (mrf as any)?.designation_name || 'Software Developer';
-
         const jobId = await this.safeInsert('jobs', {
           uuid: uuidv4(),
           organization_id: organizationId,
           mrf_request_id: mrfId,
-          job_code: `JOB-${mrf?.mr_number || uuidv4().substring(0, 8)}`,
+          job_code: `JOB-${uuidv4().substring(0, 8)}`,
           job_title: resolvedTitle,
-          job_description: mrf?.job_description || '',
-          department_id: mrf?.department_id || null,
-          location_id: mrf?.company_location_id || null,
-          no_of_positions: mrf?.number_of_positions || 1,
-          status: 'internal',
-          created_by: mrf?.created_by || mrf?.requested_by || 1,
-          updated_by: mrf?.created_by || mrf?.requested_by || 1,
+          job_description: '',
+          no_of_positions: 1,
+          status: 'published',
+          created_by: referringEmployeeId || 1,
+          updated_by: referringEmployeeId || 1,
         });
         job = await db('jobs').where('id', jobId).first();
       } catch (err: any) {
         throw new Error(`Failed to create job record: ${err.message}`);
       }
+    } else if (job && (!job.job_title || job.job_title.trim().toLowerCase() === 'position')) {
+      await db('jobs').where('id', job.id).update({ job_title: resolvedTitle }).catch(() => {});
+      job.job_title = resolvedTitle;
     }
 
     // 3. Create candidate application linked to the resolved job
@@ -793,7 +809,7 @@ export class JobReferenceService {
     } catch { application = null; }
 
     if (application) {
-      throw new Error(`You have already submitted an application for this position (${job?.job_title || 'Opening'})! Duplicate applications for the same candidate and job opening are not allowed.`);
+      throw new ConflictError(`You have already submitted an application for the position "${resolvedTitle || job?.job_title || 'this opening'}". Duplicate applications for the same candidate (${effectiveEmail}) are not allowed.`);
     }
 
     try {
@@ -804,7 +820,7 @@ export class JobReferenceService {
         job_id: job.id,
         mrf_request_id: mrfId,
         application_status: 'applied',
-        applied_from_source: referringEmployeeId ? 'Referral' : 'Direct Apply',
+        applied_from_source: candSource,
         created_by: referringEmployeeId || 1,
         updated_by: referringEmployeeId || 1,
       });
@@ -832,9 +848,6 @@ export class JobReferenceService {
         }
         const trackerId = `TRK-${String(maxNum + 1).padStart(3, '0')}`;
 
-        const mrf = await db('mrf_requests').where('id', mrfId).first().catch(() => null);
-        const posTitle = mrf?.position_title || job?.job_title || 'Position';
-
         await this.safeInsert('resume_bank', {
           uuid: uuidv4(),
           organization_id: organizationId,
@@ -842,13 +855,27 @@ export class JobReferenceService {
           candidate_id: candidate.id,
           job_id: job?.id || null,
           mrf_request_id: mrfId,
-          source: referringEmployeeId ? 'Referral' : 'Direct Apply',
-          position: posTitle,
+          source: candSource,
+          position: resolvedTitle,
           status: 'Applied',
           uploaded_by: referringEmployeeId || 1,
           created_by: referringEmployeeId || 1,
           updated_by: referringEmployeeId || 1,
         });
+      } else {
+        const rbUpdate: any = {};
+        if (!resumeEntry.position || resumeEntry.position.toLowerCase() === 'position') {
+          rbUpdate.position = resolvedTitle;
+        }
+        if (resumeEntry.source === 'Referral' && candSource === 'External') {
+          rbUpdate.source = 'External';
+        }
+        if (job?.id && !resumeEntry.job_id) {
+          rbUpdate.job_id = job.id;
+        }
+        if (Object.keys(rbUpdate).length > 0) {
+          await db('resume_bank').where('id', resumeEntry.id).update(rbUpdate).catch(() => {});
+        }
       }
     } catch (rbErr: any) {
       console.error('Failed to sync to resume_bank (non-fatal):', rbErr.message);
@@ -905,7 +932,7 @@ export class JobReferenceService {
     try {
       job = await db('jobs')
         .where('organization_id', organizationId)
-        .where('mrf_request_id', mrfId)
+        .where((q) => q.where('id', mrfId).orWhere('mrf_request_id', mrfId))
         .first();
     } catch { job = null; }
 
