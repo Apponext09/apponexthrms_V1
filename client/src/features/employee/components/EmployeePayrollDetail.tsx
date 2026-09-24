@@ -231,8 +231,8 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
 
   // Dynamic Component Definitions & Modal Items
   const [allComponentDefs, setAllComponentDefs] = useState<any[]>([]);
-  const [modalEarnings, setModalEarnings] = useState<Array<{ id: string | number; name: string; category: string; type: string; formula: string; amount: number }>>([]);
-  const [modalDeductions, setModalDeductions] = useState<Array<{ id: string | number; name: string; category: string; type: string; formula: string; amount: number }>>([]);
+  const [modalEarnings, setModalEarnings] = useState<Array<{ id: string | number; name: string; category: string; type: string; formula: string; amount: number; basedOnAttendance?: boolean }>>([]);
+  const [modalDeductions, setModalDeductions] = useState<Array<{ id: string | number; name: string; category: string; type: string; formula: string; amount: number; basedOnAttendance?: boolean }>>([]);
   const [showExtraEarnings, setShowExtraEarnings] = useState(false);
   const [showExtraDeductions, setShowExtraDeductions] = useState(false);
 
@@ -391,14 +391,17 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
     if (!formulaStr || !formulaStr.trim()) return 0;
     let expr = formulaStr.toLowerCase().trim();
 
-    // 0. Pre-process bracket notation: e.g. [50 % ctc], [50% of CTC], [CTC] * 0.50, [Basic], [Basic Salary]
+    // 0. Pre-process bracket notation: e.g. [CTC / 12], [ALLOWANCE * 100 / CTC], [50 % ctc], [CTC], [Basic]
     expr = expr.replace(/\[\s*([0-9.]+)\s*%\s*(?:of\s*)?([a-z_]+)\s*\]/gi, '($2 * ($1 / 100))');
     expr = expr.replace(/\[\s*([^\]]+?)\s*\]/g, (_, innerKey) => {
+      if (/[\+\-\*\/%^]/.test(innerKey)) {
+        return `(${innerKey})`;
+      }
       const k = innerKey.toLowerCase().trim().replace(/[\s\-_]+/g, '_');
       if (ctx[k] !== undefined) return String(ctx[k]);
-      if (k.includes('basic')) return String(ctx['basic'] || 0);
-      if (k.includes('hra') || k.includes('house_rent')) return String(ctx['hra'] || 0);
-      if (k.includes('gross') || k.includes('ctc')) return String(ctx['gross'] || ctx['ctc'] || 0);
+      if (k === 'basic' || k === 'basic_salary') return String(ctx['basic'] || 0);
+      if (k === 'hra' || k === 'house_rent' || k === 'house_rent_allowance') return String(ctx['hra'] || 0);
+      if (k === 'gross' || k === 'ctc' || k === 'gross_salary' || k === 'monthly_ctc') return String(ctx['gross'] || ctx['ctc'] || 0);
       return innerKey;
     });
 
@@ -492,12 +495,48 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
   };
 
   // Helper to format clean formula for UI labels
-  const formatFormulaDisplay = (formula: string): string => {
-    if (!formula || !formula.trim()) return '';
-    let str = formula.trim();
-    str = str.replace(/\[\s*([0-9.]+)\s*%\s*(?:of\s*)?([a-z_]+)\s*\]/gi, '$1% of $2');
-    str = str.replace(/\[\s*([^\]]+?)\s*\]/g, '$1');
-    return str;
+  const formatFormulaDisplay = (formula: string, name?: string): string => {
+    const nameLower = (name || '').toLowerCase();
+    if (nameLower.includes('special')) return 'Residual Balance';
+    if (!formula || !formula.trim()) return 'Fixed Value';
+
+    const clean = formula.trim().replace(/\[|\]/g, '');
+    const cleanLower = clean.toLowerCase();
+
+    if (
+      cleanLower.includes('ctc / 12 -') ||
+      cleanLower.includes('ctc/12 -') ||
+      cleanLower.includes('gross -') ||
+      cleanLower.includes('basic +')
+    ) {
+      return 'Residual Balance';
+    }
+
+    if (cleanLower.includes('ctc * 0.5') || cleanLower.includes('ctc*0.5') || cleanLower.includes('50% of ctc') || cleanLower.includes('0.50 / 12')) {
+      return '50% of CTC';
+    }
+    if (cleanLower.includes('basic * 0.5') || cleanLower.includes('basic*0.5') || cleanLower.includes('50% of basic')) {
+      return '50% of Basic';
+    }
+    if (cleanLower.includes('basic * 0.4') || cleanLower.includes('basic*0.4') || cleanLower.includes('40% of basic')) {
+      return '40% of Basic';
+    }
+    if (cleanLower.includes('basic * 0.12') || cleanLower.includes('basic*0.12') || cleanLower.includes('12% of basic')) {
+      return '12% of Basic';
+    }
+    if (cleanLower.includes('gross * 0.0075') || cleanLower.includes('gross*0.0075') || cleanLower.includes('0.75% of gross')) {
+      return '0.75% of Gross';
+    }
+
+    const pctMatch = clean.match(/([0-9.]+)\s*%/);
+    if (pctMatch) {
+      return `${pctMatch[1]}% Formula`;
+    }
+
+    if (clean.length > 18) {
+      return 'Formula-Based';
+    }
+    return clean;
   };
 
   // Recalculate dynamic components when CTC or Slab or Frequency changes
@@ -640,8 +679,46 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
     formulaCtx['basic'] = basicAmount;
     formulaCtx['basic_salary'] = basicAmount;
 
-    // Pass 3: Evaluate all other earning components (HRA, allowances, derived)
-    const newEarnings: Array<{ id: string | number; name: string; category: string; type: string; formula: string; amount: number }> = [];
+    // Pass 3: Evaluate all other earning components (Multi-pass for cross-component formula references)
+    const evaluatedEarningAmounts = new Map<string | number, number>();
+
+    for (let pass = 0; pass < 2; pass++) {
+      for (const comp of earningComps) {
+        const compName = comp.name || 'Component';
+        const compNameLower = compName.toLowerCase();
+        if (compNameLower.includes('basic')) continue;
+        if (compNameLower.includes('special') && (compNameLower.includes('allowance') || compNameLower.includes('residual') || (comp.formula || '').toLowerCase().includes('ctc -') || (comp.formula || '').toLowerCase().includes('gross -'))) {
+          continue; // special residual resolved after pass 2
+        }
+
+        const formula = getComponentFormula(comp);
+        const configuredAmt = Number(comp.amount ?? comp.value ?? 0);
+
+        let amt = 0;
+        if (formula) {
+          amt = evaluateFormula(formula, formulaCtx);
+        } else if (configuredAmt > 0) {
+          amt = configuredAmt;
+        }
+
+        const bType = comp.boundary_type || comp.boundaryType;
+        const minBound = Number(comp.min_amount || comp.minAmount || 0);
+        const maxBound = Number(comp.max_amount || comp.maxAmount || 0);
+        if (bType && bType !== 'Choose') {
+          if ((bType === 'Min' || bType === 'Both') && minBound > 0) amt = Math.max(minBound, amt);
+          if ((bType === 'Max' || bType === 'Both') && maxBound > 0) amt = Math.min(maxBound, amt);
+        }
+
+        const normKey = compNameLower.replace(/[^a-z0-9]/g, '_');
+        formulaCtx[normKey] = amt;
+        formulaCtx[compNameLower] = amt;
+        formulaCtx[compName.toUpperCase()] = amt;
+        if (compNameLower.includes('hra')) formulaCtx['hra'] = amt;
+        evaluatedEarningAmounts.set(comp.id, amt);
+      }
+    }
+
+    const newEarnings: Array<{ id: string | number; name: string; category: string; type: string; formula: string; amount: number; basedOnAttendance?: boolean }> = [];
     let specialIdx = -1;
     let allocatedEarningsTotal = 0;
 
@@ -650,31 +727,15 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
       const compNameLower = compName.toLowerCase();
       const compType = comp.componentType || comp.component_type || comp.type || 'Derived';
       const formula = getComponentFormula(comp);
-      const configuredAmt = Number(comp.amount ?? comp.value ?? 0);
+      const isAttBased = Boolean(comp.basedOnAttendance ?? comp.based_on_attendance);
 
       let amt = 0;
       if (compNameLower.includes('basic')) {
         amt = basicAmount;
       } else if (compNameLower.includes('special') && (compNameLower.includes('allowance') || compNameLower.includes('residual') || formula.toLowerCase().includes('ctc -') || formula.toLowerCase().includes('gross -'))) {
-        amt = -1; // special allowance residual placeholder
-      } else if (formula) {
-        amt = evaluateFormula(formula, formulaCtx);
-      } else if (configuredAmt > 0) {
-        amt = configuredAmt;
-      }
-
-      const bType = comp.boundary_type || comp.boundaryType;
-      const minBound = Number(comp.min_amount || comp.minAmount || 0);
-      const maxBound = Number(comp.max_amount || comp.maxAmount || 0);
-      if (bType && bType !== 'Choose') {
-        if ((bType === 'Min' || bType === 'Both') && minBound > 0) amt = Math.max(minBound, amt);
-        if ((bType === 'Max' || bType === 'Both') && maxBound > 0) amt = Math.min(maxBound, amt);
-      }
-
-      const normKey = compNameLower.replace(/[^a-z0-9]/g, '_');
-      if (amt > 0) {
-        formulaCtx[normKey] = amt;
-        if (compNameLower.includes('hra')) formulaCtx['hra'] = amt;
+        amt = -1; // placeholder
+      } else {
+        amt = evaluatedEarningAmounts.get(comp.id) ?? 0;
       }
 
       if (amt !== -1) allocatedEarningsTotal += amt;
@@ -685,7 +746,8 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
         category: 'Earning',
         type: compType,
         formula: formula || comp.formula || '',
-        amount: amt
+        amount: amt,
+        basedOnAttendance: isAttBased
       });
 
       if (amt === -1) {
@@ -693,36 +755,73 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
       }
     }
 
-    // If Special Allowance exists, resolve residual
+    // If Special Allowance exists, resolve residual. If not, assign residual CTC to other non-Basic slab components before creating Special Allowance
     if (specialIdx >= 0) {
       const specialAllowanceAmt = Math.max(0, monthlyGross - allocatedEarningsTotal);
       newEarnings[specialIdx].amount = specialAllowanceAmt;
       formulaCtx['special_allowance'] = specialAllowanceAmt;
+    } else if (monthlyGross > allocatedEarningsTotal) {
+      const residualAmt = Math.max(0, monthlyGross - allocatedEarningsTotal);
+      const otherEarningIdx = newEarnings.findIndex(c => !(c.name || '').toLowerCase().includes('basic'));
+      if (otherEarningIdx >= 0) {
+        newEarnings[otherEarningIdx].amount += residualAmt;
+        const normKey = (newEarnings[otherEarningIdx].name || '').toLowerCase().replace(/[^a-z0-9]/g, '_');
+        formulaCtx[normKey] = newEarnings[otherEarningIdx].amount;
+      } else {
+        newEarnings.push({
+          id: 'special_residual_auto',
+          name: 'Special Allowance',
+          category: 'Earning',
+          type: 'Derived',
+          formula: 'Residual Balance',
+          amount: residualAmt,
+          basedOnAttendance: false
+        });
+        formulaCtx['special_allowance'] = residualAmt;
+      }
     }
 
-    // Pass 4: Evaluate Deductions (100% DB-driven from component settings)
-    const newDeductions: Array<{ id: string | number; name: string; category: string; type: string; formula: string; amount: number }> = [];
+    // Pass 4: Evaluate Deductions (Multi-pass for cross-component formula references)
+    const evaluatedDeductionAmounts = new Map<string | number, number>();
+
+    for (let pass = 0; pass < 2; pass++) {
+      for (const comp of deductionComps) {
+        const compName = comp.name || 'Deduction';
+        const compNameLower = compName.toLowerCase();
+        const formula = getComponentFormula(comp);
+        const configuredAmt = Number(comp.amount ?? comp.value ?? 0);
+
+        let amt = 0;
+        if (formula) {
+          amt = evaluateFormula(formula, formulaCtx);
+        } else if (configuredAmt > 0) {
+          amt = configuredAmt;
+        }
+
+        const bType = comp.boundary_type || comp.boundaryType;
+        const minBound = Number(comp.min_amount || comp.minAmount || 0);
+        const maxBound = Number(comp.max_amount || comp.maxAmount || 0);
+        if (bType && bType !== 'Choose') {
+          if ((bType === 'Min' || bType === 'Both') && minBound > 0) amt = Math.max(minBound, amt);
+          if ((bType === 'Max' || bType === 'Both') && maxBound > 0) amt = Math.min(maxBound, amt);
+        }
+
+        const normKey = compNameLower.replace(/[^a-z0-9]/g, '_');
+        formulaCtx[normKey] = amt;
+        formulaCtx[compNameLower] = amt;
+        formulaCtx[compName.toUpperCase()] = amt;
+        evaluatedDeductionAmounts.set(comp.id, amt);
+      }
+    }
+
+    const newDeductions: Array<{ id: string | number; name: string; category: string; type: string; formula: string; amount: number; basedOnAttendance?: boolean }> = [];
 
     for (const comp of deductionComps) {
       const compName = comp.name || 'Deduction';
       const compType = comp.componentType || comp.component_type || comp.type || 'Derived';
       const formula = getComponentFormula(comp);
-      const configuredAmt = Number(comp.amount ?? comp.value ?? 0);
-
-      let amt = 0;
-      if (formula) {
-        amt = evaluateFormula(formula, formulaCtx);
-      } else if (configuredAmt > 0) {
-        amt = configuredAmt;
-      }
-
-      const bType = comp.boundary_type || comp.boundaryType;
-      const minBound = Number(comp.min_amount || comp.minAmount || 0);
-      const maxBound = Number(comp.max_amount || comp.maxAmount || 0);
-      if (bType && bType !== 'Choose') {
-        if ((bType === 'Min' || bType === 'Both') && minBound > 0) amt = Math.max(minBound, amt);
-        if ((bType === 'Max' || bType === 'Both') && maxBound > 0) amt = Math.min(maxBound, amt);
-      }
+      const isAttBased = Boolean(comp.basedOnAttendance ?? comp.based_on_attendance);
+      const amt = evaluatedDeductionAmounts.get(comp.id) ?? 0;
 
       newDeductions.push({
         id: comp.id,
@@ -730,7 +829,8 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
         category: 'Deduction',
         type: compType,
         formula: formula || comp.formula || '',
-        amount: amt
+        amount: amt,
+        basedOnAttendance: isAttBased
       });
     }
 
@@ -766,8 +866,8 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
 
   const handleOpenAddModal = () => {
     setEditingRecord(null);
-    const empSlabId = (employee as any)?.salary_slab_id || (employee as any)?.salarySlabId;
-    const defaultSlab = (empSlabId ? allSlabs.find(s => String(s.id) === String(empSlabId)) : null) || allSlabs[0];
+    const currentSlabId = activeSlabId || (employee as any)?.salary_slab_id || (employee as any)?.salarySlabId;
+    const defaultSlab = (currentSlabId ? allSlabs.find(s => String(s.id) === String(currentSlabId)) : null) || allSlabs[0];
     const defaultSlabId = defaultSlab ? String(defaultSlab.id) : '';
     const defaultSlabName = defaultSlab?.name || defaultSlab?.slab_name || 'Standard Pay Slab';
     const minCtc = Number(defaultSlab?.min_ctc ?? defaultSlab?.minCtc ?? 0);
@@ -776,11 +876,11 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
     setActiveSlabName(defaultSlabName);
 
     const empCtc = Number((employee as any)?.annual_ctc || (employee as any)?.annualCtc || ((employee as any)?.gross_salary ? (employee as any)?.gross_salary * 12 : 0));
-    const initialCtc = empCtc > 0 ? empCtc : (minCtc > 0 ? minCtc : 0);
+    const initialCtc = empCtc > 0 ? String(empCtc) : '';
 
     setInputFrequency('annual');
-    setSalaryInput(String(initialCtc));
-    recalculateFromCTC(String(initialCtc), 'annual', defaultSlabId, allComponentDefs);
+    setSalaryInput(initialCtc);
+    recalculateFromCTC(initialCtc, 'annual', defaultSlabId, allComponentDefs);
     setEffectiveFrom(new Date().toISOString().slice(0, 10));
     setArrearPayMonth(new Date().toISOString().slice(0, 10));
     setModalOpen(true);
@@ -818,7 +918,7 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
   };
 
   const handleDelete = async (rec: PayStructureRecord) => {
-    if (!confirm(`Are you sure you want to remove the salary structure effective from ${formatPayrollDate(rec.effectiveFrom)}?`)) return;
+    if (!await window.appConfirm(`Are you sure you want to remove the salary structure effective from ${formatPayrollDate(rec.effectiveFrom)}?`)) return;
     try {
       await apiClient.delete(`/payroll/salary-structure/${rec.id}`);
       showToast.success('Structure Deleted', 'Salary structure has been deactivated.');
@@ -922,7 +1022,8 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
   const grossCalculated = modalEarnings.reduce((acc, cur) => acc + (Number(cur.amount) || 0), 0);
   const totalDeductionCalculated = modalDeductions.reduce((acc, cur) => acc + (Number(cur.amount) || 0), 0);
   const netSalaryCalculated = Math.max(0, grossCalculated - totalDeductionCalculated);
-  const annualCtcCalculated = grossCalculated * 12;
+  const targetAnnualCtc = inputFrequency === 'monthly' ? (Number(salaryInput) || 0) * 12 : (Number(salaryInput) || 0);
+  const annualCtcCalculated = targetAnnualCtc > 0 ? targetAnnualCtc : (grossCalculated * 12);
 
   return (
     <div className="space-y-4">
@@ -937,12 +1038,7 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-sm font-bold text-foreground">Payroll Structure & Compensation</h3>
-                {activeSlabName && payStructures.length > 0 && (
-                  <Badge variant="outline" className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 font-bold text-[10px]">
-                    <Layers className="w-3 h-3 mr-1 text-emerald-600 dark:text-emerald-400" />
-                    {activeSlabName}
-                  </Badge>
-                )}
+               
               </div>
               <p className="text-[11px] text-muted-foreground">Assigned salary slab, monthly gross, statutory deductions & net take-home</p>
             </div>
@@ -978,13 +1074,13 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
           <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="bg-muted/40 text-muted-foreground border-b border-border/60 text-[10px] font-bold uppercase tracking-wider">
-                <th className="px-4 py-3 w-24">Action</th>
                 <th className="px-4 py-3">Slab Template</th>
                 <th className="px-4 py-3 text-right">Annual CTC</th>
                 <th className="px-4 py-3 text-right">Monthly Gross</th>
                 <th className="px-4 py-3 text-right">Net Take-Home</th>
                 <th className="px-4 py-3">Effective From</th>
                 <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3 w-24">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border/40">
@@ -1027,35 +1123,6 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
                   const ctcDisplay = rec.ctc || (rec.gross * 12);
                   return (
                     <tr key={rec.id} className="hover:bg-muted/20 transition-colors">
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            onClick={() => handleViewModal(rec)}
-                            title="View Full Breakdown"
-                            className="p-1 rounded-md text-primary hover:bg-primary/10 transition-colors cursor-pointer"
-                          >
-                            <FileText className="w-3.5 h-3.5" />
-                          </button>
-                          {canEditPayroll && (
-                            <>
-                              <button
-                                onClick={() => handleOpenEditModal(rec)}
-                                title="Edit Pay Structure"
-                                className="p-1 rounded-md text-emerald-600 hover:bg-emerald-500/10 transition-colors cursor-pointer"
-                              >
-                                <Edit2 className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                onClick={() => handleDelete(rec)}
-                                title="Delete Pay Structure"
-                                className="p-1 rounded-md text-rose-600 hover:bg-rose-500/10 transition-colors cursor-pointer"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </td>
                       <td className="px-4 py-3 font-semibold text-foreground">
                         <div className="flex items-center gap-1.5">
                           <span>{rec.slab}</span>
@@ -1090,6 +1157,28 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
                           {rec.status}
                         </Badge>
                       </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-1.5">
+                          {canEditPayroll && (
+                            <>
+                              <button
+                                onClick={() => handleOpenEditModal(rec)}
+                                title="Edit Pay Structure"
+                                className="p-1 rounded-md text-emerald-600 hover:bg-emerald-500/10 transition-colors cursor-pointer"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleDelete(rec)}
+                                title="Delete Pay Structure"
+                                className="p-1 rounded-md text-rose-600 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </td>
                     </tr>
                   );
                 })
@@ -1119,20 +1208,21 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
             </DialogTitle>
           </DialogHeader>
 
-          <div className="p-6 space-y-6 max-h-[82vh] overflow-y-auto">
+          <div className="p-6 space-y-5 max-h-[84vh] overflow-y-auto">
             {/* Top Config Card */}
-            <div className="bg-muted/30 p-4 rounded-xl border border-border/70 space-y-3">
+            <div className="bg-card p-4 rounded-xl border border-border shadow-xs">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {/* Slab Dropdown */}
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <label className="text-[11px] font-bold text-foreground flex items-center gap-1.5">
-                      <Layers className="w-3.5 h-3.5 text-primary" /> Assigned Pay Slab *
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                      <Layers className="w-3.5 h-3.5 text-primary" /> Assigned Pay Slab <span className="text-rose-500">*</span>
                     </label>
                     <button
                       type="button"
                       onClick={() => recalculateFromCTC(salaryInput, 'annual', activeSlabId)}
-                      className="text-[10px] font-bold text-primary hover:underline flex items-center gap-1 cursor-pointer"
+                      className="text-[11px] font-semibold text-primary hover:text-primary/80 flex items-center gap-1 cursor-pointer transition-colors"
+                      title="Recalculate all components according to this slab"
                     >
                       <RefreshCw className="w-3 h-3" /> Recompute
                     </button>
@@ -1148,7 +1238,7 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
                         recalculateFromCTC(salaryInput, 'annual', String(chosen.id));
                       }
                     }}
-                    className="w-full h-9 border border-border bg-background text-foreground rounded-lg px-2.5 text-xs font-bold focus:ring-2 focus:ring-primary outline-none"
+                    className="w-full h-9 border border-input bg-background text-foreground rounded-lg px-2.5 text-xs font-semibold focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all shadow-xs"
                   >
                     {allSlabs.map(s => {
                       const min = Number(s.min_ctc ?? s.minCtc ?? 0);
@@ -1164,10 +1254,17 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
                 </div>
 
                 {/* Annual CTC Input */}
-                <div>
-                  <label className="text-[11px] font-bold text-foreground flex items-center gap-1.5 mb-1.5">
-                    <Calculator className="w-3.5 h-3.5 text-primary" /> Annual CTC (₹/yr) <span className="text-rose-500">*</span>
-                  </label>
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                      <Calculator className="w-3.5 h-3.5 text-primary" /> Annual CTC (₹/yr) <span className="text-rose-500">*</span>
+                    </label>
+                    {Number(salaryInput) > 0 && (
+                      <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
+                        ₹{Math.round(Number(salaryInput) / 12).toLocaleString('en-IN')}/mo
+                      </span>
+                    )}
+                  </div>
                   <div className="relative">
                     <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-muted-foreground">₹</span>
                     <Input
@@ -1175,41 +1272,38 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
                       value={salaryInput}
                       onChange={(e) => handleSalaryInputChange(e.target.value, 'annual')}
                       placeholder="e.g. 1200000"
-                      className="h-9 pl-6 text-xs font-bold"
+                      className="h-9 pl-6 text-xs font-bold [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none shadow-xs"
                     />
                   </div>
                   
                   {/* Live CTC & Typo Helper */}
                   {(() => {
                     const curCtc = Number(salaryInput) || 0;
-                    const monthlyGross = Math.round(curCtc / 12);
                     const selectedModalSlab = allSlabs.find(s => String(s.id) === String(activeSlabId));
                     const minCtc = Number(selectedModalSlab?.min_ctc ?? selectedModalSlab?.minCtc ?? 0);
                     const maxCtc = Number(selectedModalSlab?.max_ctc ?? selectedModalSlab?.maxCtc ?? 0);
                     const isOutOfRange = maxCtc > 0 && (curCtc < minCtc || curCtc > maxCtc);
-
-                    // Detect common zero-omission typos (e.g. 48000 instead of 480000, 120000 instead of 1200000)
                     const potentialTypo = curCtc > 0 && curCtc < 180000 ? curCtc * 10 : null;
 
                     return (
-                      <div className="mt-1.5 space-y-1 text-[10px]">
+                      <div className="space-y-1 text-[10px]">
                         <div className="flex items-center justify-between font-semibold">
-                          <span className="text-emerald-600 dark:text-emerald-400 font-bold">
-                            {curCtc > 0 ? `₹${(curCtc / 100000).toFixed(2)} Lakhs/yr (₹${monthlyGross.toLocaleString('en-IN')}/mo)` : 'Enter CTC'}
+                          <span className="text-muted-foreground">
+                            {curCtc > 0 ? `₹${(curCtc / 100000).toFixed(2)} Lakhs per annum` : 'Enter CTC'}
                           </span>
                           {minCtc > 0 && isOutOfRange && (
-                            <span className="text-amber-600 dark:text-amber-400 font-bold">
-                              ⚠️ Outside slab (₹{(minCtc / 100000).toFixed(0)}L-₹{(maxCtc / 100000).toFixed(0)}L)
+                            <span className="text-amber-600 dark:text-amber-400 font-bold bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+                              ⚠️ Outside slab (₹{(minCtc / 100000).toFixed(0)}L - ₹{(maxCtc / 100000).toFixed(0)}L)
                             </span>
                           )}
                         </div>
                         {potentialTypo && (
-                          <div className="p-1 px-2 rounded bg-amber-500/10 border border-amber-500/20 text-amber-800 dark:text-amber-300 font-semibold flex items-center justify-between">
+                          <div className="p-1.5 px-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-800 dark:text-amber-300 font-semibold flex items-center justify-between">
                             <span>💡 Did you mean ₹{(potentialTypo / 100000).toFixed(1)}L (₹{potentialTypo.toLocaleString('en-IN')})?</span>
                             <button
                               type="button"
                               onClick={() => handleSalaryInputChange(String(potentialTypo), 'annual')}
-                              className="text-[9px] font-bold bg-amber-500/20 px-1.5 py-0.5 rounded hover:bg-amber-500/30 text-amber-900 dark:text-amber-100 cursor-pointer"
+                              className="text-[9px] font-bold bg-amber-500/20 px-2 py-0.5 rounded hover:bg-amber-500/30 text-amber-900 dark:text-amber-100 cursor-pointer"
                             >
                               Apply
                             </button>
@@ -1221,8 +1315,8 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
                 </div>
 
                 {/* Effective From */}
-                <div>
-                  <label className="text-[11px] font-bold text-foreground flex items-center gap-1.5 mb-1.5">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-foreground flex items-center gap-1.5">
                     <Calendar className="w-3.5 h-3.5 text-primary" /> Effective From <span className="text-rose-500">*</span>
                   </label>
                   <Input
@@ -1230,310 +1324,182 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
                     required
                     value={effectiveFrom ? String(effectiveFrom).slice(0, 10) : ''}
                     onChange={(e) => setEffectiveFrom(e.target.value)}
-                    className={`h-9 text-xs font-semibold ${!effectiveFrom ? 'border-rose-500 focus:ring-rose-500' : ''}`}
+                    className={`h-9 text-xs font-semibold shadow-xs ${!effectiveFrom ? 'border-rose-500 focus:ring-rose-500' : ''}`}
                   />
                   {!effectiveFrom && (
-                    <span className="text-[10px] font-semibold text-rose-500 mt-1 block">
+                    <span className="text-[10px] font-semibold text-rose-500 block">
                       * Please choose effective date
                     </span>
                   )}
                 </div>
               </div>
-
-              {/* Quick Presets */}
-              <div className="flex items-center gap-1.5 pt-1 border-t border-border/40 flex-wrap">
-                <span className="text-[10px] font-bold text-muted-foreground mr-1">Quick CTC Presets:</span>
-                {[
-                  { label: '₹3.6 Lakhs', val: 360000 },
-                  { label: '₹4.8 Lakhs', val: 480000 },
-                  { label: '₹6 Lakhs', val: 600000 },
-                  { label: '₹12 Lakhs', val: 1200000 },
-                  { label: '₹18 Lakhs', val: 1800000 },
-                  { label: '₹24 Lakhs', val: 2400000 }
-                ].map(p => (
-                  <button
-                    key={p.val}
-                    type="button"
-                    onClick={() => handleSalaryInputChange(String(p.val), 'annual')}
-                    className={`px-2 py-0.5 rounded text-[10px] font-bold transition-colors cursor-pointer border ${
-                      Number(salaryInput) === p.val
-                        ? 'bg-primary text-primary-foreground border-primary'
-                        : 'bg-background hover:bg-muted text-muted-foreground border-border'
-                    }`}
-                  >
-                    {p.label}
-                  </button>
-                ))}
-              </div>
             </div>
 
             {/* Earnings vs Deductions 2-Column Grid */}
-            {(() => {
-              const isCoreEarning = (name: string, amt: number) => {
-                if (amt > 0) return true;
-                const n = name.toLowerCase();
-                return n.includes('basic') || n.includes('hra') || n.includes('conveyance') || n.includes('medical') || n.includes('special') || n.includes('lta');
-              };
-
-              const isCoreDeduction = (name: string, amt: number) => {
-                if (amt > 0) return true;
-                const n = name.toLowerCase();
-                return n.includes('pf') || n.includes('pt') || n.includes('tax') || n.includes('mediclaim') || n.includes('tds') || n.includes('esic');
-              };
-
-              const getFormulaLabel = (name: string, formula?: string) => {
-                const n = name.toLowerCase();
-                if (n.includes('basic')) return '50% of Gross';
-                if (n.includes('hra')) return '40% of Basic';
-                if (n.includes('conveyance')) return '20% of Basic';
-                if (n.includes('medical')) return '5% of Gross';
-                if (n.includes('special')) return 'Residual Balance';
-                if (n.includes('pf') && !n.includes('employer')) return '12% of Basic';
-                if (n.includes('pt') || n.includes('professional tax')) return 'Flat ₹200';
-                if (n.includes('mediclaim')) return 'Flat ₹350';
-                if (n.includes('esic') && !n.includes('employer')) return '0.75% of Gross (≤ ₹21K)';
-                if (formula) return formatFormulaDisplay(formula);
-                return 'Value';
-              };
-
-              const coreEarnings = modalEarnings.filter(c => isCoreEarning(c.name, Number(c.amount) || 0));
-              const extraEarnings = modalEarnings.filter(c => !isCoreEarning(c.name, Number(c.amount) || 0));
-
-              const coreDeductions = modalDeductions.filter(c => isCoreDeduction(c.name, Number(c.amount) || 0));
-              const extraDeductions = modalDeductions.filter(c => !isCoreDeduction(c.name, Number(c.amount) || 0));
-
-              return (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  {/* Earnings Column */}
-                  <div className="border border-emerald-500/30 rounded-xl overflow-hidden bg-card shadow-xs">
-                    <div className="px-4 py-3 bg-emerald-500/10 border-b border-emerald-500/20 flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <TrendingUp className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                        <span className="text-xs font-bold text-emerald-700 dark:text-emerald-300 uppercase tracking-wider">
-                          Earnings (Monthly)
-                        </span>
-                      </div>
-                      <Badge variant="outline" className="text-xs font-black bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/40 px-2.5 py-0.5">
-                        ₹{grossCalculated.toLocaleString('en-IN')}
-                      </Badge>
-                    </div>
-
-                    <div className="p-4 space-y-3.5">
-                      {coreEarnings.length === 0 ? (
-                        <p className="text-xs text-muted-foreground italic py-2">No active earnings in this slab.</p>
-                      ) : (
-                        coreEarnings.map((item) => {
-                          const idx = modalEarnings.findIndex(it => it.id === item.id);
-                          const amt = Number(item.amount) || 0;
-                          return (
-                            <div key={item.id} className="p-2.5 rounded-lg bg-muted/20 border border-border/50 hover:border-emerald-500/30 transition-colors">
-                              <div className="flex items-center justify-between mb-1.5">
-                                <span className="text-xs font-bold text-foreground">{item.name}</span>
-                                <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20">
-                                  {getFormulaLabel(item.name, item.formula)}
-                                </span>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <div className="relative flex-1">
-                                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-muted-foreground">₹</span>
-                                  <Input
-                                    type="number"
-                                    value={item.amount}
-                                    onChange={(e) => {
-                                      const val = Number(e.target.value) || 0;
-                                      setModalEarnings(prev => {
-                                        const updated = prev.map((it, i) => i === idx ? { ...it, amount: val } : it);
-                                        const saIdx = updated.findIndex(it => it.name.toLowerCase().includes('special'));
-                                        if (saIdx >= 0 && saIdx !== idx) {
-                                          const mGross = Math.round((Number(salaryInput) || 0) / 12);
-                                          if (mGross > 0) {
-                                            const otherSum = updated
-                                              .filter((_, i) => i !== saIdx)
-                                              .reduce((acc, c) => acc + (Number(c.amount) || 0), 0);
-                                            updated[saIdx] = {
-                                              ...updated[saIdx],
-                                              amount: Math.max(0, mGross - otherSum)
-                                            };
-                                          }
-                                        }
-                                        return updated;
-                                      });
-                                    }}
-                                    className="h-8 pl-6 text-xs font-bold bg-background"
-                                  />
-                                </div>
-                                <span className="text-[10px] font-semibold text-muted-foreground w-24 text-right">
-                                  ₹{(amt * 12).toLocaleString('en-IN')}/yr
-                                </span>
-                              </div>
-                            </div>
-                          );
-                        })
-                      )}
-
-                      {/* Collapsible Additional Allowances */}
-                      {extraEarnings.length > 0 && (
-                        <div className="pt-2 border-t border-border/40">
-                          <button
-                            type="button"
-                            onClick={() => setShowExtraEarnings(prev => !prev)}
-                            className="w-full py-1.5 px-2 rounded text-[11px] font-bold text-muted-foreground hover:text-foreground hover:bg-muted/30 flex items-center justify-between cursor-pointer"
-                          >
-                            <span>Additional Allowances & Modules ({extraEarnings.length})</span>
-                            {showExtraEarnings ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                          </button>
-
-                          {showExtraEarnings && (
-                            <div className="mt-2 space-y-2.5 pl-1">
-                              {extraEarnings.map((item) => {
-                                const idx = modalEarnings.findIndex(it => it.id === item.id);
-                                return (
-                                  <div key={item.id} className="flex items-center justify-between gap-2 text-xs">
-                                    <span className="text-[11px] font-semibold text-foreground">{item.name}</span>
-                                    <div className="relative w-32">
-                                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-muted-foreground">₹</span>
-                                      <Input
-                                        type="number"
-                                        value={item.amount}
-                                        onChange={(e) => {
-                                          const val = Number(e.target.value) || 0;
-                                          setModalEarnings(prev => prev.map((it, i) => i === idx ? { ...it, amount: val } : it));
-                                        }}
-                                        className="h-7 pl-5 text-xs font-bold"
-                                      />
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              {/* Earnings Column */}
+              <div className="border border-emerald-500/20 rounded-xl overflow-hidden bg-card shadow-xs flex flex-col">
+                <div className="px-4 py-3 bg-emerald-500/5 border-b border-emerald-500/15 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <TrendingUp className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                    <span className="text-xs font-bold text-emerald-800 dark:text-emerald-300 uppercase tracking-wider">
+                      Earnings (Monthly)
+                    </span>
                   </div>
-
-                  {/* Deductions Column */}
-                  <div className="border border-rose-500/30 rounded-xl overflow-hidden bg-card shadow-xs">
-                    <div className="px-4 py-3 bg-rose-500/10 border-b border-rose-500/20 flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <ShieldCheck className="w-4 h-4 text-rose-600 dark:text-rose-400" />
-                        <span className="text-xs font-bold text-rose-700 dark:text-rose-300 uppercase tracking-wider">
-                          Deductions (Monthly)
-                        </span>
-                      </div>
-                      <Badge variant="outline" className="text-xs font-black bg-rose-500/20 text-rose-700 dark:text-rose-300 border-rose-500/40 px-2.5 py-0.5">
-                        ₹{totalDeductionCalculated.toLocaleString('en-IN')}
-                      </Badge>
-                    </div>
-
-                    <div className="p-4 space-y-3.5">
-                      {coreDeductions.length === 0 ? (
-                        <p className="text-xs text-muted-foreground italic py-2">No active deductions in this slab.</p>
-                      ) : (
-                        coreDeductions.map((item) => {
-                          const idx = modalDeductions.findIndex(it => it.id === item.id);
-                          const amt = Number(item.amount) || 0;
-                          return (
-                            <div key={item.id} className="p-2.5 rounded-lg bg-muted/20 border border-border/50 hover:border-rose-500/30 transition-colors">
-                              <div className="flex items-center justify-between mb-1.5">
-                                <span className="text-xs font-bold text-foreground">{item.name}</span>
-                                <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-rose-500/10 text-rose-700 dark:text-rose-300 border border-rose-500/20">
-                                  {getFormulaLabel(item.name, item.formula)}
-                                </span>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <div className="relative flex-1">
-                                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-muted-foreground">₹</span>
-                                  <Input
-                                    type="number"
-                                    value={item.amount}
-                                    onChange={(e) => {
-                                      const val = Number(e.target.value) || 0;
-                                      setModalDeductions(prev => prev.map((it, i) => i === idx ? { ...it, amount: val } : it));
-                                    }}
-                                    className="h-8 pl-6 text-xs font-bold bg-background"
-                                  />
-                                </div>
-                                <span className="text-[10px] font-semibold text-muted-foreground w-24 text-right">
-                                  ₹{(amt * 12).toLocaleString('en-IN')}/yr
-                                </span>
-                              </div>
-                            </div>
-                          );
-                        })
-                      )}
-
-                      {/* Collapsible Variable Deductions */}
-                      {extraDeductions.length > 0 && (
-                        <div className="pt-2 border-t border-border/40">
-                          <button
-                            type="button"
-                            onClick={() => setShowExtraDeductions(prev => !prev)}
-                            className="w-full py-1.5 px-2 rounded text-[11px] font-bold text-muted-foreground hover:text-foreground hover:bg-muted/30 flex items-center justify-between cursor-pointer"
-                          >
-                            <span>Variable Deductions & Statutory Splits ({extraDeductions.length})</span>
-                            {showExtraDeductions ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                          </button>
-
-                          {showExtraDeductions && (
-                            <div className="mt-2 space-y-2.5 pl-1">
-                              {extraDeductions.map((item) => {
-                                const idx = modalDeductions.findIndex(it => it.id === item.id);
-                                return (
-                                  <div key={item.id} className="flex items-center justify-between gap-2 text-xs">
-                                    <span className="text-[11px] font-semibold text-foreground">{item.name}</span>
-                                    <div className="relative w-32">
-                                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-muted-foreground">₹</span>
-                                      <Input
-                                        type="number"
-                                        value={item.amount}
-                                        onChange={(e) => {
-                                          const val = Number(e.target.value) || 0;
-                                          setModalDeductions(prev => prev.map((it, i) => i === idx ? { ...it, amount: val } : it));
-                                        }}
-                                        className="h-7 pl-5 text-xs font-bold"
-                                      />
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-semibold text-muted-foreground">
+                      ₹{(grossCalculated * 12).toLocaleString('en-IN')}/yr
+                    </span>
+                    <Badge variant="outline" className="text-xs font-extrabold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 px-2.5 py-0.5">
+                      ₹{grossCalculated.toLocaleString('en-IN')}
+                    </Badge>
                   </div>
                 </div>
-              );
-            })()}
+
+                <div className="p-3 space-y-1 flex-1 divide-y divide-border/40">
+                  {modalEarnings.length === 0 ? (
+                    <p className="text-xs text-muted-foreground italic py-4 text-center">No active earnings in this slab.</p>
+                  ) : (
+                    modalEarnings.map((item, idx) => {
+                      const amt = Number(item.amount) || 0;
+                      return (
+                        <div
+                          key={item.id || idx}
+                          className="flex items-center justify-between py-2 px-2 rounded-lg hover:bg-muted/30 transition-colors group"
+                        >
+                          <div className="min-w-0 pr-3">
+                            <span className="text-xs font-semibold text-foreground truncate block">{item.name}</span>
+                          </div>
+
+                          <div className="flex items-center gap-2.5 shrink-0">
+                            <div className="relative w-28 sm:w-32">
+                              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-muted-foreground">₹</span>
+                              <Input
+                                type="number"
+                                value={item.amount}
+                                onChange={(e) => {
+                                  const val = Number(e.target.value) || 0;
+                                  setModalEarnings(prev => {
+                                    const updated = prev.map((it, i) => i === idx ? { ...it, amount: val } : it);
+                                    let saIdx = updated.findIndex(it => it.name.toLowerCase().includes('special'));
+                                    const mGross = inputFrequency === 'monthly' ? (Number(salaryInput) || 0) : Math.round((Number(salaryInput) || 0) / 12);
+                                    if (mGross > 0) {
+                                      const otherSum = updated
+                                        .filter((_, i) => i !== saIdx)
+                                        .reduce((acc, c) => acc + (Number(c.amount) || 0), 0);
+                                      if (saIdx >= 0 && saIdx !== idx) {
+                                        updated[saIdx] = {
+                                          ...updated[saIdx],
+                                          amount: Math.max(0, mGross - otherSum)
+                                        };
+                                      }
+                                    }
+                                    return updated;
+                                  });
+                                }}
+                                className="h-8 pl-6 pr-2 text-xs font-bold text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none bg-background border-border/80 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                              />
+                            </div>
+                            <span className="text-[11px] font-medium text-muted-foreground w-22 text-right tabular-nums">
+                              ₹{(amt * 12).toLocaleString('en-IN')}/yr
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+
+              {/* Deductions Column */}
+              <div className="border border-rose-500/20 rounded-xl overflow-hidden bg-card shadow-xs flex flex-col">
+                <div className="px-4 py-3 bg-rose-500/5 border-b border-rose-500/15 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="w-4 h-4 text-rose-600 dark:text-rose-400" />
+                    <span className="text-xs font-bold text-rose-800 dark:text-rose-300 uppercase tracking-wider">
+                      Deductions (Monthly)
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-semibold text-muted-foreground">
+                      ₹{(totalDeductionCalculated * 12).toLocaleString('en-IN')}/yr
+                    </span>
+                    <Badge variant="outline" className="text-xs font-extrabold bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/30 px-2.5 py-0.5">
+                      ₹{totalDeductionCalculated.toLocaleString('en-IN')}
+                    </Badge>
+                  </div>
+                </div>
+
+                <div className="p-3 space-y-1 flex-1 divide-y divide-border/40">
+                  {modalDeductions.length === 0 ? (
+                    <p className="text-xs text-muted-foreground italic py-4 text-center">No active deductions in this slab.</p>
+                  ) : (
+                    modalDeductions.map((item, idx) => {
+                      const amt = Number(item.amount) || 0;
+                      return (
+                        <div
+                          key={item.id || idx}
+                          className="flex items-center justify-between py-2 px-2 rounded-lg hover:bg-muted/30 transition-colors group"
+                        >
+                          <div className="min-w-0 pr-3">
+                            <span className="text-xs font-semibold text-foreground truncate block">{item.name}</span>
+                          </div>
+
+                          <div className="flex items-center gap-2.5 shrink-0">
+                            <div className="relative w-28 sm:w-32">
+                              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-muted-foreground">₹</span>
+                              <Input
+                                type="number"
+                                value={item.amount}
+                                onChange={(e) => {
+                                  const val = Number(e.target.value) || 0;
+                                  setModalDeductions(prev => prev.map((it, i) => i === idx ? { ...it, amount: val } : it));
+                                }}
+                                className="h-8 pl-6 pr-2 text-xs font-bold text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none bg-background border-border/80 focus:border-rose-500 focus:ring-1 focus:ring-rose-500"
+                              />
+                            </div>
+                            <span className="text-[11px] font-medium text-muted-foreground w-22 text-right tabular-nums">
+                              ₹{(amt * 12).toLocaleString('en-IN')}/yr
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            </div>
 
             {/* Compensation Summary Card */}
             <div className="p-4 rounded-xl bg-gradient-to-r from-primary/10 via-emerald-500/10 to-primary/5 border border-primary/20 flex items-center justify-between flex-wrap gap-4 shadow-sm">
               <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-xl bg-primary text-primary-foreground flex items-center justify-center font-bold shadow-md">
+                <div className="w-10 h-10 rounded-xl bg-primary text-primary-foreground flex items-center justify-center font-bold shadow-sm">
                   <Wallet className="w-5 h-5" />
                 </div>
                 <div>
                   <span className="text-[10px] uppercase tracking-wider font-extrabold text-muted-foreground block">
                     Estimated Monthly Take-Home
                   </span>
-                  <span className="text-2xl font-black text-primary">
+                  <span className="text-xl font-black text-primary flex items-baseline gap-1">
                     ₹{netSalaryCalculated.toLocaleString('en-IN')}
-                    <span className="text-xs font-semibold text-muted-foreground ml-1">/ month</span>
+                    <span className="text-xs font-semibold text-muted-foreground">/ mo</span>
+                    <span className="text-[11px] font-medium text-muted-foreground ml-2">
+                      (₹{(netSalaryCalculated * 12).toLocaleString('en-IN')}/yr)
+                    </span>
                   </span>
                 </div>
               </div>
 
-              <div className="flex items-center gap-6 divide-x divide-border/60">
+              <div className="flex items-center gap-5 divide-x divide-border/60">
                 <div className="text-right">
-                  <span className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground block">Gross Monthly</span>
-                  <span className="text-sm font-black text-emerald-600 dark:text-emerald-400">₹{grossCalculated.toLocaleString('en-IN')}</span>
+                  <span className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground block">Gross Salary</span>
+                  <span className="text-sm font-black text-emerald-600 dark:text-emerald-400">₹{grossCalculated.toLocaleString('en-IN')}/mo</span>
                 </div>
-                <div className="pl-6 text-right">
-                  <span className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground block">Total Deductions</span>
-                  <span className="text-sm font-black text-rose-600 dark:text-rose-400">- ₹{totalDeductionCalculated.toLocaleString('en-IN')}</span>
+                <div className="pl-5 text-right">
+                  <span className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground block">Deductions</span>
+                  <span className="text-sm font-black text-rose-600 dark:text-rose-400">-₹{totalDeductionCalculated.toLocaleString('en-IN')}/mo</span>
                 </div>
-                <div className="pl-6 text-right">
+                <div className="pl-5 text-right">
                   <span className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground block">Annual CTC</span>
                   <span className="text-sm font-black text-foreground">₹{annualCtcCalculated.toLocaleString('en-IN')}</span>
                 </div>
@@ -1542,10 +1508,10 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
 
             {/* Modal Actions */}
             <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-border/40">
-              <Button variant="outline" size="sm" onClick={() => setModalOpen(false)} className="h-9 px-4 text-xs font-semibold">
+              <Button variant="outline" size="sm" onClick={() => setModalOpen(false)} className="h-9 px-4 text-xs font-semibold cursor-pointer">
                 Cancel
               </Button>
-              <Button size="sm" onClick={handleSave} className="bg-primary hover:bg-primary/90 text-primary-foreground h-9 px-5 text-xs font-bold shadow-sm gap-1.5">
+              <Button size="sm" onClick={handleSave} className="bg-primary hover:bg-primary/90 text-primary-foreground h-9 px-5 text-xs font-bold shadow-sm gap-1.5 cursor-pointer">
                 <CheckCircle2 className="w-4 h-4" />
                 {editingRecord ? 'Update Salary Structure' : 'Save & Activate Structure'}
               </Button>

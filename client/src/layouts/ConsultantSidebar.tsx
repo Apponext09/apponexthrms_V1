@@ -1,3 +1,4 @@
+import { SectionRail } from '@/layouts/SectionNavigation';
 import {
   LayoutDashboard,
   Clock,
@@ -11,78 +12,96 @@ import {
   Building2,
   Briefcase,
   CreditCard,
-  Receipt,
+  ReceiptIndianRupee,
   Plane,
   Activity,
   Shield,
+  ChevronDown,
+  GitBranch,
+  ScanFace,
+  RefreshCw,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/features/auth/store/authStore';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import { PortalSidebarBrand } from '@/layouts/PortalSidebarBrand';
+import { SidebarProfileMenu } from '@/layouts/SidebarProfileMenu';
 
 // ── Violet accent constants ───────────────────────────────────────────────────
 const C = {
-  activeBg: 'bg-violet-600 dark:bg-violet-600',
+  activeBg: 'bg-primary',
   activeText: 'text-white',
-  hoverBg: 'hover:bg-violet-50 dark:hover:bg-violet-950/30',
-  hoverText: 'hover:text-violet-700 dark:hover:text-violet-400',
-  icon: 'text-violet-500',
+  hoverBg: 'hover:bg-muted', hoverText: 'hover:text-foreground', icon: 'text-primary',
   sectionLabel: 'text-muted-foreground',
-  avatarBg: 'bg-violet-600',
-  avatarBorder: 'border-violet-300 dark:border-violet-700',
+  avatarBg: 'bg-primary', avatarBorder: 'border-primary/30',
 };
+
+import { useSubscriptionStore } from '@/features/subscriptions/store/subscriptionStore';
 
 // ── Nav definitions ───────────────────────────────────────────────────────────
 const CONSULTANT_NAV = [
   {
-    label: 'OVERVIEW',
+    label: 'Overview',
+    subscriptionModule: null,
+    items: [{ name: 'Dashboard', href: '/consultant/dashboard', icon: LayoutDashboard }],
+  },
+  {
+    label: 'CoreHR',
+    subscriptionModule: 'Core HR & Directory',
     items: [
-      { name: 'My Dashboard', href: '/consultant/dashboard', icon: LayoutDashboard },
-      { name: 'My Profile',   href: '/consultant/profile',   icon: User },
+      { name: 'Lifecycle', href: '/consultant/lifecycle', icon: GitBranch },
+      { name: 'Structure', href: '/consultant/org-chart', icon: Building2 },
+      { name: 'Identity', href: '/consultant/id-card', icon: Shield },
     ],
   },
   {
-    label: 'TIME & ATTENDANCE',
+    label: 'Attendance',
+    subscriptionModule: 'Attendance & Time Tracking',
     items: [
-      { name: 'Attendance',       href: '/consultant/attendance',       icon: Clock },
-      { name: 'Holiday Calendar', href: '/consultant/holiday-calendar', icon: Calendar },
+      { name: 'FacePunch', href: '/consultant/face-attendance', icon: ScanFace },
+      { name: 'Logs', href: '/consultant/attendance', icon: Clock },
+      { name: 'Shifts', href: '/consultant/shift-roster', icon: Calendar },
+      { name: 'Correction', href: '/consultant/attendance-regularization', icon: RefreshCw },
     ],
   },
   {
-    label: 'LEAVES',
+    label: 'Leaves',
+    subscriptionModule: 'Leave Management & Approvals',
     items: [
-      { name: 'My Leaves', href: '/consultant/leaves', icon: Palmtree },
+      { name: 'Leaves', href: '/consultant/leaves', icon: Palmtree },
     ],
   },
   {
-    label: 'EXPENSES',
+    label: 'Expenses',
+    subscriptionModule: 'Expense Management',
     items: [
-      { name: 'Expense Claims',   href: '/consultant/expenses', icon: Receipt },
-      { name: 'Travel Requests',  href: '/consultant/travel',   icon: Plane },
+      { name: 'Expenses',   href: '/consultant/expenses', icon: ReceiptIndianRupee },
+      { name: 'Travel',  href: '/consultant/travel-requests', icon: Plane },
+      { name: 'Advances',  href: '/consultant/travel-advances', icon: CreditCard },
+      { name: 'Mileage',   href: '/consultant/mileage-claims',  icon: Activity },
     ],
   },
   {
-    label: 'PAYROLL',
+    label: 'Payroll',
+    subscriptionModule: 'Automated Payroll Processing',
     items: [
-      { name: 'My Payslips', href: '/consultant/payslips', icon: CreditCard },
+      { name: 'Payslips', href: '/consultant/payslips', icon: CreditCard },
     ],
   },
   {
-    label: 'DOCUMENTS',
-    items: [
-      { name: 'My Documents', href: '/consultant/documents', icon: BookOpen },
-      { name: 'ID Card',      href: '/consultant/id-card',   icon: Shield },
-    ],
+    label: 'Documents',
+    subscriptionModule: 'Core HR & Directory',
+    items: [{ name: 'Documents', href: '/consultant/documents', icon: BookOpen }],
   },
   {
-    label: 'COMPANY',
+    label: 'Company',
+    subscriptionModule: null,
     items: [
       { name: 'Announcements', href: '/consultant/announcements', icon: Megaphone },
-      { name: 'Org Chart',     href: '/consultant/org-chart',     icon: Building2 },
     ],
   },
 ];
@@ -96,6 +115,8 @@ export function ConsultantSidebar({ open, onOpenChange }: ConsultantSidebarProps
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuthStore();
+  const { hasModule, isGatingEnabled } = useSubscriptionStore();
+  const [openMenu, setOpenMenu] = useState<string | null>(null);
 
   const handleLogout = () => {
     logout();
@@ -107,115 +128,44 @@ export function ConsultantSidebar({ open, onOpenChange }: ConsultantSidebarProps
   const isActive = (href: string) =>
     location.pathname === href || location.pathname.startsWith(href + '/');
 
+  const visibleNav = CONSULTANT_NAV.filter(sec => {
+    if (!isGatingEnabled || !sec.subscriptionModule) return true;
+    return hasModule(sec.subscriptionModule);
+  });
+
   return (
     <div
       className={cn(
-        'flex h-full flex-col border-r border-border bg-card transition-all duration-300 ease-in-out',
-        open ? 'w-60' : 'w-[60px]'
+        'flex h-full flex-col border-r border-border bg-white transition-all duration-300 ease-in-out dark:bg-slate-950',
+        open ? 'w-[calc(100vw-1.5rem)] max-w-72 md:w-28' : 'w-[72px]'
       )}
     >
       {/* ── Brand ── */}
-      <PortalSidebarBrand open={open} portalLabel="Consultant Portal" />
+      <PortalSidebarBrand open={false} portalLabel="Consultant Portal" />
 
       {/* ── Nav ── */}
-      <nav className="no-scrollbar flex-1 space-y-4 overflow-y-auto px-2 py-4">
-        {CONSULTANT_NAV.map((section) => (
-          <div key={section.label}>
-            <AnimatePresence>
-              {open && (
-                <motion.p
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className={cn('mb-1 px-3 text-[9px] font-bold uppercase', C.sectionLabel)}
-                >
-                  {section.label}
-                </motion.p>
-              )}
-            </AnimatePresence>
-
-            <div className="space-y-0.5">
-              {section.items.map((item) => {
-                const Icon = item.icon;
-                const active = isActive(item.href);
-                return (
-                  <button
-                    key={item.href}
-                    onClick={() => navigate(item.href)}
-                    title={!open ? item.name : undefined}
-                    className={cn(
-                      'group flex min-h-10 w-full items-center gap-3 rounded-lg px-3 py-2 text-[12px] font-semibold transition-all',
-                      active
-                        ? `${C.activeBg} ${C.activeText} shadow-sm`
-                        : `text-muted-foreground ${C.hoverBg} ${C.hoverText}`
-                    )}
-                  >
-                    <Icon
-                      size={16}
-                      className={cn('flex-shrink-0', active ? 'text-white' : C.icon)}
-                    />
-                    <AnimatePresence>
-                      {open && (
-                        <motion.span
-                          initial={{ opacity: 0, width: 0 }}
-                          animate={{ opacity: 1, width: 'auto' }}
-                          exit={{ opacity: 0, width: 0 }}
-                          className="overflow-hidden whitespace-nowrap"
-                        >
-                          {item.name}
-                        </motion.span>
-                      )}
-                    </AnimatePresence>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        ))}
-      </nav>
+      <SectionRail id="consultant" groups={visibleNav} open={open} onNavigate={() => { if (window.innerWidth < 768) onOpenChange(false); }} />
 
       {/* ── User Footer ── */}
-      <div className="border-t border-border p-3">
-        <div className={cn('flex items-center gap-3', !open && 'justify-center')}>
-          <Avatar className={cn('h-8 w-8 flex-shrink-0 border-2', C.avatarBorder)}>
-            <AvatarImage src={user?.avatarUrl} />
-            <AvatarFallback className={cn('text-xs font-bold text-white', C.avatarBg)}>
-              {initials}
-            </AvatarFallback>
-          </Avatar>
-          <AnimatePresence>
-            {open && (
-              <motion.div
-                initial={{ opacity: 0, width: 0 }}
-                animate={{ opacity: 1, width: 'auto' }}
-                exit={{ opacity: 0, width: 0 }}
-                className="flex flex-1 items-center justify-between overflow-hidden"
-              >
-                <div className="min-w-0">
-                  <p className="truncate text-xs font-semibold text-foreground">
-                    {(() => {
-                      const fName = (user?.firstName || (user as any)?.first_name || '').trim();
-                      let lName = (user?.lastName || (user as any)?.last_name || '').trim();
-                      if (lName.toLowerCase() === 'user') lName = '';
-                      const full = `${fName} ${lName}`.trim();
-                      return full || fName || 'User';
-                    })()}
-                  </p>
-                  <p className="truncate text-[10px] text-muted-foreground">Consultant</p>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7 flex-shrink-0 text-muted-foreground hover:text-destructive"
-                  onClick={handleLogout}
-                  title="Sign out"
-                >
-                  <LogOut size={13} />
-                </Button>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
+      <div className="border-t border-border bg-white p-2 dark:bg-slate-950">
+        <SidebarProfileMenu profilePath="/consultant/profile" onLogout={handleLogout} onProfileNavigate={() => { if (window.innerWidth < 768) onOpenChange(false); }}>
+          <div className="flex flex-col items-center justify-center cursor-pointer group">
+            <div
+              className="mx-auto flex size-11 items-center justify-center rounded-xl border border-border bg-white p-0.5 transition-colors hover:bg-muted dark:bg-slate-950"
+              title="View Consultant Profile"
+            >
+              <Avatar className={cn('size-10 flex-shrink-0 border-2', C.avatarBorder)}>
+                <AvatarImage src={user?.avatarUrl || (user as any)?.avatar || (user as any)?.profile_picture} alt="Profile" />
+                <AvatarFallback className={cn('text-xs font-bold text-white', C.avatarBg)}>
+                  {initials}
+                </AvatarFallback>
+              </Avatar>
+            </div>
+            <span className="text-[8.5px] font-bold tracking-tight text-primary text-center leading-tight truncate max-w-[68px] mt-1">
+              Consultant Portal
+            </span>
+          </div>
+        </SidebarProfileMenu>
       </div>
     </div>
   );

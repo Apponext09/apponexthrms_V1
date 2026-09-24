@@ -39,13 +39,21 @@ export class LeaveBalanceRepository extends BaseRepository<LeaveBalance> {
     ctx: TenantContext,
     employeeId: number,
     leaveTypeId: number,
-    fyStart: string
+    fyStart?: string
   ): Promise<LeaveBalance | null> {
-    return this.query(ctx)
+    const q = this.query(ctx)
       .where('employee_id', employeeId)
-      .where('leave_type_id', leaveTypeId)
-      .where('financial_year_start', fyStart)
-      .first() as Promise<LeaveBalance | null>;
+      .where('leave_type_id', leaveTypeId);
+
+    if (fyStart) {
+      const direct = await q.clone().where('financial_year_start', fyStart).first();
+      if (direct) return direct as LeaveBalance;
+      
+      const startsWith = await q.clone().where('financial_year_start', 'like', `${fyStart.substring(0, 4)}%`).first();
+      if (startsWith) return startsWith as LeaveBalance;
+    }
+
+    return q.orderBy('id', 'desc').first() as Promise<LeaveBalance | null>;
   }
 
   /**

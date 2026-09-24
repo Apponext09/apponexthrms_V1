@@ -73,6 +73,7 @@ export class LoanTaxSettlementController {
   async getLoan(req: Request, res: Response) {
     const { id } = req.params;
     const loan = await this.loanService.getLoan(req.ctx, parseInt(id));
+    if (!loan) { res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Loan not found' } }); return; }
     res.json({ success: true, data: loan });
   }
 
@@ -149,7 +150,7 @@ export class LoanTaxSettlementController {
         isTaxable: Boolean(r.isTaxable ?? r.is_taxable),
         isActive: Boolean((r.isActive ?? r.is_active) !== 0),
         foreclosureAllowed: Boolean(r.foreclosureAllowed ?? r.foreclosure_allowed),
-        approverRole: r.approverRole ?? r.approver_role ?? 'hr_manager',
+        approverRole: r.approverRole ?? r.approver_role ?? 'hr',
         requestFormTemplate: r.requestFormTemplate ?? r.request_form_template ?? '',
         approvedFormTemplate: r.approvedFormTemplate ?? r.approved_form_template ?? '',
         disbursementFormTemplate: r.disbursementFormTemplate ?? r.disbursement_form_template ?? '',
@@ -217,7 +218,7 @@ export class LoanTaxSettlementController {
       is_taxable: isTaxable ? 1 : 0,
       is_active: (isActive !== undefined ? isActive : is_active) !== false ? 1 : 0,
       foreclosure_allowed: (foreclosureAllowed ?? foreclosure_allowed) ? 1 : 0,
-      approver_role: approverRole || approver_role || 'hr_manager',
+      approver_role: approverRole || approver_role || 'hr',
       request_form_template: requestFormTemplate || null,
       approved_form_template: approvedFormTemplate || null,
       disbursement_form_template: disbursementFormTemplate || null,
@@ -275,24 +276,31 @@ export class LoanTaxSettlementController {
   async getTaxDeclaration(req: Request, res: Response) {
     const { id } = req.params;
     const declaration = await this.taxService.getDeclaration(req.ctx, parseInt(id));
+    if (!declaration) { res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Tax declaration not found' } }); return; }
     res.json({ success: true, data: declaration });
-  }
-
-  async addTaxInvestment(req: Request, res: Response) {
-    const investment = await this.taxService.addInvestment(req.ctx, req.body);
-    res.status(201).json({ success: true, data: investment });
-  }
-
-  async getTaxInvestments(req: Request, res: Response) {
-    const { declarationId } = req.query;
-    const investments = await this.taxService.getDeclarationInvestments(req.ctx, parseInt(declarationId as string));
-    res.json({ success: true, data: investments });
   }
 
   async finalizeTaxDeclaration(req: Request, res: Response) {
     const { id } = req.params;
     const declaration = await this.taxService.finalizeDeclaration(req.ctx, parseInt(id));
     res.json({ success: true, data: declaration });
+  }
+
+  async addTaxInvestment(req: Request, res: Response) {
+    const { id } = req.params;
+    const b = req.body || {};
+    const investment = await this.taxService.addInvestment(req.ctx, parseInt(id), {
+      investmentType: b.investmentType ?? b.investment_type ?? b.type ?? b.section,
+      investmentAmount: Number(b.investmentAmount ?? b.investment_amount ?? b.amount),
+      proofUrl: b.proofUrl ?? b.investmentProofUrl ?? b.investment_proof_url,
+    });
+    res.status(201).json({ success: true, data: investment });
+  }
+
+  async getTaxInvestments(req: Request, res: Response) {
+    const { id } = req.params;
+    const investments = await this.taxService.getInvestments(req.ctx, parseInt(id));
+    res.json({ success: true, data: investments });
   }
 
   async calculateTDS(req: Request, res: Response) {

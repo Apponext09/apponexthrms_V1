@@ -7,10 +7,31 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Eye, Trash2, CheckCircle, Clock, NotebookPen } from 'lucide-react';
+import { Plus, Eye, Trash2, CheckCircle, Clock, NotebookPen, FileText, ExternalLink, IndianRupee } from 'lucide-react';
+import { toast } from 'sonner';
 import { useReferrals, useCreateReferral, useRewardReferral, useDeleteReferral } from '../hooks/useReferrals';
 import { useCandidates } from '../hooks/useCandidates';
 import { apiClient } from '@/lib/api';
+
+const resolveResumeUrl = (rawUrl?: string | null): string => {
+  if (!rawUrl || typeof rawUrl !== 'string' || rawUrl === '#' || rawUrl === 'null' || rawUrl === 'undefined' || rawUrl.trim() === '') {
+    return '';
+  }
+  if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://') || rawUrl.startsWith('data:') || rawUrl.startsWith('blob:')) {
+    return rawUrl;
+  }
+  let clean = rawUrl.trim();
+  if (clean.startsWith('./')) clean = clean.substring(2);
+  if (!clean.startsWith('/')) clean = `/${clean}`;
+  if (!clean.startsWith('/uploads')) {
+    if (clean.startsWith('/resumes/')) {
+      clean = `/uploads${clean}`;
+    } else {
+      clean = `/uploads/resumes${clean}`;
+    }
+  }
+  return clean;
+};
 
 export const ReferralManagementPage: React.FC = () => {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -71,22 +92,31 @@ export const ReferralManagementPage: React.FC = () => {
     });
   };
 
+  const [rewardStatus, setRewardStatus] = useState('hired');
+
   const handleReward = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedReferral || !rewardAmount) return;
 
-    await rewardReferralMutation.mutateAsync({
-      rewardAmount: parseFloat(rewardAmount),
-      rewardType,
-    });
+    try {
+      await rewardReferralMutation.mutateAsync({
+        rewardAmount: parseFloat(rewardAmount),
+        rewardType,
+        newStatus: rewardStatus,
+      });
+      toast.success(`Reward of ₹${parseFloat(rewardAmount).toLocaleString()} assigned to ${selectedReferral.referrerName || selectedReferral.referrer_name || 'employee'} successfully!`);
+    } catch (err: any) {
+      toast.error('Failed to assign reward. Please try again.');
+    }
 
     setIsRewardOpen(false);
     setSelectedReferral(null);
     setRewardAmount('');
+    setRewardStatus('hired');
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('Are you sure you want to delete this referral?')) return;
+    if (!await window.appConfirm('Are you sure you want to delete this referral?')) return;
     await deleteReferralMutation.mutateAsync(id);
   };
 
@@ -105,9 +135,9 @@ export const ReferralManagementPage: React.FC = () => {
   const rewardPaidCount = referrals.filter((r: any) => r.status === 'reward_paid' || r.referral_status === 'reward_paid').length;
 
   return (
-    <div className="flex-1 space-y-6 max-w-full overflow-hidden p-6 min-h-[calc(100vh-4rem)]">
+    <div className="recruitment-page flex-1 min-w-0 space-y-4">
       {/* ── Top Header Banner ────────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card p-6 rounded-2xl border border-border/80 shadow-2xs relative overflow-hidden">
+      <div className="recruitment-page-header flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card p-6 rounded-2xl border border-border/80 shadow-2xs relative overflow-hidden">
         <div className="flex items-center gap-3.5 relative z-10">
           <div className="w-11 h-11 rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold shrink-0 border border-emerald-500/20 shadow-xs">
             <NotebookPen className="w-5 h-5" />
@@ -134,7 +164,7 @@ export const ReferralManagementPage: React.FC = () => {
 
       {/* ── KPI Stats Widgets ─────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+        <Card className="bg-card border-border shadow-sm rounded-xl overflow-hidden">
           <CardContent className="p-5 flex items-center justify-between">
             <div>
               <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Total Referrals</p>
@@ -146,7 +176,7 @@ export const ReferralManagementPage: React.FC = () => {
           </CardContent>
         </Card>
 
-        <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+        <Card className="bg-card border-border shadow-sm rounded-xl overflow-hidden">
           <CardContent className="p-5 flex items-center justify-between">
             <div>
               <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Hired from Referrals</p>
@@ -158,7 +188,7 @@ export const ReferralManagementPage: React.FC = () => {
           </CardContent>
         </Card>
 
-        <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+        <Card className="bg-card border-border shadow-sm rounded-xl overflow-hidden">
           <CardContent className="p-5 flex items-center justify-between">
             <div>
               <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Rewards Paid</p>
@@ -172,7 +202,7 @@ export const ReferralManagementPage: React.FC = () => {
       </div>
 
       {/* ── Table Container ──────────────────────────────────────────────────── */}
-      <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+      <Card className="bg-card border-border shadow-sm rounded-xl overflow-hidden">
         <CardContent className="p-0">
           <div className="w-full overflow-x-auto">
             <Table className="min-w-[900px] border-collapse">
@@ -227,6 +257,7 @@ export const ReferralManagementPage: React.FC = () => {
 
                     const rewardAmt = r.referralRewardAmount || r.referral_reward_amount || r.rewardAmount || r.reward_amount;
                     const initials = candName.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase() || 'CA';
+                    const resumeLink = r.resumeUrl || r.resume_url || r.candidate_resume_url || r.candidateResumeUrl;
 
                     return (
                       <TableRow key={r.id} className="border-border/60 hover:bg-muted/40 transition-colors">
@@ -255,6 +286,17 @@ export const ReferralManagementPage: React.FC = () => {
                         <TableCell className="py-3.5 px-4 text-center">{getStatusBadge(r.status || r.referral_status || r.referralStatus)}</TableCell>
                         <TableCell className="text-right py-3.5 px-5">
                           <div className="flex items-center justify-end gap-1.5">
+                            {resumeLink && (
+                              <a
+                                href={resumeLink}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="h-8 w-8 inline-flex items-center justify-center rounded-lg border border-blue-500/30 bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 cursor-pointer shadow-2xs"
+                                title="View Candidate Resume"
+                              >
+                                <FileText className="h-4 w-4" />
+                              </a>
+                            )}
                             <Button
                               variant="outline"
                               size="icon"
@@ -268,19 +310,19 @@ export const ReferralManagementPage: React.FC = () => {
                             >
                               <Eye className="h-4 w-4" />
                             </Button>
-                            {(r.status === 'hired' || r.referral_status === 'hired') && (
-                              <Button
-                                variant="default"
-                                size="sm"
-                                onClick={() => {
-                                  setSelectedReferral(r);
-                                  setIsRewardOpen(true);
-                                }}
-                                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-8 px-3 rounded-lg shadow-2xs cursor-pointer gap-1"
-                              >
-                                <NotebookPen className="h-3 w-3" /> Pay Reward
-                              </Button>
-                            )}
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setSelectedReferral(r);
+                                setRewardAmount(r.referralRewardAmount || r.referral_reward_amount || '');
+                                setIsRewardOpen(true);
+                              }}
+                              className="h-8 px-2.5 rounded-lg border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-bold text-[11px] cursor-pointer shadow-2xs gap-1"
+                              title="Assign Reward Amount"
+                            >
+                              <IndianRupee className="h-3 w-3" /> Reward
+                            </Button>
                             <Button 
                               variant="outline" 
                               size="icon" 
@@ -360,40 +402,70 @@ export const ReferralManagementPage: React.FC = () => {
       </Dialog>
 
       {/* REWARD PAYOUT DIALOG */}
-      <Dialog open={isRewardOpen} onOpenChange={setIsRewardOpen}>
+      <Dialog open={isRewardOpen} onOpenChange={(open) => { setIsRewardOpen(open); if (!open) setSelectedReferral(null); }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Process Referral Payout</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <IndianRupee className="w-5 h-5 text-emerald-600" />
+              Assign Referral Reward
+            </DialogTitle>
+            {selectedReferral && (
+              <p className="text-xs text-muted-foreground mt-1">
+                Referring employee: <span className="font-bold text-foreground">{selectedReferral.referrerName || selectedReferral.referrer_name || '—'}</span>
+                {' · '} Candidate: <span className="font-bold text-foreground">{selectedReferral.candidateName || selectedReferral.candidate_name || '—'}</span>
+              </p>
+            )}
           </DialogHeader>
-          <form onSubmit={handleReward} className="space-y-4">
+          <form onSubmit={handleReward} className="space-y-4 pt-1">
             <div>
-              <Label htmlFor="rewardAmount">Payout Amount (INR)</Label>
-              <Input
-                id="rewardAmount"
-                type="number"
-                value={rewardAmount}
-                onChange={(e) => setRewardAmount(e.target.value)}
-                placeholder="e.g. 15000"
-                required
-              />
+              <Label htmlFor="rewardAmount" className="text-xs font-bold">Reward Amount (₹ INR)</Label>
+              <div className="relative mt-1">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-muted-foreground">₹</span>
+                <Input
+                  id="rewardAmount"
+                  type="number"
+                  min="0"
+                  step="100"
+                  value={rewardAmount}
+                  onChange={(e) => setRewardAmount(e.target.value)}
+                  placeholder="e.g. 15000"
+                  className="pl-7 font-mono font-bold"
+                  required
+                />
+              </div>
+              <p className="text-[11px] text-muted-foreground mt-1">This amount will be visible to the referring employee in their portal.</p>
             </div>
             <div>
-              <Label htmlFor="rewardType">Payment Type</Label>
+              <Label htmlFor="rewardType" className="text-xs font-bold">Payment Method</Label>
               <Select value={rewardType} onValueChange={setRewardType}>
-                <SelectTrigger>
+                <SelectTrigger className="mt-1">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="cash">Cash / Bank Transfer</SelectItem>
                   <SelectItem value="payroll">Payroll Addition</SelectItem>
-                  <SelectItem value="giftcard">Gift Card</SelectItem>
+                  <SelectItem value="giftcard">Gift Card / Voucher</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            <DialogFooter>
+            <div>
+              <Label htmlFor="rewardStatus" className="text-xs font-bold">Update Referral Status</Label>
+              <Select value={rewardStatus} onValueChange={setRewardStatus}>
+                <SelectTrigger className="mt-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="hired">Mark Candidate as Hired</SelectItem>
+                  <SelectItem value="reward_paid">Mark Reward as Paid</SelectItem>
+                  <SelectItem value="submitted">Keep as Submitted (just save amount)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <DialogFooter className="gap-2">
               <Button type="button" variant="outline" onClick={() => { setIsRewardOpen(false); setSelectedReferral(null); }}>Cancel</Button>
-              <Button type="submit" disabled={rewardReferralMutation.isPending} className="bg-emerald-600 hover:bg-emerald-700 text-white">
-                Confirm Payout
+              <Button type="submit" disabled={rewardReferralMutation.isPending} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold gap-1.5">
+                <IndianRupee className="w-3.5 h-3.5" />
+                {rewardReferralMutation.isPending ? 'Saving...' : 'Save Reward'}
               </Button>
             </DialogFooter>
           </form>
@@ -403,41 +475,58 @@ export const ReferralManagementPage: React.FC = () => {
       {/* DETAILS / PROGRESS MODAL */}
       <Dialog open={!!selectedReferral && !isRewardOpen} onOpenChange={() => setSelectedReferral(null)}>
         <DialogContent className="max-w-md">
-          {selectedReferral && (
-            <>
-              <DialogHeader>
-                <DialogTitle>Referral Progress & Details</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div className="border-b pb-4">
-                  <h3 className="font-bold text-foreground text-lg">
-                    {selectedReferral.candidateName || selectedReferral.candidate_name || 'Candidate'}
-                  </h3>
-                  {(selectedReferral.candidateEmail || selectedReferral.candidate_email) && (
-                    <p className="text-xs text-muted-foreground font-mono">{selectedReferral.candidateEmail || selectedReferral.candidate_email}</p>
-                  )}
+          {selectedReferral && (() => {
+            const selectedResume = selectedReferral.resumeUrl || selectedReferral.resume_url || selectedReferral.candidate_resume_url || selectedReferral.candidateResumeUrl;
+            return (
+              <>
+                <DialogHeader>
+                  <DialogTitle>Referral Progress & Details</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div className="border-b pb-4">
+                    <h3 className="font-bold text-foreground text-lg">
+                      {selectedReferral.candidateName || selectedReferral.candidate_name || 'Candidate'}
+                    </h3>
+                    {(selectedReferral.candidateEmail || selectedReferral.candidate_email) && (
+                      <p className="text-xs text-muted-foreground font-mono">{selectedReferral.candidateEmail || selectedReferral.candidate_email}</p>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="font-semibold text-muted-foreground">Referred By:</div>
+                    <div className="text-foreground font-medium">{selectedReferral.referrerName || selectedReferral.referrer_name || 'Employee'}</div>
+
+                    <div className="font-semibold text-muted-foreground">Application Status:</div>
+                    <div className="text-foreground capitalize font-medium">{selectedReferral.applicationStatus || 'Unapplied'}</div>
+
+                    <div className="font-semibold text-muted-foreground">Referral Status:</div>
+                    <div>{getStatusBadge(selectedReferral.referralStatus || selectedReferral.referral_status)}</div>
+
+                    <div className="font-semibold text-muted-foreground">Reward Payout:</div>
+                    <div>{getStatusBadge(selectedReferral.rewardStatus || selectedReferral.reward_status)}</div>
+
+                    {selectedResume && (
+                      <div className="col-span-2 pt-2">
+                        <a
+                          href={resolveResumeUrl(selectedResume)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-500/20 font-bold text-xs border border-blue-500/20 transition-colors"
+                        >
+                          <FileText className="w-4 h-4" />
+                          <span>View Candidate Resume</span>
+                          <ExternalLink className="w-3 h-3 opacity-70" />
+                        </a>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="border-t pt-4 flex justify-end">
+                    <Button variant="outline" onClick={() => setSelectedReferral(null)}>Close</Button>
+                  </div>
                 </div>
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div className="font-semibold text-muted-foreground">Referred By:</div>
-                  <div className="text-foreground font-medium">{selectedReferral.referrerName || selectedReferral.referrer_name || 'Employee'}</div>
-
-                  <div className="font-semibold text-muted-foreground">Application Status:</div>
-                  <div className="text-foreground capitalize font-medium">{selectedReferral.applicationStatus || 'Unapplied'}</div>
-
-                  <div className="font-semibold text-muted-foreground">Referral Status:</div>
-                  <div>{getStatusBadge(selectedReferral.referralStatus || selectedReferral.referral_status)}</div>
-
-                  <div className="font-semibold text-muted-foreground">Reward Payout:</div>
-                  <div>{getStatusBadge(selectedReferral.rewardStatus || selectedReferral.reward_status)}</div>
-                </div>
-
-                <div className="border-t pt-4 flex justify-end">
-                  <Button variant="outline" onClick={() => setSelectedReferral(null)}>Close</Button>
-                </div>
-              </div>
-            </>
-          )}
-
+              </>
+            );
+          })()}
         </DialogContent>
       </Dialog>
     </div>

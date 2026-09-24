@@ -35,7 +35,7 @@ import {
   Palette,
   Check,
   Edit2,
-  DollarSign,
+  IndianRupee,
   Layers,
   FileEdit,
   AlertTriangle,
@@ -308,10 +308,27 @@ const ROLE_THEMES: Record<string, ThemePreset[]> = {
   ],
 };
 
+const ROLE_PRIORITY: Record<string, number> = {
+  super_admin: 100, organization_admin: 90, ceo: 90, hr_admin: 80, hr: 80,
+  hr_manager: 70, support: 70, finance: 70, finance_manager: 70,
+  department_head: 60, manager: 60, team_lead: 50, consultant: 20,
+  intern: 10, employee: 5,
+};
+
+function resolveEffectiveRole(...values: unknown[]): string {
+  const candidates = values
+    .flatMap((value) => Array.isArray(value) ? value : [value])
+    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+    .map((value) => value.trim().toLowerCase().replace(/[\s-]+/g, '_'));
+  return candidates.sort((a, b) => (ROLE_PRIORITY[b] ?? 0) - (ROLE_PRIORITY[a] ?? 0))[0] || 'employee';
+}
+
 export default function ProfilePage() {
   const { user } = useAuthStore();
-  const resolvedEmpId = Number(user?.employeeId || user?.id || 0);
-  const { employee, isLoading, refetch } = useEmployee(resolvedEmpId || 'me');
+  // Always resolve identity through the authenticated employee endpoint.  A
+  // users.id is not an employees.id, especially for managers and team leads.
+  const { employee, isLoading, refetch } = useEmployee('me');
+  const resolvedEmpId = Number(employee?.id || 0);
   const { professionalInfo } = useEmployeeProfessionalInfo(resolvedEmpId);
 
   const [activeTab, setActiveTab] = useState<
@@ -320,7 +337,6 @@ export default function ProfilePage() {
 
   const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
   const [isEditRequestModalOpen, setIsEditRequestModalOpen] = useState(false);
-  const [isEditingBasicInfo, setIsEditingBasicInfo] = useState(false);
 
   // HR Profile Face Photo Update Request State
   const [hrRequestOpen, setHrRequestOpen] = useState(false);
@@ -337,8 +353,18 @@ export default function ProfilePage() {
   const [isSavingPassword, setIsSavingPassword] = useState(false);
 
   // Role Determination & Theme Switcher
-  const roleCode = (user?.accessRole || user?.role || user?.roles?.[0] || 'employee').toLowerCase();
-  const normalizedRole = roleCode.includes('intern')
+  // Always read from auth store (user) — it is updated on login and reflects the assigned role correctly.
+  const roleCode = resolveEffectiveRole(
+    employee?.accessRole,
+    (employee as any)?.access_role,
+    (employee as any)?.roles,
+    user?.accessRole,
+    user?.role,
+    user?.roles,
+  );
+  const normalizedRole = roleCode.includes('finance')
+    ? 'finance'
+    : roleCode.includes('intern')
     ? 'intern'
     : roleCode.includes('consultant')
     ? 'consultant'
@@ -467,18 +493,25 @@ export default function ProfilePage() {
   const initials = `${activeEmp.firstName?.[0] || ''}${activeEmp.lastName?.[0] || ''}`.toUpperCase() || 'EMP';
   const status = (activeEmp.status || 'active').toLowerCase();
 
-  const roleLabel =
-    activeEmp.accessRole === 'hr_manager'
-      ? 'HR Manager'
-      : activeEmp.accessRole === 'department_head'
-      ? 'Department Manager'
-      : activeEmp.accessRole === 'team_lead'
-      ? 'Team Lead'
-      : activeEmp.accessRole === 'intern'
-      ? 'Intern'
-      : activeEmp.accessRole === 'consultant'
-      ? 'Consultant'
-      : 'Employee';
+  // Use auth store's roleCode (already computed above) — it always reflects the correct assigned role.
+  const ROLE_LABEL_MAP: Record<string, string> = {
+    super_admin: 'Super Admin',
+    organization_admin: 'CEO',
+    ceo: 'CEO',
+    hr_admin: 'HR',
+    hr: 'HR',
+    hr_manager: 'HR Manager',
+    support: 'Support',
+    finance: 'Finance',
+    finance_manager: 'Finance Manager',
+    department_head: 'Department Manager',
+    manager: 'Manager',
+    team_lead: 'Team Lead',
+    consultant: 'Consultant',
+    intern: 'Intern',
+    employee: 'Employee',
+  };
+  const roleLabel = ROLE_LABEL_MAP[roleCode] || (roleCode ? roleCode.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Employee');
 
   const jobTitle = (professionalInfo as any)?.designation?.name || (professionalInfo as any)?.specialization || (activeEmp as any)?.jobTitle || roleLabel;
   const department = activeEmp.department || (activeEmp as any)?.department_name || (user as any)?.departmentName || 'Engineering & Product';
@@ -647,7 +680,7 @@ export default function ProfilePage() {
 
             {[
               { id: 'details',   label: 'Combined Details',      icon: User,           desc: 'Basic, Contact & Emergency info' },
-              { id: 'payroll',   label: 'Payroll & Salary',     icon: DollarSign,     desc: 'Salary structure & revisions' },
+              { id: 'payroll',   label: 'Payroll & Salary',     icon: IndianRupee,     desc: 'Salary structure & revisions' },
               { id: 'documents', label: 'Documents',            icon: Layers,         desc: 'KYC & Employee certificates' },
               { id: 'statutory', label: 'Statutory Details',    icon: Lock,           desc: 'PF, ESI, PAN & Tax parameters' },
               { id: 'checkin',   label: 'Check-In Mode',        icon: MapPin,         desc: 'Geo & Attendance settings' },
@@ -716,8 +749,6 @@ export default function ProfilePage() {
           {activeTab === 'details' && (
             <EmployeeDetailsCombined
               employee={activeEmp}
-              isEditingBasicInfo={isEditingBasicInfo}
-              onEditBasicInfoToggle={setIsEditingBasicInfo}
               editUnlocked={isPersonalUnlocked}
               isBasicUnlocked={isBasicUnlocked}
               isPersonalUnlocked={isPersonalUnlocked}
@@ -734,7 +765,11 @@ export default function ProfilePage() {
 
           {/* TAB 3: DOCUMENTS & CERTIFICATES */}
           {activeTab === 'documents' && (
-            <EmployeeDocuments employeeId={resolvedEmpId} readOnly={isEmployeePortal} />
+            <EmployeeDocuments
+              employeeId={resolvedEmpId}
+              readOnly={isEmployeePortal}
+              canEdit={!isEmployeePortal || editUnlocked}
+            />
           )}
 
           {/* TAB 4: STATUTORY DETAILS */}

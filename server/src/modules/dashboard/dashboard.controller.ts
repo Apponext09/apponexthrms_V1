@@ -12,11 +12,25 @@ export class AdminDashboardController {
       return;
     }
 
-    const stats = await this.service.getAdminStats(ctx);
-    res.status(200).json({
-      success: true,
-      data: stats,
-    });
+    try {
+      const stats = await this.service.getAdminStats(ctx);
+      res.status(200).json({
+        success: true,
+        data: stats,
+      });
+    } catch (err: any) {
+      console.error('[AdminDashboardController] Error fetching admin stats:', err);
+      res.status(500).json({
+        success: false,
+        message: err.message || 'Failed to fetch admin stats',
+      });
+    }
+  });
+
+  getMyStats = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx;
+    if (!ctx) { res.status(401).json({ success: false, message: 'Tenant context required' }); return; }
+    res.status(200).json({ success: true, data: await this.service.getMyStats(ctx) });
   });
 }
 

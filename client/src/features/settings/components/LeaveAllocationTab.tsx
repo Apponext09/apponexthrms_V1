@@ -39,21 +39,22 @@ export const LeaveAllocationTab: React.FC<LeaveAllocationTabProps> = ({
   formData,
   setFormData,
   companies = [],
-  departments,
-  locations,
+  departments = [],
+  locations = [],
   subDepartments = [],
   designations = [],
-  gradeOptions,
-  employeeTypeOptions,
+  gradeOptions = [],
+  employeeTypeOptions = [],
   employeeStatusOptions = [],
+  leaveTypes = [],
 }) => {
-  const alloc = formData.allocation || {};
+  const alloc = formData?.allocation || {};
 
   const updateAlloc = (key: string, value: any) => {
     setFormData((prev: any) => ({
       ...prev,
       allocation: {
-        ...prev.allocation,
+        ...(prev?.allocation || {}),
         [key]: value,
       },
     }));
@@ -94,191 +95,28 @@ export const LeaveAllocationTab: React.FC<LeaveAllocationTabProps> = ({
   };
 
   return (
-    <div className="space-y-5 text-slate-800 dark:text-slate-100">
-      {/* 0. Basic Leave Category Meta Information */}
-      <Card className="border border-slate-200/90 dark:border-slate-800 shadow-2xs rounded-xl bg-white dark:bg-slate-950">
-        <CardHeader className="bg-slate-50/60 dark:bg-slate-900/40 border-b border-slate-100 dark:border-slate-800/80 pb-3">
-          <div className="flex items-center gap-2">
-            <div className="p-1.5 rounded-lg bg-blue-600 text-white shadow-2xs">
-              <FileText className="w-3.5 h-3.5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-1.5">
-                <CardTitle className="text-xs font-bold text-slate-900 dark:text-white">
-                  Basic Leave Details
-                </CardTitle>
-                <HelpHint
-                  title="Basic Leave Details"
-                  titleHi="लीव की बुनियादी जानकारी"
-                  description="Set the leave category title, unique code identifier, and paid status."
-                  descriptionHi="इस लीव का नाम, कोड, वर्गीकरण और पेड/अनपेड प्रकार तय करें।"
-                />
-              </div>
-              <CardDescription className="text-[11px] text-slate-500">
-                Define category name, short code, and salary paid type.
-              </CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="p-4 space-y-3.5">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
-            <div>
-              <Label className="text-[11px] font-extrabold text-slate-800 dark:text-slate-200">
-                Leave Name *
-              </Label>
-              <Input
-                type="text"
-                value={formData.leave_name || ''}
-                onChange={(e) => setFormData((prev: any) => ({ ...prev, leave_name: e.target.value }))}
-                placeholder="e.g. Sick Leave, Casual Leave"
-                className="h-8 mt-1 text-xs font-semibold"
-                required
-              />
-            </div>
-
-            <div>
-              <Label className="text-[11px] font-extrabold text-slate-800 dark:text-slate-200">
-                Leave Code *
-              </Label>
-              <Input
-                type="text"
-                value={formData.leave_code || ''}
-                onChange={(e) => setFormData((prev: any) => ({ ...prev, leave_code: e.target.value.toUpperCase() }))}
-                placeholder="e.g. SL, CL"
-                className="h-8 mt-1 text-xs uppercase font-bold"
-                required
-              />
-            </div>
-
-            <div>
-              <Label className="text-[11px] font-extrabold text-indigo-600 dark:text-indigo-400 flex items-center justify-between">
-                <span>Annual Leave Count (Days) *</span>
-                <span className="text-[9px] font-normal text-slate-400">Total yearly quota</span>
-              </Label>
-              <Input
-                type="number"
-                min="0"
-                max="365"
-                value={formData.annual_quota ? formData.annual_quota : ''}
-                onChange={(e) => {
-                  const val = e.target.value === '' ? '' : (parseFloat(e.target.value) || 0);
-                  setFormData((prev: any) => ({
-                    ...prev,
-                    annual_quota: val,
-                    allocation: {
-                      ...prev.allocation,
-                      entitlementDays: val
-                    }
-                  }));
-                }}
-                placeholder="e.g. 10"
-                className="h-8 mt-1 text-xs font-extrabold text-indigo-600 dark:text-indigo-400 bg-indigo-50/40 dark:bg-indigo-950/40 border-indigo-200 dark:border-indigo-800"
-                required
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 pt-0.5">
-            <div>
-              <div className="flex items-center gap-1">
-                <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
-                  Leave Classification
-                </Label>
-                <HelpHint
-                  title="Leave Classification"
-                  titleHi="लीव का वर्गीकरण"
-                  description="Defines whether the leave quota recurs on an annual calendar cycle or for special life events."
-                  descriptionHi="तय करें कि छुट्टी सालाना कैलेंडर चक्र पर मिलती है या विशेष घटनाओं (शादी/मातृत्व) के लिए।"
-                  effect="Calendar Leave resets every financial year. Non-Calendar Leave triggers on specific events."
-                  effectHi="कैलेंडर लीव हर साल 1 अप्रैल को रीसेट होती है, जबकि नॉन-कैलेंडर लीव विशेष इवेंट पर मिलती है।"
-                  example="Annual Leave = Calendar, Maternity Leave = Non-Calendar."
-                />
-              </div>
-              <select
-                value={formData.leave_classification || 'calendar'}
-                onChange={(e: any) => setFormData((prev: any) => ({ ...prev, leave_classification: e.target.value }))}
-                className="w-full h-8 mt-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-2.5 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              >
-                <option value="calendar">Calendar Leave (Annual cycle)</option>
-                <option value="non-calendar">Non-Calendar Leave (Special event)</option>
-                <option value="uncategorized">Uncategorized (LWP / Custom)</option>
-              </select>
-            </div>
-
-            <div>
-              <div className="flex items-center gap-1">
-                <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
-                  Paid / Unpaid Type
-                </Label>
-                <HelpHint
-                  title="Paid vs Unpaid Classification"
-                  titleHi="पेड बनाम अनपेड लीव"
-                  description="Determines whether payroll calculates full daily salary or deducts wages when taken."
-                  descriptionHi="तय करें कि छुट्टी लेने पर पूरा वेतन मिलेगा या सैलरी से कटौैती होगी।"
-                  effect="Paid Leave = Full compensation. Unpaid LWP = Daily wage automatically deducted in payroll."
-                  effectHi="पेड लीव में पूरा वेतन मिलता है, अनपेड लीव (LWP) में सैलरी स्लिप से दिन का वेतन कटता है।"
-                  example="Casual Leave = Paid, Leave Without Pay = Unpaid."
-                />
-              </div>
-              <select
-                value={formData.paid_type || 'paid'}
-                onChange={(e: any) => setFormData((prev: any) => ({ ...prev, paid_type: e.target.value }))}
-                className="w-full h-8 mt-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-2.5 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              >
-                <option value="paid">Paid Leave (Full salary paid)</option>
-                <option value="unpaid">Unpaid Leave / LWP (Salary deducted)</option>
-                <option value="half_paid">Half-Paid Leave (50% salary)</option>
-              </select>
-            </div>
-
-            <div>
-              <div className="flex items-center gap-1">
-                <Label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
-                  Policy Status
-                </Label>
-                <HelpHint
-                  title="Policy Status"
-                  titleHi="नीति की स्थिति"
-                  description="Controls whether this leave policy is active and available for employees to select."
-                  descriptionHi="तय करें कि यह लीव पॉलिसी सक्रिय है या कर्मचारियों के लिए बंद है।"
-                  effect="Active = Visible in employee dropdowns & balance cards. Inactive = Hidden from employees."
-                  effectHi="Active होने पर कर्मचारी अप्लाई कर सकेंगे, Inactive होने पर लीव ड्रॉपडाउन से हट जाएगी।"
-                />
-              </div>
-              <select
-                value={formData.status || 'active'}
-                onChange={(e: any) => setFormData((prev: any) => ({ ...prev, status: e.target.value }))}
-                className="w-full h-8 mt-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-2.5 text-xs font-semibold text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              >
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-              </select>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
+    <div className="space-y-5 text-foreground dark:text-slate-100">
       {/* 1. Days worked to leave earned */}
-      <Card className="border border-slate-200/90 dark:border-slate-800 shadow-2xs rounded-xl bg-white dark:bg-slate-950">
-        <CardHeader className="bg-slate-50/60 dark:bg-slate-900/40 border-b border-slate-100 dark:border-slate-800/80 pb-3">
+      <Card className="border border-border/60/90 dark:border-slate-800 shadow-2xs rounded-xl bg-background dark:bg-slate-950">
+        <CardHeader className="bg-muted/30/60 dark:bg-slate-900/40 border-b border-slate-100 dark:border-slate-800/80 pb-3">
           <div className="flex items-center gap-1.5">
-            <CardTitle className="text-xs font-bold text-slate-900 dark:text-white">
+            <CardTitle className="text-xs font-bold text-foreground dark:text-white">
               Days worked to leave earned
             </CardTitle>
-            <Info className="w-3.5 h-3.5 text-slate-400" />
+            <Info className="w-3.5 h-3.5 text-muted-foreground/70" />
           </div>
-          <CardDescription className="text-[11px] text-slate-500">
+          <CardDescription className="text-[11px] text-muted-foreground">
             How time on the clock turns into leave.
           </CardDescription>
         </CardHeader>
-        <CardContent className="p-4 space-y-4 text-xs text-slate-700 dark:text-slate-300">
+        <CardContent className="p-4 space-y-4 text-xs text-foreground dark:text-slate-300">
           {/* Row 1: Frequency */}
           <div className="flex flex-wrap items-center gap-2">
             <span>Work out what was earned</span>
             <select
               value={alloc.entitlementPeriodicity || 'Monthly'}
               onChange={(e) => updateAlloc('entitlementPeriodicity', e.target.value)}
-              className="h-8 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-2.5 text-xs font-semibold text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="h-8 rounded-lg border border-border/60 dark:border-slate-700 bg-muted/30 dark:bg-slate-900 px-2.5 text-xs font-semibold text-foreground dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
             >
               <option value="Monthly">how often...</option>
               <option value="Monthly">Monthly</option>
@@ -304,7 +142,7 @@ export const LeaveAllocationTab: React.FC<LeaveAllocationTabProps> = ({
             <select
               value={alloc.accrualBasis || 'ratio'}
               onChange={(e) => updateAlloc('accrualBasis', e.target.value)}
-              className="h-8 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-2.5 text-xs font-semibold text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="h-8 rounded-lg border border-border/60 dark:border-slate-700 bg-muted/30 dark:bg-slate-900 px-2.5 text-xs font-semibold text-foreground dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
             >
               <option value="ratio">a fixed ratio of days worked</option>
               <option value="fixed">annual fixed quota periodicity</option>
@@ -313,7 +151,7 @@ export const LeaveAllocationTab: React.FC<LeaveAllocationTabProps> = ({
             <select
               value={alloc.countedAs || 'working_days'}
               onChange={(e) => updateAlloc('countedAs', e.target.value)}
-              className="h-8 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-2.5 text-xs font-semibold text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="h-8 rounded-lg border border-border/60 dark:border-slate-700 bg-muted/30 dark:bg-slate-900 px-2.5 text-xs font-semibold text-foreground dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
             >
               <option value="working_days">working days</option>
               <option value="calendar_days">calendar days</option>
@@ -331,7 +169,7 @@ export const LeaveAllocationTab: React.FC<LeaveAllocationTabProps> = ({
 
           {/* Row 3: Ratio / Entitlement inputs */}
           {alloc.accrualBasis !== 'fixed' ? (
-            <div className="flex flex-wrap items-center gap-2 bg-slate-50/70 dark:bg-slate-900/40 p-2.5 rounded-lg border border-slate-200/60 dark:border-slate-800">
+            <div className="flex flex-wrap items-center gap-2 bg-muted/30/70 dark:bg-slate-900/40 p-2.5 rounded-lg border border-border/60/60 dark:border-slate-800">
               <span>Earn</span>
               <Input
                 type="number"
@@ -362,7 +200,7 @@ export const LeaveAllocationTab: React.FC<LeaveAllocationTabProps> = ({
               />
             </div>
           ) : (
-            <div className="flex flex-wrap items-center gap-2 bg-slate-50/70 dark:bg-slate-900/40 p-2.5 rounded-lg border border-slate-200/60 dark:border-slate-800">
+            <div className="flex flex-wrap items-center gap-2 bg-muted/30/70 dark:bg-slate-900/40 p-2.5 rounded-lg border border-border/60/60 dark:border-slate-800">
               <span>Grant</span>
               <Input
                 type="number"
@@ -387,13 +225,13 @@ export const LeaveAllocationTab: React.FC<LeaveAllocationTabProps> = ({
                 updateAlloc('whenEmployeeLeaves', e.target.value);
                 updateAlloc('considerAllocationTillResignedDate', e.target.value === 'resignation_date');
               }}
-              className="h-8 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-2.5 text-xs font-semibold text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="h-8 rounded-lg border border-border/60 dark:border-slate-700 bg-muted/30 dark:bg-slate-900 px-2.5 text-xs font-semibold text-foreground dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
             >
               <option value="none">choose a date...</option>
               <option value="resignation_date">resignation date</option>
               <option value="last_working_day">last working day</option>
             </select>
-            <span className="text-slate-400">— select none and an exit changes nothing</span>
+            <span className="text-muted-foreground/70">— select none and an exit changes nothing</span>
 
             <HelpHint
               title="Resignation Date Allocation Cutoff"
@@ -407,16 +245,16 @@ export const LeaveAllocationTab: React.FC<LeaveAllocationTabProps> = ({
 
           {/* Row 5: Cap balance on resignation */}
           <div className="space-y-1.5 pt-1">
-            <label className="flex items-center gap-2 text-xs font-semibold text-slate-800 dark:text-slate-200 cursor-pointer">
+            <label className="flex items-center gap-2 text-xs font-semibold text-foreground dark:text-slate-200 cursor-pointer">
               <Checkbox
                 checked={!!alloc.capOnResignation}
                 onCheckedChange={(c) => updateAlloc('capOnResignation', !!c)}
               />
               <span>Cap the balance when an employee resigns</span>
-              <Info className="w-3.5 h-3.5 text-slate-400" />
+              <Info className="w-3.5 h-3.5 text-muted-foreground/70" />
             </label>
             {alloc.capOnResignation && (
-              <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600 dark:text-slate-400 pl-6">
+              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground dark:text-muted-foreground/70 pl-6">
                 <span>On resignation, keep at most</span>
                 <Input
                   type="number"
@@ -427,7 +265,7 @@ export const LeaveAllocationTab: React.FC<LeaveAllocationTabProps> = ({
                 <select
                   value={alloc.resignationCapUnit || 'days'}
                   onChange={(e) => updateAlloc('resignationCapUnit', e.target.value)}
-                  className="h-7 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-2 text-xs font-medium"
+                  className="h-7 rounded-md border border-border/60 dark:border-slate-700 bg-muted/30 dark:bg-slate-900 px-2 text-xs font-medium"
                 >
                   <option value="days">days</option>
                   <option value="hours">hours</option>
@@ -439,32 +277,32 @@ export const LeaveAllocationTab: React.FC<LeaveAllocationTabProps> = ({
 
           {/* Row 6: Show expired leaves on dashboard */}
           <div className="pt-1">
-            <label className="flex items-center gap-2 text-xs font-semibold text-slate-800 dark:text-slate-200 cursor-pointer">
+            <label className="flex items-center gap-2 text-xs font-semibold text-foreground dark:text-slate-200 cursor-pointer">
               <Checkbox
                 checked={alloc.showExpiredLeavesOnDashboard !== false}
                 onCheckedChange={(c) => updateAlloc('showExpiredLeavesOnDashboard', !!c)}
               />
               <span>Show expired leaves on dashboard</span>
-              <Info className="w-3.5 h-3.5 text-slate-400" />
+              <Info className="w-3.5 h-3.5 text-muted-foreground/70" />
             </label>
           </div>
         </CardContent>
       </Card>
 
       {/* 2. Opening and maximum balance */}
-      <Card className="border border-slate-200/90 dark:border-slate-800 shadow-2xs rounded-xl bg-white dark:bg-slate-950">
-        <CardHeader className="bg-slate-50/60 dark:bg-slate-900/40 border-b border-slate-100 dark:border-slate-800/80 pb-3">
+      <Card className="border border-border/60/90 dark:border-slate-800 shadow-2xs rounded-xl bg-background dark:bg-slate-950">
+        <CardHeader className="bg-muted/30/60 dark:bg-slate-900/40 border-b border-slate-100 dark:border-slate-800/80 pb-3">
           <div className="flex items-center gap-1.5">
-            <CardTitle className="text-xs font-bold text-slate-900 dark:text-white">
+            <CardTitle className="text-xs font-bold text-foreground dark:text-white">
               Opening and maximum balance
             </CardTitle>
-            <Info className="w-3.5 h-3.5 text-slate-400" />
+            <Info className="w-3.5 h-3.5 text-muted-foreground/70" />
           </div>
-          <CardDescription className="text-[11px] text-slate-500">
+          <CardDescription className="text-[11px] text-muted-foreground">
             What an employee starts with, and how much they may hold at once.
           </CardDescription>
         </CardHeader>
-        <CardContent className="p-4 text-xs text-slate-700 dark:text-slate-300">
+        <CardContent className="p-4 text-xs text-foreground dark:text-slate-300">
           <div className="flex flex-wrap items-center gap-2">
             <span>Start an employee with</span>
             <Input
@@ -493,8 +331,8 @@ export const LeaveAllocationTab: React.FC<LeaveAllocationTabProps> = ({
       </Card>
 
       {/* 3. Round off */}
-      <Card className="border border-slate-200/90 dark:border-slate-800 shadow-2xs rounded-xl bg-white dark:bg-slate-950">
-        <CardHeader className="bg-slate-50/60 dark:bg-slate-900/40 border-b border-slate-100 dark:border-slate-800/80 pb-3">
+      <Card className="border border-border/60/90 dark:border-slate-800 shadow-2xs rounded-xl bg-background dark:bg-slate-950">
+        <CardHeader className="bg-muted/30/60 dark:bg-slate-900/40 border-b border-slate-100 dark:border-slate-800/80 pb-3">
           <label className="flex items-center gap-2 cursor-pointer">
             <Checkbox
               checked={alloc.roundOffType ? alloc.roundOffType !== 'none' : !!alloc.leaveRoundOff}
@@ -505,24 +343,24 @@ export const LeaveAllocationTab: React.FC<LeaveAllocationTabProps> = ({
               }}
             />
             <div className="flex items-center gap-1.5">
-              <CardTitle className="text-xs font-bold text-slate-900 dark:text-white">
+              <CardTitle className="text-xs font-bold text-foreground dark:text-white">
                 Round off
               </CardTitle>
-              <Info className="w-3.5 h-3.5 text-slate-400" />
+              <Info className="w-3.5 h-3.5 text-muted-foreground/70" />
             </div>
           </label>
-          <CardDescription className="text-[11px] text-slate-500 pl-6">
+          <CardDescription className="text-[11px] text-muted-foreground pl-6">
             What happens when a calculation produces a fraction.
           </CardDescription>
         </CardHeader>
         {(alloc.roundOffType ? alloc.roundOffType !== 'none' : !!alloc.leaveRoundOff) && (
-          <CardContent className="p-4 text-xs text-slate-700 dark:text-slate-300">
+          <CardContent className="p-4 text-xs text-foreground dark:text-slate-300">
             <div className="flex flex-wrap items-center gap-2">
               <span>Settle a fraction to the</span>
               <select
                 value={alloc.roundOffType || 'nearest'}
                 onChange={(e) => updateAlloc('roundOffType', e.target.value)}
-                className="h-8 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-2.5 text-xs font-semibold text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="h-8 rounded-lg border border-border/60 dark:border-slate-700 bg-muted/30 dark:bg-slate-900 px-2.5 text-xs font-semibold text-foreground dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
               >
                 <option value="nearest">nearest</option>
                 <option value="ceil">round up (ceil)</option>
@@ -531,7 +369,7 @@ export const LeaveAllocationTab: React.FC<LeaveAllocationTabProps> = ({
               <select
                 value={alloc.roundOffUnit || 'day'}
                 onChange={(e) => updateAlloc('roundOffUnit', e.target.value)}
-                className="h-8 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-2.5 text-xs font-semibold text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="h-8 rounded-lg border border-border/60 dark:border-slate-700 bg-muted/30 dark:bg-slate-900 px-2.5 text-xs font-semibold text-foreground dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
               >
                 <option value="day">day</option>
                 <option value="half_day">half day</option>
@@ -542,32 +380,32 @@ export const LeaveAllocationTab: React.FC<LeaveAllocationTabProps> = ({
       </Card>
 
       {/* 4. Credited leave expires */}
-      <Card className="border border-slate-200/90 dark:border-slate-800 shadow-2xs rounded-xl bg-white dark:bg-slate-950">
-        <CardHeader className="bg-slate-50/60 dark:bg-slate-900/40 border-b border-slate-100 dark:border-slate-800/80 pb-3">
+      <Card className="border border-border/60/90 dark:border-slate-800 shadow-2xs rounded-xl bg-background dark:bg-slate-950">
+        <CardHeader className="bg-muted/30/60 dark:bg-slate-900/40 border-b border-slate-100 dark:border-slate-800/80 pb-3">
           <label className="flex items-center gap-2 cursor-pointer">
             <Checkbox
               checked={!!alloc.creditedLeaveExpires}
               onCheckedChange={(c) => updateAlloc('creditedLeaveExpires', !!c)}
             />
             <div className="flex items-center gap-1.5">
-              <CardTitle className="text-xs font-bold text-slate-900 dark:text-white">
+              <CardTitle className="text-xs font-bold text-foreground dark:text-white">
                 Credited leave expires
               </CardTitle>
-              <Info className="w-3.5 h-3.5 text-slate-400" />
+              <Info className="w-3.5 h-3.5 text-muted-foreground/70" />
             </div>
           </label>
-          <CardDescription className="text-[11px] text-slate-500 pl-6">
+          <CardDescription className="text-[11px] text-muted-foreground pl-6">
             Unused days lapse — after a set time, or when their period ends.
           </CardDescription>
         </CardHeader>
         {alloc.creditedLeaveExpires && (
-          <CardContent className="p-4 space-y-3 text-xs text-slate-700 dark:text-slate-300">
+          <CardContent className="p-4 space-y-3 text-xs text-foreground dark:text-slate-300">
             <div className="flex flex-wrap items-center gap-2">
               <span>Credited leave lapses</span>
               <select
                 value={alloc.expiryMode || 'set_days'}
                 onChange={(e) => updateAlloc('expiryMode', e.target.value)}
-                className="h-8 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-2.5 text-xs font-semibold text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="h-8 rounded-lg border border-border/60 dark:border-slate-700 bg-muted/30 dark:bg-slate-900 px-2.5 text-xs font-semibold text-foreground dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
               >
                 <option value="set_days">a set number of days after it was credited</option>
                 <option value="end_of_financial_year">at the end of financial year</option>
@@ -587,7 +425,7 @@ export const LeaveAllocationTab: React.FC<LeaveAllocationTabProps> = ({
               <select
                 value={alloc.expiryTriggerDate || 'credited'}
                 onChange={(e) => updateAlloc('expiryTriggerDate', e.target.value)}
-                className="h-8 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-2.5 text-xs font-semibold text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="h-8 rounded-lg border border-border/60 dark:border-slate-700 bg-muted/30 dark:bg-slate-900 px-2.5 text-xs font-semibold text-foreground dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
               >
                 <option value="credited">which date...</option>
                 <option value="credited">credited date</option>
@@ -614,36 +452,36 @@ export const LeaveAllocationTab: React.FC<LeaveAllocationTabProps> = ({
       <LeaveScopeCards
         title="Applies to"
         description="Leave this empty and this accrual applies to every employee."
-        scopeData={formData.employment_allocation || {}}
+        scopeData={formData?.employment_allocation || {}}
         onUpdateScope={(key, values) => {
           setFormData((prev: any) => ({
             ...prev,
             employment_allocation: {
-              ...prev.employment_allocation,
+              ...(prev?.employment_allocation || {}),
               [key]: values,
             },
           }));
         }}
-        companies={companies}
-        locations={locations}
-        departments={departments}
-        subDepartments={subDepartments}
-        designations={designations}
-        grades={gradeOptions}
-        employeeTypes={employeeTypeOptions}
-        employeeStatuses={employeeStatusOptions}
+        companies={companies || []}
+        locations={locations || []}
+        departments={departments || []}
+        subDepartments={subDepartments || []}
+        designations={designations || []}
+        grades={gradeOptions || []}
+        employeeTypes={employeeTypeOptions || []}
+        employeeStatuses={employeeStatusOptions || []}
       />
 
       {/* 6. Only when (Advanced Allocation Conditions) */}
-      <Card className="border border-slate-200/90 dark:border-slate-800 shadow-2xs rounded-xl bg-white dark:bg-slate-950">
-        <CardHeader className="bg-slate-50/60 dark:bg-slate-900/40 border-b border-slate-100 dark:border-slate-800/80 pb-3">
+      <Card className="border border-border/60/90 dark:border-slate-800 shadow-2xs rounded-xl bg-background dark:bg-slate-950">
+        <CardHeader className="bg-muted/30/60 dark:bg-slate-900/40 border-b border-slate-100 dark:border-slate-800/80 pb-3">
           <div className="flex items-center gap-1.5">
-            <GitBranch className="w-3.5 h-3.5 text-slate-500" />
-            <CardTitle className="text-xs font-bold text-slate-900 dark:text-white">
+            <GitBranch className="w-3.5 h-3.5 text-muted-foreground" />
+            <CardTitle className="text-xs font-bold text-foreground dark:text-white">
               Only when
             </CardTitle>
           </div>
-          <CardDescription className="text-[11px] text-slate-500">
+          <CardDescription className="text-[11px] text-muted-foreground">
             Leave this empty and this accrual always applies.
           </CardDescription>
         </CardHeader>
@@ -651,9 +489,9 @@ export const LeaveAllocationTab: React.FC<LeaveAllocationTabProps> = ({
           <RuleConditionBuilder
             value={alloc.onlyWhen || alloc.only_when}
             onChange={(newGroup) => updateAlloc('onlyWhen', newGroup)}
-            departments={departments}
-            locations={locations}
-            grades={gradeOptions.map((g, i) => ({ id: i + 1, name: g }))}
+            departments={departments || []}
+            locations={locations || []}
+            grades={(gradeOptions || []).map((g, i) => ({ id: i + 1, name: g }))}
           />
         </CardContent>
       </Card>

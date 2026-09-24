@@ -9,6 +9,7 @@ import { useAttendanceStore } from './features/attendance/store/attendanceStore'
 import { BreakOverlay } from './features/attendance/components/BreakOverlay';
 import { useBreakSync } from './features/attendance/hooks/useBreakSync';
 import { LoadingScreen } from './components/LoadingScreen';
+import { ConfirmationDialog } from './components/ConfirmationDialog';
 
 // ── Global Error Boundary ──────────────────────────────────────────────────
 // Catches any unhandled React render errors and shows a readable message
@@ -330,11 +331,20 @@ export default function App() {
     <AppErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <BrowserRouter>
+<<<<<<< HEAD
           <AuthInitializer>
             <BreakOverlayProvider>
               <AppRoutes />
             </BreakOverlayProvider>
           </AuthInitializer>
+=======
+          {/* <ThemeProvider> */}
+          <BreakOverlayProvider>
+            <AppRoutes />
+            <ConfirmationDialog />
+          </BreakOverlayProvider>
+          {/* </ThemeProvider> */}
+>>>>>>> b13431884f6e3fb77d4463ab4da204cadac8faca
         </BrowserRouter>
       </QueryClientProvider>
     </AppErrorBoundary>

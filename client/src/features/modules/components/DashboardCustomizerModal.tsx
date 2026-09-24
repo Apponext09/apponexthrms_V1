@@ -4,6 +4,7 @@ import {
   ALL_AVAILABLE_KPIS,
   ALL_AVAILABLE_REPORTS,
   ALL_AVAILABLE_QUICK_ACTIONS,
+  FIXED_KPIS,
 } from '@/features/dashboard/store/dashboardCustomizationStore';
 import {
   Dialog,
@@ -31,7 +32,7 @@ import {
   FileBarChart,
   Coffee,
   Navigation,
-  DollarSign,
+  IndianRupee,
   Flame,
   CreditCard,
   FilePlus,
@@ -42,6 +43,7 @@ import {
   Sliders,
   Check,
   Layers,
+  Lock,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -62,12 +64,13 @@ const ICON_COMPONENTS: Record<string, any> = {
   FileBarChart,
   Coffee,
   Navigation,
-  DollarSign,
+  IndianRupee,
   Flame,
   CreditCard,
   FilePlus,
   CheckCircle,
   Settings,
+  Lock,
 };
 
 interface DashboardCustomizerModalProps {
@@ -97,8 +100,8 @@ export function DashboardCustomizerModal({ open, onOpenChange }: DashboardCustom
     onOpenChange(false);
   };
 
-  const handleReset = () => {
-    if (confirm('Reset all dashboard customizations back to factory defaults?')) {
+  const handleReset = async () => {
+    if (await window.appConfirm('Reset all dashboard customizations back to factory defaults?')) {
       resetToDefaults();
       toast.info('Reset dashboard configuration to defaults');
     }
@@ -299,60 +302,100 @@ export function DashboardCustomizerModal({ open, onOpenChange }: DashboardCustom
 
           {/* ─── TAB 2: KPIS STUDIO ─── */}
           {activeTab === 'kpis' && (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h4 className="text-xs font-bold text-foreground">Available KPI Metrics</h4>
-                  <p className="text-[11px] text-muted-foreground">
-                    Select which KPI cards appear in the top dashboard statistics grid:
-                  </p>
+            <div className="space-y-5">
+
+              {/* ── Pinned / Fixed KPIs ──────────────────────────────────────── */}
+              <div>
+                <div className="flex items-center gap-2 mb-2.5">
+                  <Lock className="w-3.5 h-3.5 text-muted-foreground" />
+                  <h4 className="text-xs font-bold text-foreground">Pinned KPIs</h4>
+                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0 ml-auto">Always On</Badge>
                 </div>
-                <Badge variant="outline" className="text-xs font-bold bg-primary/10 text-primary border-primary/20">
-                  {config.enabledKpiIds.length} Selected
-                </Badge>
+                <p className="text-[11px] text-muted-foreground mb-3">
+                  These 4 core metrics are permanently displayed and cannot be removed:
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {FIXED_KPIS.map((kpi) => {
+                    const IconComp = ICON_COMPONENTS[kpi.iconName] || Layers;
+                    return (
+                      <div
+                        key={kpi.id}
+                        className="p-3 rounded-xl border border-border/60 bg-muted/30 flex items-center justify-between gap-3 opacity-80 cursor-not-allowed"
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="p-2 rounded-lg shrink-0 bg-primary/10 text-primary">
+                            <IconComp className="w-4 h-4" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-bold text-xs text-foreground truncate">{kpi.label}</p>
+                            <span className="text-[10px] text-muted-foreground uppercase font-semibold">Core</span>
+                          </div>
+                        </div>
+                        <div className="shrink-0 flex items-center gap-1.5">
+                          <Lock className="w-3 h-3 text-muted-foreground" />
+                          <span className="text-[10px] font-bold text-muted-foreground">Pinned</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                {ALL_AVAILABLE_KPIS.map((kpi) => {
-                  const isEnabled = config.enabledKpiIds.includes(kpi.id);
+              {/* ── Optional / Toggleable KPIs ───────────────────────────────── */}
+              <div>
+                <div className="flex items-center justify-between mb-2.5">
+                  <div>
+                    <h4 className="text-xs font-bold text-foreground">Optional KPI Metrics</h4>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                      Enable additional metrics to appear on the dashboard:
+                    </p>
+                  </div>
+                  <Badge variant="outline" className="text-xs font-bold bg-primary/10 text-primary border-primary/20">
+                    {config.enabledKpiIds.length} Active
+                  </Badge>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {ALL_AVAILABLE_KPIS.map((kpi) => {
+                    const isEnabled = config.enabledKpiIds.includes(kpi.id);
 
-                  return (
-                    <div
-                      key={kpi.id}
-                      onClick={() => toggleKpi(kpi.id)}
-                      className={cn(
-                        'p-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-3',
-                        isEnabled
-                          ? 'border-primary bg-primary/5 shadow-2xs ring-1 ring-primary/40'
-                          : 'border-border/80 bg-card hover:bg-muted/40'
-                      )}
-                    >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <div
-                          className={cn(
-                            'p-2 rounded-lg shrink-0',
-                            isEnabled ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
-                          )}
-                        >
-                          {getIcon(kpi.iconName)}
+                    return (
+                      <div
+                        key={kpi.id}
+                        onClick={() => toggleKpi(kpi.id)}
+                        className={cn(
+                          'p-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-3',
+                          isEnabled
+                            ? 'border-primary bg-primary/5 shadow-2xs ring-1 ring-primary/40'
+                            : 'border-border/80 bg-card hover:bg-muted/40'
+                        )}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div
+                            className={cn(
+                              'p-2 rounded-lg shrink-0',
+                              isEnabled ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
+                            )}
+                          >
+                            {getIcon(kpi.iconName)}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-bold text-xs text-foreground truncate">{kpi.label}</p>
+                            <span className="text-[10px] text-muted-foreground uppercase font-semibold">
+                              {kpi.category}
+                            </span>
+                          </div>
                         </div>
-                        <div className="min-w-0">
-                          <p className="font-bold text-xs text-foreground truncate">{kpi.label}</p>
-                          <span className="text-[10px] text-muted-foreground uppercase font-semibold">
-                            {kpi.category}
-                          </span>
+
+                        <div className="shrink-0">
+                          <Switch
+                            checked={isEnabled}
+                            onCheckedChange={() => toggleKpi(kpi.id)}
+                          />
                         </div>
                       </div>
-
-                      <div className="shrink-0">
-                        <Switch
-                          checked={isEnabled}
-                          onCheckedChange={() => toggleKpi(kpi.id)}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
             </div>
           )}

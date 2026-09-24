@@ -263,10 +263,10 @@ export function TipTapRichTextEditor({
   };
 
   // Helper to add hyperlink
-  const handleAddLink = () => {
+  const handleAddLink = async () => {
     if (!editor) return;
     const previousUrl = editor.getAttributes('link').href;
-    const url = window.prompt('Enter Link URL:', previousUrl || 'https://');
+    const url = await window.appPrompt('Enter Link URL:', previousUrl || 'https://');
     if (url === null) return;
     if (url === '') {
       editor.chain().focus().extendMarkRange('link').unsetLink().run();
@@ -299,10 +299,10 @@ export function TipTapRichTextEditor({
   }
 
   return (
-    <div className="relative border border-slate-300 rounded bg-white shadow-sm font-sans">
+    <div className="relative border border-slate-200 dark:border-slate-750 rounded-lg bg-white dark:bg-slate-900 shadow-xs font-sans overflow-hidden">
       
       {/* ─── Styled Rich Text Editor Toolbar ───────────────────────────────── */}
-      <div className="flex flex-wrap items-center gap-0.5 p-1 bg-[#f4f4f4] border-b border-slate-300 text-slate-700 text-xs select-none">
+      <div className="flex flex-wrap items-center gap-0.5 p-1.5 bg-slate-100 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 text-slate-750 dark:text-slate-200 text-xs select-none">
         
         {/* Bold */}
         <button
@@ -311,8 +311,8 @@ export function TipTapRichTextEditor({
           disabled={disabled}
           title="Bold"
           className={cn(
-            'p-1 px-2 rounded hover:bg-slate-200 transition-colors cursor-pointer font-extrabold text-slate-800 text-sm select-none',
-            editor.isActive('bold') ? 'bg-slate-300' : ''
+            'p-1 px-2 rounded hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer font-extrabold text-slate-800 dark:text-slate-100 text-sm select-none',
+            editor.isActive('bold') ? 'bg-slate-300 dark:bg-slate-600 text-blue-600 dark:text-blue-400 font-bold' : ''
           )}
         >
           B
@@ -325,8 +325,8 @@ export function TipTapRichTextEditor({
           disabled={disabled}
           title="Italic"
           className={cn(
-            'p-1 px-2 rounded hover:bg-slate-200 transition-colors cursor-pointer italic font-serif text-slate-850 text-sm select-none',
-            editor.isActive('italic') ? 'bg-slate-300' : ''
+            'p-1 px-2 rounded hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer italic font-serif text-slate-800 dark:text-slate-100 text-sm select-none',
+            editor.isActive('italic') ? 'bg-slate-300 dark:bg-slate-600 text-blue-600 dark:text-blue-400 font-bold' : ''
           )}
         >
           I
@@ -339,8 +339,8 @@ export function TipTapRichTextEditor({
           disabled={disabled}
           title="Underline"
           className={cn(
-            'p-1 px-1.5 rounded hover:bg-slate-200 transition-colors cursor-pointer underline text-slate-800 text-sm select-none',
-            editor.isActive('underline') ? 'bg-slate-300' : ''
+            'p-1 px-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer underline text-slate-800 dark:text-slate-100 text-sm select-none',
+            editor.isActive('underline') ? 'bg-slate-300 dark:bg-slate-600 text-blue-600 dark:text-blue-400 font-bold' : ''
           )}
         >
           U
@@ -353,14 +353,14 @@ export function TipTapRichTextEditor({
           disabled={disabled}
           title="Strikethrough"
           className={cn(
-            'p-1 px-1.5 rounded hover:bg-slate-200 transition-colors cursor-pointer line-through text-slate-800 text-sm select-none',
-            editor.isActive('strike') ? 'bg-slate-300' : ''
+            'p-1 px-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer line-through text-slate-800 dark:text-slate-100 text-sm select-none',
+            editor.isActive('strike') ? 'bg-slate-300 dark:bg-slate-600 text-blue-600 dark:text-blue-400 font-bold' : ''
           )}
         >
           S
         </button>
 
-        <div className="h-5 w-[1px] bg-slate-300 mx-1.5" />
+        <div className="h-5 w-[1px] bg-slate-300 dark:bg-slate-650 mx-1" />
 
         {/* Align Left */}
         <button
@@ -369,11 +369,11 @@ export function TipTapRichTextEditor({
           disabled={disabled}
           title="Align Left"
           className={cn(
-            'p-1 rounded hover:bg-slate-200 transition-colors cursor-pointer',
-            editor.isActive({ textAlign: 'left' }) ? 'bg-slate-300' : ''
+            'p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer text-slate-700 dark:text-slate-200',
+            editor.isActive({ textAlign: 'left' }) ? 'bg-slate-300 dark:bg-slate-600 text-blue-600 dark:text-blue-400' : ''
           )}
         >
-          <AlignLeft className="h-3.5 w-3.5 text-slate-700" />
+          <AlignLeft className="h-3.5 w-3.5" />
         </button>
 
         {/* Align Center */}
@@ -383,11 +383,11 @@ export function TipTapRichTextEditor({
           disabled={disabled}
           title="Align Center"
           className={cn(
-            'p-1 rounded hover:bg-slate-200 transition-colors cursor-pointer',
-            editor.isActive({ textAlign: 'center' }) ? 'bg-slate-300' : ''
+            'p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer text-slate-700 dark:text-slate-200',
+            editor.isActive({ textAlign: 'center' }) ? 'bg-slate-300 dark:bg-slate-600 text-blue-600 dark:text-blue-400' : ''
           )}
         >
-          <AlignCenter className="h-3.5 w-3.5 text-slate-700" />
+          <AlignCenter className="h-3.5 w-3.5" />
         </button>
 
         {/* Align Right */}
@@ -397,11 +397,11 @@ export function TipTapRichTextEditor({
           disabled={disabled}
           title="Align Right"
           className={cn(
-            'p-1 rounded hover:bg-slate-200 transition-colors cursor-pointer',
-            editor.isActive({ textAlign: 'right' }) ? 'bg-slate-300' : ''
+            'p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer text-slate-700 dark:text-slate-200',
+            editor.isActive({ textAlign: 'right' }) ? 'bg-slate-300 dark:bg-slate-600 text-blue-600 dark:text-blue-400' : ''
           )}
         >
-          <AlignRight className="h-3.5 w-3.5 text-slate-700" />
+          <AlignRight className="h-3.5 w-3.5" />
         </button>
 
         {/* Align Justify */}
@@ -411,14 +411,14 @@ export function TipTapRichTextEditor({
           disabled={disabled}
           title="Align Justify"
           className={cn(
-            'p-1 rounded hover:bg-slate-200 transition-colors cursor-pointer',
-            editor.isActive({ textAlign: 'justify' }) ? 'bg-slate-300' : ''
+            'p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer text-slate-700 dark:text-slate-200',
+            editor.isActive({ textAlign: 'justify' }) ? 'bg-slate-300 dark:bg-slate-600 text-blue-600 dark:text-blue-400' : ''
           )}
         >
-          <AlignJustify className="h-3.5 w-3.5 text-slate-700" />
+          <AlignJustify className="h-3.5 w-3.5" />
         </button>
 
-        <div className="h-5 w-[1px] bg-slate-300 mx-1.5" />
+        <div className="h-5 w-[1px] bg-slate-300 dark:bg-slate-650 mx-1" />
 
         {/* Bullet List */}
         <button
@@ -427,11 +427,11 @@ export function TipTapRichTextEditor({
           disabled={disabled}
           title="Bullet List"
           className={cn(
-            'p-1 rounded hover:bg-slate-200 transition-colors cursor-pointer',
-            editor.isActive('bulletList') ? 'bg-slate-300' : ''
+            'p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer text-slate-700 dark:text-slate-200',
+            editor.isActive('bulletList') ? 'bg-slate-300 dark:bg-slate-600 text-blue-600 dark:text-blue-400' : ''
           )}
         >
-          <List className="h-3.5 w-3.5 text-slate-700" />
+          <List className="h-3.5 w-3.5" />
         </button>
 
         {/* Ordered List */}
@@ -441,14 +441,14 @@ export function TipTapRichTextEditor({
           disabled={disabled}
           title="Numbered List"
           className={cn(
-            'p-1 rounded hover:bg-slate-200 transition-colors cursor-pointer',
-            editor.isActive('orderedList') ? 'bg-slate-300' : ''
+            'p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer text-slate-700 dark:text-slate-200',
+            editor.isActive('orderedList') ? 'bg-slate-300 dark:bg-slate-600 text-blue-600 dark:text-blue-400' : ''
           )}
         >
-          <ListOrdered className="h-3.5 w-3.5 text-slate-700" />
+          <ListOrdered className="h-3.5 w-3.5" />
         </button>
 
-        <div className="h-5 w-[1px] bg-slate-300 mx-1.5" />
+        <div className="h-5 w-[1px] bg-slate-300 dark:bg-slate-650 mx-1" />
 
         {/* Font Size Select */}
         <select
@@ -457,16 +457,16 @@ export function TipTapRichTextEditor({
               editor.chain().focus().setMark('textStyle', { fontSize: e.target.value }).run();
             }
           }}
-          className="bg-white border border-slate-300 rounded px-1 py-0.5 text-xs text-slate-700 focus:outline-none cursor-pointer h-[24px] font-medium"
+          className="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded px-1.5 py-0.5 text-xs text-slate-800 dark:text-slate-200 focus:outline-none cursor-pointer h-[26px] font-medium"
           defaultValue=""
         >
-          <option value="" disabled>Font Size...</option>
-          <option value="12px">12px</option>
-          <option value="14px">14px</option>
-          <option value="16px">16px</option>
-          <option value="18px">18px</option>
-          <option value="20px">20px</option>
-          <option value="24px">24px</option>
+          <option value="" disabled className="bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200">Font Size...</option>
+          <option value="12px" className="bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200">12px</option>
+          <option value="14px" className="bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200">14px</option>
+          <option value="16px" className="bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200">16px</option>
+          <option value="18px" className="bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200">18px</option>
+          <option value="20px" className="bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200">20px</option>
+          <option value="24px" className="bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200">24px</option>
         </select>
 
         {/* Font Family Select */}
@@ -476,16 +476,16 @@ export function TipTapRichTextEditor({
               editor.chain().focus().setFontFamily(e.target.value).run();
             }
           }}
-          className="bg-white border border-slate-300 rounded px-1 py-0.5 text-xs text-slate-700 focus:outline-none cursor-pointer h-[24px] font-medium ml-0.5"
+          className="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded px-1.5 py-0.5 text-xs text-slate-800 dark:text-slate-200 focus:outline-none cursor-pointer h-[26px] font-medium ml-0.5"
           defaultValue=""
         >
-          <option value="" disabled>Font Family...</option>
-          <option value="Arial">Arial</option>
-          <option value="Courier New">Courier</option>
-          <option value="Georgia">Georgia</option>
-          <option value="Times New Roman">Times New Roman</option>
-          <option value="Verdana">Verdana</option>
-          <option value="Inter">Inter</option>
+          <option value="" disabled className="bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200">Font Family...</option>
+          <option value="Arial" className="bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200">Arial</option>
+          <option value="Courier New" className="bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200">Courier</option>
+          <option value="Georgia" className="bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200">Georgia</option>
+          <option value="Times New Roman" className="bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200">Times New Roman</option>
+          <option value="Verdana" className="bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200">Verdana</option>
+          <option value="Inter" className="bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200">Inter</option>
         </select>
 
         {/* Font Format Select */}
@@ -504,16 +504,16 @@ export function TipTapRichTextEditor({
             else if (val === 'h2') editor.chain().focus().toggleHeading({ level: 2 }).run();
             else if (val === 'h3') editor.chain().focus().toggleHeading({ level: 3 }).run();
           }}
-          className="bg-white border border-slate-300 rounded px-1 py-0.5 text-xs text-slate-700 focus:outline-none cursor-pointer h-[24px] font-medium ml-0.5"
+          className="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded px-1.5 py-0.5 text-xs text-slate-800 dark:text-slate-200 focus:outline-none cursor-pointer h-[26px] font-medium ml-0.5"
         >
-          <option value="" disabled>Font Format</option>
-          <option value="p">Paragraph</option>
-          <option value="h1">Heading 1</option>
-          <option value="h2">Heading 2</option>
-          <option value="h3">Heading 3</option>
+          <option value="" disabled className="bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200">Font Format</option>
+          <option value="p" className="bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200">Paragraph</option>
+          <option value="h1" className="bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200">Heading 1</option>
+          <option value="h2" className="bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200">Heading 2</option>
+          <option value="h3" className="bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200">Heading 3</option>
         </select>
 
-        <div className="h-5 w-[1px] bg-slate-300 mx-1.5" />
+        <div className="h-5 w-[1px] bg-slate-300 dark:bg-slate-650 mx-1" />
 
         {/* Subscript x₂ */}
         <button
@@ -522,8 +522,8 @@ export function TipTapRichTextEditor({
           disabled={disabled}
           title="Subscript"
           className={cn(
-            'p-1 px-1.5 rounded hover:bg-slate-200 transition-colors cursor-pointer text-slate-800 text-xs font-bold font-sans select-none',
-            editor.isActive('subscript') ? 'bg-slate-300' : ''
+            'p-1 px-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer text-slate-800 dark:text-slate-200 text-xs font-bold font-sans select-none',
+            editor.isActive('subscript') ? 'bg-slate-300 dark:bg-slate-600 text-blue-600 dark:text-blue-400' : ''
           )}
         >
           x<sub>2</sub>
@@ -536,8 +536,8 @@ export function TipTapRichTextEditor({
           disabled={disabled}
           title="Superscript"
           className={cn(
-            'p-1 px-1.5 rounded hover:bg-slate-200 transition-colors cursor-pointer text-slate-800 text-xs font-bold font-sans select-none',
-            editor.isActive('superscript') ? 'bg-slate-300' : ''
+            'p-1 px-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer text-slate-800 dark:text-slate-200 text-xs font-bold font-sans select-none',
+            editor.isActive('superscript') ? 'bg-slate-300 dark:bg-slate-600 text-blue-600 dark:text-blue-400' : ''
           )}
         >
           x<sup>2</sup>
@@ -550,14 +550,14 @@ export function TipTapRichTextEditor({
           disabled={disabled}
           title="Quote"
           className={cn(
-            'p-1 rounded hover:bg-slate-200 transition-colors cursor-pointer',
-            editor.isActive('blockquote') ? 'bg-slate-300' : ''
+            'p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer text-slate-700 dark:text-slate-200',
+            editor.isActive('blockquote') ? 'bg-slate-300 dark:bg-slate-600 text-blue-600 dark:text-blue-400' : ''
           )}
         >
-          <Quote className="h-3.5 w-3.5 text-slate-700" />
+          <Quote className="h-3.5 w-3.5" />
         </button>
 
-        <div className="h-5 w-[1px] bg-slate-300 mx-1.5" />
+        <div className="h-5 w-[1px] bg-slate-300 dark:bg-slate-650 mx-1" />
 
         {/* Link */}
         <button
@@ -566,16 +566,16 @@ export function TipTapRichTextEditor({
           disabled={disabled}
           title="Insert Link"
           className={cn(
-            'p-1 rounded hover:bg-slate-200 transition-colors cursor-pointer',
-            editor.isActive('link') ? 'bg-slate-300' : ''
+            'p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer text-slate-700 dark:text-slate-200',
+            editor.isActive('link') ? 'bg-slate-300 dark:bg-slate-600 text-blue-600 dark:text-blue-400' : ''
           )}
         >
-          <LinkIcon className="h-3.5 w-3.5 text-slate-700" />
+          <LinkIcon className="h-3.5 w-3.5" />
         </button>
 
         {/* Local Image Upload */}
         <label
-          className="p-1 rounded hover:bg-slate-200 transition-colors cursor-pointer inline-flex items-center justify-center text-slate-700"
+          className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer inline-flex items-center justify-center text-slate-700 dark:text-slate-200"
           title="Insert Local Image"
         >
           <ImageIcon className="h-3.5 w-3.5" />
@@ -594,12 +594,12 @@ export function TipTapRichTextEditor({
           onClick={() => editor.chain().focus().unsetAllMarks().clearNodes().run()}
           disabled={disabled}
           title="Clear Formatting"
-          className="p-1 rounded hover:bg-slate-200 hover:text-red-650 transition-colors text-slate-700 cursor-pointer"
+          className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-red-500 transition-colors text-slate-700 dark:text-slate-200 cursor-pointer"
         >
           <RemoveFormatting className="h-3.5 w-3.5" />
         </button>
 
-        <div className="h-5 w-[1px] bg-slate-300 mx-1.5" />
+        <div className="h-5 w-[1px] bg-slate-300 dark:bg-slate-650 mx-1" />
 
         {/* Toggle HTML Source Code view */}
         <button
@@ -607,14 +607,14 @@ export function TipTapRichTextEditor({
           onClick={() => setShowSource(!showSource)}
           title="Toggle HTML Source Code"
           className={cn(
-            'p-1 rounded hover:bg-slate-200 transition-colors cursor-pointer flex items-center justify-center font-bold font-sans text-xs px-1.5 text-slate-800',
-            showSource ? 'bg-slate-300 text-blue-700 border border-blue-300' : ''
+            'p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer flex items-center justify-center font-bold font-sans text-xs px-1.5 text-slate-700 dark:text-slate-200',
+            showSource ? 'bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 border border-blue-300 dark:border-blue-700' : ''
           )}
         >
           HTML
         </button>
 
-        <div className="h-5 w-[1px] bg-slate-300 mx-1.5" />
+        <div className="h-5 w-[1px] bg-slate-300 dark:bg-slate-650 mx-1" />
 
         {/* Undo */}
         <button
@@ -622,7 +622,7 @@ export function TipTapRichTextEditor({
           onClick={() => editor.chain().focus().undo().run()}
           disabled={disabled || !editor.can().undo()}
           title="Undo"
-          className="p-1 rounded hover:bg-slate-200 transition-colors disabled:opacity-40 text-slate-700 cursor-pointer"
+          className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors disabled:opacity-40 text-slate-700 dark:text-slate-200 cursor-pointer"
         >
           <Undo className="h-3.5 w-3.5" />
         </button>
@@ -633,31 +633,31 @@ export function TipTapRichTextEditor({
           onClick={() => editor.chain().focus().redo().run()}
           disabled={disabled || !editor.can().redo()}
           title="Redo"
-          className="p-1 rounded hover:bg-slate-200 transition-colors disabled:opacity-40 text-slate-700 cursor-pointer"
+          className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors disabled:opacity-40 text-slate-700 dark:text-slate-200 cursor-pointer"
         >
           <Redo className="h-3.5 w-3.5" />
         </button>
 
-        <div className="ml-auto text-[10px] text-slate-500 font-mono px-1.5">
+        <div className="ml-auto text-[10px] text-slate-500 dark:text-slate-400 font-mono px-1.5">
           {editor.getText().length} chars
         </div>
       </div>
 
       {/* ─── Editor Content / HTML Source Editor area ──────────────────────── */}
-      <div className="bg-white min-h-[160px] max-h-[350px] overflow-y-auto">
+      <div className="bg-white dark:bg-slate-900 min-h-[160px] max-h-[350px] overflow-y-auto">
         {showSource ? (
           /* Raw HTML Editor Mode */
           <textarea
             value={rawHtml}
             onChange={handleRawHtmlChange}
             disabled={disabled}
-            className="w-full min-h-[160px] p-4 text-xs font-mono text-slate-700 border-0 focus:outline-none focus:ring-0 resize-none bg-slate-50/70"
+            className="w-full min-h-[160px] p-4 text-xs font-mono text-slate-900 dark:text-slate-100 border-0 focus:outline-none focus:ring-0 resize-none bg-slate-50 dark:bg-slate-950 placeholder:text-slate-400 dark:placeholder:text-slate-600"
             placeholder="Type raw HTML source code here..."
             style={{ minHeight: '160px' }}
           />
         ) : (
           /* Visual WSYIWYG mode */
-          <div className="p-4 text-xs text-foreground font-normal leading-relaxed prose prose-sm max-w-none focus:outline-none min-h-[140px]">
+          <div className="p-4 text-xs text-slate-900 dark:text-slate-100 font-normal leading-relaxed prose dark:prose-invert max-w-none focus:outline-none min-h-[140px] [&_.ProseMirror]:min-h-[120px] [&_.ProseMirror]:outline-none [&_.ProseMirror]:text-slate-900 dark:[&_.ProseMirror]:text-slate-100">
             <EditorContent editor={editor} />
           </div>
         )}
@@ -665,14 +665,14 @@ export function TipTapRichTextEditor({
 
       {/* ─── Image Customizer Absolute Overlay (Prevents Dialog conflicts) ─── */}
       {isCustomizerOpen && (
-        <div className="absolute inset-0 bg-white z-[60] p-4 flex flex-col justify-between overflow-y-auto rounded-lg border border-slate-300">
+        <div className="absolute inset-0 bg-background z-[60] p-4 flex flex-col justify-between overflow-y-auto rounded-lg border border-border">
           
           <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
             <div>
-              <h4 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+              <h4 className="text-sm font-bold text-foreground flex items-center gap-2">
                 <Crop className="w-4 h-4 text-blue-500" /> Customize Image Upload
               </h4>
-              <p className="text-[10px] text-slate-400 mt-0.5">
+              <p className="text-[10px] text-muted-foreground/70 mt-0.5">
                 Drag on the image to crop. Set positioning and alignment.
               </p>
             </div>
@@ -683,7 +683,7 @@ export function TipTapRichTextEditor({
                 setImageObj(null);
                 setCropBox(null);
               }}
-              className="p-1 text-slate-400 hover:text-slate-650 hover:bg-slate-50 rounded-full transition-all"
+              className="p-1 text-muted-foreground/70 hover:text-slate-650 hover:bg-muted/30 rounded-full transition-all"
             >
               <X className="w-4.5 h-4.5" />
             </button>
@@ -692,7 +692,7 @@ export function TipTapRichTextEditor({
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 py-1 flex-1 min-h-0">
             
             {/* Canvas area (2 cols) */}
-            <div className="md:col-span-2 flex items-center justify-center bg-slate-50 border border-slate-200 rounded p-1 min-h-[220px]">
+            <div className="md:col-span-2 flex items-center justify-center bg-muted/30 border border-border/60 rounded p-1 min-h-[220px]">
               <canvas
                 ref={canvasRef}
                 width={canvasWidth}
@@ -701,24 +701,24 @@ export function TipTapRichTextEditor({
                 onMouseMove={handleCanvasMouseMove}
                 onMouseUp={handleCanvasMouseUp}
                 onMouseLeave={handleCanvasMouseUp}
-                className="border border-slate-200 rounded cursor-crosshair max-w-full block bg-white"
+                className="border border-border/60 rounded cursor-crosshair max-w-full block bg-background"
                 style={{ width: `${canvasWidth}px`, height: `${canvasHeight}px` }}
               />
             </div>
 
             {/* Editing settings sidepanel (1 col) */}
-            <div className="space-y-4 flex flex-col justify-between text-xs text-slate-600">
+            <div className="space-y-4 flex flex-col justify-between text-xs text-muted-foreground">
               
               <div className="space-y-3">
                 {/* Crop information */}
-                <div className="bg-blue-50/50 border border-blue-100 rounded p-2.5 text-[11px] text-slate-600">
+                <div className="bg-blue-50/50 border border-blue-100 rounded p-2.5 text-[11px] text-muted-foreground">
                   <span className="font-bold text-blue-800 block mb-0.5">Cropping Guide:</span>
                   Click and drag your mouse directly on the image to draw a crop boundary. Click "Clear Crop Area" to insert the full image.
                 </div>
 
                 {/* Image alignment */}
                 <div className="space-y-1">
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Align Position</span>
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">Align Position</span>
                   <div className="grid grid-cols-3 gap-1">
                     <button
                       type="button"
@@ -727,7 +727,7 @@ export function TipTapRichTextEditor({
                         "h-8 text-xs font-semibold rounded border transition-all cursor-pointer",
                         imageAlign === 'left' 
                           ? "bg-[#1e73be] border-[#1e73be] text-white shadow-xs" 
-                          : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+                          : "bg-background border-border/60 text-muted-foreground hover:bg-muted/30"
                       )}
                     >
                       Left
@@ -739,7 +739,7 @@ export function TipTapRichTextEditor({
                         "h-8 text-xs font-semibold rounded border transition-all cursor-pointer",
                         imageAlign === 'center' 
                           ? "bg-[#1e73be] border-[#1e73be] text-white shadow-xs" 
-                          : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+                          : "bg-background border-border/60 text-muted-foreground hover:bg-muted/30"
                       )}
                     >
                       Center
@@ -751,7 +751,7 @@ export function TipTapRichTextEditor({
                         "h-8 text-xs font-semibold rounded border transition-all cursor-pointer",
                         imageAlign === 'right' 
                           ? "bg-[#1e73be] border-[#1e73be] text-white shadow-xs" 
-                          : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+                          : "bg-background border-border/60 text-muted-foreground hover:bg-muted/30"
                       )}
                     >
                       Right
@@ -766,7 +766,7 @@ export function TipTapRichTextEditor({
                   type="button"
                   onClick={() => setCropBox(null)}
                   disabled={!cropBox}
-                  className="w-full h-8 text-[11px] border border-slate-200 rounded text-slate-500 hover:bg-slate-50 flex items-center justify-center gap-1 cursor-pointer disabled:opacity-40 disabled:pointer-events-none"
+                  className="w-full h-8 text-[11px] border border-border/60 rounded text-muted-foreground hover:bg-muted/30 flex items-center justify-center gap-1 cursor-pointer disabled:opacity-40 disabled:pointer-events-none"
                 >
                   Clear Crop Area
                 </button>
@@ -784,7 +784,7 @@ export function TipTapRichTextEditor({
                 setImageObj(null);
                 setCropBox(null);
               }}
-              className="h-9 px-4 text-xs font-medium border border-slate-200 rounded text-slate-600 hover:bg-slate-50 cursor-pointer"
+              className="h-9 px-4 text-xs font-medium border border-border/60 rounded text-muted-foreground hover:bg-muted/30 cursor-pointer"
             >
               Cancel
             </button>

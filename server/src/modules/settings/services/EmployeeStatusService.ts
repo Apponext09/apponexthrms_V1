@@ -2,6 +2,7 @@ import { EmployeeStatusRepository, type EmployeeStatusCreate, type EmployeeStatu
 import type { TenantContext, ListQueryOptions } from '../../../db/types';
 import { NotFoundError, ConflictError } from '../../../common/errors';
 import crypto from 'crypto';
+import { assertMasterNotInUse } from '../utils/masterUsage';
 
 export class EmployeeStatusService {
   private repo: EmployeeStatusRepository;
@@ -32,22 +33,29 @@ export class EmployeeStatusService {
   }
 
   async listEmployeeStatuses(ctx: TenantContext, options: ListQueryOptions) {
-    const res = await this.repo.list(ctx, options);
-    // BaseRepository list returns { items, meta }
-    if (res && res.items) {
-      return {
-        ...res,
-        items: res.items.map((item: any) => this.mapToFrontendFields(item)),
-        data: res.items.map((item: any) => this.mapToFrontendFields(item)) // Return data as well for compatibility
-      };
-    } else if (Array.isArray(res)) {
-      const data = res.map(item => this.mapToFrontendFields(item));
-      return { data, items: data };
+    await this.repo.ensureTable();
+    try {
+      const res = await this.repo.list(ctx, options);
+      // BaseRepository list returns { items, meta }
+      if (res && res.items) {
+        return {
+          ...res,
+          items: res.items.map((item: any) => this.mapToFrontendFields(item)),
+          data: res.items.map((item: any) => this.mapToFrontendFields(item)) // Return data as well for compatibility
+        };
+      } else if (Array.isArray(res)) {
+        const data = res.map(item => this.mapToFrontendFields(item));
+        return { data, items: data };
+      }
+      return res;
+    } catch (err) {
+      console.error('[EmployeeStatusService.listEmployeeStatuses] Error:', err);
+      return { data: [], items: [], meta: { total: 0, page: 1, limit: 50, totalPages: 0 } };
     }
-    return res;
   }
 
   async getEmployeeStatus(ctx: TenantContext, id: number | string) {
+    await this.repo.ensureTable();
     const status = await this.repo.getById(ctx, id);
     if (!status) throw new NotFoundError('Employee Status not found');
     return this.mapToFrontendFields(status);
@@ -58,6 +66,7 @@ export class EmployeeStatusService {
       name: data.name,
     };
     
+    if (data.companyId !== undefined || data.company_id !== undefined) mapped.company_id = data.companyId ?? data.company_id;
     if (data.probationStatus !== undefined || data.is_probation_status !== undefined) mapped.is_probation_status = data.probationStatus ?? data.is_probation_status;
     if (data.probationPeriodValue !== undefined || data.probation_period_value !== undefined) mapped.probation_period_value = data.probationPeriodValue ?? data.probation_period_value;
     if (data.probationPeriodUnit !== undefined || data.probation_period_unit !== undefined) mapped.probation_period_unit = data.probationPeriodUnit ?? data.probation_period_unit;
@@ -77,6 +86,7 @@ export class EmployeeStatusService {
   }
 
   async createEmployeeStatus(ctx: TenantContext, data: any) {
+    await this.repo.ensureTable();
     const isUnique = await this.repo.isNameUnique(ctx, data.name);
     if (!isUnique) throw new ConflictError(`Employee status '${data.name}' already exists`);
 
@@ -90,6 +100,7 @@ export class EmployeeStatusService {
   }
 
   async updateEmployeeStatus(ctx: TenantContext, id: number | string, data: any) {
+    await this.repo.ensureTable();
     const existing = await this.repo.getById(ctx, id);
     if (!existing) throw new NotFoundError('Employee Status not found');
 
@@ -105,6 +116,7 @@ export class EmployeeStatusService {
   }
 
   async deleteEmployeeStatus(ctx: TenantContext, id: number | string) {
+    await this.repo.ensureTable();
     await this.getEmployeeStatus(ctx, id);
     
     // We are performing a HARD DELETE from the database directly as requested by the user.

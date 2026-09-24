@@ -29,21 +29,21 @@ export const LeaveEncashmentTab: React.FC<LeaveEncashmentTabProps> = ({
   formData,
   setFormData,
   companies = [],
-  departments,
-  locations,
+  departments = [],
+  locations = [],
   subDepartments = [],
   designations = [],
-  gradeOptions,
+  gradeOptions = [],
   employeeTypeOptions = [],
   employeeStatusOptions = [],
 }) => {
-  const enc = formData.encashment || {};
+  const enc = formData?.encashment || {};
 
   const updateEnc = (key: string, value: any) => {
     setFormData((prev: any) => ({
       ...prev,
       encashment: {
-        ...prev.encashment,
+        ...(prev?.encashment || {}),
         [key]: value,
       },
     }));
@@ -84,27 +84,27 @@ export const LeaveEncashmentTab: React.FC<LeaveEncashmentTabProps> = ({
   };
 
   return (
-    <div className="space-y-5 text-slate-800 dark:text-slate-100">
+    <div className="space-y-5 text-foreground dark:text-slate-100">
       {/* 1. Reset */}
-      <Card className="border border-slate-200/90 dark:border-slate-800 shadow-2xs rounded-xl bg-white dark:bg-slate-950">
-        <CardHeader className="bg-slate-50/60 dark:bg-slate-900/40 border-b border-slate-100 dark:border-slate-800/80 pb-3">
+      <Card className="border border-border/60/90 dark:border-slate-800 shadow-2xs rounded-xl bg-background dark:bg-slate-950">
+        <CardHeader className="bg-muted/30/60 dark:bg-slate-900/40 border-b border-slate-100 dark:border-slate-800/80 pb-3">
           <div className="flex items-center gap-1.5">
-            <CardTitle className="text-xs font-bold text-slate-900 dark:text-white">
+            <CardTitle className="text-xs font-bold text-foreground dark:text-white">
               Reset
             </CardTitle>
-            <Info className="w-3.5 h-3.5 text-slate-400" />
+            <Info className="w-3.5 h-3.5 text-muted-foreground/70" />
           </div>
-          <CardDescription className="text-[11px] text-slate-500">
+          <CardDescription className="text-[11px] text-muted-foreground">
             When unused leave is dealt with, and which fate is applied first.
           </CardDescription>
         </CardHeader>
-        <CardContent className="p-4 space-y-3.5 text-xs text-slate-700 dark:text-slate-300">
+        <CardContent className="p-4 space-y-3.5 text-xs text-foreground dark:text-slate-300">
           <div className="flex flex-wrap items-center gap-2">
             <span>Work out what happens to unused leave</span>
             <select
               value={enc.resetFrequency || 'yearly'}
               onChange={(e) => updateEnc('resetFrequency', e.target.value)}
-              className="h-8 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-2.5 text-xs font-semibold text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="h-8 rounded-lg border border-border/60 dark:border-slate-700 bg-muted/30 dark:bg-slate-900 px-2.5 text-xs font-semibold text-foreground dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
             >
               <option value="yearly">how often...</option>
               <option value="monthly">Monthly</option>
@@ -130,7 +130,7 @@ export const LeaveEncashmentTab: React.FC<LeaveEncashmentTabProps> = ({
             <select
               value={enc.fillCapFirst || 'carry_forward'}
               onChange={(e) => updateEnc('fillCapFirst', e.target.value)}
-              className="h-8 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-2.5 text-xs font-semibold text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="h-8 rounded-lg border border-border/60 dark:border-slate-700 bg-muted/30 dark:bg-slate-900 px-2.5 text-xs font-semibold text-foreground dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
             >
               <option value="carry_forward">carry forward</option>
               <option value="encashment">encashment</option>
@@ -150,19 +150,19 @@ export const LeaveEncashmentTab: React.FC<LeaveEncashmentTabProps> = ({
       </Card>
 
       {/* 2. Limits */}
-      <Card className="border border-slate-200/90 dark:border-slate-800 shadow-2xs rounded-xl bg-white dark:bg-slate-950">
-        <CardHeader className="bg-slate-50/60 dark:bg-slate-900/40 border-b border-slate-100 dark:border-slate-800/80 pb-3">
+      <Card className="border border-border/60/90 dark:border-slate-800 shadow-2xs rounded-xl bg-background dark:bg-slate-950">
+        <CardHeader className="bg-muted/30/60 dark:bg-slate-900/40 border-b border-slate-100 dark:border-slate-800/80 pb-3">
           <div className="flex items-center gap-1.5">
-            <CardTitle className="text-xs font-bold text-slate-900 dark:text-white">
+            <CardTitle className="text-xs font-bold text-foreground dark:text-white">
               Limits
             </CardTitle>
-            <Info className="w-3.5 h-3.5 text-slate-400" />
+            <Info className="w-3.5 h-3.5 text-muted-foreground/70" />
           </div>
-          <CardDescription className="text-[11px] text-slate-500">
+          <CardDescription className="text-[11px] text-muted-foreground">
             How much may roll over, how much may be paid out, and the ceiling on both together.
           </CardDescription>
         </CardHeader>
-        <CardContent className="p-4 space-y-3.5 text-xs text-slate-700 dark:text-slate-300">
+        <CardContent className="p-4 space-y-3.5 text-xs text-foreground dark:text-slate-300">
           {/* Row 1: Carry over */}
           <div className="flex flex-wrap items-center gap-2">
             <span>Carry over at most</span>
@@ -183,7 +183,7 @@ export const LeaveEncashmentTab: React.FC<LeaveEncashmentTabProps> = ({
             <select
               value={enc.carryForwardUnit || 'days'}
               onChange={(e) => updateEnc('carryForwardUnit', e.target.value)}
-              className="h-7 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-2 text-xs font-medium"
+              className="h-7 rounded-md border border-border/60 dark:border-slate-700 bg-muted/30 dark:bg-slate-900 px-2 text-xs font-medium"
             >
               <option value="days">days</option>
               <option value="percent">% of unused</option>
@@ -221,7 +221,7 @@ export const LeaveEncashmentTab: React.FC<LeaveEncashmentTabProps> = ({
             <select
               value={enc.encashUnit || 'days'}
               onChange={(e) => updateEnc('encashUnit', e.target.value)}
-              className="h-7 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-2 text-xs font-medium"
+              className="h-7 rounded-md border border-border/60 dark:border-slate-700 bg-muted/30 dark:bg-slate-900 px-2 text-xs font-medium"
             >
               <option value="days">days</option>
               <option value="percent">% of unused</option>
@@ -292,8 +292,8 @@ export const LeaveEncashmentTab: React.FC<LeaveEncashmentTabProps> = ({
       </Card>
 
       {/* 3. Employees can request encashment */}
-      <Card className="border border-slate-200/90 dark:border-slate-800 shadow-2xs rounded-xl bg-white dark:bg-slate-950">
-        <CardHeader className="bg-slate-50/60 dark:bg-slate-900/40 border-b border-slate-100 dark:border-slate-800/80 pb-3">
+      <Card className="border border-border/60/90 dark:border-slate-800 shadow-2xs rounded-xl bg-background dark:bg-slate-950">
+        <CardHeader className="bg-muted/30/60 dark:bg-slate-900/40 border-b border-slate-100 dark:border-slate-800/80 pb-3">
           <label className="flex items-center gap-2 cursor-pointer">
             <Checkbox
               checked={enc.employeesCanRequestEncashment !== false && enc.allow_employee_encashment_request !== false}
@@ -303,7 +303,7 @@ export const LeaveEncashmentTab: React.FC<LeaveEncashmentTabProps> = ({
               }}
             />
             <div className="flex items-center gap-1.5">
-              <CardTitle className="text-xs font-bold text-slate-900 dark:text-white">
+              <CardTitle className="text-xs font-bold text-foreground dark:text-white">
                 Employees can request encashment
               </CardTitle>
             </div>
@@ -316,12 +316,12 @@ export const LeaveEncashmentTab: React.FC<LeaveEncashmentTabProps> = ({
               effectHi="Checked होने पर एम्प्लॉई डैशबोर्ड से स्वयं एनकैशमेंट की मांग कर सकेगा; Unchecked होने पर सिर्फ ईयर-एंड पर ऑटोमैटिक एनकैश होगा।"
             />
           </label>
-          <CardDescription className="text-[11px] text-slate-500 pl-6">
+          <CardDescription className="text-[11px] text-muted-foreground pl-6">
             Without this, leave is only ever encashed automatically at the end of a cycle.
           </CardDescription>
         </CardHeader>
         {(enc.employeesCanRequestEncashment !== false && enc.allow_employee_encashment_request !== false) && (
-          <CardContent className="p-4 space-y-3 text-xs text-slate-700 dark:text-slate-300 pl-8">
+          <CardContent className="p-4 space-y-3 text-xs text-foreground dark:text-slate-300 pl-8">
             <div className="flex flex-wrap items-center gap-2">
               <span>They must be left with at least</span>
               <Input
@@ -345,13 +345,13 @@ export const LeaveEncashmentTab: React.FC<LeaveEncashmentTabProps> = ({
             </div>
 
             <div className="pt-1">
-              <label className="flex items-center gap-2 font-semibold text-slate-800 dark:text-slate-200 cursor-pointer">
+              <label className="flex items-center gap-2 font-semibold text-foreground dark:text-slate-200 cursor-pointer">
                 <Checkbox
                   checked={!!enc.allowMultipleEncashmentPerCycle}
                   onCheckedChange={(c) => updateEnc('allowMultipleEncashmentPerCycle', !!c)}
                 />
                 <span>Allow more than one encashment per cycle</span>
-                <Info className="w-3.5 h-3.5 text-slate-400" />
+                <Info className="w-3.5 h-3.5 text-muted-foreground/70" />
               </label>
             </div>
           </CardContent>
@@ -359,25 +359,25 @@ export const LeaveEncashmentTab: React.FC<LeaveEncashmentTabProps> = ({
       </Card>
 
       {/* 4. Pay out */}
-      <Card className="border border-slate-200/90 dark:border-slate-800 shadow-2xs rounded-xl bg-white dark:bg-slate-950">
-        <CardHeader className="bg-slate-50/60 dark:bg-slate-900/40 border-b border-slate-100 dark:border-slate-800/80 pb-3">
+      <Card className="border border-border/60/90 dark:border-slate-800 shadow-2xs rounded-xl bg-background dark:bg-slate-950">
+        <CardHeader className="bg-muted/30/60 dark:bg-slate-900/40 border-b border-slate-100 dark:border-slate-800/80 pb-3">
           <div className="flex items-center gap-1.5">
-            <CardTitle className="text-xs font-bold text-slate-900 dark:text-white">
+            <CardTitle className="text-xs font-bold text-foreground dark:text-white">
               Pay out
             </CardTitle>
-            <Info className="w-3.5 h-3.5 text-slate-400" />
+            <Info className="w-3.5 h-3.5 text-muted-foreground/70" />
           </div>
-          <CardDescription className="text-[11px] text-slate-500">
+          <CardDescription className="text-[11px] text-muted-foreground">
             Which balance an encashment draws from, and when the money is released.
           </CardDescription>
         </CardHeader>
-        <CardContent className="p-4 space-y-3.5 text-xs text-slate-700 dark:text-slate-300">
+        <CardContent className="p-4 space-y-3.5 text-xs text-foreground dark:text-slate-300">
           <div className="flex flex-wrap items-center gap-2">
             <span>Take the days from</span>
             <select
               value={enc.takeDaysFrom || 'closed_year'}
               onChange={(e) => updateEnc('takeDaysFrom', e.target.value)}
-              className="h-8 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-2.5 text-xs font-semibold text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="h-8 rounded-lg border border-border/60 dark:border-slate-700 bg-muted/30 dark:bg-slate-900 px-2.5 text-xs font-semibold text-foreground dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
             >
               <option value="closed_year">the year being closed</option>
               <option value="active_balance">current active balance</option>
@@ -393,7 +393,7 @@ export const LeaveEncashmentTab: React.FC<LeaveEncashmentTabProps> = ({
                 updateEnc('releaseMoneySchedule', e.target.value);
                 updateEnc('disbursement', { ...(enc.disbursement || {}), periodicity: e.target.value });
               }}
-              className="h-8 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-2.5 text-xs font-semibold text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="h-8 rounded-lg border border-border/60 dark:border-slate-700 bg-muted/30 dark:bg-slate-900 px-2.5 text-xs font-semibold text-foreground dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
             >
               <option value="monthly">how often...</option>
               <option value="monthly">Monthly</option>
@@ -419,26 +419,26 @@ export const LeaveEncashmentTab: React.FC<LeaveEncashmentTabProps> = ({
             },
           }));
         }}
-        companies={companies}
-        locations={locations}
-        departments={departments}
-        subDepartments={subDepartments}
-        designations={designations}
-        grades={gradeOptions}
-        employeeTypes={employeeTypeOptions}
-        employeeStatuses={employeeStatusOptions}
+        companies={companies || []}
+        locations={locations || []}
+        departments={departments || []}
+        subDepartments={subDepartments || []}
+        designations={designations || []}
+        grades={gradeOptions || []}
+        employeeTypes={employeeTypeOptions || []}
+        employeeStatuses={employeeStatusOptions || []}
       />
 
       {/* 6. Only when */}
-      <Card className="border border-slate-200/90 dark:border-slate-800 shadow-2xs rounded-xl bg-white dark:bg-slate-950">
-        <CardHeader className="bg-slate-50/60 dark:bg-slate-900/40 border-b border-slate-100 dark:border-slate-800/80 pb-3">
+      <Card className="border border-border/60/90 dark:border-slate-800 shadow-2xs rounded-xl bg-background dark:bg-slate-950">
+        <CardHeader className="bg-muted/30/60 dark:bg-slate-900/40 border-b border-slate-100 dark:border-slate-800/80 pb-3">
           <div className="flex items-center gap-1.5">
-            <GitBranch className="w-3.5 h-3.5 text-slate-500" />
-            <CardTitle className="text-xs font-bold text-slate-900 dark:text-white">
+            <GitBranch className="w-3.5 h-3.5 text-muted-foreground" />
+            <CardTitle className="text-xs font-bold text-foreground dark:text-white">
               Only when
             </CardTitle>
           </div>
-          <CardDescription className="text-[11px] text-slate-500">
+          <CardDescription className="text-[11px] text-muted-foreground">
             Leave this empty and this carry forward always applies.
           </CardDescription>
         </CardHeader>
@@ -446,9 +446,9 @@ export const LeaveEncashmentTab: React.FC<LeaveEncashmentTabProps> = ({
           <RuleConditionBuilder
             value={enc.onlyWhen || enc.only_when}
             onChange={(newGroup) => updateEnc('onlyWhen', newGroup)}
-            departments={departments}
-            locations={locations}
-            grades={gradeOptions.map((g, i) => ({ id: i + 1, name: g }))}
+            departments={departments || []}
+            locations={locations || []}
+            grades={(gradeOptions || []).map((g, i) => ({ id: i + 1, name: g }))}
           />
         </CardContent>
       </Card>

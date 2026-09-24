@@ -198,13 +198,18 @@ export class PayrollRegisterController {
 
       if (cycleRow) {
         const sCyc = withSnakeAliases(cycleRow) || cycleRow;
-        if (sCyc.start_date || sCyc.calculation_start_day) {
-          cycleStartDay = Math.max(1, Math.min(calendarDays, Number(sCyc.start_date || sCyc.calculation_start_day)));
+        if (sCyc.start_date) {
+          cycleStartDay = Math.max(1, Math.min(calendarDays, Number(sCyc.start_date)));
         }
-        if (sCyc.cutoff_day) {
-          cycleCutoffDay = Math.max(1, Math.min(calendarDays, Number(sCyc.cutoff_day)));
+        const rawRegCutoff = Number(sCyc.cutoff_day);
+        if (sCyc.cutoff_day != null && rawRegCutoff > 0) {
+          cycleCutoffDay = Math.max(1, Math.min(calendarDays, rawRegCutoff));
+        } else {
+          cycleCutoffDay = calendarDays;
         }
-        if (sCyc.frequency === 'Weekly') totalDays = 7;
+        if (sCyc.total_days_calc && !isNaN(Number(sCyc.total_days_calc)) && Number(sCyc.total_days_calc) > 0) {
+          totalDays = Number(sCyc.total_days_calc);
+        } else if (sCyc.frequency === 'Weekly') totalDays = 7;
         else if (sCyc.frequency === 'Bi-Weekly' || sCyc.frequency === 'Fortnightly') totalDays = 14;
         else if (sCyc.frequency === 'Semi-Monthly') totalDays = 15;
         else {
@@ -214,6 +219,59 @@ export class PayrollRegisterController {
 
       const monthStart = fromDate ? String(fromDate).slice(0, 10) : `${targetMonth}-${String(cycleStartDay).padStart(2, '0')}`;
       const monthEnd = toDate ? String(toDate).slice(0, 10) : `${targetMonth}-${String(cycleCutoffDay).padStart(2, '0')}`;
+
+      // ── Authoritative results from an already-processed payroll run ──────────
+      // Once payroll has actually been processed, the register MUST reflect the
+      // figures that were persisted by PayrollService.processPayroll (the single
+      // calculation engine) — not re-derive them here. The preview chain below
+      // only runs for months that have not been processed yet.
+      const authByEmp = new Map<number, any>();
+      try {
+        const processedRun = await db('payroll_runs')
+          .where('organization_id', targetOrgId)
+          .whereRaw("DATE_FORMAT(run_month, '%Y-%m') = ?", [targetMonth])
+          .whereIn('status', ['completed', 'calculated', 'locked', 'approved', 'published', 'paid'])
+          .orderBy('id', 'desc')
+          .first();
+        if (processedRun) {
+          const preRows = await db('payroll_run_employees')
+            .where('payroll_run_id', processedRun.id)
+            .where('organization_id', targetOrgId);
+          const preIds = preRows.map((r: any) => r.id ?? r.ID);
+          const earnAgg = preIds.length ? await db('payroll_earnings')
+            .whereIn('payroll_run_employee_id', preIds)
+            .select('payroll_run_employee_id', 'component_name', 'actual_value') : [];
+          const dedAgg = preIds.length ? await db('payroll_deductions')
+            .whereIn('payroll_run_employee_id', preIds)
+            .select('payroll_run_employee_id', 'component_name', 'actual_value') : [];
+          const byPre: Record<number, { earnings: any[]; deductions: any[] }> = {};
+          for (const r of preRows) byPre[r.id ?? r.ID] = { earnings: [], deductions: [] };
+          for (const e of earnAgg) byPre[(e as any).payrollRunEmployeeId ?? (e as any).payroll_run_employee_id]?.earnings.push(e);
+          for (const d of dedAgg) byPre[(d as any).payrollRunEmployeeId ?? (d as any).payroll_run_employee_id]?.deductions.push(d);
+          const { classifyComponent } = await import('../utils/payroll.classify');
+          for (const r of preRows) {
+            const s = withSnakeAliases(r) || r;
+            const bucket = byPre[r.id ?? r.ID] || { earnings: [], deductions: [] };
+            const find = (arr: any[], code: string) => Number(
+              arr.find((x) => classifyComponent({ name: x.componentName ?? x.component_name }).statutoryCode === code)
+                ?.actualValue ?? arr.find((x) => classifyComponent({ name: x.componentName ?? x.component_name }).statutoryCode === code)?.actual_value ?? 0
+            );
+            authByEmp.set(Number(s.employee_id), {
+              runId: processedRun.id,
+              paid_days: Number(s.working_days ?? 0),
+              unpaid_days: Number(s.unpaid_leave_days ?? 0),
+              gross_earned: Number(s.total_earnings ?? 0),
+              total_deduction: Number(s.total_deductions ?? 0),
+              net_salary: Number(s.net_salary ?? 0),
+              tds: Number(s.tax_deducted ?? 0) || find(bucket.deductions, 'tds'),
+              pf: find(bucket.deductions, 'epf') + find(bucket.deductions, 'eps'),
+              esic: find(bucket.deductions, 'esi'),
+              pt: find(bucket.deductions, 'pt'),
+              runStatus: processedRun.status,
+            });
+          }
+        }
+      } catch { /* preview mode */ }
 
       const resultRows = [];
 
@@ -233,26 +291,8 @@ export class PayrollRegisterController {
         const ifscCode = emp.ifsc_code || emp.ifscCode || null;
         const reportingManager = (emp.reporting_manager || emp.reportingManager || '').trim() || 'Organization Admin';
 
-        // 2. Resolve Salary Structure (or auto-resolve/assign from Pay Slab dynamically)
+        // 2. Resolve Salary Structure
         let struct: any = null;
-        try {
-          struct = await db('employee_salary_structures as ess')
-            .join('salary_structures as ss', 'ess.salary_structure_id', 'ss.id')
-            .where('ess.employee_id', emp.id)
-            .where('ess.is_current', 1)
-            .where('ss.effective_from', '<=', monthEnd)
-            .where(function (this: any) {
-              this.whereNull('ss.effective_to').orWhere('ss.effective_to', '>=', monthStart);
-            })
-            .whereNull('ess.deleted_at')
-            .whereNull('ss.deleted_at')
-            .orderBy('ss.effective_from', 'desc')
-            .orderBy('ss.id', 'desc')
-            .select('ss.*')
-            .first();
-        } catch {
-          struct = null;
-        }
 
         if (!struct) {
           try {
@@ -318,7 +358,7 @@ export class PayrollRegisterController {
           matchedSlab = allSlabs.find((s: any) => Number(s.id) === Number(slabIdToTry));
         }
 
-        // If no slab linked on structure, find best matching slab by CTC or fallback to default slab
+        // If no slab linked on structure, find best matching slab by CTC
         if (!matchedSlab) {
           if (structCtc > 0) {
             matchedSlab = allSlabs.find((s: any) => {
@@ -328,17 +368,18 @@ export class PayrollRegisterController {
               return structCtc >= minCtc && structCtc <= maxCtc;
             });
           }
-          // Final fallback: use first active slab
-          if (!matchedSlab && allSlabs.length > 0) {
-            matchedSlab = allSlabs[0];
-          }
         }
 
-        // Check if employee has a valid assigned salary structure or dynamic fallback
-        const hasAssignedStructure = Boolean(struct && (sStruct.gross_monthly || sStruct.annual_ctc || sStruct.salary_slab_id || sStruct.slab_id)) || (structCtc > 0) || (allSlabs.length > 0);
+        // Check if employee has a valid assigned salary structure or explicit CTC
+        const hasAssignedStructure = Boolean(
+          (struct && (Number(sStruct.gross_monthly || 0) > 0 || Number(sStruct.annual_ctc || 0) > 0 || sStruct.salary_slab_id || sStruct.slab_id)) ||
+          (empCtcFromRecord > 0)
+        );
 
         const slabRow = matchedSlab ? (withSnakeAliases(matchedSlab) || {}) : {};
-        const slabName = slabRow.name || sStruct.structure_name || (allSlabs[0]?.name || 'Standard Pay Slab');
+        const slabName = hasAssignedStructure
+          ? (slabRow.name || sStruct.structure_name || 'Standard Pay Slab')
+          : 'No Pay Slab Assigned';
 
         let selectedCompIds: number[] = [];
         try {
@@ -351,11 +392,15 @@ export class PayrollRegisterController {
         }
 
         // 4. Resolve Gross & CTC
-        const grossMonthly = positiveNum(
-          sStruct.gross_monthly,
-          structCtc > 0 ? Math.round(structCtc / 12) : (slabRow.min_ctc ? Math.round(Number(slabRow.min_ctc) / 12) : (emp.gross_salary ? Number(emp.gross_salary) : 0))
-        );
-        const annualCTC = positiveNum(sStruct.annual_ctc, structCtc > 0 ? structCtc : grossMonthly * 12);
+        const grossMonthly = hasAssignedStructure
+          ? positiveNum(
+              sStruct.gross_monthly,
+              structCtc > 0 ? Math.round(structCtc / 12) : (emp.gross_salary ? Number(emp.gross_salary) : 0)
+            )
+          : 0;
+        const annualCTC = hasAssignedStructure
+          ? positiveNum(sStruct.annual_ctc, structCtc > 0 ? structCtc : grossMonthly * 12)
+          : 0;
 
         // 5. Parse Custom Components JSON
         let customComps: Record<string, number> = {};
@@ -380,7 +425,7 @@ export class PayrollRegisterController {
             .select('status');
           for (const rec of attRecs) {
             const s = (rec.status || '').toLowerCase();
-            if (s === 'present' || s === 'work_from_home' || s === 'sick') presentDays++;
+            if (s === 'present' || s === 'work_from_home') presentDays++;
             else if (s === 'half_day') halfDayCount++;
             else if (s === 'absent') absentDays++;
             else if (s === 'weekly_off') weeklyOffDays++;
@@ -808,6 +853,23 @@ export class PayrollRegisterController {
           override = null;
         }
 
+        if (override?.component_values) {
+          try {
+            const parsed = typeof override.component_values === 'string'
+              ? JSON.parse(override.component_values)
+              : override.component_values;
+            if (parsed && typeof parsed === 'object') {
+              for (const [k, v] of Object.entries<any>(parsed)) {
+                if (componentValues[k]) {
+                  componentValues[k] = { ...componentValues[k], ...v };
+                } else {
+                  componentValues[k] = v;
+                }
+              }
+            }
+          } catch { /* ignore JSON parse */ }
+        }
+
         resultRows.push({
           id: emp.id,
           employee_id: emp.id,
@@ -901,6 +963,31 @@ export class PayrollRegisterController {
           is_overridden: Boolean(override),
           component_values: componentValues,
         });
+
+        // ── Overlay authoritative processed-run figures (single engine) ───────
+        // A manual register override still wins; otherwise the persisted run
+        // values replace the preview re-calculation so the register always
+        // matches GET /payroll/:id, the payslip and the payslip details.
+        const auth = authByEmp.get(Number(emp.id));
+        if (auth && !override) {
+          const row: any = resultRows[resultRows.length - 1];
+          row.paid_days = auth.paid_days;
+          row.unpaid_days = auth.unpaid_days;
+          row.gross_earned = auth.gross_earned;
+          row.grossEarned = auth.gross_earned;
+          row.total_gross_earned = auth.gross_earned;
+          row.total_deduction = auth.total_deduction;
+          row.totalDeduction = auth.total_deduction;
+          row.net_salary = auth.net_salary;
+          row.netSalary = auth.net_salary;
+          row.pt = auth.pt;
+          row.pf = auth.pf;
+          row.esic = auth.esic;
+          row.tds = auth.tds;
+          row.status = String(auth.runStatus || 'PROCESSED').toUpperCase();
+          row.source = 'payroll_run';
+          row.payroll_run_id = auth.runId;
+        }
       }
 
       // ── Apply payrollStatus filter (post-processing) ───────────────────────────────
@@ -1024,6 +1111,11 @@ export class PayrollRegisterController {
       notes: notes || '',
       updated_at: new Date(),
     };
+
+    const compVals = req.body.component_values || req.body.componentValues;
+    if (compVals) {
+      payload.component_values = typeof compVals === 'string' ? compVals : JSON.stringify(compVals);
+    }
 
     const existing = await db('payroll_register_overrides')
       .where({ organization_id: orgId, employee_id: Number(employee_id), month: targetMonth })

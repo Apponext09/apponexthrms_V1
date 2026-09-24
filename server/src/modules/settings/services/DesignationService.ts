@@ -3,6 +3,7 @@ import { AuditService } from '../../audit/audit.service';
 import { DesignationRepository } from '../repositories/DesignationRepository';
 import type { TenantContext } from '../../../db/types';
 import { ConflictError, NotFoundError } from '../../../common/errors/index';
+import { assertMasterNotInUse } from '../utils/masterUsage';
 
 export interface DesignationCreate {
   name: string;
@@ -48,27 +49,45 @@ export class DesignationService {
   }
 
   async listDesignations(ctx: TenantContext, options?: any) {
-    return this.designationRepo.list(ctx, options);
+    await this.designationRepo.ensureTable();
+    try {
+      return await this.designationRepo.list(ctx, options);
+    } catch (err) {
+      console.error('[DesignationService.listDesignations] Error:', err);
+      return { data: [], items: [], meta: { total: 0, page: 1, limit: 50, totalPages: 0 } };
+    }
   }
 
   async getDesignation(ctx: TenantContext, id: number | string) {
+    await this.designationRepo.ensureTable();
     const designation = await this.designationRepo.getById(ctx, id);
     if (!designation) throw new NotFoundError('Designation not found');
     return designation;
   }
 
   async createDesignation(ctx: TenantContext, data: DesignationCreate) {
-    let code = (data.code && data.code.trim()) ? data.code.trim().toUpperCase() : generateCodeFromName(data.name);
+    await this.designationRepo.ensureTable();
+    const name = data.name?.trim();
+    if (!name) throw new ConflictError('Designation name is required');
 
-    let isUnique = await this.designationRepo.isCodeUnique(ctx, code);
+    const code = (data.code && data.code.trim()) ? data.code.trim().toUpperCase() : generateCodeFromName(name);
+
+    const existingName = await this.designationRepo
+      .query(ctx)
+      .whereRaw('LOWER(name) = ?', [name.toLowerCase()])
+      .first();
+    if (existingName) throw new ConflictError(`Designation '${name}' already exists`);
+
+    const isUnique = await this.designationRepo.isCodeUnique(ctx, code);
     if (!isUnique) {
-      code = `${code}-${Date.now().toString().slice(-4)}`;
+      throw new ConflictError(`Designation code '${code}' already exists`);
     }
 
     const designation = await this.designationRepo.create(ctx, {
       uuid: uuidv4(),
-      name: data.name,
+      name,
       code,
+      company_id: data.mapped_companies?.length ? Number(data.mapped_companies[0]) : undefined,
       description: data.description || null,
       status: data.status || 'active',
       mapped_companies: data.mapped_companies ? JSON.stringify(data.mapped_companies) : null,
@@ -93,6 +112,16 @@ export class DesignationService {
   async updateDesignation(ctx: TenantContext, id: number | string, data: DesignationUpdate) {
     const designation = await this.getDesignation(ctx, id);
 
+    const name = data.name?.trim();
+    if (name && name.toLowerCase() !== String(designation.name || '').toLowerCase()) {
+      const duplicate = await this.designationRepo
+        .query(ctx)
+        .whereRaw('LOWER(name) = ?', [name.toLowerCase()])
+        .whereNot('id', designation.id)
+        .first();
+      if (duplicate) throw new ConflictError(`Designation '${name}' already exists`);
+    }
+
     let newCode: string | undefined = undefined;
     if (data.code && data.code.trim() && data.code.trim() !== designation.code) {
       newCode = data.code.trim().toUpperCase();
@@ -101,7 +130,7 @@ export class DesignationService {
     }
 
     const updated = await this.designationRepo.update(ctx, id, {
-      name: data.name || undefined,
+      name: name || undefined,
       code: newCode,
       description: data.description !== undefined ? data.description : undefined,
       status: data.status || undefined,
@@ -126,6 +155,9 @@ export class DesignationService {
 
   async deleteDesignation(ctx: TenantContext, id: number | string) {
     const designation = await this.getDesignation(ctx, id);
+    await assertMasterNotInUse(ctx.organizationId, id, 'designation', [
+      { table: 'employees', column: 'current_designation_id', label: 'employee(s)' },
+    ]);
     await this.designationRepo.delete(ctx, id);
     await this.auditService.log(ctx, {
       action: 'DELETE',

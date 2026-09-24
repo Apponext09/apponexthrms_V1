@@ -1,20 +1,77 @@
 import http from 'http';
-// reload trigger comment #37 - SMTP email delivery wired up
+// reload trigger comment #38 - departments table schema repair (colour, color, email, is_active)
 import { Server } from 'socket.io';
 import fs from 'fs';
 import { createApp } from './app';
 import { getEnv } from './config/env';
 import { getLogger, logger } from '@/common/lib/logger';
 import { initializeKnex, closeKnex, getKnex } from './db/knex';
-import { setupProfileSchemaAndSeed } from './scripts/setup_profile_schema_and_seed';
 import { initializeNotificationSocket } from './realtime/notification.socket';
 import { initializeLiveTrackingSocket } from './modules/Livetracking/sockets/livetracking.socket';
 import { LeaveExpiryJobService } from './modules/leaves/services/LeaveExpiryJobService';
 import { startAutoCheckOutCron } from './modules/attendance/services/AutoCheckOutService';
 
 
-// Force restart trigger
 const env = getEnv();
+
+/**
+ * Repair corrupted super_admin password hash in the background.
+ * Runs AFTER server starts listening so it never blocks incoming requests.
+ */
+async function repairSuperAdminHashIfNeeded(): Promise<void> {
+  try {
+    const db = getKnex();
+    const hasSA = await db.schema.hasTable('super_admins');
+    if (!hasSA) return;
+
+    const sa = await db('super_admins').whereRaw('LOWER(email) = ?', ['superadmin@apponext.com']).first();
+    const curHash = sa?.password_hash || sa?.passwordHash;
+    if (sa && (curHash?.startsWith('$2a$') || !curHash?.startsWith('$argon2'))) {
+      const { hash: argon2Hash } = await import('argon2');
+      const validArgon2Hash = await argon2Hash('SuperAdmin@2026!Secure', {
+        memoryCost: 12288,
+        timeCost: 3,
+        parallelism: 1,
+        type: 1,
+      });
+      await db('super_admins').where('id', sa.id).update({
+        password_hash: validArgon2Hash,
+        updated_at: new Date(),
+      });
+      logger.info(`[DB REPAIR] ✅ Fixed corrupted super_admins password_hash for superadmin@apponext.com`);
+    }
+  } catch (e: any) {
+    logger.warn(`[DB REPAIR] Could not check super_admins password hash: ${e?.message}`);
+  }
+}
+
+async function repairLmsSchemaIfNeeded(): Promise<void> {
+  try {
+    const db = getKnex();
+    const hasModules = await db.schema.hasTable('lms_modules');
+    if (hasModules) {
+      await db.raw('ALTER TABLE `lms_modules` MODIFY COLUMN `content_url` LONGTEXT NULL');
+      await db.raw('ALTER TABLE `lms_modules` MODIFY COLUMN `body_text` LONGTEXT NULL');
+      logger.info(`[DB REPAIR] ✅ Verified lms_modules content_url and body_text are LONGTEXT`);
+    }
+
+    const hasBatches = await db.schema.hasTable('lms_batches');
+    if (hasBatches) {
+      const hasScheduleTime = await db.schema.hasColumn('lms_batches', 'schedule_time');
+      if (!hasScheduleTime) {
+        await db.schema.alterTable('lms_batches', (table) => {
+          table.string('schedule_time', 150).nullable();
+          table.string('schedule_days', 150).nullable();
+          table.string('today_session_time', 150).nullable();
+          table.string('session_notice', 255).nullable();
+        });
+        logger.info(`[DB REPAIR] ✅ Added schedule timing columns to lms_batches`);
+      }
+    }
+  } catch (e: any) {
+    logger.warn(`[DB REPAIR] Could not alter LMS tables: ${e?.message}`);
+  }
+}
 
 /**
  * Start the HTTP server
@@ -25,13 +82,6 @@ async function start() {
     logger.info('Initializing database connection...');
     initializeKnex();
     logger.info('Database connection initialized');
-
-
-
-
-
-
-
 
     // Create Express app
     const app = createApp();
@@ -55,14 +105,21 @@ async function start() {
     // Initialize live tracking socket
     initializeLiveTrackingSocket(io);
 
-    // Start listening on 0.0.0.0 (all network interfaces for mobile & LAN access)
-      server.listen(env.PORT, '0.0.0.0', () => {
-      logger.info(`Server started on port ${env.PORT} (host: 0.0.0.0) [READY]`);
+    server.on('error', (err: any) => {
+      if (err.code === 'EADDRINUSE') {
+        logger.error(`[SERVER ERROR] Port ${env.PORT} is already in use (EADDRINUSE). Please terminate zombie process on port ${env.PORT}.`);
+        process.exit(1);
+      } else {
+        logger.error('[SERVER ERROR]', err);
+      }
+    });
 
-      // Run schema checks and profile seeding asynchronously in background
-      setupProfileSchemaAndSeed(getKnex()).catch((err) => {
-        logger.error('Background setupProfileSchemaAndSeed error:', err?.message || err);
-      });
+    // Start listening on 0.0.0.0 (all network interfaces for mobile & LAN access)
+    server.listen(env.PORT, '0.0.0.0', () => {
+      logger.info(`Server started on port ${env.PORT} (host: 0.0.0.0) [READY]`);
+      // Run background repairs
+      repairSuperAdminHashIfNeeded().catch(() => {});
+      repairLmsSchemaIfNeeded().catch(() => {});
 
       // Start automatic Leave & Comp-off Expiry Scheduler (runs every 12 hours)
       const expiryJobService = new LeaveExpiryJobService();

@@ -66,8 +66,8 @@ export function DesignationsPage() {
         return [];
       };
 
-      const deptIds = parseArr(desig.mapped_departments);
-      const gradeIds = parseArr(desig.mapped_grades);
+      const deptIds = parseArr(desig.mapped_departments ?? desig.mappedDepartments);
+      const gradeIds = parseArr(desig.mapped_grades ?? desig.mappedGrades);
 
       // Resolve department names
       const deptNames = deptIds
@@ -277,7 +277,7 @@ export function DesignationsPage() {
   };
 
   const handleDelete = async (id: string | number) => {
-    if (confirm('Are you sure you want to delete this designation?')) {
+    if (await window.appConfirm('Are you sure you want to delete this designation?')) {
       try {
         await deleteDesignation(id);
         toast.success('Designation deleted successfully!');

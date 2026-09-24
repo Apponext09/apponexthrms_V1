@@ -16,5 +16,3 @@ export { TeamLeadPayrollPortal } from './TeamLeadPayrollPortal';
 export { ManagerPayrollPortal } from './ManagerPayrollPortal';
 export { HRPayrollPortal } from './HRPayrollPortal';
 export { AdminPayrollPortal } from './AdminPayrollPortal';
-export { AdminExpenseClaims } from './AdminExpenseClaims';
-export { AdminTravelRequests } from './AdminTravelRequests';

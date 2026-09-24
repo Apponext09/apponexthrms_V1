@@ -28,6 +28,9 @@ router.get('/my-edit-permission', controller.getMyEditPermission);
 router.post('/consume-edit-permission/:requestId', controller.consumeEditPermission);
 router.get('/my-profile-requests', controller.getMyProfileRequests);
 
+router.get('/org-hierarchy/rules', controller.getOrgHierarchyRules);
+router.put('/org-hierarchy/rules', controller.saveOrgHierarchyRules);
+
 /**
  * GET /employees/me - Get logged-in user employee profile
  */

@@ -164,7 +164,8 @@ export class JobReferenceController {
    */
   listOpenings = asyncHandler(async (req: Request, res: Response) => {
     const { organizationId, departmentId, departmentName, employmentType, search, page, pageSize } = req.query;
-    const orgId = organizationId ? parseInt(organizationId as string, 10) : undefined;
+    const reqOrg = (req as any).user?.organizationId || (req as any).ctx?.organizationId || req.headers['x-organization-id'] || req.headers['x-company-id'];
+    const orgId = organizationId ? parseInt(organizationId as string, 10) : (reqOrg ? parseInt(String(reqOrg), 10) : undefined);
 
     const result = await this.jobRefService.listOpenings(
       orgId,
@@ -174,7 +175,7 @@ export class JobReferenceController {
         employmentType: employmentType as string || undefined,
         search: search as string || undefined,
         page: page ? parseInt(page as string, 10) : 1,
-        pageSize: pageSize ? parseInt(pageSize as string, 10) : 50,
+        pageSize: pageSize ? parseInt(pageSize as string, 10) : 100,
       }
     );
 

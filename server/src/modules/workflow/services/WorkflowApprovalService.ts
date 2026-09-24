@@ -6,6 +6,8 @@ import { WorkflowStepRepository } from '../repositories/WorkflowStepRepository';
 import { WorkflowDelegationRepository } from '../repositories/WorkflowDelegationRepository';
 import { WorkflowHistoryRepository } from '../repositories/WorkflowHistoryRepository';
 import type { TenantContext } from '../../../db/types';
+import { RegularizationService } from '../../attendance/services/RegularizationService';
+import { WorkflowExecutionService } from './WorkflowExecutionService';
 
 export class WorkflowApprovalService {
   private instanceRepo: WorkflowInstanceRepository;
@@ -69,10 +71,15 @@ export class WorkflowApprovalService {
           approval_count,
           updated_by: ctx.userId,
         } as any);
+        if (instance.entity_type === 'attendance_regularization') {
+          await new RegularizationService().completeConfiguredWorkflow(ctx, instance.entity_id, 'approved', comment);
+        }
       } else {
         // Move to next step
         const nextStep = await this.stepRepo.getNextStep(ctx, step?.workflow_id!, step!.step_number);
         if (nextStep) {
+          const nextApproverId = await new WorkflowExecutionService().resolveApproverId(ctx, nextStep, (instance.metadata || {}) as any);
+          if (!nextApproverId) throw new ValidationError('No active approver could be resolved for the next workflow step');
           await this.instanceRepo.update(ctx, instance.id, {
             current_step_number: nextStep.step_number,
             approval_count,
@@ -86,7 +93,7 @@ export class WorkflowApprovalService {
             step_id: nextStep.id,
             step_number: nextStep.step_number,
             status: 'pending',
-            approver_id: nextStep.approver_id,
+            approver_id: nextApproverId,
             assigned_at: new Date(),
             created_by: ctx.userId,
             updated_by: ctx.userId,
@@ -146,6 +153,9 @@ export class WorkflowApprovalService {
         rejection_count,
         updated_by: ctx.userId,
       } as any);
+      if (instance.entity_type === 'attendance_regularization') {
+        await new RegularizationService().completeConfiguredWorkflow(ctx, instance.entity_id, 'rejected', reason);
+      }
     }
 
     // Log history

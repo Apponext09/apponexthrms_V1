@@ -834,13 +834,206 @@ export class AttendanceService {
       return m.slice(0, 10);
     })();
 
+    // ── AUTO OT CALCULATION ────────────────────────────────────────────────
+    // Non-fatal: any failure here NEVER blocks checkout. Employee always gets their record.
+    let overtimeMinutes = 0;
+    let isAutoApproved = false;
+    try {
+      const { OTRuleService } = await import('./OTRuleService');
+      const otRuleService = new OTRuleService();
+      const otRule = await otRuleService.getEligibleRule(ctx, input.employeeId);
+
+      if (otRule) {
+        const db = getKnex();
+
+        // ── Shift timing & Roster/Type configuration ───────────────────────
+        const shiftRow = await db('employee_shift_assignments as esa')
+          .join('shift_templates as st', 'st.id', 'esa.shift_id')
+          .where('esa.employee_id', input.employeeId)
+          .where('esa.organization_id', ctx.organizationId)
+          .where('esa.effective_from', '<=', today)
+          .where((q: any) =>
+            q.whereNull('esa.effective_to').orWhere('esa.effective_to', '>=', today)
+          )
+          .orderBy('esa.effective_from', 'desc')
+          .select('st.start_time', 'st.end_time', 'st.shift_type', 'st.roster_pattern')
+          .first()
+          .catch(() => null);
+
+        const parseShiftTime = (timeStr: string, dateStr: string): Date => {
+          return new Date(`${dateStr}T${timeStr}`);
+        };
+        let shiftStart = shiftRow?.start_time
+          ? parseShiftTime(String(shiftRow.start_time), today) : null;
+        let shiftEnd = shiftRow?.end_time
+          ? parseShiftTime(String(shiftRow.end_time), today) : null;
+
+        // Overnight shift handling: if shift end time is before/equal shift start time, shift ends on next calendar day
+        if (shiftStart && shiftEnd && shiftEnd.getTime() <= shiftStart.getTime()) {
+          shiftEnd.setDate(shiftEnd.getDate() + 1);
+        }
+
+        // ── Day type detection (Holiday & Weekly Off / Roster Rest Day) ──
+        let isHoliday = false;
+        try {
+          // Direct DB check: is today in any holidays table for this org?
+          const holRow = await db('holidays')
+            .join('holiday_calendars as hc', 'hc.id', 'holidays.holiday_calendar_id')
+            .where('hc.organization_id', ctx.organizationId)
+            .whereNull('holidays.deleted_at')
+            .whereRaw('DATE(holidays.holiday_date) = ?', [today])
+            .first()
+            .catch(() => null);
+          isHoliday = !!holRow;
+        } catch { /* skip */ }
+
+        const dateObj = new Date(today);
+        const dow = dateObj.getDay(); // 0=Sun, 6=Sat
+        let isWeekend = false;
+
+        // 1. If employee has a Roster Shift, check their Shift Roster Pattern:
+        if (shiftRow?.shift_type === 'roster' || shiftRow?.roster_pattern) {
+          const isWorking = this.shiftService.isWorkingDay(dateObj, shiftRow.roster_pattern);
+          isWeekend = !isWorking; // If not a working day in roster, it's their rest day!
+        } else {
+          // 2. For General Shift: Check weekly_off_rules from Holiday Calendars
+          try {
+            const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+            const weekDayName = dayNames[dow];
+
+            const weekOffRule = await db('weekly_off_rules as wor')
+              .join('holiday_calendars as hc', 'hc.id', 'wor.calendar_id')
+              .where('wor.organization_id', ctx.organizationId)
+              .where('wor.week_day', weekDayName)
+              .whereNull('wor.deleted_at')
+              .first()
+              .catch(() => null);
+
+            if (weekOffRule) {
+              const isAlt = Boolean(weekOffRule.is_alternate || weekOffRule.isAlternate);
+              if (isAlt) {
+                const dayOfMonth = dateObj.getDate();
+                const nthWeekday = Math.floor((dayOfMonth - 1) / 7) + 1;
+                const altWeeksStr = String(weekOffRule.alternate_weeks || weekOffRule.alternateWeeks || '');
+                isWeekend = altWeeksStr.includes(String(nthWeekday));
+              } else {
+                isWeekend = true;
+              }
+            } else {
+              isWeekend = (dow === 0); // Fallback: Sunday is weekly off
+            }
+          } catch {
+            isWeekend = (dow === 0);
+          }
+        }
+
+        const dayType: 'normal' | 'holiday' | 'weekend' =
+          isHoliday ? 'holiday' : isWeekend ? 'weekend' : 'normal';
+
+        // ── Weekly OT already accrued this week ─────────────────────────
+        const dowNum = new Date(today).getDay();
+        const daysFromMonday = dowNum === 0 ? 6 : dowNum - 1;
+        const weekStartDate = new Date(today);
+        weekStartDate.setDate(weekStartDate.getDate() - daysFromMonday);
+        const weekStart = weekStartDate.toISOString().slice(0, 10);
+
+        const weeklyRow = await db('attendance_records')
+          .where('employee_id', input.employeeId)
+          .where('organization_id', ctx.organizationId)
+          .where('check_in_date', '>=', weekStart)
+          .where('check_in_date', '<', today)
+          .sum('overtime_minutes as total')
+          .first()
+          .catch(() => null);
+        const alreadyAccruedWeeklyMinutes = Number((weeklyRow as any)?.total || 0);
+
+        // ── Calculate OT ────────────────────────────────────────────────
+        overtimeMinutes = otRuleService.calculateOvertimeMinutes({
+          rule:                        otRule,
+          checkInTime:                 new Date(existingCheckInTime),
+          checkOutTime:                new Date(now),
+          workDurationMinutes,
+          shiftStartTime:              shiftStart,
+          shiftEndTime:                shiftEnd,
+          dayType,
+          alreadyAccruedWeeklyMinutes,
+        });
+
+        // ── Upsert overtime_request record (prevent duplicate insertion) ─
+        if (overtimeMinutes > 0) {
+          const autoApproveEnabled = Boolean((otRule as any).autoOtApprove ?? (otRule as any).auto_ot_approve);
+          const minMins = (otRule as any).autoApproveMinMinutes ?? (otRule as any).auto_approve_min_minutes;
+          const maxMins = (otRule as any).autoApproveMaxMinutes ?? (otRule as any).auto_approve_max_minutes;
+
+          const autoApprove =
+            autoApproveEnabled &&
+            (minMins == null || overtimeMinutes >= minMins) &&
+            (maxMins == null || overtimeMinutes <= maxMins);
+
+          isAutoApproved = autoApprove;
+
+          const overtimeType = dayType === 'holiday'
+            ? 'holiday_work' : dayType === 'weekend' ? 'weekend_work' : 'extra_hours';
+
+          const existingReq = await db('overtime_requests')
+            .where({
+              employee_id: input.employeeId,
+              organization_id: ctx.organizationId,
+              overtime_date: today,
+              source: 'auto_checkout',
+            })
+            .first()
+            .catch(() => null);
+
+          if (existingReq) {
+            await db('overtime_requests')
+              .where('id', existingReq.id)
+              .update({
+                overtime_hours:   parseFloat((overtimeMinutes / 60).toFixed(2)),
+                overtime_minutes: overtimeMinutes,
+                overtime_type:    overtimeType,
+                day_type:         dayType,
+                approval_status:  autoApprove ? 'approved' : 'pending',
+                approved_by:      autoApprove ? ctx.userId : null,
+                approval_date:    autoApprove
+                  ? new Date().toISOString().slice(0, 19).replace('T', ' ') : null,
+                updated_at:       new Date(),
+                updated_by:       ctx.userId,
+              });
+          } else {
+            await db('overtime_requests').insert({
+              uuid:                 uuidv4(),
+              employee_id:          input.employeeId,
+              organization_id:      ctx.organizationId,
+              overtime_date:        today,
+              overtime_hours:       parseFloat((overtimeMinutes / 60).toFixed(2)),
+              overtime_minutes:     overtimeMinutes,
+              overtime_type:        overtimeType,
+              day_type:             dayType,
+              source:               'auto_checkout',
+              approval_status:      autoApprove ? 'approved' : 'pending',
+              approved_by:          autoApprove ? ctx.userId : null,
+              approval_date:        autoApprove
+                ? new Date().toISOString().slice(0, 19).replace('T', ' ') : null,
+              created_by:           ctx.userId,
+              updated_by:           ctx.userId,
+            });
+          }
+        }
+      }
+    } catch (otErr) {
+      logger.warn('[AttendanceService.checkOut] OT calculation failed (non-fatal):', otErr);
+    }
+    // ── END AUTO OT ────────────────────────────────────────────────────────
+
     record = await this.recordRepo.update(ctx, record.id, {
-      check_out_time: now,
+      check_out_time:        now,
       check_out_location_id: matchedLocationId,
-      check_out_method: cleanOutMethod,
-      duration_minutes: durationMinutes,
-      break_time_minutes: totalBreakMinutes,
+      check_out_method:      cleanOutMethod,
+      duration_minutes:      durationMinutes,
+      break_time_minutes:    totalBreakMinutes,
       work_duration_minutes: workDurationMinutes,
+      overtime_minutes:      isAutoApproved ? overtimeMinutes : 0,
     });
 
     // Create session record
@@ -1323,10 +1516,9 @@ export class AttendanceService {
    * reporting officers to that company scope only.
    * Companies list always returns all companies for the org (used for the top-level picker).
    */
-  async getReportFilterOptions(ctx: TenantContext, companyId?: string | number | null) {
+  async getReportFilterOptions(ctx: TenantContext, companyId?: string | number | null, inputDeptIds?: number[] | string[]) {
     try {
       const { db } = await import('../../../db/knex');
-      console.log('[FilterOptions] companyId received:', companyId, '| organizationId:', ctx.organizationId);
 
       const isValidCompanyId = companyId != null && String(companyId) !== 'all' && String(companyId) !== 'undefined';
 
@@ -1381,47 +1573,50 @@ export class AttendanceService {
       }));
 
       // ── 4. Reporting Officers ─────────────────────────────────────────────────
-      let assignedManagerQuery = db('employees')
+      let officerQuery = db('employees')
         .where('organization_id', ctx.organizationId)
         .whereNull('deleted_at')
-        .whereNotNull('reporting_manager_id');
+        .where(function () {
+          this.whereIn('id', function () {
+            this.select('reporting_manager_id')
+              .from('employees')
+              .where('organization_id', ctx.organizationId)
+              .whereNull('deleted_at')
+              .whereNotNull('reporting_manager_id');
+          }).orWhereIn('access_role', ['organization_admin', 'hr_admin', 'hr_manager', 'department_head', 'manager', 'team_lead']);
+        });
+
       if (isValidCompanyId) {
-        assignedManagerQuery = assignedManagerQuery.where(function () {
+        officerQuery = officerQuery.where(function () {
           this.where('company_id', companyId).orWhereNull('company_id');
         });
       }
-      const assignedManagerIdRows = await assignedManagerQuery.distinct('reporting_manager_id').select('reporting_manager_id').catch(() => []);
-      const assignedManagerIds = assignedManagerIdRows
-        .map((r: any) => Number(r.reportingManagerId ?? r.reporting_manager_id))
-        .filter(Boolean);
 
-      let formattedReportingOfficers: { id: string; name: string }[] = [];
-      if (assignedManagerIds.length > 0) {
-        const managerRows = await db('employees')
-          .where('organization_id', ctx.organizationId)
-          .whereNull('deleted_at')
-          .whereIn('id', assignedManagerIds)
-          .select('id', 'first_name', 'last_name', 'employee_code')
-          .orderBy('first_name', 'asc')
-          .catch(() => []);
+      const officerRows = await officerQuery
+        .select('id', 'first_name', 'last_name', 'employee_code')
+        .orderBy('first_name', 'asc')
+        .catch(() => []);
 
-        formattedReportingOfficers = managerRows.map((e: any) => ({
-          id: String(e.id),
-          name: `${e.firstName ?? e.first_name ?? ''} ${e.lastName ?? e.last_name ?? ''}`.trim() || `Officer ${e.id}`,
-        }));
-      }
+      const formattedReportingOfficers = officerRows.map((e: any) => ({
+        id: String(e.id),
+        name: `${e.firstName ?? e.first_name ?? ''} ${e.lastName ?? e.last_name ?? ''}`.trim() || `Officer ${e.id}`,
+      }));
 
       // ── 5. Employees ─────────────────────────────────────────────────────────
       let employeeQuery = db('employees')
         .where('organization_id', ctx.organizationId)
-        .whereNull('deleted_at');
+        .whereNull('deleted_at')
+        .where(function () {
+          this.where('is_ceo', 0).orWhereNull('is_ceo');
+        });
       if (isValidCompanyId) {
         employeeQuery = employeeQuery.where(function () {
           this.where('company_id', companyId).orWhereNull('company_id');
         });
       }
-      if (departmentIds && departmentIds.length > 0) {
-        employeeQuery = employeeQuery.whereIn('current_department_id', departmentIds);
+      const filterDepts = (inputDeptIds && inputDeptIds.length > 0) ? inputDeptIds : departmentIds;
+      if (filterDepts && filterDepts.length > 0) {
+        employeeQuery = employeeQuery.whereIn('current_department_id', filterDepts);
       }
       const employeeRows = await employeeQuery.select('id', 'first_name', 'last_name', 'employee_code').orderBy('first_name', 'asc').catch(() => []);
       const formattedEmployees = employeeRows.map((e: any) => ({
@@ -1477,12 +1672,22 @@ export class AttendanceService {
 
     const parseIds = (val: any): number[] => {
       if (!val) return [];
-      const arr = Array.isArray(val) ? val : String(val).split(',');
-      return arr
+      let rawArr: any[] = [];
+      if (Array.isArray(val)) {
+        rawArr = val;
+      } else if (typeof val === 'object' && val !== null) {
+        rawArr = Object.values(val);
+      } else if (typeof val === 'string') {
+        rawArr = val.split(',');
+      } else if (typeof val === 'number') {
+        rawArr = [val];
+      }
+
+      return rawArr
         .map((x: any) => {
           if (typeof x === 'number') return x;
           const str = String(x).trim();
-          if (!str) return NaN;
+          if (!str || str === '[object Object]') return NaN;
           if (/^\d+$/.test(str)) return parseInt(str, 10);
           const match = str.match(/\d+/);
           return match ? parseInt(match[0], 10) : NaN;
@@ -1492,12 +1697,20 @@ export class AttendanceService {
 
     const parseStrings = (val: any): string[] => {
       if (!val) return [];
-      const arr = Array.isArray(val) ? val : String(val).split(',');
-      return arr.map((x: any) => String(x).trim()).filter(Boolean);
+      let rawArr: any[] = [];
+      if (Array.isArray(val)) {
+        rawArr = val;
+      } else if (typeof val === 'object' && val !== null) {
+        rawArr = Object.values(val);
+      } else if (typeof val === 'string') {
+        rawArr = val.split(',');
+      }
+      return rawArr.map((x: any) => String(x).trim()).filter((s) => s && s !== '[object Object]');
     };
 
     const targetEmpIds = parseIds(rawEmp);
     const targetEmpStrings = parseStrings(rawEmp);
+    const targetLocIds = parseIds(rawLoc);
     const targetDeptIds = parseIds(rawDept);
     const targetRoIds = parseIds(rawRo);
     const targetCompanyIds = isAllCompanies ? [] : parseIds(rawCompany);
@@ -1539,6 +1752,12 @@ export class AttendanceService {
     if (targetRoIds.length > 0) {
       empQuery = empQuery.whereIn('reporting_manager_id', targetRoIds);
     }
+    if (targetLocIds.length > 0) {
+      empQuery = empQuery.where(function () {
+        this.whereIn('current_branch_id', targetLocIds)
+          .orWhereIn('current_location_id', targetLocIds);
+      });
+    }
 
     const employeeList = await empQuery.catch(() => []);
     if (employeeList.length === 0) {
@@ -1565,7 +1784,7 @@ export class AttendanceService {
     }
 
     // 2. Fetch actual attendance records, shift assignments, and break data from DB
-    const [dbRecords, shiftAssignments, breakRows] = await Promise.all([
+    const [dbRecords, shiftAssignments, breakRows, approvedLeaveRows] = await Promise.all([
       db('attendance_records')
         .leftJoin('attendance_locations as in_loc', 'attendance_records.check_in_location_id', 'in_loc.id')
         .leftJoin('attendance_locations as out_loc', 'attendance_records.check_out_location_id', 'out_loc.id')
@@ -1574,6 +1793,9 @@ export class AttendanceService {
         .leftJoin('shift_templates as st_rec', 'attendance_records.shift_id', 'st_rec.id')
         .where('attendance_records.organization_id', ctx.organizationId)
         .whereIn('attendance_records.employee_id', matchedEmpIds)
+        .where('attendance_records.check_in_date', '>=', startStr)
+        .where('attendance_records.check_in_date', '<=', endStr)
+        .whereNull('attendance_records.deleted_at')
         .select(
           'attendance_records.*',
           'in_loc.location_name as check_in_location_name',
@@ -1597,7 +1819,8 @@ export class AttendanceService {
           'esa.assignment_end_date',
           'st.shift_name',
           'st.start_time',
-          'st.end_time'
+          'st.end_time',
+          'st.duration_hours'
         )
         .catch(() => []),
 
@@ -1612,6 +1835,18 @@ export class AttendanceService {
         )
         .whereNull('deleted_at')
         .select('attendance_record_id', 'break_duration_minutes', 'break_start_time', 'break_end_time', 'status', 'updated_at')
+        .catch(() => []),
+
+      db('leave_applications')
+        .where('organization_id', ctx.organizationId)
+        .whereIn('employee_id', matchedEmpIds)
+        .where('status', 'approved')
+        .whereNull('deleted_at')
+        .where(function () {
+          this.where('application_start_date', '<=', endStr)
+            .andWhere('application_end_date', '>=', startStr);
+        })
+        .select('employee_id', 'application_start_date', 'application_end_date', 'is_half_day')
         .catch(() => [])
     ]);
 
@@ -1679,6 +1914,21 @@ export class AttendanceService {
       }
     }
 
+    const leaveMap = new Map<string, any>();
+    for (const leave of approvedLeaveRows) {
+      const employeeId = Number(leave.employee_id);
+      const leaveStart = getDateStrKey(leave.application_start_date);
+      const leaveEnd = getDateStrKey(leave.application_end_date);
+      if (!employeeId || !leaveStart || !leaveEnd) continue;
+      const cursor = new Date(`${leaveStart}T12:00:00`);
+      const end = new Date(`${leaveEnd}T12:00:00`);
+      while (cursor <= end) {
+        const key = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}-${String(cursor.getDate()).padStart(2, '0')}`;
+        if (key >= startStr && key <= endStr) leaveMap.set(`${employeeId}_${key}`, leave);
+        cursor.setDate(cursor.getDate() + 1);
+      }
+    }
+
     const getDatesInRange = (sStr: string, eStr: string): string[] => {
       const result: string[] = [];
       const partsS = sStr.split('-').map(Number);
@@ -1704,12 +1954,15 @@ export class AttendanceService {
     const rows: any[] = [];
     let rowIdCounter = 1;
 
-    const [locationsGen, locationsAtt, geofencesList, branchesList] = await Promise.all([
+    const [locationsGen, locationsAtt, geofencesList, branchesList, shiftTemplatesList] = await Promise.all([
       db('locations').where('organization_id', ctx.organizationId).whereNull('deleted_at').catch(() => []),
       db('attendance_locations').where('organization_id', ctx.organizationId).whereNull('deleted_at').catch(() => []),
       db('attendance_geofences').where('organization_id', ctx.organizationId).catch(() => []),
       db('branches').where('organization_id', ctx.organizationId).whereNull('deleted_at').catch(() => []),
+      db('shift_templates').where('organization_id', ctx.organizationId).whereNull('deleted_at').catch(() => []),
     ]);
+
+    const defaultOrgShift = shiftTemplatesList.find((s: any) => s.is_default || s.isDefault) || shiftTemplatesList[0];
 
     const locationNameMap = new Map<number, string>();
     locationsGen.forEach((l: any) => locationNameMap.set(Number(l.id), l.name || l.location_name));
@@ -1773,7 +2026,16 @@ export class AttendanceService {
         let actualWorkingHours = '00:00';
         let lateMins = '00:00';
         let breakHoursForRow = '00:00';
-        const empDefaultLoc = emp.location_name || emp.locationName || dbRec?.emp_location_name || dbRec?.empLocationName || 'Primary Office';
+        let breakMinsForRow = 0;
+        const normalizeLocationName = (locName: string | null | undefined): string => {
+          if (!locName || locName === 'Primary Office' || locName === 'Primary Office - Corporate HQ') {
+            return 'Kosqu Technolab';
+          }
+          return locName;
+        };
+
+        const empRawLoc = emp.location_name || emp.locationName || dbRec?.emp_location_name || dbRec?.empLocationName;
+        const empDefaultLoc = normalizeLocationName(empRawLoc);
         let checkInLoc = empDefaultLoc;
         let checkOutLoc = empDefaultLoc;
         let formattedIn: string | null = null;
@@ -1803,8 +2065,11 @@ export class AttendanceService {
           const inLocId = dbRec.check_in_location_id || dbRec.checkInLocationId;
           const outLocId = dbRec.check_out_location_id || dbRec.checkOutLocationId;
 
-          const resolvedInLoc = (inLocId ? locationNameMap.get(Number(inLocId)) : null) || dbRec.check_in_location_name || dbRec.checkInLocationName || dbRec.check_in_location || dbRec.checkInLocation || dbRec.location;
-          const resolvedOutLoc = (outLocId ? locationNameMap.get(Number(outLocId)) : null) || dbRec.check_out_location_name || dbRec.checkOutLocationName || dbRec.check_out_location || dbRec.checkOutLocation || dbRec.location;
+          const rawInLoc = (inLocId ? locationNameMap.get(Number(inLocId)) : null) || dbRec.check_in_location_name || dbRec.checkInLocationName || dbRec.check_in_location || dbRec.checkInLocation || dbRec.location;
+          const rawOutLoc = (outLocId ? locationNameMap.get(Number(outLocId)) : null) || dbRec.check_out_location_name || dbRec.checkOutLocationName || dbRec.check_out_location || dbRec.checkOutLocation || dbRec.location;
+
+          const resolvedInLoc = normalizeLocationName(rawInLoc);
+          const resolvedOutLoc = normalizeLocationName(rawOutLoc);
 
           if (resolvedInLoc) {
             checkInLoc = resolvedInLoc;
@@ -1872,6 +2137,7 @@ export class AttendanceService {
           const mapBreakMins = breakMinsMap.get(Number(dbRec.id)) || 0;
           const recStoredBreakMins = Number(dbRec.break_time_minutes || dbRec.breakTimeMinutes || 0);
           const recBreakMins = mapBreakMins > 0 ? mapBreakMins : recStoredBreakMins;
+          breakMinsForRow = recBreakMins;
 
           const netMins = Math.max(0, durationMins - recBreakMins);
           const hrs = Math.floor(netMins / 60).toString().padStart(2, '0');
@@ -1890,25 +2156,43 @@ export class AttendanceService {
         } else {
           // No attendance record for this date — check if holiday or week-off or absent
           const isHolidayDate = reportHolidaySet.has(dateStr);
-          dayStatus = isWeekend ? 'Week Off' : isHolidayDate ? 'Holiday' : 'Absent';
+          const approvedLeave = leaveMap.get(`${empId}_${dateStr}`);
+          dayStatus = approvedLeave
+            ? (approvedLeave.is_half_day ? 'Half Day' : 'Leave')
+            : isHolidayDate
+              ? 'Holiday'
+              : isWeekend
+                ? 'Week Off'
+                : 'Absent';
           actualTiming = '-- - --';
           actualWorkingHours = '00:00';
         }
 
-        const shortHours = dayStatus === 'Half Day' ? '04:30' : dayStatus === 'Absent' ? '09:00' : '00:00';
+        let shortHours = '00:00';
         const totalBreakHours = breakHoursForRow;
 
         const isFalse = (val: any) => val === false || val === 'false' || val === 0 || val === '0';
         const isTrue = (val: any) => val === true || val === 'true' || val === 1 || val === '1';
 
-        if (sf && sf.present !== undefined && isFalse(sf.present) && dayStatus === 'Full Day') continue;
-        if (sf && sf.halfDay !== undefined && isFalse(sf.halfDay) && dayStatus === 'Half Day') continue;
-        if (sf && sf.absent !== undefined && isFalse(sf.absent) && dayStatus === 'Absent') continue;
-        if (sf && sf.leave !== undefined && isFalse(sf.leave) && dayStatus === 'Leave') continue;
-        if (sf && sf.expected !== undefined && isFalse(sf.expected) && (dayStatus === 'Week Off' || dayStatus === 'Holiday')) continue;
+        if (sf) {
+          const hasPositiveStatusFilter = (
+            isTrue(sf.present) || isTrue(sf.halfDay) || isTrue(sf.absent) || isTrue(sf.leave) || isTrue(sf.expected)
+          );
 
-        if (sf && sf.lateMark !== undefined && isTrue(sf.lateMark) && isLate !== 'Yes') continue;
-        if (sf && sf.shortWorkingHour !== undefined && isTrue(sf.shortWorkingHour) && (shortHours === '00:00' || dayStatus === 'Full Day')) continue;
+          if (hasPositiveStatusFilter) {
+            let statusMatch = false;
+            if (isTrue(sf.present) && dayStatus === 'Full Day') statusMatch = true;
+            if (isTrue(sf.halfDay) && dayStatus === 'Half Day') statusMatch = true;
+            if (isTrue(sf.absent) && dayStatus === 'Absent') statusMatch = true;
+            if (isTrue(sf.leave) && dayStatus === 'Leave') statusMatch = true;
+            if (isTrue(sf.expected) && (dayStatus === 'Week Off' || dayStatus === 'Holiday')) statusMatch = true;
+
+            if (!statusMatch) continue;
+          }
+
+          if (isTrue(sf.lateMark) && isLate !== 'Yes') continue;
+          if (isTrue(sf.breakLog) && breakMinsForRow <= 0) continue;
+        }
 
         if (workType === 'full_day' && dayStatus !== 'Full Day') continue;
         if (workType === 'half_day' && dayStatus !== 'Half Day') continue;
@@ -1933,31 +2217,49 @@ export class AttendanceService {
         };
 
         const resolveEmpShift = (eId: number, dStr: string, recordObj?: any) => {
-          if (recordObj && recordObj.rec_shift_name) {
-            const sName = recordObj.rec_shift_name;
-            const sIn = recordObj.rec_shift_start_time ? formatDisplayTime(recordObj.rec_shift_start_time) : '--';
-            const sOut = recordObj.rec_shift_end_time ? formatDisplayTime(recordObj.rec_shift_end_time) : '--';
-            const dur = Number(recordObj.rec_shift_duration_hours || recordObj.recShiftDurationHours || 0);
+          // 1. Check if the attendance record itself specifies a shift
+          if (recordObj && (recordObj.rec_shift_name || recordObj.shift_name || recordObj.shiftName)) {
+            const sName = recordObj.rec_shift_name || recordObj.shift_name || recordObj.shiftName;
+            const sIn = recordObj.rec_shift_start_time || recordObj.shift_start_time ? formatDisplayTime(recordObj.rec_shift_start_time || recordObj.shift_start_time) : '--';
+            const sOut = recordObj.rec_shift_end_time || recordObj.shift_end_time ? formatDisplayTime(recordObj.rec_shift_end_time || recordObj.shift_end_time) : '--';
+            const dur = Number(recordObj.rec_shift_duration_hours || recordObj.recShiftDurationHours || recordObj.duration_hours || 0);
             return { shiftName: sName, startTime: sIn, endTime: sOut, durationHours: dur };
           }
-          const saMatch = shiftAssignments.find((sa: any) => {
-            if (Number(sa.employee_id) !== eId) return false;
-            const sDate = sa.assignment_start_date ? getDateStrKey(sa.assignment_start_date) : '';
-            const eDate = sa.assignment_end_date ? getDateStrKey(sa.assignment_end_date) : '';
-            if (sDate && sDate > dStr) return false;
-            if (eDate && eDate < dStr) return false;
-            return true;
-          });
-          if (saMatch) {
-            return {
-              shiftName: saMatch.shift_name || 'Unknown Shift',
-              startTime: saMatch.start_time ? formatDisplayTime(saMatch.start_time) : '--',
-              endTime: saMatch.end_time ? formatDisplayTime(saMatch.end_time) : '--',
-              durationHours: Number(saMatch.duration_hours || saMatch.durationHours || 0),
-            };
+
+          // 2. Filter shift assignments for this employee
+          const empAssignments = shiftAssignments.filter((sa: any) => Number(sa.employee_id || sa.employeeId) === eId);
+
+          if (empAssignments.length > 0) {
+            // Find assignment covering the date
+            const dateMatch = empAssignments.find((sa: any) => {
+              const sDate = sa.assignment_start_date ? getDateStrKey(sa.assignment_start_date) : '';
+              const eDate = sa.assignment_end_date ? getDateStrKey(sa.assignment_end_date) : '';
+              if (sDate && sDate > dStr) return false;
+              if (eDate && eDate < dStr) return false;
+              return true;
+            });
+
+            const saMatch = dateMatch || empAssignments[0]; // Fall back to employee's assigned shift
+            if (saMatch) {
+              const sName = saMatch.shift_name || saMatch.shiftName || 'Standard Shift';
+              const sIn = saMatch.start_time || saMatch.startTime ? formatDisplayTime(saMatch.start_time || saMatch.startTime) : '--';
+              const sOut = saMatch.end_time || saMatch.endTime ? formatDisplayTime(saMatch.end_time || saMatch.endTime) : '--';
+              const dur = Number(saMatch.duration_hours || saMatch.durationHours || 9);
+              return { shiftName: sName, startTime: sIn, endTime: sOut, durationHours: dur };
+            }
           }
-          // No shift assigned — return Unassigned (do NOT fall back to hardcoded General Shift)
-          return { shiftName: 'Unassigned', startTime: '--', endTime: '--', durationHours: 0 };
+
+          // 3. Fall back to organization's default shift template if available
+          if (defaultOrgShift) {
+            const sName = defaultOrgShift.shift_name || defaultOrgShift.name || 'General Shift';
+            const sIn = defaultOrgShift.start_time ? formatDisplayTime(defaultOrgShift.start_time) : '09:00 AM';
+            const sOut = defaultOrgShift.end_time ? formatDisplayTime(defaultOrgShift.end_time) : '06:00 PM';
+            const dur = Number(defaultOrgShift.duration_hours || defaultOrgShift.durationHours || 9);
+            return { shiftName: sName, startTime: sIn, endTime: sOut, durationHours: dur };
+          }
+
+          // 4. Final fallback
+          return { shiftName: 'General Shift', startTime: '09:00 AM', endTime: '06:00 PM', durationHours: 9 };
         };
 
         const currentShift = resolveEmpShift(empId, dateStr, dbRec);
@@ -1977,6 +2279,37 @@ export class AttendanceService {
           const m = (totalMins % 60).toString().padStart(2, '0');
           return `${h}:${m}`;
         })();
+
+        const expectedMinutes = Math.round((currentShift.durationHours || 0) * 60);
+        const [actualHoursPart = '0', actualMinutesPart = '0'] = actualWorkingHours.split(':');
+        const actualMinutes = Number(actualHoursPart) * 60 + Number(actualMinutesPart);
+        // A short-working-hour record must have an actual punch. Absence and
+        // leave have their own filters and must not be reported as short work.
+        if (formattedIn && expectedMinutes > 0 && actualMinutes < expectedMinutes) {
+          const difference = expectedMinutes - actualMinutes;
+          shortHours = `${String(Math.floor(difference / 60)).padStart(2, '0')}:${String(difference % 60).padStart(2, '0')}`;
+        }
+
+        if (isTrue(sf.shortWorkingHour) && shortHours === '00:00') continue;
+
+        if (isLate === 'Yes' && formattedIn && currentShift.startTime !== '--') {
+          const toMinutes = (value: string) => {
+            const match = value.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+            if (!match) return null;
+            let hour = Number(match[1]);
+            const minute = Number(match[2]);
+            const meridiem = match[3]?.toUpperCase();
+            if (meridiem === 'PM' && hour < 12) hour += 12;
+            if (meridiem === 'AM' && hour === 12) hour = 0;
+            return hour * 60 + minute;
+          };
+          const scheduled = toMinutes(currentShift.startTime);
+          const punched = toMinutes(formattedIn);
+          if (scheduled !== null && punched !== null && punched > scheduled) {
+            const difference = punched - scheduled;
+            lateMins = `${String(Math.floor(difference / 60)).padStart(2, '0')}:${String(difference % 60).padStart(2, '0')}`;
+          }
+        }
 
         rows.push({
           id: String(rowIdCounter++),
@@ -2056,11 +2389,15 @@ export class AttendanceService {
     const targetLocIds = parseIds(rawLoc);
     const targetRoIds = parseIds(rawRo);
     const targetCompanyIds = parseIds(rawCompany);
+    const saturdayRule = params?.saturdayRule || params?.saturday_rule || 'all_off';
 
-    // 1. Fetch matching employees from DB
+    // 1. Fetch matching employees from DB (Excluding CEO)
     let empQuery = db('employees')
       .where('organization_id', ctx.organizationId)
-      .whereNull('deleted_at');
+      .whereNull('deleted_at')
+      .where(function () {
+        this.where('is_ceo', 0).orWhereNull('is_ceo');
+      });
 
     if (targetCompanyIds.length > 0) {
       empQuery = empQuery.where(function () {
@@ -2149,18 +2486,56 @@ export class AttendanceService {
 
     const dates = getDatesInRange(startStr, endStr);
 
-    // Fetch actual attendance records from DB (including break_time_minutes)
-    const dbRecords = await db('attendance_records')
-      .where('organization_id', ctx.organizationId)
-      .whereIn('employee_id', matchedEmpIds)
-      .where('check_in_date', '>=', startStr)
-      .where('check_in_date', '<=', endStr)
-      .whereNull('deleted_at')
-      .select(
-        'id', 'employee_id', 'check_in_date', 'check_in_time', 'check_out_time',
-        'status', 'duration_minutes', 'work_duration_minutes', 'break_time_minutes'
-      )
-      .catch(() => []);
+    // Fetch actual attendance records & approved leaves from DB
+    const [dbRecords, approvedLeaveRows] = await Promise.all([
+      db('attendance_records')
+        .where('organization_id', ctx.organizationId)
+        .whereIn('employee_id', matchedEmpIds)
+        .where('check_in_date', '>=', startStr)
+        .where('check_in_date', '<=', endStr)
+        .whereNull('deleted_at')
+        .select(
+          'id', 'employee_id', 'check_in_date', 'check_in_time', 'check_out_time',
+          'status', 'duration_minutes', 'work_duration_minutes', 'break_time_minutes'
+        )
+        .catch(() => []),
+
+      db('leave_applications')
+        .leftJoin('leave_types', 'leave_applications.leave_type_id', 'leave_types.id')
+        .where('leave_applications.organization_id', ctx.organizationId)
+        .whereIn('leave_applications.employee_id', matchedEmpIds)
+        .where('leave_applications.status', 'approved')
+        .whereNull('leave_applications.deleted_at')
+        .where(function () {
+          this.where('leave_applications.application_start_date', '<=', endStr)
+            .andWhere('leave_applications.application_end_date', '>=', startStr);
+        })
+        .select(
+          'leave_applications.employee_id',
+          'leave_applications.application_start_date',
+          'leave_applications.application_end_date',
+          'leave_applications.is_half_day',
+          'leave_types.name as leave_type_name',
+          'leave_types.code as leave_type_code'
+        )
+        .catch(() => [])
+    ]);
+
+    // Build leave lookup map: `${empId}_${dateStr}` → leave object
+    const leaveMap = new Map<string, any>();
+    for (const l of approvedLeaveRows) {
+      const eId = Number(l.employee_id || l.employeeId);
+      const sStr = String(l.application_start_date || l.applicationStartDate || '').slice(0, 10);
+      const eStr = String(l.application_end_date || l.applicationEndDate || '').slice(0, 10);
+      if (eId && sStr && eStr) {
+        const lDates = getDatesInRange(sStr, eStr);
+        for (const ld of lDates) {
+          if (ld >= startStr && ld <= endStr) {
+            leaveMap.set(`${eId}_${ld}`, l);
+          }
+        }
+      }
+    }
 
     // ── Helper: parse any timestamp value → 'HH:MM' string (IST-aware) ────
     const toHHMM = (t: any): string | null => {
@@ -2170,11 +2545,8 @@ export class AttendanceService {
         d = t;
       } else {
         const str = String(t).trim();
-        // MySQL returns timestamps as 'YYYY-MM-DD HH:MM:SS' in local time
-        // new Date() on that interprets as UTC, so we must parse manually
         const match = str.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/);
         if (match) {
-          // Parse as local time to avoid UTC offset shift
           d = new Date(
             parseInt(match[1]), parseInt(match[2]) - 1, parseInt(match[3]),
             parseInt(match[4]), parseInt(match[5])
@@ -2204,8 +2576,6 @@ export class AttendanceService {
       const rawDate = r.check_in_date || r.checkInDate;
       let dateKey = '';
       if (rawDate instanceof Date) {
-        // MySQL Date type comes back as a JS Date at midnight UTC
-        // Add 1 day's offset protection: use UTC date components
         const y = rawDate.getUTCFullYear();
         const m = String(rawDate.getUTCMonth() + 1).padStart(2, '0');
         const d = String(rawDate.getUTCDate()).padStart(2, '0');
@@ -2283,9 +2653,27 @@ export class AttendanceService {
 
         const key = `${empId}_${dateStr}`;
         const rec = recordLookup.get(key);
+        const approvedLeave = leaveMap.get(key);
 
-        if (dayOfWeek === 0 || dayOfWeek === 6) {
-          // Weekend
+        // Determine if Saturday is off based on saturdayRule
+        let isSaturdayOff = true;
+        if (dayOfWeek === 6) {
+          const dayOfMonth = dt.getDate();
+          const saturdayOccurrence = Math.ceil(dayOfMonth / 7);
+          if (saturdayRule === 'all_working' || saturdayRule === 'working') {
+            isSaturdayOff = false;
+          } else if (saturdayRule === 'alternate_off' || saturdayRule === 'second_fourth_off') {
+            isSaturdayOff = (saturdayOccurrence === 2 || saturdayOccurrence === 4);
+          } else if (saturdayRule === 'first_third_off') {
+            isSaturdayOff = (saturdayOccurrence === 1 || saturdayOccurrence === 3);
+          } else {
+            isSaturdayOff = true;
+          }
+        }
+
+        const isWeekendOffDay = dayOfWeek === 0 || (dayOfWeek === 6 && isSaturdayOff);
+
+        if (isWeekendOffDay && !rec) {
           dailyStatus[dateStr] = 'W/O';
           dailyTimings[dateStr] = 'Week-Off';
           wo += 1;
@@ -2293,14 +2681,29 @@ export class AttendanceService {
         }
 
         if (!rec) {
-          // Working day but no attendance record — check if holiday before marking NP
-          if (matrixHolidaySet.has(dateStr)) {
+          // No attendance punch on working day / working weekend
+          if (approvedLeave) {
+            const lCode = String(approvedLeave.leave_type_code || approvedLeave.leave_type_name || '').toUpperCase();
+            if (lCode.includes('LWP') || lCode.includes('UNPAID')) {
+              dailyStatus[dateStr] = 'LWP';
+              dailyTimings[dateStr] = '00:00-00:00';
+              lwp += 1;
+            } else if (lCode.includes('PRIVILEGE') || lCode.includes('PLV')) {
+              dailyStatus[dateStr] = 'PLV';
+              dailyTimings[dateStr] = '00:00-00:00';
+              plv += 1;
+            } else {
+              dailyStatus[dateStr] = 'PL';
+              dailyTimings[dateStr] = '00:00-00:00';
+              pl += 1;
+            }
+          } else if (matrixHolidaySet.has(dateStr)) {
             const holName = matrixHolidaySet.get(dateStr) || 'Holiday';
             dailyStatus[dateStr] = 'Holiday';
             dailyTimings[dateStr] = holName;
             totalHoliday += 1;
           } else {
-            // No record, not a holiday → Not Present
+            // Not Present
             dailyStatus[dateStr] = 'NP';
             dailyTimings[dateStr] = '00:00-00:00';
           }
@@ -2322,7 +2725,6 @@ export class AttendanceService {
         } else if (duration != null && duration > 0) {
           workMins = Number(duration);
         } else if ((rec.check_in_time || rec.checkInTime) && (rec.check_out_time || rec.checkOutTime)) {
-          // Compute from timestamps
           const dIn = new Date(rec.check_in_time || rec.checkInTime);
           const dOut = new Date(rec.check_out_time || rec.checkOutTime);
           if (!isNaN(dIn.getTime()) && !isNaN(dOut.getTime()) && dOut > dIn) {
@@ -2342,9 +2744,18 @@ export class AttendanceService {
           dailyTimings[dateStr] = '00:00-00:00';
           totalHoliday += 1;
         } else if (st === 'on_leave') {
-          dailyStatus[dateStr] = 'PL';
+          const lCode = String(approvedLeave?.leave_type_code || approvedLeave?.leave_type_name || '').toUpperCase();
+          if (lCode.includes('LWP') || lCode.includes('UNPAID')) {
+            dailyStatus[dateStr] = 'LWP';
+            lwp += 1;
+          } else if (lCode.includes('PRIVILEGE') || lCode.includes('PLV')) {
+            dailyStatus[dateStr] = 'PLV';
+            plv += 1;
+          } else {
+            dailyStatus[dateStr] = 'PL';
+            pl += 1;
+          }
           dailyTimings[dateStr] = '00:00-00:00';
-          pl += 1;
         } else if (st === 'absent') {
           dailyStatus[dateStr] = 'LWP';
           dailyTimings[dateStr] = '00:00-00:00';
@@ -2519,14 +2930,19 @@ export class AttendanceService {
       let rawDate = r.check_in_date || r.checkInDate || rawIn;
       let formattedDate = '';
       if (rawDate) {
-        const d = new Date(rawDate);
-        if (!isNaN(d.getTime())) {
-          const y = d.getFullYear();
-          const m = String(d.getMonth() + 1).padStart(2, '0');
-          const day = String(d.getDate()).padStart(2, '0');
-          formattedDate = `${y}-${m}-${day}`;
-        } else {
+        if (typeof rawDate === 'string') {
+          // dateStrings:true → mysql2 returns '2026-09-04' or '2026-09-04 15:54:29'
           formattedDate = String(rawDate).slice(0, 10);
+        } else {
+          const d = new Date(rawDate);
+          if (!isNaN(d.getTime())) {
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            formattedDate = `${y}-${m}-${day}`;
+          } else {
+            formattedDate = String(rawDate).slice(0, 10);
+          }
         }
       }
       if (!formattedDate) formattedDate = getLocalYYYYMMDD();

@@ -7,7 +7,6 @@ import { Label } from '@/components/ui/label';
 import { Edit, Save, X, Loader2, Lock } from 'lucide-react';
 import { showToast } from '@/components/ui/toast';
 import { ProfileEditRequestModal } from './ProfileEditRequestModal';
-import { useConsumeEditPermission } from '../hooks/useProfileEditPermission';
 import { useAuthStore } from '@/features/auth/store/authStore';
 import {
   useEmployeePersonalInfo,
@@ -40,7 +39,6 @@ export function EmployeePersonalInfo({ employeeId, editUnlocked = false, approve
 
   const isEmployeePortal = !isAdminOrHR;
   const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
-  const { consumePermission } = useConsumeEditPermission();
 
   const { personalInfo, isLoading } = useEmployeePersonalInfo(employeeId);
   const { updatePersonalInfo, isLoading: isSaving } = useUpdatePersonalInfo(employeeId);
@@ -58,10 +56,6 @@ export function EmployeePersonalInfo({ employeeId, editUnlocked = false, approve
         payload.childrenCount = Number(payload.childrenCount) || 0;
       }
       await updatePersonalInfo(payload);
-      // Consume the approved edit permission so employee can't edit again without another approval
-      if (isEmployeePortal && approvedRequestId) {
-        await consumePermission(approvedRequestId);
-      }
       showToast.success('Personal information saved');
       setIsEditing(false);
     } catch {
@@ -144,24 +138,60 @@ export function EmployeePersonalInfo({ employeeId, editUnlocked = false, approve
               />
             </div>
             <div>
-              <Label htmlFor="spouseName" className="text-xs font-medium">Spouse's Name</Label>
-              <Input
-                id="spouseName"
-                className="mt-1 h-9 text-xs"
-                value={form.spouseName || ''}
-                onChange={(e) => setForm({ ...form, spouseName: e.target.value })}
-              />
+              <Label htmlFor="maritalStatus" className="text-xs font-medium">Marital Status</Label>
+              <select
+                id="maritalStatus"
+                className="mt-1 h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
+                value={form.maritalStatus || ''}
+                onChange={(e) => {
+                  const status = e.target.value || null;
+                  // Clear spouse name if switching away from married
+                  // Clear children count if switching to single
+                  setForm({
+                    ...form,
+                    maritalStatus: status,
+                    spouseName: status === 'married' ? form.spouseName : null,
+                    childrenCount: (status === 'married' || status === 'divorced' || status === 'widowed')
+                      ? form.childrenCount
+                      : null,
+                  });
+                }}
+              >
+                <option value="">-- Select Marital Status --</option>
+                <option value="single">Single</option>
+                <option value="married">Married</option>
+                <option value="divorced">Divorced</option>
+                <option value="widowed">Widowed</option>
+              </select>
             </div>
-            <div>
-              <Label htmlFor="childrenCount" className="text-xs font-medium">Children Count</Label>
-              <Input
-                id="childrenCount"
-                type="number"
-                className="mt-1 h-9 text-xs"
-                value={form.childrenCount ?? ''}
-                onChange={(e) => setForm({ ...form, childrenCount: e.target.value as any })}
-              />
-            </div>
+
+            {/* Spouse Name — only for Married */}
+            {form.maritalStatus === 'married' && (
+              <div>
+                <Label htmlFor="spouseName" className="text-xs font-medium">Spouse's Name</Label>
+                <Input
+                  id="spouseName"
+                  className="mt-1 h-9 text-xs"
+                  value={form.spouseName || ''}
+                  onChange={(e) => setForm({ ...form, spouseName: e.target.value })}
+                />
+              </div>
+            )}
+
+            {/* Children Count — for Married, Divorced, Widowed */}
+            {(form.maritalStatus === 'married' || form.maritalStatus === 'divorced' || form.maritalStatus === 'widowed') && (
+              <div>
+                <Label htmlFor="childrenCount" className="text-xs font-medium">Children Count</Label>
+                <Input
+                  id="childrenCount"
+                  type="number"
+                  min={0}
+                  className="mt-1 h-9 text-xs"
+                  value={form.childrenCount ?? ''}
+                  onChange={(e) => setForm({ ...form, childrenCount: e.target.value as any })}
+                />
+              </div>
+            )}
             <div className="md:col-span-2">
               <Label htmlFor="currentAddress" className="text-xs font-medium">Current Address</Label>
               <Input
@@ -235,13 +265,27 @@ export function EmployeePersonalInfo({ employeeId, editUnlocked = false, approve
                   <p className="mt-0.5 text-xs font-medium text-foreground">{formatValue(personalInfo?.motherName)}</p>
                 </div>
                 <div>
-                  <p className="text-[10px] font-bold text-muted-foreground uppercase">Spouse's Name</p>
-                  <p className="mt-0.5 text-xs font-medium text-foreground">{formatValue(personalInfo?.spouseName)}</p>
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase">Marital Status</p>
+                  <p className="mt-0.5 text-xs font-medium text-foreground capitalize">{formatValue(personalInfo?.maritalStatus)}</p>
                 </div>
-                <div>
-                  <p className="text-[10px] font-bold text-muted-foreground uppercase">Children Count</p>
-                  <p className="mt-0.5 text-xs font-medium text-foreground">{formatValue(personalInfo?.childrenCount)}</p>
-                </div>
+
+                {/* Spouse Name — only when married */}
+                {personalInfo?.maritalStatus === 'married' && (
+                  <div>
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase">Spouse's Name</p>
+                    <p className="mt-0.5 text-xs font-medium text-foreground">{formatValue(personalInfo?.spouseName)}</p>
+                  </div>
+                )}
+
+                {/* Children Count — when married, divorced, or widowed */}
+                {(personalInfo?.maritalStatus === 'married' ||
+                  personalInfo?.maritalStatus === 'divorced' ||
+                  personalInfo?.maritalStatus === 'widowed') && (
+                  <div>
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase">Children Count</p>
+                    <p className="mt-0.5 text-xs font-medium text-foreground">{formatValue(personalInfo?.childrenCount)}</p>
+                  </div>
+                )}
               </div>
             </div>
 

@@ -5,10 +5,11 @@ import {
   LayoutDashboard, Clock, Palmtree, FileText, User,
   Calendar, Megaphone, Building2, BookOpen, Briefcase,
   CheckCircle2, TrendingUp, Target, Bell, ChevronRight,
-  GraduationCap, Timer, Award, Activity
+  GraduationCap, Timer, Award, Activity, ReceiptIndianRupee
 } from 'lucide-react';
 
 import { useAuthStore } from '@/features/auth/store/authStore';
+import { apiClient } from '@/config/api';
 
 // ── Amber accent palette ──────────────────────────────────────────────────────
 const amber = {
@@ -24,6 +25,7 @@ const QUICK_ACTIONS = [
   { label: 'Mark Attendance',   icon: Clock,       href: '/intern/attendance',       color: 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800 hover:border-amber-400' },
   { label: 'Apply Leave',       icon: Palmtree,    href: '/intern/leaves',           color: 'bg-sky-50 dark:bg-sky-950/30 border-sky-200 dark:border-sky-800 hover:border-sky-400' },
   { label: 'My Payslip',        icon: FileText,    href: '/intern/payslips',         color: 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800 hover:border-emerald-400' },
+  { label: 'Expense Claims',    icon: ReceiptIndianRupee, href: '/intern/expenses',  color: 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800 hover:border-amber-400' },
   { label: 'My Documents',      icon: BookOpen,    href: '/intern/documents',        color: 'bg-violet-50 dark:bg-violet-950/30 border-violet-200 dark:border-violet-800 hover:border-violet-400' },
   { label: 'Holiday Calendar',  icon: Calendar,    href: '/intern/holiday-calendar', color: 'bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-800 hover:border-rose-400' },
   { label: 'My Profile',        icon: User,        href: '/intern/profile',          color: 'bg-orange-50 dark:bg-orange-950/30 border-orange-200 dark:border-orange-800 hover:border-orange-400' },
@@ -93,17 +95,20 @@ export function InternDashboardPage() {
   const { user } = useAuthStore();
   const navigate = useNavigate();
   const [greeting, setGreeting] = useState('');
+  const [stats, setStats] = useState<any>(null);
 
   useEffect(() => {
     const h = new Date().getHours();
     setGreeting(h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening');
   }, []);
 
+  useEffect(() => { apiClient.get('/dashboard/me/stats').then((r) => setStats(r.data?.data)).catch(() => setStats({})); }, []);
+
   const firstName = user?.firstName || 'Intern';
 
   // Placeholder internship dates — in real use these would come from the employee profile API
-  const internStart = '2026-06-01';
-  const internEnd   = '2026-12-31';
+  const internStart = stats?.startDate || new Date().toISOString().slice(0, 10);
+  const internEnd = stats?.endDate || internStart;
 
   const today = new Date().toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
@@ -140,10 +145,10 @@ export function InternDashboardPage() {
 
       {/* ── Stats Row ──────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <StatCard label="Days Present"    value={18}   icon={CheckCircle2} sub="This month"     accent="text-emerald-600 dark:text-emerald-400" />
-        <StatCard label="Leaves Taken"    value={2}    icon={Palmtree}     sub="Remaining: 8"   accent="text-sky-600 dark:text-sky-400" />
-        <StatCard label="Stipend"         value="₹12K" icon={TrendingUp}   sub="Last disbursed" accent="text-amber-600 dark:text-amber-400" />
-        <StatCard label="Tasks Completed" value={7}    icon={Target}       sub="Out of 10 this week" accent="text-violet-600 dark:text-violet-400" />
+        <StatCard label="Days Present" value={stats?.attendanceDays ?? '—'} icon={CheckCircle2} sub="This month" accent="text-emerald-600 dark:text-emerald-400" />
+        <StatCard label="Leave Requests" value={stats?.leaveDays ?? '—'} icon={Palmtree} sub="Recorded requests" accent="text-sky-600 dark:text-sky-400" />
+        <StatCard label="Payslips" value={stats?.payslipCount ?? '—'} icon={TrendingUp} sub="Available records" accent="text-amber-600 dark:text-amber-400" />
+        <StatCard label="Active Tasks" value={stats?.activeTasks ?? '—'} icon={Target} sub="Current assignments" accent="text-violet-600 dark:text-violet-400" />
       </div>
 
       {/* ── Quick Actions ───────────────────────────────────────────────────── */}

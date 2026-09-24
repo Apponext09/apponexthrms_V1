@@ -49,14 +49,14 @@ export function EmployeeDataTable({
     employeeNameAvatar: true,
     employeeCode: true,
     contactInfo: true,
-    statusBadge: true,
+    statusBadge: false,
     accessRole: true,
     department: true,
     designation: true,
     employmentType: true,
-    location: true,
-    reportingManager: true,
-    dateOfJoining: true,
+    location: false,
+    reportingManager: false,
+    dateOfJoining: false,
     actions: true,
     actionViewProfile: true,
     actionEdit: false,
@@ -129,8 +129,10 @@ export function EmployeeDataTable({
                 {/* Employee Name & Avatar */}
                 {cols.employeeNameAvatar && (
                   <TableCell
-                    onClick={() => navigate(`/employees/${employee.id}`)}
-                    className="py-3 px-4 font-medium cursor-pointer"
+                    onClick={() => {
+                      if (!isCeo) navigate(`/employees/${employee.id}`);
+                    }}
+                    className={cn("py-3 px-4 font-medium", isCeo ? "cursor-default" : "cursor-pointer")}
                   >
                     <div className="flex items-center gap-3">
                       <div
@@ -166,8 +168,10 @@ export function EmployeeDataTable({
                 {/* Employee Code */}
                 {cols.employeeCode && (
                   <TableCell
-                    onClick={() => navigate(`/employees/${employee.id}`)}
-                    className="py-3 px-4 cursor-pointer font-mono font-semibold text-foreground/80"
+                    onClick={() => {
+                      if (!isCeo) navigate(`/employees/${employee.id}`);
+                    }}
+                    className={cn("py-3 px-4 font-mono font-semibold text-foreground/80", isCeo ? "cursor-default" : "cursor-pointer")}
                   >
                     <span
                       className={cn(
@@ -195,72 +199,87 @@ export function EmployeeDataTable({
                 {/* Status Pill Badge */}
                 {cols.statusBadge && (
                   <TableCell className="py-3 px-4">
-                    <span
-                      className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${
-                        employee.status === 'active'
-                          ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20'
-                          : employee.status === 'inactive' || employee.status === 'exit'
-                          ? 'bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/20'
-                          : 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20'
-                      }`}
-                    >
-                      <span
-                        className={`w-1.5 h-1.5 rounded-full ${
-                          employee.status === 'active'
-                            ? 'bg-emerald-500'
-                            : employee.status === 'inactive' || employee.status === 'exit'
-                            ? 'bg-rose-500'
-                            : 'bg-amber-500'
-                        }`}
-                      />
-                      {employee.status ? employee.status.charAt(0).toUpperCase() + employee.status.slice(1) : 'Active'}
-                    </span>
+                    {(() => {
+                      const displayStatus = (employee as any).employeeStatus || (employee as any).employee_status || employee.status || 'Active';
+                      const lower = String(displayStatus).toLowerCase();
+                      const isActive = lower === 'active';
+                      const isInactive = lower === 'inactive' || lower === 'exit' || lower === 'terminated';
+                      return (
+                        <span
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${
+                            isActive
+                              ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20'
+                              : isInactive
+                              ? 'bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/20'
+                              : 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20'
+                          }`}
+                        >
+                          <span
+                            className={`w-1.5 h-1.5 rounded-full ${
+                              isActive
+                                ? 'bg-emerald-500'
+                                : isInactive
+                                ? 'bg-rose-500'
+                                : 'bg-amber-500'
+                            }`}
+                          />
+                          {String(displayStatus).charAt(0).toUpperCase() + String(displayStatus).slice(1)}
+                        </span>
+                      );
+                    })()}
                   </TableCell>
                 )}
 
                 {/* Access Role Badge */}
-                {cols.accessRole && (
-                  <TableCell className="py-3 px-4">
-                    <span
-                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold border ${
-                        isCeo
-                          ? 'bg-amber-500/20 text-amber-800 dark:text-amber-300 border-amber-500/40 font-black'
-                          : employee.accessRole === 'hr_manager' || employee.accessRole === 'organization_admin'
-                          ? 'bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/20'
-                          : employee.accessRole === 'department_head' || employee.accessRole === 'manager'
-                          ? 'bg-violet-500/10 text-violet-700 dark:text-violet-300 border-violet-500/20'
-                          : employee.accessRole === 'team_lead'
-                          ? 'bg-teal-500/10 text-teal-700 dark:text-teal-300 border-teal-500/20'
-                          : employee.accessRole === 'intern'
-                          ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20'
-                          : employee.accessRole === 'consultant'
-                          ? 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border-indigo-500/20'
-                          : 'bg-slate-500/10 text-slate-700 dark:text-slate-300 border-slate-500/20'
-                      }`}
-                    >
-                      {isCeo ? (
-                        <>
-                          <Crown className="w-3 h-3 text-amber-600 dark:text-amber-400" /> CEO / Executive
-                        </>
-                      ) : employee.accessRole === 'organization_admin' ? (
-                        'Admin'
-                      ) : employee.accessRole === 'hr_manager' ? (
-                        'HR'
-                      ) : employee.accessRole === 'department_head' || employee.accessRole === 'manager' ? (
-                        'Manager'
-                      ) : employee.accessRole === 'team_lead' ? (
-                        'Team Lead'
-                      ) : employee.accessRole === 'intern' ? (
-                        'Intern'
-                      ) : employee.accessRole === 'consultant' ? (
-                        'Consultant'
-                      ) : (
-                        'Employee'
-                      )}
-                    </span>
-                  </TableCell>
-                )}
-
+{cols.accessRole && (
+  <TableCell className="py-3 px-4">
+    <span
+      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold border ${
+        isCeo
+          ? 'bg-amber-500/20 text-amber-800 dark:text-amber-300 border-amber-500/40 font-black'
+          : employee.accessRole === 'hr_manager' ||
+            employee.accessRole === 'organization_admin'
+          ? 'bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/20'
+          : employee.accessRole === 'finance'
+          ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20'
+          : employee.accessRole === 'department_head' ||
+            employee.accessRole === 'manager'
+          ? 'bg-violet-500/10 text-violet-700 dark:text-violet-300 border-violet-500/20'
+          : employee.accessRole === 'team_lead'
+          ? 'bg-teal-500/10 text-teal-700 dark:text-teal-300 border-teal-500/20'
+          : employee.accessRole === 'intern'
+          ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20'
+          : employee.accessRole === 'consultant'
+          ? 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border-indigo-500/20'
+          : 'bg-slate-500/10 text-slate-700 dark:text-slate-300 border-slate-500/20'
+      }`}
+    >
+      {isCeo ? (
+        <>
+          <Crown className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+          CEO / Executive
+        </>
+      ) : employee.accessRole === 'organization_admin' ? (
+        'Admin'
+      ) : employee.accessRole === 'hr_manager' ? (
+        'HR'
+      ) : employee.accessRole === 'finance' ? (
+        'Finance'
+      ) : employee.accessRole === 'department_head' ||
+        employee.accessRole === 'manager' ? (
+        'Manager'
+      ) : employee.accessRole === 'team_lead' ? (
+        'Team Lead'
+      ) : employee.accessRole === 'intern' ? (
+        'Intern'
+      ) : employee.accessRole === 'consultant' ? (
+        'Consultant'
+      ) : (
+        'Employee'
+      )}
+    </span>
+  </TableCell>
+)}
 
                 {/* Department */}
                 {cols.department && (
@@ -331,7 +350,7 @@ export function EmployeeDataTable({
                 {cols.actions && (
                   <TableCell className="py-3 px-4 text-right">
                     <div className="flex items-center justify-end gap-1">
-                      {cols.actionViewProfile && (
+                      {cols.actionViewProfile && !isCeo && (
                         <Button
                           variant="ghost"
                           size="sm"
@@ -355,7 +374,7 @@ export function EmployeeDataTable({
                           onClick={async (e) => {
                             e.stopPropagation();
                             if (employee.id === undefined) return;
-                            if (window.confirm(`Are you sure you want to delete ${fullName}?`)) {
+                            if (await window.appConfirm(`Are you sure you want to delete ${fullName}?`)) {
                               try {
                                 await deleteEmployee(employee.id);
                                 onRefresh?.();

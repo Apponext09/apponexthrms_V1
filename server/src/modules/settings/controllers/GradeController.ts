@@ -3,10 +3,11 @@ import { z } from 'zod';
 import { GenericSettingsController } from './GenericSettingsController';
 import { GenericSettingsService } from '../services/GenericSettingsService';
 import { GradeRepository } from '../repositories/GradeRepository';
+import { assertMasterNotInUse } from '../utils/masterUsage';
 
 const gradeCreateSchema = z.object({
-  name: z.string().min(2, 'Name is required').max(150, 'Name must be under 150 characters'),
-  code: z.string().min(1, 'Code is required').max(50, 'Code must be under 50 characters'),
+  name: z.string().trim().min(2, 'Name is required').max(150, 'Name must be under 150 characters'),
+  code: z.string().trim().min(1, 'Code is required').max(50, 'Code must be under 50 characters'),
   description: z.string().max(1000).optional().nullable(),
   color: z.string().max(20).optional().nullable(),
   status: z.enum(['active', 'inactive']).default('active'),
@@ -47,5 +48,12 @@ export class GradeController extends GenericSettingsController {
       }
       throw error;
     }
+  }
+
+  async delete(req: Request, res: Response): Promise<void> {
+    await assertMasterNotInUse(req.ctx!.organizationId, req.params.id, 'grade', [
+      { table: 'employees', column: 'current_grade_id', label: 'employee(s)' },
+    ]);
+    await super.delete(req, res);
   }
 }

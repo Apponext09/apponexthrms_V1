@@ -192,14 +192,23 @@ export class LeaveApprovalService {
       // Standard approval (no negative balance policy or no excess)
       await db.transaction(async (trx) => {
         // Update balance
-        const currentBal = await trx('leave_balances')
+        let currentBal = await trx('leave_balances')
           .where({ employee_id: employeeId, leave_type_id: leaveTypeId, financial_year_start: fyStart })
           .first();
 
+        if (!currentBal) {
+          currentBal = await trx('leave_balances')
+            .where({ employee_id: employeeId, leave_type_id: leaveTypeId })
+            .orderBy('id', 'desc')
+            .first();
+        }
+
         if (isFinalApproval && currentBal) {
-          const newConsumed = (parseFloat(currentBal.consumed_balance) || 0) + totalDays;
-          const newAvailable = (parseFloat(currentBal.available_balance) || 0); // Already subtracted on submission
-          const newPending = Math.max(0, (parseFloat(currentBal.pending_approval_balance) || 0) - totalDays);
+          const totalDaysNum = parseFloat(String(totalDays)) || 0;
+          const newConsumed = (parseFloat(currentBal.consumed_balance || currentBal.consumedBalance) || 0) + totalDaysNum;
+          const opening = (parseFloat(currentBal.opening_balance || currentBal.openingBalance || currentBal.allocated_balance || currentBal.allocatedBalance) || 0) + (parseFloat(currentBal.carry_forward_balance || currentBal.carryForwardBalance) || 0);
+          const newAvailable = Math.max(0, opening - newConsumed);
+          const newPending = Math.max(0, (parseFloat(currentBal.pending_approval_balance || currentBal.pendingApprovalBalance) || 0) - totalDaysNum);
 
           await trx('leave_balances')
             .where('id', currentBal.id)
@@ -723,7 +732,7 @@ export class LeaveApprovalService {
             .first();
 
           let nextApproverUserId = null;
-          let roleName = 'hr_manager';
+          let roleName = 'hr';
 
           if (employee && employee.reporting_manager_id) {
             const manager = await trx('employees')
@@ -747,14 +756,14 @@ export class LeaveApprovalService {
               .join('user_roles as ur', 'u.id', 'ur.user_id')
               .join('roles as r', 'ur.role_id', 'r.id')
               .where('u.organization_id', app.organization_id)
-              .whereIn('r.code', ['hr_manager', 'tenant_admin', 'system_admin', 'organization_admin'])
+              .whereIn('r.code', ['hr', 'hr_manager', 'tenant_admin', 'system_admin', 'organization_admin'])
               .whereNull('u.deleted_at')
               .select('u.id')
               .first();
 
             if (hrUser) {
               nextApproverUserId = hrUser.id;
-              roleName = 'hr_manager';
+              roleName = 'hr';
             }
           }
 

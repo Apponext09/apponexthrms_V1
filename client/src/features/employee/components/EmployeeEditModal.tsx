@@ -12,7 +12,8 @@ import { Label } from '@/components/ui/label';
 import { useUpdateEmployee, useEmployees } from '../hooks/useEmployees';
 import { useDepartments } from '../../settings/hooks/useDepartments';
 import { useEmployeeTypes } from '../../settings/hooks/useEmployeeTypes';
-import { AlertCircle, Edit2, Copy, Check, Eye, EyeOff } from 'lucide-react';
+import { useEmployeeLinkedMasters, useEmployeeMasterValues, useSaveEmployeeMasterValues } from '../../master-builder/hooks/useEmployeeCustomMasters';
+import { AlertCircle, Edit2, Copy, Check, Eye, EyeOff, Layers } from 'lucide-react';
 import { toast } from 'sonner';
 
 const updateEmployeeCode = () =>
@@ -81,6 +82,27 @@ export function EmployeeEditModal({
   const { employees: allEmployees } = useEmployees({ pageSize: 500 });
   const { data: departmentsData } = useDepartments(1, 100);
   const { employeeTypes } = useEmployeeTypes();
+  const { data: linkedMasters = [] } = useEmployeeLinkedMasters();
+  const { data: currentMasterValues = [] } = useEmployeeMasterValues(employee?.id);
+  const saveMasterValuesMutation = useSaveEmployeeMasterValues(employee?.id);
+  const [masterAssignments, setMasterAssignments] = useState<Record<number, { recordId?: number | null; recordIds?: number[]; customValue?: string | null }>>({});
+
+  React.useEffect(() => {
+    if (open && currentMasterValues.length > 0) {
+      const initialMap: Record<number, any> = {};
+      currentMasterValues.forEach((mv) => {
+        initialMap[mv.masterId] = {
+          recordId: mv.recordId || null,
+          recordIds: mv.recordIds || [],
+          customValue: mv.customValue || null,
+        };
+      });
+      setMasterAssignments(initialMap);
+    } else if (open) {
+      setMasterAssignments({});
+    }
+  }, [currentMasterValues, open]);
+
   const departmentEmployees = formData.departmentId
     ? allEmployees.filter((employee: any) =>
         String(employee.currentDepartmentId ?? employee.current_department_id ?? '') === formData.departmentId
@@ -170,6 +192,25 @@ export function EmployeeEditModal({
     try {
       setIsSubmitting(true);
       await updateEmployee(payload);
+
+      // Save custom master values if any exist
+      if (linkedMasters.length > 0 && employee?.id) {
+        try {
+          const assignmentsPayload = linkedMasters.map((m) => {
+            const val = masterAssignments[m.id];
+            return {
+              masterId: m.id,
+              recordId: val?.recordId ?? null,
+              recordIds: val?.recordIds ?? [],
+              customValue: val?.customValue ?? null,
+            };
+          });
+          await saveMasterValuesMutation.mutateAsync(assignmentsPayload);
+        } catch (masterErr) {
+          console.warn('Failed to save custom master assignments:', masterErr);
+        }
+      }
+
       toast.success('Employee updated successfully');
       onSuccess();
       onOpenChange(false);
@@ -179,7 +220,6 @@ export function EmployeeEditModal({
     } finally {
       setIsSubmitting(false);
     }
-
   };
 
   return (
@@ -418,6 +458,7 @@ export function EmployeeEditModal({
                       <option value="hr_manager">HR</option>
                       <option value="intern">Intern</option>
                       <option value="consultant">Consultant</option>
+                      <option value="finance">Finance</option>
                     </select>
                     <p className="text-xs text-muted-foreground mt-1">
                       Controls which portal they log into.{' '}
@@ -464,6 +505,97 @@ export function EmployeeEditModal({
                       </>
                     )}
                   </div>
+
+                  {/* Linked Custom Masters Section */}
+                  {linkedMasters.length > 0 && (
+                    <div className="col-span-2 pt-4 border-t border-border/80 space-y-3">
+                      <div className="flex items-center gap-2">
+                        <Layers className="w-4 h-4 text-primary" />
+                        <Label className="text-xs font-bold uppercase tracking-wider text-primary">
+                          Custom Master Attributes & Linkages
+                        </Label>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                        {linkedMasters.map((master) => {
+                          const assignment = masterAssignments[master.id] || {};
+                          const isPrimary = master.employeeLinkage === 'primary_assignment';
+
+                          return (
+                            <div key={master.id} className="space-y-1.5 p-3 rounded-xl border border-border/80 bg-muted/20">
+                              <Label className="text-xs font-semibold flex items-center justify-between">
+                                <span>{master.name}</span>
+                                <span className="text-[10px] text-muted-foreground font-normal">
+                                  {isPrimary ? 'Primary (Single-select)' : 'Secondary (Multi-select)'}
+                                </span>
+                              </Label>
+
+                              {isPrimary ? (
+                                <select
+                                  className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                  value={assignment.recordId ? String(assignment.recordId) : ''}
+                                  onChange={(e) => {
+                                    const val = e.target.value ? Number(e.target.value) : null;
+                                    setMasterAssignments((prev) => ({
+                                      ...prev,
+                                      [master.id]: {
+                                        ...prev[master.id],
+                                        recordId: val,
+                                      },
+                                    }));
+                                  }}
+                                >
+                                  <option value="">-- Select {master.name} --</option>
+                                  {master.records.map((rec) => (
+                                    <option key={rec.id} value={rec.id}>
+                                      {rec.label} {rec.recordCode ? `(${rec.recordCode})` : ''}
+                                    </option>
+                                  ))}
+                                </select>
+                              ) : (
+                                <div className="space-y-1">
+                                  <div className="flex flex-wrap gap-1 max-h-28 overflow-y-auto p-1.5 rounded-lg border border-input bg-background">
+                                    {master.records.map((rec) => {
+                                      const isSelected = (assignment.recordIds || []).includes(rec.id);
+                                      return (
+                                        <button
+                                          type="button"
+                                          key={rec.id}
+                                          onClick={() => {
+                                            const currentIds = assignment.recordIds || [];
+                                            const nextIds = isSelected
+                                              ? currentIds.filter((id: number) => id !== rec.id)
+                                              : [...currentIds, rec.id];
+                                            setMasterAssignments((prev) => ({
+                                              ...prev,
+                                              [master.id]: {
+                                                ...prev[master.id],
+                                                recordIds: nextIds,
+                                              },
+                                            }));
+                                          }}
+                                          className={`px-2 py-0.5 rounded-md text-[11px] font-medium transition-colors cursor-pointer border ${
+                                            isSelected
+                                              ? 'bg-primary text-primary-foreground border-primary font-bold'
+                                              : 'bg-muted/60 text-muted-foreground border-border hover:bg-muted'
+                                          }`}
+                                        >
+                                          {rec.label}
+                                        </button>
+                                      );
+                                    })}
+                                    {master.records.length === 0 && (
+                                      <span className="text-[11px] text-muted-foreground italic p-1">No records in Master Builder</span>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 

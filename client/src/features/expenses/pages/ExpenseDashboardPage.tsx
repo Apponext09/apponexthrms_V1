@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { expenseApi } from '../api/expenseApi';
 import {
-  Receipt,
+  ReceiptIndianRupee,
   Clock,
   CheckCircle2,
   XCircle,
@@ -11,7 +11,7 @@ import {
   FileSpreadsheet,
   PlusCircle,
   Building2,
-  DollarSign
+  IndianRupee
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -27,6 +27,7 @@ import {
   CartesianGrid
 } from 'recharts';
 import { useNavigate } from 'react-router-dom';
+import { formatMoney } from '../utils/formatMoney';
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4'];
 
@@ -34,12 +35,17 @@ export const ExpenseDashboardPage: React.FC = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<any>(null);
+  const [settings, setSettings] = useState<any>(null);
 
   const fetchDashboard = async () => {
     try {
       setLoading(true);
-      const res = await expenseApi.getDashboardSummary();
+      const [res, set] = await Promise.all([
+        expenseApi.getDashboardSummary(),
+        expenseApi.getSettings().catch(() => null),
+      ]);
       setData(res);
+      setSettings(set);
     } catch (err) {
       console.error('Failed to load expense dashboard:', err);
     } finally {
@@ -62,6 +68,7 @@ export const ExpenseDashboardPage: React.FC = () => {
 
   const kpis = data?.kpis || {};
   const charts = data?.charts || {};
+  const money = (n: number | string | null | undefined) => formatMoney(n, settings);
 
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
@@ -70,7 +77,7 @@ export const ExpenseDashboardPage: React.FC = () => {
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Expense Management Dashboard</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            Real-time overview of organization claims, policy compliance, and reimbursement status
+            Your claims and reimbursement status. Organization payment records are available in Reports.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -97,12 +104,12 @@ export const ExpenseDashboardPage: React.FC = () => {
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Expenses</span>
             <div className="p-2 bg-blue-50 dark:bg-blue-950/40 text-blue-600 rounded-lg">
-              <Receipt className="w-5 h-5" />
+              <ReceiptIndianRupee className="w-5 h-5" />
             </div>
           </div>
           <div className="mt-4">
             <div className="text-2xl font-bold text-slate-900 dark:text-white">
-              ₹{(kpis.totalExpenses || 0).toLocaleString('en-IN')}
+              {money(kpis.totalExpenses)}
             </div>
             <p className="text-xs text-slate-500 mt-1">Total claimed amount</p>
           </div>
@@ -162,7 +169,7 @@ export const ExpenseDashboardPage: React.FC = () => {
           </div>
           <div className="mt-4">
             <div className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
-              {kpis.paymentPending || 0}
+              {money(kpis.paymentPending)}
             </div>
             <p className="text-xs text-slate-500 mt-1">Awaiting disbursal</p>
           </div>
@@ -172,12 +179,12 @@ export const ExpenseDashboardPage: React.FC = () => {
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-purple-600 dark:text-purple-400 uppercase tracking-wider">Reimbursed</span>
             <div className="p-2 bg-purple-50 dark:bg-purple-950/40 text-purple-600 rounded-lg">
-              <DollarSign className="w-5 h-5" />
+              <IndianRupee className="w-5 h-5" />
             </div>
           </div>
           <div className="mt-4">
             <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">
-              ₹{(kpis.totalReimbursedAmount || 0).toLocaleString('en-IN')}
+              {money(kpis.totalReimbursedAmount)}
             </div>
             <p className="text-xs text-slate-500 mt-1">Total paid out</p>
           </div>
@@ -224,7 +231,7 @@ export const ExpenseDashboardPage: React.FC = () => {
                 <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
                 <XAxis dataKey="month" tick={{ fontSize: 12 }} />
                 <YAxis tick={{ fontSize: 12 }} />
-                <Tooltip formatter={(val: any) => `₹${Number(val).toLocaleString('en-IN')}`} />
+                <Tooltip formatter={(val: any) => money(val)} />
                 <Legend />
                 <Bar dataKey="claimed" name="Claimed Amount" fill="#3b82f6" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="approved" name="Approved Amount" fill="#10b981" radius={[4, 4, 0, 0]} />
@@ -237,7 +244,7 @@ export const ExpenseDashboardPage: React.FC = () => {
         <div className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-base font-semibold text-slate-900 dark:text-white flex items-center gap-2">
-              <Receipt className="w-4 h-4 text-purple-500" />
+              <ReceiptIndianRupee className="w-4 h-4 text-purple-500" />
               Category-Wise Spending
             </h3>
           </div>
@@ -252,13 +259,13 @@ export const ExpenseDashboardPage: React.FC = () => {
                     cx="50%"
                     cy="50%"
                     outerRadius={90}
-                    label={(entry) => `${entry.categoryName}: ₹${Number(entry.totalAmount).toLocaleString('en-IN')}`}
+                    label={(entry) => `${entry.categoryName}: ${money(entry.totalAmount)}`}
                   >
                     {charts.categoryExpenses.map((_: any, index: number) => (
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
-                  <Tooltip formatter={(val: any) => `₹${Number(val).toLocaleString('en-IN')}`} />
+                  <Tooltip formatter={(val: any) => money(val)} />
                 </PieChart>
               </ResponsiveContainer>
             ) : (
@@ -284,7 +291,7 @@ export const ExpenseDashboardPage: React.FC = () => {
                   <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
                   <XAxis type="number" tick={{ fontSize: 12 }} />
                   <YAxis dataKey="departmentName" type="category" width={140} tick={{ fontSize: 12 }} />
-                  <Tooltip formatter={(val: any) => `₹${Number(val).toLocaleString('en-IN')}`} />
+                  <Tooltip formatter={(val: any) => money(val)} />
                   <Bar dataKey="totalAmount" name="Total Claimed" fill="#8b5cf6" radius={[0, 4, 4, 0]} />
                 </BarChart>
               </ResponsiveContainer>

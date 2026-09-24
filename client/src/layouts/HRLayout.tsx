@@ -1,4 +1,6 @@
-import { useState, useEffect } from 'react';
+import { SectionRail } from '@/layouts/SectionNavigation';
+import { SectionTabs } from '@/layouts/SectionNavigation';
+import { useState, useEffect, useMemo } from 'react';
 import { Outlet, useLocation, useNavigate, NavLink } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Toaster } from '@/components/ui/toast';
@@ -6,15 +8,10 @@ import { useAuthStore } from '@/features/auth/store/authStore';
 import { useThemeStore } from '@/features/settings/store/themeStore';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { getUserRoleAndDept } from '@/lib/userProfile';
-import {
-  LayoutDashboard, Users, CreditCard, Calendar, Clock,
-  Target, Briefcase, BarChart3, Settings, LogOut,
-  Bell, Sun, Moon, Menu, UserPlus, UserMinus, ArrowLeftRight, Receipt, Compass,
-  FileText, RefreshCw, Percent, UserX, CheckCircle2,
-  Building2, GitBranch, FileCheck, ChevronLeft, ChevronRight, ChevronDown, MapPin, UserCheck, Scan, Navigation, ShieldCheck, Shield, TrendingUp, Layers,
-  Zap, Sliders, Award, Coffee, Grid, Smile, Code2,
-  FilePlus, LineChart, ListChecks, UploadCloud, Palette
-} from 'lucide-react';
+import { useRbac } from '@/lib/rbac';
+import { useLicensedFeatures } from '@/features/licensing/api/useLicensing';
+import { useAttendanceModuleSettings } from '@/features/attendance/hooks/useAttendanceModuleSettings';
+import { getVisibleSections, NavSection, NavItem } from '@/config/navigation';
 import { cn } from '@/lib/utils';
 import { useNotifications } from '@/features/notifications/hooks/useNotifications';
 import { useNotificationSocket } from '@/features/notifications/hooks/useNotificationSocket';
@@ -22,421 +19,273 @@ import { useNotificationStore } from '@/features/notifications/store/notificatio
 import { NotificationDrawer } from '@/features/notifications/components/NotificationDrawer';
 import { NotificationBell } from '@/features/notifications/components/NotificationBell';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
 import { PortalSidebarBrand } from './PortalSidebarBrand';
-// ── Accent palette for HR (rose/pink) ────────────────────────────────────────
-const C = {
-  dot: 'bg-primary',
-  icon: 'text-primary',
-  badge: 'border-primary/20 bg-primary/10 text-primary',
-  activeBg: 'portal-sidebar-active',
-  activeText: 'text-white dark:text-slate-950',
-  hoverBg: 'hover:bg-muted',
-  hoverText: 'hover:text-foreground',
-  avatarBorder: 'border-primary/30',
-  avatarBg: 'bg-primary',
-  profileHover: 'group-hover:text-primary',
-  notifDot: 'bg-primary',
-  sectionLabel: 'text-muted-foreground',
+import { masterBuilderApi, CustomMasterItem } from '@/features/master-builder/api/masterBuilderApi';
+import { GlobalSearchButton } from '@/features/search/components/GlobalSearch';
+import { SidebarProfileMenu } from './SidebarProfileMenu';
+import { useSubscriptionStore } from '@/features/subscriptions/store/subscriptionStore';
+
+import {
+  ChevronDown, ChevronRight, Menu, Sun, Moon, LogOut, Building2, Lock,
+  LayoutDashboard, Users, RefreshCw, GitBranch, BarChart3, Calendar, FilePlus,
+  Briefcase, UserCheck, FileText, ClipboardList, Clock, MapPin, Wifi, Coffee,
+  ScanFace, Palmtree, FileBarChart, CheckSquare, DollarSign, CreditCard,
+  Receipt, TrendingUp, PieChart, Settings, Award, Target, Star, Activity,
+  Zap, Package, Monitor, HelpCircle, Bell, Cog, Globe, Shield as ShieldIcon,
+  Navigation, UserPlus, BarChart2, Layers, Database, AlertCircle, BookOpen,
+  Heart, MessageSquare, Clipboard, Wallet, ShieldCheck, ArrowUpDown, FileSpreadsheet,
+  Inbox, Code2, ListChecks, UploadCloud, Palette, Boxes, UserX, Percent, UserMinus,
+  Compass, ArrowLeftRight, ReceiptIndianRupee, List, CalendarClock, Tag, Car,
+  IndianRupee, CheckCircle, FileCheck, Sliders, Sparkles, Megaphone,
+  CalendarDays, UserCog, User, GraduationCap, LineChart, Grid,
+} from 'lucide-react';
+
+// Static icon registry matching navigation.ts
+const ICON_REGISTRY: Record<string, React.ComponentType<{ className?: string }>> = {
+  LayoutDashboard, Users, RefreshCw, GitBranch, BarChart3, Calendar, FilePlus,
+  Briefcase, UserCheck, FileText, ClipboardList, Clock, MapPin, Wifi, Coffee,
+  ScanFace, Palmtree, FileBarChart, CheckSquare, DollarSign, CreditCard,
+  Receipt, TrendingUp, PieChart, Settings, Award, Target, Star, Activity,
+  Zap, Package, Monitor, HelpCircle, Bell, Cog, Building2, Globe, Shield: ShieldIcon,
+  Navigation, UserPlus, BarChart2, Layers, Database, AlertCircle, BookOpen,
+  Heart, MessageSquare, Clipboard, Wallet, ShieldCheck, ArrowUpDown, FileSpreadsheet,
+  Lock, ChevronDown, LogOut, Inbox, Code2, ListChecks, UploadCloud, Palette, Boxes,
+  UserX, Percent, UserMinus, Compass, ArrowLeftRight, ReceiptIndianRupee, List,
+  CalendarClock, Tag, Car, IndianRupee, CheckCircle, FileCheck, Sliders, Sparkles,
+  Megaphone, CalendarDays, UserCog, User, GraduationCap, LineChart, Grid,
 };
 
-const HR_NAV = [
-  {
-    label: 'OVERVIEW',
-    items: [
-      { name: 'Dashboard', href: '/hr/dashboard', icon: LayoutDashboard }
-    ],
-  },
-  {
-    label: 'CORE MODULE',
-    items: [
-      {
-        name: 'Core Module',
-        href: '/hr/employees',
-        icon: Users,
-        subItems: [
-          { name: 'Employees', href: '/hr/employees', icon: Users },
-          { name: 'Employee Lifecycle', href: '/hr/employee-lifecycle', icon: RefreshCw },
-          { name: 'Org Structure', href: '/hr/org-structure', icon: GitBranch },
-        ],
-      },
-    ],
-  },
-  {
-    label: 'PAYROLL',
-    items: [
-      {
-        name: 'Payroll Module',
-        href: '/hr/payroll',
-        icon: CreditCard,
-        subItems: [
-          { name: 'Payroll Dashboard', href: '/hr/payroll', icon: LayoutDashboard },
-          { name: 'Payroll Master Settings', href: '/hr/payroll/settings', icon: Sliders },
-          { name: 'Payroll Processing', href: '/hr/payroll-processing', icon: RefreshCw },
-          { name: 'Payslip Management', href: '/hr/payslips', icon: FileText },
-          { name: 'Mass Salary Structure Upload', href: '/hr/payroll/mass-salary-upload', icon: UploadCloud },
-          { name: 'Salary Revisions', href: '/hr/salary-revision', icon: TrendingUp },
-        ],
-      },
-    ],
-  },
-  {
-    label: 'SETTLEMENT MANAGEMENT',
-    items: [
-      { name: 'Exit Settlements (FnF)', href: '/hr/settlements', icon: UserX },
-      { name: 'Gratuity Policy', href: '/hr/gratuity', icon: Award },
-    ],
-  },
-  {
-    label: 'LOAN MANAGEMENT',
-    items: [
-      { name: 'Loan Type Settings', href: '/payroll/loan-types', icon: Sliders },
-      { name: 'Loan Requests & Disbursal', href: '/payroll/loans', icon: Percent },
-    ],
-  },
-  {
-    label: 'EXPENSE MANAGEMENT',
-    items: [
-      { name: 'Dashboard', href: '/expenses/dashboard', icon: TrendingUp },
-      { name: 'My Expenses', href: '/expenses/my-expenses', icon: Receipt },
-      { name: 'Approvals', href: '/expenses/approvals', icon: CheckCircle2 },
-      { name: 'Finance Verification', href: '/expenses/finance-verification', icon: FileCheck },
-      { name: 'Reimbursements', href: '/expenses/reimbursements', icon: CreditCard },
-      { name: 'Travel Requests', href: '/expenses/travel-requests', icon: Compass },
-      { name: 'Travel Advances', href: '/expenses/travel-advances', icon: Percent },
-      { name: 'Mileage Claims', href: '/expenses/mileage-claims', icon: Navigation },
-      { name: 'Expense Categories', href: '/expenses/categories', icon: Layers },
-      { name: 'Expense Policies', href: '/expenses/policies', icon: ShieldCheck },
-      { name: 'Reports & Analytics', href: '/expenses/reports', icon: LineChart },
-      { name: 'Settings', href: '/expenses/settings', icon: Sliders },
-    ],
-  },
-  {
-    label: 'LEAVE & TIME',
-    items: [
-      {
-        name: 'Attendance',
-        href: '/hr/attendance',
-        icon: Clock,
-        subItems: [
-          { name: 'Attendance Dashboard', href: '/hr/attendance', icon: LayoutDashboard },
-          { name: 'Live Employee Tracking', href: '/hr/live-tracking', icon: Navigation },
-          { name: 'Location Management & Mapping', href: '/hr/attendance/locations', icon: MapPin },
-        ],
-      },
-      { name: 'Leave Approvals', href: '/hr/leaves/approvals', icon: CheckCircle2 },
-      { name: 'Holiday Manage', href: '/hr/holidays', icon: Calendar },
-    ],
-  },
-  {
-    label: 'RECRUITMENT',
-    items: [
-      { name: 'MRF Request', href: '/hr/recruitment/mrf-request', icon: FilePlus },
-      { name: 'Job Management', href: '/hr/recruitment/jobs', icon: Briefcase },
-      { name: 'Career Portal Customization', href: '/hr/recruitment/career-customization', icon: Palette },
-      { name: 'Candidate Management', href: '/hr/recruitment/candidates', icon: Users },
-      { name: 'Candidate Report', href: '/hr/recruitment/candidate-report', icon: Users },
-      { name: 'Resume Source Screen Bank', href: '/hr/recruitment/resume-bank', icon: FileText },
-      { name: 'Applicant Tracker', href: '/hr/recruitment/applicant-tracker', icon: LineChart },
-      { name: 'Assessment Management', href: '/hr/recruitment/assessments', icon: Code2 },
-      { name: 'Offer Management', href: '/recruitment/offers', icon: FileCheck },
-      { name: 'Interview Schedule', href: '/hr/recruitment/interview-schedule', icon: Calendar },
-      { name: 'Interviewer Rating Details', href: '/hr/recruitment/interviewer-rating', icon: ListChecks },
-    ],
-  },
-  {
-    label: 'PERFORMANCE',
-    items: [
-      { name: 'Overview', href: '/hr/performance', icon: BarChart3 },
-      { name: 'Reviews', href: '/hr/performance/reviews', icon: CheckCircle2 },
-    ],
-  },
-  {
-    label: 'MASTERS',
-    items: [
-      { name: 'Company', href: '/hr/masters/company', icon: Building2 },
-      { name: 'Location', href: '/hr/masters/location', icon: MapPin },
-      { name: 'Department', href: '/hr/masters/department', icon: Layers },
-      { name: 'Designation', href: '/hr/masters/designation', icon: Briefcase },
-      { name: 'General Shift', href: '/hr/masters/general-shift', icon: Clock },
-      { name: 'Roster Shift', href: '/hr/masters/roster-shift', icon: Clock },
-      { name: 'OT Rule', href: '/hr/masters/ot-rule', icon: Sliders },
-      { name: 'Grade', href: '/hr/masters/grade', icon: Award },
-      { name: 'Holiday', href: '/hr/masters/holiday', icon: Calendar },
-      { name: 'Employee Status', href: '/hr/masters/employee-status', icon: Users },
-      { name: 'Emp. Type', href: '/hr/masters/emp-type', icon: Users },
-      { name: 'Events', href: '/hr/masters/events', icon: Calendar },
-      { name: 'Offer Letter Master', href: '/hr/masters/offer-templates', icon: FileText },
-      { name: 'Notification Templates', href: '/hr/masters/notification-templates', icon: Bell },
-      { name: 'Notification Merge Codes', href: '/hr/masters/notification-merge-codes', icon: Code2 },
-      { name: 'Break', href: '/hr/masters/break', icon: Coffee },
-      { name: 'Roles & Responsibility', href: '/hr/masters/roles-responsibility', icon: ShieldCheck },
-      { name: 'KRA Form', href: '/hr/masters/kra', icon: FileText },
-      { name: 'Resource Plan', href: '/hr/masters/resource-plan', icon: Grid },
-    ],
-  },
-  {
-    label: 'OPERATIONS',
-    items: [
-      { name: 'Policy Management', href: '/policies/manage', icon: Shield },
-      { name: 'My Policies', href: '/employee/policies', icon: FileText },
-
-      { name: 'Workflows', href: '/hr/workflow', icon: GitBranch },
-      { name: 'Settings', href: '/hr/settings', icon: Settings },
-    ],
-  },
-];
-
-interface SidebarNavContentProps {
-  sidebarOpen: boolean;
-  setMobileOpen: (open: boolean) => void;
-  openDropdowns: Record<string, boolean>;
-  setOpenDropdowns: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
-  pathname: string;
-  user: any;
-  roleInfo: any;
-  initials: string;
-  handleLogout: () => void;
-  navigate: (path: string) => void;
+function getIconComponent(iconName?: string) {
+  if (!iconName) return <LayoutDashboard className="size-4 flex-shrink-0" />;
+  const Icon = ICON_REGISTRY[iconName] || ICON_REGISTRY.LayoutDashboard;
+  return <Icon className="size-4 flex-shrink-0" />;
 }
 
-function SidebarNavContent({
-  sidebarOpen,
-  setMobileOpen,
-  openDropdowns,
-  setOpenDropdowns,
-  pathname,
-  user,
-  roleInfo,
-  initials,
-  handleLogout,
-  navigate,
-}: SidebarNavContentProps) {
-  return (
-    <div className="flex flex-col h-full">
-      {/* ── Logo ── */}
-      <PortalSidebarBrand open={sidebarOpen} portalLabel="HR Panel" />
-
-      {/* ── Nav ── */}
-      <nav className="no-scrollbar flex-1 space-y-4 overflow-y-auto px-3 py-4">
-        {HR_NAV.map((section) => (
-          <div key={section.label}>
-            <AnimatePresence>
-              {sidebarOpen && !(section.items.length === 1 && (section.items[0] as any).subItems) && (
-                <motion.p
-                  initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                  className={cn('mb-1 px-3 text-[9px] font-bold uppercase', C.sectionLabel)}
-                >
-                  {section.label}
-                </motion.p>
-              )}
-            </AnimatePresence>
-
-            <div className="space-y-0.5">
-              {section.items.map((item: any) => {
-                const Icon = item.icon;
-                const hasSubItems = item.subItems && item.subItems.length > 0;
-
-                if (hasSubItems) {
-                  const isSubActive = item.subItems.some((sub: any) =>
-                    pathname === sub.href || pathname.startsWith(sub.href + '/')
-                  );
-                  const isOpen = openDropdowns[item.href] ?? (isSubActive || true);
-
-                  return (
-                    <div key={item.href} className="space-y-1">
-                      <button
-                        onClick={() => setOpenDropdowns(prev => ({ ...prev, [item.href]: !isOpen }))}
-                        className={cn(
-                          'group flex min-h-10 w-full items-center justify-between rounded-lg px-3 py-2 text-[12px] font-semibold transition-colors',
-                          isSubActive
-                            ? 'bg-primary/10 text-primary'
-                            : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-                          !sidebarOpen && 'justify-center px-2'
-                        )}
-                        title={!sidebarOpen ? item.name : undefined}
-                      >
-                        <div className="flex items-center gap-3">
-                          <Icon className={cn('size-4 flex-shrink-0', isSubActive ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground')} />
-                          {sidebarOpen && <span>{item.name}</span>}
-                        </div>
-                        {sidebarOpen && (
-                          <ChevronDown
-                            className={cn('h-4 w-4 transition-transform duration-200 text-muted-foreground', isOpen && 'rotate-180')}
-                          />
-                        )}
-                      </button>
-
-                      {isOpen && sidebarOpen && (
-                        <div className="ml-3 mt-1 space-y-1 border-l border-border pl-3">
-                          {item.subItems.map((sub: any) => {
-                            const SubIcon = sub.icon;
-                            const active = pathname === sub.href || pathname.startsWith(sub.href + '/');
-                            return (
-                              <NavLink
-                                key={sub.href}
-                                to={sub.href}
-                                onClick={() => setMobileOpen(false)}
-                                className={cn(
-                                  'flex min-h-9 items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors',
-                                  active
-                                    ? 'portal-sidebar-active font-bold text-white dark:text-slate-950'
-                                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                                )}
-                              >
-                                <SubIcon className={cn('size-3.5 flex-shrink-0', active ? 'text-white dark:text-slate-950' : 'text-muted-foreground')} />
-                                <span className="truncate">{sub.name}</span>
-                              </NavLink>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  );
-                }
-
-                const active = pathname === item.href || pathname.startsWith(item.href + '/');
-                return (
-                  <NavLink
-                    key={item.href}
-                    to={item.href}
-                    onClick={() => setMobileOpen(false)}
-                    title={!sidebarOpen ? item.name : undefined}
-                    className={cn(
-                      'group relative flex min-h-10 items-center gap-3 rounded-lg px-3 py-2 text-[12px] transition-colors',
-                      active
-                        ? cn(C.activeBg, C.activeText, 'font-semibold shadow-md')
-                        : cn('text-muted-foreground font-medium', C.hoverBg, C.hoverText),
-                      !sidebarOpen && 'justify-center px-2'
-                    )}
-                  >
-                    <Icon className={cn(
-                      'size-4 flex-shrink-0 transition-colors',
-                      active ? 'text-white dark:text-slate-950' : 'text-muted-foreground'
-                    )} />
-                    <AnimatePresence initial={false}>
-                      {sidebarOpen && (
-                        <motion.span
-                          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                          className="truncate leading-none"
-                        >
-                          {item.name}
-                        </motion.span>
-                      )}
-                    </AnimatePresence>
-                  </NavLink>
-                );
-              })}
-            </div>
-          </div>
-        ))}
-      </nav>
-
-      {/* ── User footer ── */}
-      <div className="flex-shrink-0 border-t border-border bg-card p-3">
-        <div
-          onClick={() => navigate('/hr/profile')}
-          className={cn(
-            'group flex min-h-14 cursor-pointer items-center gap-2.5 rounded-xl border p-2.5 transition-colors',
-            'border-border bg-card hover:bg-muted',
-            !sidebarOpen && 'justify-center'
-          )}
-          title="View Profile"
-        >
-          <div className="relative flex-shrink-0">
-            <Avatar className={cn('size-9 border shadow-soft-xs', C.avatarBorder)}>
-              <AvatarImage src={user?.avatarUrl} />
-              <AvatarFallback className={cn(C.avatarBg, 'text-white font-bold text-[10px]')}>
-                {initials}
-              </AvatarFallback>
-            </Avatar>
-            <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 bg-emerald-500 border-2 border-card rounded-full" />
-          </div>
-
-          <AnimatePresence initial={false}>
-            {sidebarOpen && (
-              <motion.div
-                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                className="flex-1 min-w-0 leading-tight"
-              >
-                <p className={cn('text-[12px] font-bold text-foreground truncate transition-colors', C.profileHover)}>
-                  {(() => {
-  const fName = (user?.firstName || (user as any)?.first_name || '').trim();
-  let lName = (user?.lastName || (user as any)?.last_name || '').trim();
-  if (lName.toLowerCase() === 'user') lName = '';
-  const full = `${fName} ${lName}`.trim();
-  return full || fName || 'User';
-})()}
-                </p>
-                <p className={cn('text-[10px] font-medium truncate', C.icon)}>
-                  {roleInfo.roleTitle}
-                </p>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {sidebarOpen && (
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={(e) => { e.stopPropagation(); handleLogout(); }}
-              className="h-6 w-6 rounded-lg text-muted-foreground/50 hover:text-rose-500 hover:bg-rose-500/10 flex-shrink-0 transition-colors"
-              title="Logout"
-              aria-label="Log out"
-            >
-              <LogOut className="h-3 w-3" />
-            </Button>
-          )}
-        </div>
-      </div>
-    </div>
-  );
+// Map standard route href to /hr/* route href for HR layout
+function mapToHRHref(href: string): string {
+  if (!href) return '/hr/dashboard';
+  if (href.startsWith('/hr/')) return href;
+  if (href === '/' || href === '/dashboard') return '/hr/dashboard';
+  if (href === '/employees') return '/hr/employees';
+  if (href === '/employee-lifecycle') return '/hr/employee-lifecycle';
+  if (href === '/employee/lifecycle') return '/hr/lifecycle';
+  if (href === '/employee/id-card') return '/hr/id-card';
+  if (href === '/org-structure') return '/hr/org-structure';
+  if (href.startsWith('/recruitment')) return `/hr${href}`;
+  if (href === '/attendance') return '/hr/attendance';
+  if (href === '/live-tracking') return '/hr/live-tracking';
+  if (href === '/attendance/locations') return '/hr/attendance/locations';
+  if (href === '/attendance/break-logs') return '/hr/attendance/break-logs';
+  if (href === '/attendance/face-punch') return '/hr/face-attendance';
+  if (href === '/employee/attendance') return '/hr/my-attendance';
+  if (href === '/employee/attendance-regularization') return '/hr/my-attendance-correction';
+  if (href === '/employee/shift-roster') return '/hr/my-shifts';
+  if (href === '/attendance/shifts') return '/hr/attendance/shifts';
+  if (href === '/attendance/roster-shifts') return '/hr/attendance/roster-shifts';
+  if (href.startsWith('/leaves')) return `/hr${href}`;
+  if (href === '/approvals/dashboard') return '/hr/approvals/dashboard';
+  if (href === '/settings/leave-policies') return '/hr/settings/leave-policies';
+  if (href === '/holidays') return '/hr/holidays';
+  if (href.startsWith('/payroll')) return `/hr${href}`;
+  if (href.startsWith('/expenses')) return `/hr${href}`;
+  if (href.startsWith('/policies')) return `/hr${href}`;
+  if (href === '/assets') return '/hr/assets/dashboard';
+  if (href === '/assets/my-assets') return '/hr/assets/assign';
+  if (href === '/assets/list') return '/hr/assets/list';
+  if (href.startsWith('/performance')) return `/hr${href}`;
+  if (href.startsWith('/analytics')) return `/hr${href}`;
+  if (href === '/hr-operations/requests') return '/hr/requests';
+  if (href === '/workflow') return '/hr/workflow';
+  if (href === '/configuration') return '/hr/settings';
+  if (href === '/hr-operations/announcements') return '/hr/announcements';
+  if (href.startsWith('/masters')) {
+    if (href.includes('tab=')) {
+      const tab = href.split('tab=')[1];
+      return `/hr/masters/${tab}`;
+    }
+    return `/hr${href}`;
+  }
+  if (href.startsWith('/operational-masters')) {
+    if (href.includes('tab=')) {
+      const tab = href.split('tab=')[1];
+      return `/hr/operational-masters/${tab}`;
+    }
+    return `/hr${href}`;
+  }
+  if (href.startsWith('/modules')) {
+    if (href.includes('?')) {
+      const query = href.substring(href.indexOf('?'));
+      return `/hr/modules${query}`;
+    }
+    return '/hr/modules';
+  }
+  if (href.startsWith('/settings')) {
+    const sub = href.replace('/settings', '');
+    return `/hr/settings${sub}`;
+  }
+  return `/hr${href}`;
 }
 
 export function HRLayout() {
   useNotificationSocket();
-  const { unreadCount } = useNotifications();
-  const setDrawerOpen = useNotificationStore(state => state.setDrawerOpen);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const [openDropdowns, setOpenDropdowns] = useState<Record<string, boolean>>({
-    '/hr/employees': true,
-    '/hr/payroll': true,
-  });
-  const [mounted, setMounted] = useState(false);
-  const { user, logout } = useAuthStore();
-  const { theme, setTheme } = useThemeStore();
   const navigate = useNavigate();
   const location = useLocation();
+  const { user, logout } = useAuthStore();
+  const { roles } = useRbac();
+  const { theme, setTheme } = useThemeStore();
+  const { data: licensedFeatures } = useLicensedFeatures();
+  const { attendanceMode, liveTrackingEnabled } = useAttendanceModuleSettings();
+  const { enabledModules } = useSubscriptionStore();
+
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
+  const [customMasters, setCustomMasters] = useState<CustomMasterItem[]>([]);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => { setMounted(true); }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchMasters = async () => {
+      try {
+        const list = await masterBuilderApi.getMasters();
+        if (isMounted) setCustomMasters(list || []);
+      } catch (err) {}
+    };
+    fetchMasters();
+    window.addEventListener('custom_masters_updated', fetchMasters);
+    return () => {
+      isMounted = false;
+      window.removeEventListener('custom_masters_updated', fetchMasters);
+    };
+  }, []);
+
+  // Compute HR visible sections derived from navigation.ts so cleanliness & tab order match CEO/Admin 1:1
+  const hrSections = useMemo(() => {
+    const rawSections = getVisibleSections(roles, licensedFeatures, attendanceMode, liveTrackingEnabled, enabledModules);
+    return rawSections.map((sec) => {
+      const items = sec.items.map((item) => {
+        const hrHref = mapToHRHref(item.href);
+        const children = item.children?.map((c) => ({
+          ...c,
+          href: mapToHRHref(c.href),
+        }));
+        return {
+          ...item,
+          href: hrHref,
+          children,
+        };
+      });
+
+      // Insert custom masters if section is MASTERS
+      if (sec.id === 'masters' && customMasters.length > 0) {
+        const existingHrefs = new Set(items.map((i) => i.href.toLowerCase()));
+        const customItems: NavItem[] = customMasters
+          .filter((cm) => !existingHrefs.has(`/hr/masters/${cm.code}`.toLowerCase()))
+          .map((cm): NavItem => ({
+            name: cm.name,
+            href: `/hr/masters/${cm.code}`,
+            icon: 'Boxes',
+          }));
+        return {
+          ...sec,
+          items: [...items, ...customItems],
+        };
+      }
+
+      return {
+        ...sec,
+        items,
+      };
+    });
+  }, [roles, licensedFeatures, attendanceMode, liveTrackingEnabled, customMasters]);
+
+  const toggleSection = (id: string, currentlyExpanded: boolean) => {
+    setExpandedSections((prev) => ({ ...prev, [id]: !currentlyExpanded }));
+  };
+
+  const isPathActive = (itemHref: string, currentPath: string, currentSearch: string = ''): boolean => {
+    if (!itemHref || !currentPath) return false;
+    const currentFull = currentSearch ? `${currentPath}${currentSearch}` : currentPath;
+
+    if (itemHref.includes('?')) {
+      return currentFull === itemHref;
+    }
+
+    if (itemHref === currentPath) return true;
+    const exactMatchRoutes = [
+      '/', '/dashboard', '/hr', '/hr/dashboard',
+      '/attendance', '/hr/attendance',
+      '/leaves', '/hr/leaves',
+      '/payroll', '/hr/payroll',
+      '/recruitment', '/hr/recruitment',
+      '/performance', '/hr/performance',
+      '/assets', '/hr/assets',
+      '/expenses', '/hr/expenses',
+      '/modules', '/hr/modules',
+      '/masters', '/hr/masters',
+      '/operational-masters', '/hr/operational-masters',
+    ];
+    if (exactMatchRoutes.includes(itemHref)) return currentPath === itemHref;
+    return currentPath.startsWith(itemHref + '/');
+  };
+
   if (!mounted) return null;
 
   const roleInfo = getUserRoleAndDept(user);
   const currentTheme = theme === 'system'
     ? window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
     : theme;
-  const initials = `${user?.firstName?.[0] || ''}${user?.lastName?.[0] || ''}`.toUpperCase();
+  const initials = `${user?.firstName?.[0] || ''}${user?.lastName?.[0] || ''}`.toUpperCase() || 'HR';
   const handleLogout = () => { logout(); navigate('/login'); };
 
   const renderSidebarContent = () => (
-    <SidebarNavContent
-      sidebarOpen={sidebarOpen}
-      setMobileOpen={setMobileOpen}
-      openDropdowns={openDropdowns}
-      setOpenDropdowns={setOpenDropdowns}
-      pathname={location.pathname}
-      user={user}
-      roleInfo={roleInfo}
-      initials={initials}
-      handleLogout={handleLogout}
-      navigate={navigate}
-    />
+    <div className="flex h-full flex-col bg-white text-foreground select-none dark:bg-slate-950">
+      {/* ── Brand Header (HR Portal Branding) ── */}
+      <PortalSidebarBrand open={false} portalLabel="HR Portal" />
+
+      {/* ── Navigation List (Exact same dropdown cleanliness & tab order as CEO/Admin) ── */}
+      <SectionRail id="hr" groups={hrSections.map(section => ({ label: section.label, icon: ICON_REGISTRY[section.icon || section.items[0]?.icon] || LayoutDashboard, items: section.items.map(item => ({ ...item, icon: ICON_REGISTRY[item.icon] || LayoutDashboard, children: item.children?.map(child => ({ name: child.name, href: child.href, icon: ICON_REGISTRY[child.icon] || LayoutDashboard, isLocked: (child as any).isLocked })) })) }))} open={sidebarOpen} onNavigate={() => setMobileOpen(false)} />
+
+      {/* ── User Footer ── */}
+      <div className="flex-shrink-0 border-t border-border bg-white p-2 dark:bg-slate-950">
+        <SidebarProfileMenu profilePath="/hr/profile" onLogout={handleLogout} onProfileNavigate={() => setMobileOpen(false)}>
+          <div className="flex flex-col items-center justify-center cursor-pointer group">
+            <div
+              className={cn(
+                'mx-auto flex size-11 items-center justify-center rounded-xl border p-0.5 transition-colors',
+                'border-border bg-card hover:bg-muted',
+                !sidebarOpen && 'justify-center'
+              )}
+              title="View HR Profile"
+            >
+              <div className="relative flex-shrink-0">
+                <Avatar className="size-10 border border-primary/30 bg-primary shadow-soft-xs">
+                  <AvatarImage src={user?.avatarUrl || (user as any)?.avatar || (user as any)?.profile_picture} alt="Profile" />
+                  <AvatarFallback className="bg-primary text-white font-bold text-xs">
+                    {initials}
+                  </AvatarFallback>
+                </Avatar>
+                <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 bg-emerald-500 border-2 border-card rounded-full" />
+              </div>
+            </div>
+            <span className="text-[8.5px] font-bold tracking-tight text-primary text-center leading-tight truncate max-w-[68px] mt-1">
+              HR Portal
+            </span>
+          </div>
+        </SidebarProfileMenu>
+      </div>
+    </div>
   );
+
 
   return (
     <div className="app-shell-reference flex h-dvh overflow-hidden bg-background">
       {/* ── Desktop Sidebar ── */}
-      <aside className={cn('role-portal-sidebar relative hidden h-dvh flex-shrink-0 flex-col overflow-hidden border-r border-border bg-card md:flex', sidebarOpen ? 'w-64' : 'w-[72px]')}>
+      <aside className={cn('role-portal-sidebar relative hidden h-dvh flex-shrink-0 flex-col overflow-hidden border-r border-border bg-white dark:bg-slate-950 md:flex', sidebarOpen ? 'w-28' : 'w-[72px]')}>
         {!sidebarOpen && (
           <button
             onClick={() => setSidebarOpen(true)}
@@ -461,7 +310,7 @@ export function HRLayout() {
             <motion.aside
               initial={{ x: -260 }} animate={{ x: 0 }} exit={{ x: -260 }}
               transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
-              className="role-portal-sidebar fixed inset-y-0 left-0 z-50 w-64 border-r border-border bg-card shadow-2xl md:hidden"
+              className="role-portal-sidebar fixed inset-y-0 left-0 z-50 w-[calc(100vw-1.5rem)] max-w-72 border-r border-border bg-white shadow-xl dark:bg-slate-950 md:hidden"
             >
               {renderSidebarContent()}
             </motion.aside>
@@ -471,7 +320,7 @@ export function HRLayout() {
 
       {/* ── Main content ── */}
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-        <header className="sticky top-0 z-30 flex-shrink-0 border-b border-border bg-card/80 backdrop-blur-md px-4 h-14 flex items-center gap-3">
+        <header className="sticky top-0 z-30 flex h-16 flex-shrink-0 items-center gap-3 border-b border-border bg-card px-3 sm:px-6">
           <Button
             variant="ghost" size="icon"
             onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -490,59 +339,25 @@ export function HRLayout() {
           </Button>
 
           <div className="flex items-center gap-2">
-            <div className={cn('h-2 w-2 rounded-full', C.dot)} />
-            <span className="text-sm font-bold text-foreground hidden sm:block">HR Panel</span>
-            <span className={cn(
-              'hidden md:inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full border',
-              C.badge
-            )}>
-              {roleInfo.roleTitle} · {roleInfo.departmentName}
-            </span>
+            <span className="hidden truncate text-base font-extrabold tracking-tight text-foreground md:inline">APPONEXTHRMS</span>
+           
           </div>
 
           <div className="flex-1" />
 
           <div className="flex items-center gap-2">
-            {/* Organization Name Badge */}
-            <div className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs font-bold text-primary shadow-xs mr-1">
-              <Building2 className="w-3.5 h-3.5 text-primary" />
-              <span>{user?.organizationName || user?.organizationCode || (user as any)?.organization?.name || 'Organization'}</span>
-            </div>
-
+            <GlobalSearchButton />
             <Button variant="ghost" size="icon" onClick={() => setTheme(currentTheme === 'dark' ? 'light' : 'dark')} aria-label={currentTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
               {currentTheme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </Button>
 
             <NotificationBell className="size-8 rounded-lg" iconClassName="size-4" />
-
-            <div className="w-px h-5 bg-border mx-1" />
-
-            <button
-              onClick={() => navigate('/hr/profile')}
-              className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-muted/60 transition-colors"
-            >
-              <Avatar className={cn('h-7 w-7 border', C.avatarBorder)}>
-                <AvatarImage src={user?.avatarUrl} />
-                <AvatarFallback className={cn(C.avatarBg, 'text-white text-[10px] font-bold')}>
-                  {initials}
-                </AvatarFallback>
-              </Avatar>
-              <div className="hidden lg:block text-left leading-tight">
-                <p className="text-[12px] font-semibold text-foreground">{(() => {
-  const fName = (user?.firstName || (user as any)?.first_name || '').trim();
-  let lName = (user?.lastName || (user as any)?.last_name || '').trim();
-  if (lName.toLowerCase() === 'user') lName = '';
-  const full = `${fName} ${lName}`.trim();
-  return full || fName || 'User';
-})()}</p>
-                <p className={cn('text-[10px] font-medium', C.icon)}>{roleInfo.departmentName}</p>
-              </div>
-            </button>
           </div>
         </header>
+        <SectionTabs id="hr" />
 
         <main className="flex-1 overflow-auto">
-          <div className="p-6 min-h-full">
+          <div className="min-h-full p-4 sm:p-6">
             <Outlet />
           </div>
         </main>
@@ -552,3 +367,5 @@ export function HRLayout() {
     </div>
   );
 }
+
+export default HRLayout;

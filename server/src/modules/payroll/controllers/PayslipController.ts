@@ -7,6 +7,7 @@
 
 import type { Request, Response } from 'express';
 import { getKnex } from '../../../db/knex';
+import { NotFoundError } from '../../../common/errors/index';
 import { PayslipService } from '../services/PayslipService';
 
 export class PayslipController {
@@ -52,7 +53,10 @@ export class PayslipController {
     const roleCodes = userRoles.map((r: any) => r.code);
     const isAdminOrHR = roleCodes.includes('organization_admin') ||
       roleCodes.includes('super_admin') ||
+      roleCodes.includes('hr') ||
+      roleCodes.includes('hr_admin') ||
       roleCodes.includes('hr_manager') ||
+      roleCodes.includes('finance') ||
       roleCodes.includes('finance_manager');
 
     let query = db('payslips as p')
@@ -118,6 +122,7 @@ export class PayslipController {
   async getPayslip(req: Request, res: Response) {
     const { id } = req.params;
     const payslip = await this.payslipService.getPayslip(req.ctx, parseInt(id));
+    if (!payslip) throw new NotFoundError('Payslip not found');
     res.json({ success: true, data: payslip });
   }
 

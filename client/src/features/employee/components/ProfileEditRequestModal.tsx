@@ -38,7 +38,8 @@ export function ProfileEditRequestModal({
       const res = await apiClient.post('/employees/profile-update-requests', {
         employeeId: employee.id,
         requestType: 'personal_info',
-        targetArea: 'Complete Profile (All Sections)',
+        targetArea: 'Complete Profile (Basic, Personal, Professional, Statutory, Documents & Photo)',
+        requestedChanges: 'Basic information, personal information, professional information, statutory details, documents, and profile photo.',
         reason: reason.trim(),
       });
       return res.data;
@@ -83,7 +84,7 @@ export function ProfileEditRequestModal({
           <div className="p-3.5 bg-blue-500/10 border border-blue-500/20 rounded-2xl flex items-start gap-2.5 text-[11px] text-blue-700 dark:text-blue-300 font-medium">
             <FileText className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
             <span>
-              This request asks HR for approval to unlock your <strong>Complete Profile</strong> (Personal Info, Address, Emergency Contacts, Statutory Parameters & Profile Photo). Upon HR approval, your whole profile can be edited.
+              This request asks HR for approval to unlock your <strong>Complete Profile</strong>: basic, personal, professional, statutory details, documents, and profile photo. Upon HR approval, these self-service profile sections can be edited.
             </span>
           </div>
 

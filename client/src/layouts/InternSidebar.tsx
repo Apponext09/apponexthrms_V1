@@ -1,3 +1,4 @@
+import { SectionRail } from '@/layouts/SectionNavigation';
 import {
   LayoutDashboard,
   Clock,
@@ -12,68 +13,83 @@ import {
   Building2,
   GraduationCap,
   CreditCard,
+  ReceiptIndianRupee,
+  Plane,
+  Activity,
   Shield,
+  ChevronDown,
+  GitBranch,
+  ScanFace,
+  RefreshCw,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/features/auth/store/authStore';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import { PortalSidebarBrand } from '@/layouts/PortalSidebarBrand';
+import { SidebarProfileMenu } from '@/layouts/SidebarProfileMenu';
 
 // ── Amber accent constants ────────────────────────────────────────────────────
 const C = {
-  activeBg: 'bg-amber-500 dark:bg-amber-500',
+  activeBg: 'bg-primary',
   activeText: 'text-white',
-  hoverBg: 'hover:bg-amber-50 dark:hover:bg-amber-950/30',
-  hoverText: 'hover:text-amber-700 dark:hover:text-amber-400',
-  icon: 'text-amber-500',
+  hoverBg: 'hover:bg-muted', hoverText: 'hover:text-foreground', icon: 'text-primary',
   sectionLabel: 'text-muted-foreground',
-  avatarBg: 'bg-amber-500',
-  avatarBorder: 'border-amber-300 dark:border-amber-700',
+  avatarBg: 'bg-primary', avatarBorder: 'border-primary/30',
 };
 
 // ── Nav definitions ───────────────────────────────────────────────────────────
 const INTERN_NAV = [
   {
-    label: 'OVERVIEW',
+    label: 'Overview',
+    items: [{ name: 'Dashboard', href: '/intern/dashboard', icon: LayoutDashboard }],
+  },
+  {
+    label: 'CoreHR',
     items: [
-      { name: 'My Dashboard', href: '/intern/dashboard', icon: LayoutDashboard },
-      { name: 'My Profile',   href: '/intern/profile',   icon: User },
+      { name: 'Lifecycle', href: '/intern/lifecycle', icon: GitBranch },
+      { name: 'Structure', href: '/intern/org-chart', icon: Building2 },
+      { name: 'Identity', href: '/intern/id-card', icon: Shield },
     ],
   },
   {
-    label: 'TIME & ATTENDANCE',
+    label: 'Attendance',
     items: [
-      { name: 'Attendance',       href: '/intern/attendance',       icon: Clock },
-      { name: 'Holiday Calendar', href: '/intern/holiday-calendar', icon: Calendar },
+      { name: 'FacePunch', href: '/intern/face-attendance', icon: ScanFace },
+      { name: 'Logs', href: '/intern/attendance', icon: Clock },
+      { name: 'Shifts', href: '/intern/shift-roster', icon: Calendar },
+      { name: 'Correction', href: '/intern/attendance-regularization', icon: RefreshCw },
     ],
   },
   {
-    label: 'LEAVES',
+    label: 'Leaves',
     items: [
-      { name: 'My Leaves', href: '/intern/leaves', icon: Palmtree },
+      { name: 'Leaves', href: '/intern/leaves', icon: Palmtree },
     ],
   },
   {
-    label: 'PAYROLL',
+    label: 'Payroll',
     items: [
-      { name: 'My Payslips', href: '/intern/payslips', icon: CreditCard },
+      { name: 'Payslips', href: '/intern/payslips', icon: CreditCard },
     ],
   },
+  { label: 'Documents', items: [{ name: 'Documents', href: '/intern/documents', icon: BookOpen }] },
   {
-    label: 'DOCUMENTS',
-    items: [
-      { name: 'My Documents', href: '/intern/documents', icon: BookOpen },
-      { name: 'ID Card',      href: '/intern/id-card',   icon: Shield },
-    ],
-  },
-  {
-    label: 'COMPANY',
+    label: 'Company',
     items: [
       { name: 'Announcements', href: '/intern/announcements', icon: Megaphone },
-      { name: 'Org Chart',     href: '/intern/org-chart',     icon: Building2 },
+    ],
+  },
+  {
+    label: 'Expenses',
+    items: [
+      { name: 'Expenses', href: '/intern/expenses', icon: ReceiptIndianRupee },
+      { name: 'Travel', href: '/intern/travel-requests', icon: Plane },
+      { name: 'Advances', href: '/intern/travel-advances', icon: CreditCard },
+      { name: 'Mileage', href: '/intern/mileage-claims', icon: Activity },
     ],
   },
 ];
@@ -87,6 +103,7 @@ export function InternSidebar({ open, onOpenChange }: InternSidebarProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuthStore();
+  const [openMenu, setOpenMenu] = useState<string | null>(null);
 
   const handleLogout = () => {
     logout();
@@ -101,112 +118,36 @@ export function InternSidebar({ open, onOpenChange }: InternSidebarProps) {
   return (
     <div
       className={cn(
-        'flex h-full flex-col border-r border-border bg-card transition-all duration-300 ease-in-out',
-        open ? 'w-60' : 'w-[60px]'
+        'flex h-full flex-col border-r border-border bg-white transition-all duration-300 ease-in-out dark:bg-slate-950',
+        open ? 'w-[calc(100vw-1.5rem)] max-w-72 md:w-28' : 'w-[72px]'
       )}
     >
       {/* ── Brand ── */}
-      <PortalSidebarBrand open={open} portalLabel="Intern Portal" />
+      <PortalSidebarBrand open={false} portalLabel="Intern Portal" />
 
       {/* ── Nav ── */}
-      <nav className="no-scrollbar flex-1 space-y-4 overflow-y-auto px-2 py-4">
-        {INTERN_NAV.map((section) => (
-          <div key={section.label}>
-            <AnimatePresence>
-              {open && (
-                <motion.p
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className={cn('mb-1 px-3 text-[9px] font-bold uppercase', C.sectionLabel)}
-                >
-                  {section.label}
-                </motion.p>
-              )}
-            </AnimatePresence>
-
-            <div className="space-y-0.5">
-              {section.items.map((item) => {
-                const Icon = item.icon;
-                const active = isActive(item.href);
-                return (
-                  <button
-                    key={item.href}
-                    onClick={() => navigate(item.href)}
-                    title={!open ? item.name : undefined}
-                    className={cn(
-                      'group flex min-h-10 w-full items-center gap-3 rounded-lg px-3 py-2 text-[12px] font-semibold transition-all',
-                      active
-                        ? `${C.activeBg} ${C.activeText} shadow-sm`
-                        : `text-muted-foreground ${C.hoverBg} ${C.hoverText}`
-                    )}
-                  >
-                    <Icon
-                      size={16}
-                      className={cn('flex-shrink-0', active ? 'text-white' : C.icon)}
-                    />
-                    <AnimatePresence>
-                      {open && (
-                        <motion.span
-                          initial={{ opacity: 0, width: 0 }}
-                          animate={{ opacity: 1, width: 'auto' }}
-                          exit={{ opacity: 0, width: 0 }}
-                          className="overflow-hidden whitespace-nowrap"
-                        >
-                          {item.name}
-                        </motion.span>
-                      )}
-                    </AnimatePresence>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        ))}
-      </nav>
+      <SectionRail id="intern" groups={INTERN_NAV} open={open} onNavigate={() => { if (window.innerWidth < 768) onOpenChange(false); }} />
 
       {/* ── User Footer ── */}
-      <div className="border-t border-border p-3">
-        <div className={cn('flex items-center gap-3', !open && 'justify-center')}>
-          <Avatar className={cn('h-8 w-8 flex-shrink-0 border-2', C.avatarBorder)}>
-            <AvatarImage src={user?.avatarUrl} />
-            <AvatarFallback className={cn('text-xs font-bold text-white', C.avatarBg)}>
-              {initials}
-            </AvatarFallback>
-          </Avatar>
-          <AnimatePresence>
-            {open && (
-              <motion.div
-                initial={{ opacity: 0, width: 0 }}
-                animate={{ opacity: 1, width: 'auto' }}
-                exit={{ opacity: 0, width: 0 }}
-                className="flex flex-1 items-center justify-between overflow-hidden"
-              >
-                <div className="min-w-0">
-                  <p className="truncate text-xs font-semibold text-foreground">
-                    {(() => {
-                      const fName = (user?.firstName || (user as any)?.first_name || '').trim();
-                      let lName = (user?.lastName || (user as any)?.last_name || '').trim();
-                      if (lName.toLowerCase() === 'user') lName = '';
-                      const full = `${fName} ${lName}`.trim();
-                      return full || fName || 'User';
-                    })()}
-                  </p>
-                  <p className="truncate text-[10px] text-muted-foreground">Intern</p>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7 flex-shrink-0 text-muted-foreground hover:text-destructive"
-                  onClick={handleLogout}
-                  title="Sign out"
-                >
-                  <LogOut size={13} />
-                </Button>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
+      <div className="border-t border-border bg-white p-2 dark:bg-slate-950">
+        <SidebarProfileMenu profilePath="/intern/profile" onLogout={handleLogout} onProfileNavigate={() => { if (window.innerWidth < 768) onOpenChange(false); }}>
+          <div className="flex flex-col items-center justify-center cursor-pointer group">
+            <div
+              className="mx-auto flex size-11 items-center justify-center rounded-xl border border-border bg-white p-0.5 transition-colors hover:bg-muted dark:bg-slate-950"
+              title="View Intern Profile"
+            >
+              <Avatar className={cn('size-10 flex-shrink-0 border-2', C.avatarBorder)}>
+                <AvatarImage src={user?.avatarUrl || (user as any)?.avatar || (user as any)?.profile_picture} alt="Profile" />
+                <AvatarFallback className={cn('text-xs font-bold text-white', C.avatarBg)}>
+                  {initials}
+                </AvatarFallback>
+              </Avatar>
+            </div>
+            <span className="text-[8.5px] font-bold tracking-tight text-primary text-center leading-tight truncate max-w-[68px] mt-1">
+              Intern Portal
+            </span>
+          </div>
+        </SidebarProfileMenu>
       </div>
     </div>
   );

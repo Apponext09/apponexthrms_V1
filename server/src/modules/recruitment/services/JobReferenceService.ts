@@ -57,20 +57,129 @@ export class JobReferenceService {
   }
 
   /**
-   * Get public-facing job reference data for a given MRF ID.
-  /**
-   * Get public-facing job reference data for a given MRF ID or mr_number.
+   * Get public-facing job reference data for a given MRF ID or job ID / code.
    * Returns limited public info (no salary, no internal notes).
    */
   async getPublicJobData(mrfId: number | string) {
     const db = getKnex();
     const idStr = String(mrfId).trim();
+    const idNum = !isNaN(Number(idStr)) ? Number(idStr) : null;
 
+    // 1. Try finding in jobs table (created from Job Management) first
+    let jobQuery = db('jobs as j')
+      .leftJoin('departments as d', 'j.department_id', 'd.id')
+      .leftJoin('designations as des', 'j.designation_id', 'des.id')
+      .leftJoin('mrf_requests as m', 'j.mrf_request_id', 'm.id')
+      .whereNull('j.deleted_at')
+      .where((q) => {
+        if (idNum !== null) {
+          q.where('j.id', idNum)
+           .orWhere('j.job_code', idStr)
+           .orWhere('j.mrf_request_id', idNum);
+        } else {
+          q.where('j.job_code', idStr)
+           .orWhere('j.uuid', idStr);
+        }
+      });
+
+    const job = await jobQuery
+      .select(
+        'j.*',
+        'd.name as dept_name',
+        'des.name as desig_name',
+        'm.qualification_required as mrf_qualification',
+        'm.experience_desired as mrf_experience',
+        'm.skills as mrf_skills',
+        'm.target_closure_date as mrf_closure_date'
+      )
+      .first();
+
+    if (job) {
+      const jobCode = (job as any).jobCode || (job as any).job_code || '';
+      const jobTitle = (job as any).jobTitle || (job as any).job_title || `Position ${jobCode}`;
+      const jobOrgId = (job as any).organizationId || (job as any).organization_id;
+      const jobNoPos = (job as any).noOfPositions || (job as any).no_of_positions || 1;
+      const jobDeptId = (job as any).departmentId || (job as any).department_id;
+      const jobDeptName = (job as any).deptName || (job as any).dept_name || '';
+      const jobDesigName = (job as any).desigName || (job as any).desig_name || '';
+      const jobType = (job as any).jobType || (job as any).job_type || '';
+      const jobEmpType = (job as any).employmentType || (job as any).employment_type || '';
+      const jobMinExp = (job as any).minExperienceYears || (job as any).min_experience_years;
+      const jobMaxExp = (job as any).maxExperienceYears || (job as any).max_experience_years;
+      const jobExpLevel = (job as any).experienceLevel || (job as any).experience_level || '';
+      const jobDesc = (job as any).jobDescription || (job as any).job_description || '';
+      const jobStatus = (job as any).status;
+      const jobExpiry = (job as any).expiryDate || (job as any).expiry_date || (job as any).mrf_closure_date || null;
+      const jobCreatedAt = (job as any).createdAt || (job as any).created_at;
+
+      const effectiveEmpType = jobType === 'full_time' ? 'Full Time'
+        : jobType === 'part_time' ? 'Part Time'
+        : jobType === 'contract' ? 'Contract'
+        : jobType === 'internship' ? 'Internship'
+        : (jobEmpType || jobType || 'Full Time');
+
+      // Fetch skills from job_skills, fallback to mrf_skills
+      let parsedSkills: any[] = [];
+      try {
+        const skillRows = await db('job_skills').where('job_id', job.id).select('skill_name');
+        parsedSkills = skillRows.map((r: any) => (r as any).skillName || (r as any).skill_name).filter(Boolean);
+      } catch { /* ignore */ }
+
+      if (parsedSkills.length === 0 && (job as any).mrf_skills) {
+        const rawSkills = (job as any).mrf_skills;
+        if (typeof rawSkills === 'string') {
+          try {
+            parsedSkills = JSON.parse(rawSkills);
+          } catch {
+            parsedSkills = rawSkills.split(',').map((s: string) => s.trim());
+          }
+        } else if (Array.isArray(rawSkills)) {
+          parsedSkills = rawSkills;
+        }
+      }
+
+      const qual = (job as any).mrf_qualification || 'Graduate / Diploma';
+      const exp = jobMinExp ? `${jobMinExp}-${jobMaxExp || 5} Years` : ((job as any).mrf_experience || jobExpLevel || 'Experienced');
+
+      return {
+        id: job.id,
+        organizationId: jobOrgId,
+        organization_id: jobOrgId,
+        mrNumber: jobCode,
+        mr_number: jobCode,
+        positionTitle: jobTitle,
+        position_title: jobTitle,
+        numberOfPositions: jobNoPos,
+        number_of_positions: jobNoPos,
+        departmentId: jobDeptId,
+        department_id: jobDeptId,
+        departmentName: jobDeptName,
+        department_name: jobDeptName,
+        designationName: jobDesigName,
+        designation_name: jobDesigName,
+        employmentType: effectiveEmpType,
+        employment_type: effectiveEmpType,
+        qualificationRequired: qual,
+        qualification_required: qual,
+        experienceDesired: exp,
+        experience_desired: exp,
+        skills: parsedSkills,
+        jobDescription: jobDesc,
+        job_description: jobDesc,
+        status: jobStatus,
+        targetClosureDate: jobExpiry,
+        target_closure_date: jobExpiry,
+        createdAt: jobCreatedAt,
+        created_at: jobCreatedAt,
+      };
+    }
+
+    // 2. Fallback: Try finding in mrf_requests
     const mrf = await db('mrf_requests')
       .whereNull('deleted_at')
       .where((q) => {
-        if (!isNaN(Number(idStr))) {
-          q.where('id', Number(idStr))
+        if (idNum !== null) {
+          q.where('id', idNum)
            .orWhere('mr_number', idStr)
            .orWhere('mr_number', `MR-${idStr}`)
            .orWhere('mr_number', `MR-0${idStr}`)
@@ -83,68 +192,81 @@ export class JobReferenceService {
       })
       .first();
 
-    if (!mrf) return null;
+    if (mrf) {
+      const mrfDeptId = (mrf as any).departmentId || (mrf as any).department_id;
+      const mrfGradeId = (mrf as any).gradeId || (mrf as any).grade_id;
+      const mrfMrNumber = (mrf as any).mrNumber || (mrf as any).mr_number || '';
+      const mrfOrgId = (mrf as any).organizationId || (mrf as any).organization_id;
+      const mrfPositionTitle = (mrf as any).positionTitle || (mrf as any).position_title || `Position ${mrfMrNumber}`;
+      const mrfNumPositions = (mrf as any).numberOfPositions || (mrf as any).number_of_positions || 1;
+      const mrfEmpType = (mrf as any).employmentType || (mrf as any).employment_type || 'Full Time';
+      const mrfQual = (mrf as any).qualificationRequired || (mrf as any).qualification_required || '';
+      const mrfExp = (mrf as any).experienceDesired || (mrf as any).experience_desired || '';
+      const mrfJobDesc = (mrf as any).jobDescription || (mrf as any).job_description || '';
+      const mrfStatus = (mrf as any).status;
+      const mrfClosureDate = (mrf as any).targetClosureDate || (mrf as any).target_closure_date || null;
+      const mrfCreatedAt = (mrf as any).createdAt || (mrf as any).created_at;
 
-    // Resolve department name
-    let departmentName = '';
-    if (mrf.department_id) {
-      const dept = await db('departments').where('id', mrf.department_id).first();
-      departmentName = dept?.name || '';
-    }
-
-    // Resolve designation name
-    let designationName = '';
-    if (mrf.grade_id) {
-      const desig = await db('designations').where('id', mrf.grade_id).first();
-      designationName = desig?.title || desig?.name || '';
-    }
-
-    let parsedSkills: any = null;
-    if (mrf.skills) {
-      if (typeof mrf.skills === 'string') {
-        try {
-          parsedSkills = JSON.parse(mrf.skills);
-        } catch {
-          parsedSkills = mrf.skills;
-        }
-      } else {
-        parsedSkills = mrf.skills;
+      let departmentName = '';
+      if (mrfDeptId) {
+        const dept = await db('departments').where('id', mrfDeptId).first();
+        departmentName = (dept as any)?.name || '';
       }
+
+      let designationName = '';
+      if (mrfGradeId) {
+        const desig = await db('designations').where('id', mrfGradeId).first();
+        designationName = (desig as any)?.title || (desig as any)?.name || '';
+      }
+
+      let parsedSkills: any = null;
+      const rawSkills = (mrf as any).skills;
+      if (rawSkills) {
+        if (typeof rawSkills === 'string') {
+          try {
+            parsedSkills = JSON.parse(rawSkills);
+          } catch {
+            parsedSkills = rawSkills.split(',').map((s: string) => s.trim());
+          }
+        } else {
+          parsedSkills = rawSkills;
+        }
+      }
+
+      return {
+        id: mrf.id,
+        organizationId: mrfOrgId,
+        organization_id: mrfOrgId,
+        mrNumber: mrfMrNumber,
+        mr_number: mrfMrNumber,
+        positionTitle: mrfPositionTitle,
+        position_title: mrfPositionTitle,
+        numberOfPositions: mrfNumPositions,
+        number_of_positions: mrfNumPositions,
+        departmentId: mrfDeptId,
+        department_id: mrfDeptId,
+        departmentName,
+        department_name: departmentName,
+        designationName,
+        designation_name: designationName,
+        employmentType: mrfEmpType,
+        employment_type: mrfEmpType,
+        qualificationRequired: mrfQual,
+        qualification_required: mrfQual,
+        experienceDesired: mrfExp,
+        experience_desired: mrfExp,
+        skills: parsedSkills || [],
+        jobDescription: mrfJobDesc,
+        job_description: mrfJobDesc,
+        status: mrfStatus,
+        targetClosureDate: mrfClosureDate,
+        target_closure_date: mrfClosureDate,
+        createdAt: mrfCreatedAt,
+        created_at: mrfCreatedAt,
+      };
     }
 
-    const title = mrf.position_title || mrf.positionTitle || `Position ${mrf.mr_number}`;
-
-    return {
-      id: mrf.id,
-      organizationId: mrf.organization_id,
-      organization_id: mrf.organization_id,
-      mrNumber: mrf.mr_number,
-      mr_number: mrf.mr_number,
-      positionTitle: title,
-      position_title: title,
-      numberOfPositions: mrf.number_of_positions,
-      number_of_positions: mrf.number_of_positions,
-      departmentId: mrf.department_id,
-      department_id: mrf.department_id,
-      departmentName,
-      department_name: departmentName,
-      designationName,
-      designation_name: designationName,
-      employmentType: mrf.employment_type || 'Full Time',
-      employment_type: mrf.employment_type || 'Full Time',
-      qualificationRequired: mrf.qualification_required || '',
-      qualification_required: mrf.qualification_required || '',
-      experienceDesired: mrf.experience_desired || '',
-      experience_desired: mrf.experience_desired || '',
-      skills: parsedSkills,
-      jobDescription: mrf.job_description,
-      job_description: mrf.job_description,
-      status: mrf.status,
-      targetClosureDate: mrf.target_closure_date || null,
-      target_closure_date: mrf.target_closure_date || null,
-      createdAt: mrf.created_at,
-      created_at: mrf.created_at,
-    };
+    return null;
   }
 
   /**
@@ -184,13 +306,19 @@ export class JobReferenceService {
       }
     }
 
-    let employmentTypes: any[] = [];
+    let employmentTypes: string[] = ['Full Time', 'Part Time', 'Contract', 'Internship'];
     try {
-      employmentTypes = await db('mrf_requests')
-        .whereNotNull('employment_type')
-        .where((q) => q.whereNot('status', 'Closed').orWhereNull('status'))
-        .distinct('employment_type')
-        .pluck('employment_type');
+      const jobTypes = await db('jobs')
+        .whereNotNull('job_type')
+        .where((q) => {
+          q.where('is_published_external', true).orWhere('is_published_external', 1);
+        })
+        .where((q) => q.where('status', 'published').orWhere('status', 'active').orWhere('status', 'open'))
+        .distinct('job_type')
+        .pluck('job_type');
+
+      const formattedJobTypes = jobTypes.map((t: string) => t === 'full_time' ? 'Full Time' : (t === 'part_time' ? 'Part Time' : (t === 'contract' ? 'Contract' : (t === 'internship' ? 'Internship' : t))));
+      employmentTypes = Array.from(new Set([...employmentTypes, ...formattedJobTypes])).filter(Boolean);
     } catch (err) {
       console.error('Error fetching employmentTypes:', err);
     }
@@ -198,7 +326,7 @@ export class JobReferenceService {
     return {
       departments: departments.map((d: any) => ({ id: d.id, name: d.name })),
       designations: designations.map((d: any) => ({ id: d.id, name: d.name })),
-      employmentTypes: employmentTypes.filter(Boolean),
+      employmentTypes,
     };
   }
 
@@ -239,7 +367,19 @@ export class JobReferenceService {
   }
 
   /**
-   * List active job openings (MRF requests that are Open)
+   * List active job postings for external public consumption
+   */
+  async listPublicJobs(organizationId: number, options?: { page?: number; pageSize?: number; search?: string }) {
+    return this.listOpenings(organizationId, {
+      page: options?.page,
+      pageSize: options?.pageSize,
+      search: options?.search,
+    });
+  }
+
+  /**
+   * List active job openings on the Career Portal
+   * Strictly respects Job Publishing status and "Job Visibility & Candidate Reach" (is_published_external)
    */
   async listOpenings(_orgId?: number, filters?: {
     departmentId?: number;
@@ -251,111 +391,180 @@ export class JobReferenceService {
   }) {
     const db = getKnex();
 
-    let items: any[] = [];
-    let total = 0;
+    let allOpenings: any[] = [];
     const page = filters?.page || 1;
     const pageSize = filters?.pageSize || 50;
     const offset = (page - 1) * pageSize;
 
+    const todayStr = new Date().toISOString().substring(0, 10);
+
+    // ── Fetch REAL published & externally visible jobs from `jobs` table ──
     try {
-      const todayStr = new Date().toISOString().substring(0, 10);
-
-      // Primary query with joins
-      const query = db('mrf_requests as m')
-        .leftJoin('departments as d', 'm.department_id', 'd.id')
-        .leftJoin('grades as dg', 'm.grade_id', 'dg.id')
-        .whereNull('m.deleted_at')
+      const jobsQuery = db('jobs as j')
+        .leftJoin('departments as d', 'j.department_id', 'd.id')
+        .leftJoin('designations as des', 'j.designation_id', 'des.id')
+        .leftJoin('mrf_requests as m', 'j.mrf_request_id', 'm.id')
+        .whereNull('j.deleted_at')
+        .whereNull('j.closed_at')
         .where((q) => {
-          q.whereNot('m.status', 'Closed')
-           .orWhereNull('m.status');
+          q.where('j.is_published_external', true)
+           .orWhere('j.is_published_external', 1);
         })
-        .andWhere((q) => {
-          q.whereNull('m.target_closure_date')
-           .orWhere('m.target_closure_date', '>=', todayStr);
+        .where((q) => {
+          q.whereIn('j.status', ['published', 'active', 'open', 'Published', 'Active', 'Open', 'Approved']);
         })
-        .select(
-          'm.id',
-          'm.mr_number',
-          'm.position_title',
-          'm.number_of_positions',
-          'm.department_id',
-          'd.name as department_name',
-          'dg.name as designation_name',
-          'm.employment_type',
-          'm.qualification_required',
-          'm.experience_desired',
-          'm.skills',
-          'm.job_description',
-          'm.target_closure_date',
-          'm.created_at'
-        );
+        .where((q) => {
+          q.whereNull('j.expiry_date')
+           .orWhere('j.expiry_date', '>=', todayStr);
+        });
 
-      if (filters?.departmentId) {
-        query.where('m.department_id', filters.departmentId);
-      } else if (filters?.departmentName) {
-        query.where('d.name', filters.departmentName);
+      if (_orgId) {
+        jobsQuery.andWhere((q) => {
+          q.where('j.organization_id', _orgId)
+           .orWhereNull('j.organization_id');
+        });
       }
-      if (filters?.employmentType) {
-        query.where('m.employment_type', filters.employmentType);
+      if (filters?.departmentId) {
+        jobsQuery.where('j.department_id', filters.departmentId);
+      } else if (filters?.departmentName && filters.departmentName !== 'All' && filters.departmentName !== 'All Departments') {
+        jobsQuery.where('d.name', filters.departmentName);
+      }
+      if (filters?.employmentType && filters.employmentType !== 'All' && filters.employmentType !== 'All Types') {
+        const empType = filters.employmentType.toLowerCase().replace(/\s+/g, '_');
+        jobsQuery.where((q) => {
+          q.where('j.job_type', empType)
+           .orWhere('j.job_type', filters.employmentType!)
+           .orWhere('j.employment_type', empType)
+           .orWhere('j.employment_type', filters.employmentType!);
+        });
       }
       if (filters?.search) {
-        query.andWhere((q) => {
-          q.where('m.position_title', 'like', `%${filters.search}%`)
-            .orWhere('m.mr_number', 'like', `%${filters.search}%`)
-            .orWhere('d.name', 'like', `%${filters.search}%`)
-            .orWhere('m.qualification_required', 'like', `%${filters.search}%`);
+        jobsQuery.andWhere((q) => {
+          q.where('j.job_title', 'like', `%${filters.search}%`)
+           .orWhere('j.job_code', 'like', `%${filters.search}%`)
+           .orWhere('d.name', 'like', `%${filters.search}%`);
         });
       }
 
-      const countResult = await query.clone().clearSelect().count('m.id as count').first();
-      total = parseInt((countResult as any)?.count as string, 10) || 0;
+      const jobRows = await jobsQuery
+        .select(
+          'j.id', 'j.job_code', 'j.job_title', 'j.no_of_positions',
+          'j.department_id', 'd.name as dept_name',
+          'des.name as desig_name',
+          'j.job_type', 'j.employment_type',
+          'j.experience_level', 'j.min_experience_years', 'j.max_experience_years',
+          'j.job_description', 'j.status', 'j.expiry_date', 'j.closed_at', 'j.created_at',
+          'm.qualification_required as mrf_qualification',
+          'm.experience_desired as mrf_experience',
+          'm.skills as mrf_skills'
+        )
+        .orderBy('j.created_at', 'desc');
 
-      items = await query
-        .orderBy('m.created_at', 'desc')
-        .limit(pageSize)
-        .offset(offset);
-
-    } catch (err) {
-      console.error('listOpenings with joins failed, falling back to direct query:', err);
-      try {
-        const todayStr = new Date().toISOString().substring(0, 10);
-        // Fallback query without joins
-        const fallbackQuery = db('mrf_requests')
-          .whereNull('deleted_at')
-          .where((q) => {
-            q.whereNot('status', 'Closed')
-             .orWhereNull('status');
-          })
-          .andWhere((q) => {
-            q.whereNull('target_closure_date')
-             .orWhere('target_closure_date', '>=', todayStr);
-          });
-
-        if (filters?.employmentType) {
-          fallbackQuery.where('employment_type', filters.employmentType);
+      // Fetch skills from job_skills table
+      const jobIds = jobRows.map((j: any) => j.id);
+      const jobSkillsMap = new Map<number, string[]>();
+      if (jobIds.length > 0) {
+        try {
+          const skillsRows = await db('job_skills')
+            .whereIn('job_id', jobIds)
+            .select('job_id', 'skill_name');
+          for (const row of skillsRows) {
+            const jid = Number((row as any).jobId || (row as any).job_id);
+            const sname = (row as any).skillName || (row as any).skill_name;
+            if (!jobSkillsMap.has(jid)) jobSkillsMap.set(jid, []);
+            if (sname) jobSkillsMap.get(jid)!.push(sname);
+          }
+        } catch (skErr) {
+          console.warn('Could not fetch job_skills:', skErr);
         }
-        if (filters?.search) {
-          fallbackQuery.andWhere((q) => {
-            q.where('position_title', 'like', `%${filters.search}%`)
-              .orWhere('mr_number', 'like', `%${filters.search}%`);
-          });
-        }
-
-        const countResult = await fallbackQuery.clone().count('id as count').first();
-        total = parseInt((countResult as any)?.count as string, 10) || 0;
-
-        items = await fallbackQuery
-          .select('*')
-          .orderBy('created_at', 'desc')
-          .limit(pageSize)
-          .offset(offset);
-      } catch (fallbackErr) {
-        console.error('Fallback query also failed:', fallbackErr);
       }
+
+      for (const j of jobRows) {
+        const jStatus = String((j as any).status || '').toLowerCase();
+        if (jStatus === 'closed' || jStatus === 'archived' || jStatus === 'rejected') {
+          continue;
+        }
+        if ((j as any).closedAt || (j as any).closed_at) {
+          continue;
+        }
+
+        const jobCode = (j as any).jobCode || (j as any).job_code || '';
+        const jobTitle = (j as any).jobTitle || (j as any).job_title || '';
+        const noOfPositions = (j as any).noOfPositions || (j as any).no_of_positions || 1;
+        const deptId = (j as any).departmentId || (j as any).department_id;
+        const deptName = (j as any).deptName || (j as any).dept_name || '';
+        const desigName = (j as any).desigName || (j as any).desig_name || '';
+        const jobType = (j as any).jobType || (j as any).job_type || '';
+        const empType = (j as any).employmentType || (j as any).employment_type || '';
+        const expLevel = (j as any).experienceLevel || (j as any).experience_level || '';
+        const minExp = (j as any).minExperienceYears || (j as any).min_experience_years;
+        const maxExp = (j as any).maxExperienceYears || (j as any).max_experience_years;
+        const jobDesc = (j as any).jobDescription || (j as any).job_description || '';
+        const expDateRaw = (j as any).expiryDate || (j as any).expiry_date;
+        const createdAt = (j as any).createdAt || (j as any).created_at || new Date().toISOString();
+
+        const effectiveEmpType = jobType === 'full_time' ? 'Full Time'
+          : jobType === 'part_time' ? 'Part Time'
+          : jobType === 'contract' ? 'Contract'
+          : jobType === 'internship' ? 'Internship'
+          : (empType || jobType || 'Full Time');
+
+        let parsedSkills: string[] = jobSkillsMap.get(Number(j.id)) || [];
+        if (parsedSkills.length === 0 && (j as any).mrf_skills) {
+          const rawSkills = (j as any).mrf_skills;
+          if (typeof rawSkills === 'string') {
+            try {
+              parsedSkills = JSON.parse(rawSkills);
+            } catch {
+              parsedSkills = rawSkills.split(',').map((s: string) => s.trim());
+            }
+          } else if (Array.isArray(rawSkills)) {
+            parsedSkills = rawSkills;
+          }
+        }
+
+        const qual = (j as any).mrf_qualification || 'Graduate / Diploma';
+        const exp = minExp ? `${minExp}-${maxExp || 5} Years` : ((j as any).mrf_experience || expLevel || 'Experienced');
+
+        allOpenings.push({
+          id: j.id,
+          mr_number: jobCode,
+          position_title: jobTitle,
+          number_of_positions: noOfPositions,
+          department_id: deptId,
+          department_name: deptName,
+          designation_name: desigName,
+          employment_type: effectiveEmpType,
+          qualification_required: qual,
+          experience_desired: exp,
+          skills: parsedSkills,
+          job_description: jobDesc,
+          target_closure_date: expDateRaw || null,
+          created_at: createdAt,
+          source_type: 'job',
+        });
+      }
+    } catch (jobsErr) {
+      console.error('Error fetching jobs in listOpenings:', jobsErr);
     }
 
-    // Parse and map keys
-    const parsed = items.map((item: any) => {
+    // Deduplicate by mr_number
+    const seen = new Set<string>();
+    const uniqueOpenings = allOpenings.filter((item) => {
+      const key = `${item.mr_number || item.id}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+    // Sort by created_at desc
+    uniqueOpenings.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+
+    const total = uniqueOpenings.length;
+    const paginatedItems = uniqueOpenings.slice(offset, offset + pageSize);
+
+    // Parse skills and build final response
+    const parsed = paginatedItems.map((item: any) => {
       let parsedSkills: any[] = [];
       if (item.skills) {
         if (typeof item.skills === 'string') {
@@ -368,36 +577,45 @@ export class JobReferenceService {
           parsedSkills = item.skills;
         }
       }
-      const title = item.position_title || item.positionTitle || `Position ${item.mr_number || item.mrNumber}`;
-      const dept = item.department_name || item.departmentName || '';
-      const desig = item.designation_name || item.designationName || '';
+
       return {
-        ...item,
-        position_title: title,
-        positionTitle: title,
-        mr_number: item.mr_number || item.mrNumber,
-        mrNumber: item.mr_number || item.mrNumber,
-        department_name: dept,
-        departmentName: dept,
-        designation_name: desig,
-        designationName: desig,
-        employment_type: item.employment_type || 'Full Time',
-        employmentType: item.employment_type || 'Full Time',
-        qualification_required: item.qualification_required || '',
-        qualificationRequired: item.qualification_required || '',
-        experience_desired: item.experience_desired || '',
-        experienceDesired: item.experience_desired || '',
+        id: item.id,
+        mr_number: item.mr_number,
+        mrNumber: item.mr_number,
+        position_title: item.position_title,
+        positionTitle: item.position_title,
+        number_of_positions: item.number_of_positions,
+        numberOfPositions: item.number_of_positions,
+        department_id: item.department_id,
+        departmentId: item.department_id,
+        department_name: item.department_name,
+        departmentName: item.department_name,
+        designation_name: item.designation_name,
+        designationName: item.designation_name,
+        employment_type: item.employment_type,
+        employmentType: item.employment_type,
+        qualification_required: item.qualification_required,
+        qualificationRequired: item.qualification_required,
+        experience_desired: item.experience_desired,
+        experienceDesired: item.experience_desired,
+        job_description: item.job_description,
+        jobDescription: item.job_description,
         target_closure_date: item.target_closure_date,
         targetClosureDate: item.target_closure_date,
-        created_at: item.created_at || new Date().toISOString(),
-        createdAt: item.created_at || new Date().toISOString(),
+        created_at: item.created_at,
+        createdAt: item.created_at,
         skills: parsedSkills,
       };
     });
 
     return {
       items: parsed,
-      meta: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) },
+      meta: {
+        total,
+        page,
+        pageSize,
+        totalPages: Math.ceil(total / pageSize) || 1,
+      },
     };
   }
 
@@ -512,13 +730,21 @@ export class JobReferenceService {
       candidate = await db('candidates').where('id', candidate.id).first();
     }
 
-    // 2. Resolve or create Job record linked to this MRF
+    // 2. Resolve or create Job record linked to this MRF or Job
     let job: any = null;
     try {
+      // First check if mrfId is already a direct job ID
       job = await db('jobs')
         .where('organization_id', organizationId)
-        .where('mrf_request_id', mrfId)
+        .where('id', mrfId)
         .first();
+
+      if (!job) {
+        job = await db('jobs')
+          .where('organization_id', organizationId)
+          .where('mrf_request_id', mrfId)
+          .first();
+      }
     } catch {
       // mrf_request_id column may not exist, try without it
       job = null;
@@ -539,7 +765,7 @@ export class JobReferenceService {
           department_id: mrf?.department_id || null,
           location_id: mrf?.company_location_id || null,
           no_of_positions: mrf?.number_of_positions || 1,
-          status: 'published',
+          status: 'internal',
           created_by: mrf?.created_by || mrf?.requested_by || 1,
           updated_by: mrf?.created_by || mrf?.requested_by || 1,
         });

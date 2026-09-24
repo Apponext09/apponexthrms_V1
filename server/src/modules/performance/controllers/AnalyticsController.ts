@@ -1,4 +1,4 @@
-﻿import type { Request, Response } from 'express';
+import type { Request, Response } from 'express';
 import { asyncHandler } from '../../../common/utils/asyncHandler';
 import { AnalyticsService } from '../services/AnalyticsService';
 
@@ -10,6 +10,12 @@ export class AnalyticsController {
   }
 
   getDashboardMetrics = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const metrics = await this.service.generateDashboardMetrics(ctx);
+    res.json({ success: true, data: metrics });
+  });
+
+  getMetrics = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
     const metrics = await this.service.generateDashboardMetrics(ctx);
     res.json({ success: true, data: metrics });

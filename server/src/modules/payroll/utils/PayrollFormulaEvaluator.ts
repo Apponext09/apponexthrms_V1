@@ -5,6 +5,8 @@
  * dynamic variable resolution, condition checks, and statutory boundaries.
  */
 
+import { toPaise, toRupees } from './payroll.money';
+
 export interface FormulaContext {
   ctc?: number;
   annual_ctc?: number;
@@ -48,6 +50,13 @@ export class PayrollFormulaEvaluator {
    */
   static evaluate(formula: string, context: FormulaContext = {}): number {
     if (!formula || typeof formula !== 'string' || !formula.trim()) {
+      return 0;
+    }
+
+    // Defence-in-depth: payroll formulas are short arithmetic expressions.
+    // Anything longer is either malformed or a payload — refuse before parsing.
+    if (formula.length > 500) {
+      console.warn('[PayrollFormulaEvaluator] Rejected over-long formula (>' + 500 + ' chars)');
       return 0;
     }
 
@@ -123,8 +132,11 @@ export class PayrollFormulaEvaluator {
       }
     }
 
-    // 2. Pre-process bracket notation: e.g. [CTC], [Basic], [Basic Salary], [House Rent Allowance], [Conveyance Allowance]
+    // 2. Pre-process bracket notation: e.g. [CTC], [Basic], [CTC / 12], [ALLOWANCE * 100 / CTC]
     expr = expr.replace(/\[\s*([^\]]+?)\s*\]/g, (match, innerKey) => {
+      if (/[\+\-\*\/%^]/.test(innerKey)) {
+        return `(${innerKey})`;
+      }
       const normInner = this.normalizeKey(innerKey);
       if (lookup[normInner] !== undefined) {
         return String(lookup[normInner]);
@@ -178,12 +190,32 @@ export class PayrollFormulaEvaluator {
       // Handle power operator ^ -> **
       expr = expr.replace(/\^/g, '**');
 
+      // ── Security gate ────────────────────────────────────────────────────────
+      // `new Function` executes arbitrary JS. After variable substitution and the
+      // Math.* transform above, a *legitimate* payroll formula contains nothing
+      // but numbers, arithmetic operators, parentheses and whitelisted Math calls.
+      // Any leftover identifier means either an unresolved variable (typo in the
+      // component config) or an injection attempt (formula strings are attacker-
+      // controllable by anyone with structure:edit). Refuse to evaluate it.
+      const sanitized = expr
+        .replace(/\bMath\.(?:min|max|round|ceil|floor|abs|pow|sqrt)\b/g, '')
+        .replace(/\*\*/g, '');
+      if (!/^[\d\s+\-*/%.,()]*$/.test(sanitized)) {
+        console.warn(
+          `[PayrollFormulaEvaluator] Rejected non-arithmetic formula ${JSON.stringify(formula)} (resolved: ${JSON.stringify(expr)})`
+        );
+        return 0;
+      }
+
       // Safe execution using Function constructor with no scope access
       const fn = new Function('Math', `"use strict"; return (${expr});`);
       const result = fn(Math);
 
       if (typeof result === 'number' && !isNaN(result) && isFinite(result)) {
-        return Math.round(result * 100) / 100;
+        // Component base amount at paise precision; the organization's rounding
+        // mode (whole rupees, half-even, …) is applied to earned/total figures
+        // in PayrollService, not here.
+        return toRupees(toPaise(result));
       }
       return 0;
     } catch (err) {

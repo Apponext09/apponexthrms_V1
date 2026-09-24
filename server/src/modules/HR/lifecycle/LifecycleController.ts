@@ -26,8 +26,6 @@ export class LifecycleController {
       if (!isNaN(parsed) && parsed > 0) {
         companyId = parsed;
       }
-    } else if (ctx.companyId) {
-      companyId = ctx.companyId;
     }
 
     const data = await this.lifecycleService.getAllEmployeeLifecycleSummaries(ctx, {
@@ -54,6 +52,34 @@ export class LifecycleController {
     res.json({ success: true, data });
   });
 
+  /**
+   * Return lifecycle details for the authenticated user's linked employee.
+   * This avoids relying on a client-side employeeId, which is not present in
+   * every role's login payload.
+   */
+  getMyEmployeeLifecycleDetails = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const data = await this.lifecycleService.getEmployeeLifecycleDetails(ctx, 0);
+    res.json({ success: true, data });
+  });
+
+  /** Submit a resignation for the authenticated employee only. */
+  submitMyResignation = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { resignationDate, lastWorkingDay, reason } = req.body || {};
+    if (!resignationDate || !lastWorkingDay || !reason?.trim()) {
+      return res.status(400).json({ success: false, message: 'Resignation date, last working day, and reason are required.' });
+    }
+    if (Number.isNaN(new Date(resignationDate).getTime()) || Number.isNaN(new Date(lastWorkingDay).getTime())) {
+      return res.status(400).json({ success: false, message: 'Please provide valid resignation and last working dates.' });
+    }
+    if (new Date(lastWorkingDay) < new Date(resignationDate)) {
+      return res.status(400).json({ success: false, message: 'Last working day cannot be before the resignation date.' });
+    }
+    const result = await this.lifecycleService.submitMyResignation(ctx, { resignationDate, lastWorkingDay, reason: reason.trim() });
+    res.status(201).json({ success: true, data: result });
+  });
+
   transferEmployee = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
     const {
@@ -67,6 +93,13 @@ export class LifecycleController {
       transferReason,
       notes,
     } = req.body;
+
+    if (!Number.isInteger(Number(employeeId)) || Number(employeeId) <= 0) {
+      return res.status(400).json({ success: false, message: 'A valid employee is required for transfer.' });
+    }
+    if (!effectiveDate || Number.isNaN(new Date(effectiveDate).getTime())) {
+      return res.status(400).json({ success: false, message: 'A valid transfer effective date is required.' });
+    }
 
     const result = await this.lifecycleService.transferEmployee(ctx, {
       employeeId: Number(employeeId),
@@ -87,6 +120,10 @@ export class LifecycleController {
     const ctx = req.ctx!;
     const { employeeId } = req.params;
 
+    if (!Number.isInteger(Number(employeeId)) || Number(employeeId) <= 0) {
+      return res.status(400).json({ success: false, message: 'Invalid employee ID.' });
+    }
+
     const result = await this.lifecycleService.saveOnboardingDetails(ctx, {
       employeeId: Number(employeeId),
       ...req.body,
@@ -98,6 +135,10 @@ export class LifecycleController {
   saveOffboardingDetails = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
     const { employeeId } = req.params;
+
+    if (!Number.isInteger(Number(employeeId)) || Number(employeeId) <= 0) {
+      return res.status(400).json({ success: false, message: 'Invalid employee ID.' });
+    }
 
     const result = await this.lifecycleService.saveOffboardingDetails(ctx, {
       employeeId: Number(employeeId),

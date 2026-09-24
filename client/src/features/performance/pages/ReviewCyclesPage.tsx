@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { AlertCircle, Plus, Calendar } from 'lucide-react';
 
 export const ReviewCyclesPage: React.FC = () => {
-  const { cycles, isLoading, error } = useReviewCycles();
+  const { cycles, isLoading, error, refetch } = useReviewCycles();
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -36,14 +36,19 @@ export const ReviewCyclesPage: React.FC = () => {
     );
   }
 
-  if (error) {
+  if (error && (!cycles || cycles.length === 0)) {
     return (
       <div className="p-6">
         <Card className="border-red-200 dark:border-red-900">
           <CardContent className="pt-6">
-            <div className="flex items-center gap-3 text-red-600 dark:text-red-400">
-              <AlertCircle className="h-5 w-5" />
-              <p>Failed to load review cycles</p>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3 text-red-600 dark:text-red-400">
+                <AlertCircle className="h-5 w-5" />
+                <p>Failed to load review cycles</p>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => refetch()}>
+                Retry
+              </Button>
             </div>
           </CardContent>
         </Card>

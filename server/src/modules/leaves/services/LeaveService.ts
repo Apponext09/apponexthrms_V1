@@ -1629,8 +1629,8 @@ export class LeaveService {
         .forUpdate()
         .first();
 
-      // 4. Lock the balance row to prevent race conditions (filtered by the application's cycle year)
-      const balance = await trx('leave_balances')
+      // 4. Lock the balance row to prevent race conditions
+      let balance = await trx('leave_balances')
         .where('organization_id', ctx.organizationId)
         .where('employee_id', app.employeeId)
         .where('leave_type_id', app.leaveTypeId)
@@ -1639,16 +1639,26 @@ export class LeaveService {
         .forUpdate()
         .first();
 
-      const totalDays = parseFloat(app.totalDays) || 0;
+      if (!balance) {
+        balance = await trx('leave_balances')
+          .where('organization_id', ctx.organizationId)
+          .where('employee_id', app.employeeId)
+          .where('leave_type_id', app.leaveTypeId)
+          .whereNull('deleted_at')
+          .orderBy('id', 'desc')
+          .forUpdate()
+          .first();
+      }
 
-      // 5. Update pending and available balances on leave_balances
+      const totalDays = parseFloat(app.totalDays || app.total_days) || 0;
+
+      // 5. Update pending and available balances on leave_balances (release pending, keep balance based on approved consumed)
       if (balance) {
-        const pendingApprovalBalance = parseFloat(balance.pendingApprovalBalance) || 0;
-        if (pendingApprovalBalance < totalDays) {
-          throw new ValidationError(`Inconsistent leave balance: Application requests cancellation of ${totalDays} days, but pending balance is only ${pendingApprovalBalance} days.`);
-        }
-        const newPending = pendingApprovalBalance - totalDays;
-        const newAvailable = (parseFloat(balance.availableBalance) || 0) + totalDays;
+        const pendingApprovalBalance = parseFloat(balance.pendingApprovalBalance || balance.pending_approval_balance) || 0;
+        const newPending = Math.max(0, pendingApprovalBalance - totalDays);
+        const currentConsumed = parseFloat(balance.consumedBalance || balance.consumed_balance) || 0;
+        const totalOpening = (parseFloat(balance.openingBalance || balance.opening_balance || balance.allocatedBalance || balance.allocated_balance) || 0) + (parseFloat(balance.carryForwardBalance || balance.carry_forward_balance) || 0);
+        const newAvailable = Math.max(0, totalOpening - currentConsumed);
 
         await trx('leave_balances')
           .where('id', balance.id)
@@ -2024,10 +2034,13 @@ export class LeaveService {
       }
 
       // 5. Calculate base rate
-      const compensation = await trx('employee_compensation')
+      const struct = await trx('salary_structures')
         .where({ employee_id: employeeId })
-        .first();
-      const baseSalary = compensation ? parseFloat(compensation.baseSalary || compensation.base_salary || 0) : 0;
+        .whereNull('deleted_at')
+        .orderBy('id', 'desc')
+        .first()
+        .catch(() => null);
+      const baseSalary = struct ? parseFloat(struct.gross_monthly || struct.grossMonthly || (struct.annual_ctc ? struct.annual_ctc / 12 : 0) || 0) : 0;
       const dailyRate = baseSalary > 0 ? parseFloat((baseSalary / 30).toFixed(2)) : 1000.0;
       const totalAmount = parseFloat((dailyRate * encashmentDays).toFixed(2));
 

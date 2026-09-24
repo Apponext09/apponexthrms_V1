@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { apiClient } from '@/config/api';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useSettlement } from '../hooks/index';
 import {
-  UserX, FileText, CheckCircle2, DollarSign, Download,
+  UserX, FileText, CheckCircle2, Download,
   Laptop, ShieldCheck, Clock, Send, AlertCircle, ArrowRight, Plus,
   Upload, Paperclip, FileCheck, Trash2
 } from 'lucide-react';
@@ -46,7 +46,7 @@ export const MySettlementPage: React.FC = () => {
               setSettlement(list2[0]);
               setSettlementList(list2);
             }
-          }).catch(() => {});
+          }).catch(() => { });
         }
       })
       .catch(() => {
@@ -56,7 +56,7 @@ export const MySettlementPage: React.FC = () => {
             setSettlement(list2[0]);
             setSettlementList(list2);
           }
-        }).catch(() => {});
+        }).catch(() => { });
       })
       .finally(() => setLoading(false));
   };
@@ -70,7 +70,7 @@ export const MySettlementPage: React.FC = () => {
       apiClient.get('/employees').then((res: any) => {
         const list = res.data?.data || res.data || [];
         if (list.length > 0) setMyEmployeeId(list[0].id);
-      }).catch(() => {});
+      }).catch(() => { });
     });
   }, []);
 
@@ -195,9 +195,8 @@ export const MySettlementPage: React.FC = () => {
                   onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
                   onDragLeave={() => setIsDragging(false)}
                   onDrop={handleFileDrop}
-                  className={`border-2 border-dashed rounded-xl p-5 text-center transition-all cursor-pointer ${
-                    isDragging ? 'border-primary bg-primary/10' : 'border-border/80 hover:border-primary/50 hover:bg-muted/30'
-                  }`}
+                  className={`border-2 border-dashed rounded-xl p-5 text-center transition-all cursor-pointer ${isDragging ? 'border-primary bg-primary/10' : 'border-border/80 hover:border-primary/50 hover:bg-muted/30'
+                    }`}
                 >
                   <label htmlFor="resignation-upload" className="cursor-pointer space-y-2 block">
                     <Upload className="w-8 h-8 text-primary mx-auto opacity-70" />

@@ -224,9 +224,11 @@ export class HolidayCalendarService {
     const weekDay = dayNames[dateObj.getDay()]; // e.g. 'Sat', 'Sun'
 
     const weekOffRule = await query('weekly_off_rules')
-      .where('organization_id', ctx.organizationId)
       .where('calendar_id', calendarId)
       .where('week_day', weekDay)
+      .where((builder) => {
+        builder.where('organization_id', ctx.organizationId).orWhereNull('organization_id');
+      })
       .whereNull('deleted_at')
       .first();
 
@@ -354,53 +356,53 @@ export class HolidayCalendarService {
     weeklyOffRules: any[];
   } | null> {
     const query = trxOrDb || db;
-    const resolved = await this.getCalendarForEmployee(trxOrDb, ctx, employeeId, targetYear);
-    if (!resolved || !resolved.calendarId) {
+    const year = targetYear || new Date().getFullYear();
+    const resolved = await this.getCalendarForEmployee(trxOrDb, ctx, employeeId, year);
+
+    let targetCalendar = resolved?.calendar || null;
+    let targetCalendarId = resolved?.calendarId || null;
+
+    if (!targetCalendarId) {
       // Fallback: look for any published or active calendar for the current year
-      const year = targetYear || new Date().getFullYear();
       const fallbackCal = await query('holiday_calendars')
         .where('organization_id', ctx.organizationId)
-        .where('calendar_year', year)
+        .where((builder) => {
+          builder.where('calendar_year', year).orWhere('year', year);
+        })
         .whereNull('deleted_at')
-        .orderBy('status', 'asc')
+        .orderByRaw("CASE WHEN status IN ('Published', 'Active', 'active') THEN 1 WHEN status IN ('Draft', 'draft') THEN 2 ELSE 3 END")
         .first();
 
-      if (!fallbackCal) return null;
+      if (fallbackCal) {
+        targetCalendar = fallbackCal;
+        targetCalendarId = fallbackCal.id;
+      }
+    }
 
+    if (targetCalendarId) {
       const holidays = await query('holidays')
-        .where('holiday_calendar_id', fallbackCal.id)
         .where('organization_id', ctx.organizationId)
+        .where((builder) => {
+          builder.where('calendar_id', targetCalendarId).orWhere('holiday_calendar_id', targetCalendarId);
+        })
         .whereNull('deleted_at')
         .orderBy('holiday_date', 'asc');
 
       const weeklyOffRules = await query('weekly_off_rules')
-        .where('holiday_calendar_id', fallbackCal.id)
-        .where('organization_id', ctx.organizationId)
+        .where('calendar_id', targetCalendarId)
+        .where((builder) => {
+          builder.where('organization_id', ctx.organizationId).orWhereNull('organization_id');
+        })
         .whereNull('deleted_at');
 
       return {
-        calendar: fallbackCal,
-        holidays,
-        weeklyOffRules,
+        calendar: targetCalendar,
+        holidays: holidays || [],
+        weeklyOffRules: weeklyOffRules || [],
       };
     }
 
-    const holidays = await query('holidays')
-      .where('holiday_calendar_id', resolved.calendarId)
-      .where('organization_id', ctx.organizationId)
-      .whereNull('deleted_at')
-      .orderBy('holiday_date', 'asc');
-
-    const weeklyOffRules = await query('weekly_off_rules')
-      .where('holiday_calendar_id', resolved.calendarId)
-      .where('organization_id', ctx.organizationId)
-      .whereNull('deleted_at');
-
-    return {
-      calendar: resolved.calendar,
-      holidays,
-      weeklyOffRules,
-    };
+    return null;
   }
 }
 

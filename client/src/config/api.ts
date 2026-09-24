@@ -1,6 +1,10 @@
 import axios from 'axios';
 
+<<<<<<< HEAD
 const rawApiUrl = (import.meta as any).env.VITE_API_URL || '/api/v1';
+=======
+const rawApiUrl = (import.meta as any).env.VITE_API_URL || 'http://localhost:3000/api/v1';
+>>>>>>> b13431884f6e3fb77d4463ab4da204cadac8faca
 const API_BASE_URL = rawApiUrl.endsWith('/v1') ? rawApiUrl : `${rawApiUrl}/v1`;
 
 export const getApiBaseUrl = (): string => {
@@ -115,8 +119,14 @@ apiClient.interceptors.response.use(
         console.error('[API] Token refresh failed, clearing auth and redirecting to login');
         localStorage.removeItem('accessToken');
         localStorage.removeItem('refreshToken');
-        if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
-          window.location.href = '/login';
+        localStorage.removeItem('auth-storage');
+        try {
+          const { useAuthStore } = await import('@/features/auth/store/authStore');
+          useAuthStore.getState().logout();
+        } catch (e) {
+          if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
+            window.location.href = '/login';
+          }
         }
         return Promise.reject(refreshError);
       } finally {

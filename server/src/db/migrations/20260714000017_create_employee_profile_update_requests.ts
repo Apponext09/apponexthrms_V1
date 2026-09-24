@@ -8,9 +8,12 @@ export async function up(knex: Knex): Promise<void> {
     table.bigIncrements('id').primary();
     table.uuid('uuid').notNullable().unique();
     table.bigInteger('organization_id').unsigned().notNullable();
+    table.bigInteger('company_id').unsigned().nullable();
     table.bigInteger('employee_id').unsigned().notNullable();
 
     table.enum('request_type', ['personal_info', 'contact', 'bank_details', 'emergency_contact']).notNullable();
+    table.string('profile_section', 200).nullable();
+    table.text('reason').nullable();
     table.json('current_value').nullable();
     table.json('requested_value').nullable();
     table.enum('status', ['pending', 'approved', 'rejected']).defaultTo('pending');

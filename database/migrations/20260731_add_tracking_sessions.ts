@@ -10,7 +10,7 @@ export async function up(knex: Knex): Promise<void> {
   if (!hasTable) {
     await knex.schema.createTable('employee_tracking_sessions', (table) => {
       table.bigIncrements('id').primary();
-      table.string('uuid', 36).notNullable().unique().defaultTo(knex.raw('(UUID())'));
+      table.string('uuid', 36).notNullable().unique();
       table.integer('organization_id').unsigned().notNullable();
       table.integer('employee_id').unsigned().notNullable();
       table.date('session_date').notNullable().comment('YYYY-MM-DD date of the session');

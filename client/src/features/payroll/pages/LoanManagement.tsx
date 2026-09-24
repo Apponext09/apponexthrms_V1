@@ -12,7 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { apiClient } from '@/config/api';
 import {
-  Search, UserCheck, Calendar, DollarSign, Plus, FileText, User, Filter,
+  Search, UserCheck, Calendar, IndianRupee, Plus, FileText, User, Filter,
   AlertCircle, Eye, CheckCircle2, ShieldCheck, XCircle, Clock, Check, X,
   Crown, Coins, CreditCard, Building, Download, FileSpreadsheet, FileCheck,
   Calculator, LayoutGrid, List, ChevronRight, AlertTriangle, Sparkles, RefreshCcw, Trash2
@@ -23,16 +23,18 @@ export const LoanManagement: React.FC = () => {
   const roleInfo = getUserRoleAndDept(user);
 
   const isTeamLead = roleInfo.roleCode === 'team_lead' || user?.roles?.includes('team_lead');
-  const isHRManager = roleInfo.roleCode === 'hr_manager' || user?.roles?.includes('hr_manager');
+  const isHRManager = roleInfo.roleCode === 'hr' || user?.roles?.includes('hr') || user?.roles?.includes('hr_admin') || user?.roles?.includes('hr_manager');
   const isManager = roleInfo.roleCode === 'department_head' || user?.roles?.includes('manager');
 
   const isAdmin =
     user?.roles?.includes('organization_admin') ||
     user?.roles?.includes('super_admin') ||
+    user?.roles?.includes('hr') ||
+    user?.roles?.includes('hr_admin') ||
     user?.roles?.includes('hr_manager') ||
     roleInfo.roleCode === 'organization_admin' ||
     roleInfo.roleCode === 'super_admin' ||
-    roleInfo.roleCode === 'hr_manager';
+    roleInfo.roleCode === 'hr';
 
   const loggedInUserName = `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || user?.email || 'Employee';
   const loggedInUserId = (user as any)?.employeeId || user?.id || 1;
@@ -242,7 +244,7 @@ export const LoanManagement: React.FC = () => {
 
   const handleDeleteLoanType = async (id: string | number, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    if (!window.confirm('Are you sure you want to delete this Loan Type?')) return;
+    if (!await window.appConfirm('Are you sure you want to delete this Loan Type?')) return;
     try {
       await apiClient.delete(`/payroll/loan-types/${id}`);
     } catch (err) {}

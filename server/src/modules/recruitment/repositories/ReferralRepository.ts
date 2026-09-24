@@ -29,7 +29,7 @@ export class ReferralRepository extends BaseRepository<Referral> {
     return this.listEnriched(ctx, { referrerEmployeeId: employeeId });
   }
 
-  async listEnriched(ctx: TenantContext, options?: { referrerEmployeeId?: number }) {
+  async listEnriched(ctx: TenantContext, options?: { referrerEmployeeId?: number; referrerEmployeeIds?: number[]; createdBy?: number }) {
     let q = this.query(ctx)
       .leftJoin('candidates', 'referrals.candidate_id', 'candidates.id')
       .leftJoin('employees', 'referrals.referrer_employee_id', 'employees.id')
@@ -40,14 +40,29 @@ export class ReferralRepository extends BaseRepository<Referral> {
         'candidates.email as candidate_email',
         'candidates.phone as candidate_phone',
         'candidates.current_company as candidate_position',
+        'candidates.resume_url as candidate_resume_url',
         'employees.first_name as referrer_first_name',
         'employees.last_name as referrer_last_name',
         'employees.email as referrer_email'
       )
       .whereNull('referrals.deleted_at');
 
-    if (options?.referrerEmployeeId) {
-      q = q.where('referrals.referrer_employee_id', options.referrerEmployeeId);
+    if (options?.referrerEmployeeIds && options.referrerEmployeeIds.length > 0) {
+      q = q.where((builder) => {
+        builder.whereIn('referrals.referrer_employee_id', options.referrerEmployeeIds!);
+        if (options?.createdBy) {
+          builder.orWhere('referrals.created_by', options.createdBy);
+        }
+      });
+    } else if (options?.referrerEmployeeId) {
+      q = q.where((builder) => {
+        builder.where('referrals.referrer_employee_id', options.referrerEmployeeId!);
+        if (options?.createdBy) {
+          builder.orWhere('referrals.created_by', options.createdBy);
+        }
+      });
+    } else if (options?.createdBy) {
+      q = q.where('referrals.created_by', options.createdBy);
     }
 
     const rows = await q.orderBy('referrals.id', 'desc');
@@ -68,6 +83,7 @@ export class ReferralRepository extends BaseRepository<Referral> {
       const candPos = r.candidatePosition || r.candidate_position || 'Open Role';
       const refEmail = r.referrerEmail || r.referrer_email || '';
       const rewardAmt = r.referralRewardAmount || r.referral_reward_amount || null;
+      const resumeUrl = r.candidateResumeUrl || r.candidate_resume_url || r.resumeUrl || r.resume_url || null;
 
       const statusVal = r.status || r.referralStatus || r.referral_status || 'submitted';
 
@@ -82,6 +98,10 @@ export class ReferralRepository extends BaseRepository<Referral> {
         candidateEmail: candEmail,
         candidate_phone: candPhone,
         candidatePhone: candPhone,
+        candidate_resume_url: resumeUrl,
+        candidateResumeUrl: resumeUrl,
+        resume_url: resumeUrl,
+        resumeUrl: resumeUrl,
         position_title: candPos,
         positionTitle: candPos,
         referrer_employee_id: refId,

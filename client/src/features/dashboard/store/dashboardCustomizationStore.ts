@@ -26,18 +26,22 @@ export interface QuickActionOption {
   category: string;
 }
 
+// ─── Fixed KPIs (always shown, not removable) ────────────────────────────────
+// These 4 appear in a permanent pinned row on the dashboard.
+export const FIXED_KPIS = [
+  { id: 'totalHeadcount', label: 'Total Employee Count', iconName: 'Users', path: '/employees' },
+  { id: 'activeDepartments', label: 'Active Departments', iconName: 'Building2', path: '/masters?tab=department' },
+  { id: 'officeLocations', label: 'Office Locations', iconName: 'MapPin', path: '/masters?tab=location' },
+  { id: 'monthlyPayrollCost', label: 'Est. Monthly Payroll', iconName: 'Wallet', path: '/payroll' },
+] as const;
+
+// ─── Optional KPIs (toggled from Customization tab) ──────────────────────────
 export const ALL_AVAILABLE_KPIS: KPIOption[] = [
-  { id: 'totalHeadcount', label: 'Total Employee Count', category: 'Core HR', iconName: 'Users', defaultEnabled: true, color: 'text-primary' },
-  { id: 'activeDepartments', label: 'Active Departments', category: 'Core HR', iconName: 'Building2', defaultEnabled: true, color: 'text-blue-500' },
-  { id: 'officeLocations', label: 'Office Locations', category: 'Core HR', iconName: 'MapPin', defaultEnabled: true, color: 'text-emerald-500' },
-  { id: 'reportingOfficers', label: 'Reporting Officers', category: 'Core HR', iconName: 'ShieldCheck', defaultEnabled: true, color: 'text-violet-500' },
-  { id: 'presentToday', label: 'Present Today', category: 'Attendance', iconName: 'UserCheck', defaultEnabled: true, color: 'text-emerald-600' },
-  { id: 'onLeaveToday', label: 'On Leave Today', category: 'Leaves', iconName: 'Palmtree', defaultEnabled: false, color: 'text-amber-500' },
-  { id: 'pendingApprovals', label: 'Pending Approvals', category: 'Governance', iconName: 'Clock', defaultEnabled: true, color: 'text-rose-500' },
   { id: 'openJobs', label: 'Open Job Postings', category: 'Recruitment', iconName: 'Briefcase', defaultEnabled: false, color: 'text-indigo-500' },
-  { id: 'newHiresThisMonth', label: 'New Hires (This Month)', category: 'Recruitment', iconName: 'UserPlus', defaultEnabled: false, color: 'text-cyan-500' },
-  { id: 'activeAssets', label: 'Assigned Assets', category: 'Assets', iconName: 'Package', defaultEnabled: false, color: 'text-teal-500' },
-  { id: 'monthlyPayrollCost', label: 'Est. Monthly Payroll', category: 'Finance', iconName: 'Wallet', defaultEnabled: false, color: 'text-emerald-600' },
+  { id: 'pendingApprovals', label: 'Pending Approvals', category: 'Workflow', iconName: 'Clock', defaultEnabled: false, color: 'text-amber-500' },
+  { id: 'newHires', label: 'New Hires This Month', category: 'Core HR', iconName: 'UserPlus', defaultEnabled: false, color: 'text-emerald-500' },
+  { id: 'onLeaveToday', label: 'On Leave Today', category: 'Leaves', iconName: 'Palmtree', defaultEnabled: false, color: 'text-sky-500' },
+  { id: 'reportingOfficers', label: 'Reporting Officer', category: 'Core HR', iconName: 'UserCheck', defaultEnabled: false, color: 'text-violet-500' },
 ];
 
 export const ALL_AVAILABLE_REPORTS: ReportOption[] = [
@@ -45,17 +49,19 @@ export const ALL_AVAILABLE_REPORTS: ReportOption[] = [
   { id: 'timelog_report', title: 'Timelog & Productivity Report', path: '/analytics/timelog', description: 'Working hours, effective time & break analysis', iconName: 'Clock' },
   { id: 'break_logs_report', title: 'Break Logs Report', path: '/attendance/break-logs', description: 'Break duration, exceedances and activity timeline', iconName: 'Coffee' },
   { id: 'live_tracking_report', title: 'Live Field Geotracking', path: '/live-tracking', description: 'GPS coordinates and live route tracking for field staff', iconName: 'Navigation' },
-  { id: 'payroll_reports', title: 'Payroll & Salary Report', path: '/payroll/reports', description: 'Statutory calculations, gross/net distribution & tax deductions', iconName: 'DollarSign' },
+  { id: 'payroll_reports', title: 'Payroll & Salary Report', path: '/payroll/reports', description: 'Statutory calculations, gross/net distribution & tax deductions', iconName: 'IndianRupee' },
   { id: 'leave_burnout_report', title: 'Leave & Burnout Risk Analysis', path: '/leaves/reports/burnout-risk', description: 'Employee fatigue indicators and leave balance utilization', iconName: 'Flame' },
+  { id: 'policy_acknowledgement_report', title: 'Policy Compliance & Acknowledgement', path: '/policies/reports', description: 'Employee sign-off audit, pending acknowledgements and policy version tracking', iconName: 'ShieldCheck' },
 ];
 
 export const ALL_AVAILABLE_QUICK_ACTIONS: QuickActionOption[] = [
   { id: 'add_employee', label: 'Add Employee', path: '/employees', iconName: 'UserPlus', category: 'Core HR' },
-  { id: 'departments', label: 'Departments', path: '/settings/departments', iconName: 'Building2', category: 'Core HR' },
-  { id: 'designations', label: 'Designations', path: '/settings/designations', iconName: 'Briefcase', category: 'Core HR' },
+  { id: 'departments', label: 'Departments', path: '/masters?tab=department', iconName: 'Building2', category: 'Core HR' },
+  { id: 'designations', label: 'Designations', path: '/masters?tab=designation', iconName: 'Briefcase', category: 'Core HR' },
   { id: 'payroll', label: 'Payroll Management', path: '/payroll', iconName: 'CreditCard', category: 'Finance' },
+  { id: 'policy_governance', label: 'Policy Governance', path: '/policies/manage', iconName: 'ShieldCheck', category: 'Governance' },
   { id: 'mrf_request', label: 'Create MRF Request', path: '/recruitment/mrf-request', iconName: 'FilePlus', category: 'Recruitment' },
-  { id: 'leave_approvals', label: 'Approvals Inbox', path: '/leaves/approvals', iconName: 'CheckCircle', category: 'Leaves' },
+  { id: 'leave_approvals', label: 'Approvals Inbox', path: '/approvals', iconName: 'CheckCircle', category: 'Leaves' },
   { id: 'live_tracking', label: 'Live Tracking', path: '/live-tracking', iconName: 'Navigation', category: 'Attendance' },
   { id: 'branding', label: 'Settings & Branding', path: '/settings/branding', iconName: 'Settings', category: 'Settings' },
   { id: 'assets', label: 'Asset Fleet', path: '/assets/list', iconName: 'Package', category: 'Assets' },
@@ -80,7 +86,7 @@ const DEFAULT_CONFIG: DashboardSectionsConfig = {
   showHeaderAttendanceReport: true,
   selectedReportId: 'attendance_reports',
   showKpiSection: true,
-  enabledKpiIds: ['totalHeadcount', 'activeDepartments', 'officeLocations', 'reportingOfficers'],
+  enabledKpiIds: [], // Optional KPIs — all off by default
   showGrowthTrendChart: true,
   showEntityDetails: true,
   showRecentRoster: true,
@@ -134,7 +140,7 @@ export const useDashboardCustomizationStore = create<DashboardCustomizationStore
         })),
     }),
     {
-      name: 'apponext_dashboard_customization_v1',
+      name: 'apponext_dashboard_customization_v2',
     }
   )
 );

@@ -1,4 +1,4 @@
-﻿import type { Request, Response } from 'express';
+import type { Request, Response } from 'express';
 import { asyncHandler } from '../../../common/utils/asyncHandler';
 import { validate } from '../../../common/middleware/validate';
 import { ReviewService } from '../services/ReviewService';
@@ -122,6 +122,51 @@ export class ReviewController {
 
     const cycle = await this.service.completeCycle(ctx, parseInt(id, 10));
     res.json({ success: true, data: cycle });
+  });
+
+  listCycles = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { page = 1, pageSize = 50, status } = req.query;
+    const options: any = {
+      page: parseInt(page as string, 10),
+      pageSize: parseInt(pageSize as string, 10),
+    };
+    if (status) {
+      options.filters = { status: status as string };
+    }
+    const result = await this.service.listCycles(ctx, options);
+    res.json({ success: true, data: result.items, meta: result.meta });
+  });
+
+  getCycle = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { id } = req.params;
+    const cycle = await this.service.getCycle(ctx, parseInt(id, 10));
+    res.json({ success: true, data: cycle });
+  });
+
+  updateCycle = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { id } = req.params;
+    const updated = await this.service.updateCycle(ctx, parseInt(id, 10), req.body);
+    res.json({ success: true, data: updated });
+  });
+
+  listReviews = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { cycleId, employeeId, page = 1, pageSize = 50 } = req.query;
+    const result = await this.service.listReviews(
+      ctx,
+      {
+        cycleId: cycleId ? parseInt(cycleId as string, 10) : undefined,
+        employeeId: employeeId ? parseInt(employeeId as string, 10) : undefined,
+      },
+      {
+        page: parseInt(page as string, 10),
+        pageSize: parseInt(pageSize as string, 10),
+      }
+    );
+    res.json({ success: true, data: result.items, meta: result.meta });
   });
 }
 

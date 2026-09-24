@@ -12,6 +12,9 @@ import type { LiveEmployee, RoutePoint } from '../types/livetracking.types';
 
 // Fix for Vite bundling — not needed with MapLibre, kept as no-op for safety
 
+// Default focus when a route hasn't loaded yet (Navi Mumbai — matches the live dashboard default)
+const NAVI_MUMBAI_CENTER: [number, number] = [73.0297, 19.033];
+
 
 /** Helper to convert 0-indexed integer into alphabet label (0->A, 1->B, 2->C, 3->D...) */
 function getAlphabetLabel(index: number): string {
@@ -157,7 +160,7 @@ function interpolateRoutePoints(rawPoints: RoutePoint[], stepsPerSegment = 20): 
 interface PlaybackMapProps {
   interpolatedRoute: RoutePoint[];
   rawRoute: RoutePoint[];
-  playedPath: RoutePoint[];
+  playIndex: number;
   currentPoint: RoutePoint | undefined;
   destinationClusters: DestinationCluster[];
   employeeName: string;
@@ -175,16 +178,21 @@ const PLAYBACK_MAP_STYLE: maplibregl.StyleSpecification = {
         'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png',
       ],
       tileSize: 256,
+      // OSM only serves tiles up to z19 — capping the SOURCE here makes MapLibre
+      // over-zoom (upscale) the last available tile beyond that instead of
+      // fetching non-existent tiles.
+      maxzoom: 19,
       attribution: '&copy; OpenStreetMap contributors',
     },
   },
   layers: [
     {
+      // NOTE: no `maxzoom` on the LAYER — a layer-level maxzoom stops the layer
+      // from rendering at all past that zoom (blank map), unlike a source maxzoom
+      // which just triggers over-zoom. Keep this layer active at every zoom level.
       id: 'osm-base-layer',
       type: 'raster',
       source: 'osm-tiles',
-      minzoom: 0,
-      maxzoom: 19,
     },
   ],
 };
@@ -192,7 +200,7 @@ const PLAYBACK_MAP_STYLE: maplibregl.StyleSpecification = {
 const PlaybackMap: React.FC<PlaybackMapProps> = ({
   interpolatedRoute,
   rawRoute,
-  playedPath,
+  playIndex,
   currentPoint,
   destinationClusters,
   employeeName,
@@ -204,6 +212,23 @@ const PlaybackMap: React.FC<PlaybackMapProps> = ({
   const markersRef = useRef<maplibregl.Marker[]>([]);
   const playerMarkerRef = useRef<maplibregl.Marker | null>(null);
 
+  // Incrementally-built played-path buffer — avoids re-slicing/re-mapping the
+  // whole interpolatedRoute array on every ~15-40ms animation tick, which was
+  // the actual cause of the line lagging behind the marker on longer routes
+  // (a full day's history can interpolate into tens of thousands of points).
+  const playedCoordsRef = useRef<[number, number][]>([]);
+  const lastPlayIndexRef = useRef<number>(-1);
+  const lastRouteRef = useRef<RoutePoint[] | null>(null);
+
+  // Keep the latest route in a ref so the map's 'load' handler (registered once,
+  // on mount) can fit to it even if the route finishes loading AFTER the map's
+  // 'load' event fires — using the closed-over prop there was stale and caused
+  // the map to stay centered on the fallback location instead of the employee's route.
+  const interpolatedRouteRef = useRef<RoutePoint[]>(interpolatedRoute);
+  useEffect(() => {
+    interpolatedRouteRef.current = interpolatedRoute;
+  }, [interpolatedRoute]);
+
   // ── Init MapLibre ───────────────────────────────────────────────────────
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -211,7 +236,7 @@ const PlaybackMap: React.FC<PlaybackMapProps> = ({
     const first = interpolatedRoute[0];
     const center: [number, number] = first
       ? [first.longitude, first.latitude]
-      : [78.9629, 20.5937];
+      : NAVI_MUMBAI_CENTER;
 
     const map = new maplibregl.Map({
       container: containerRef.current,
@@ -225,6 +250,15 @@ const PlaybackMap: React.FC<PlaybackMapProps> = ({
     map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right');
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: false }), 'top-right');
     mapRef.current = map;
+
+    // The modal's layout/transition can leave the map container at zero size
+    // for a moment when the map initializes — resize once it has settled so
+    // fitBounds computes against the real container dimensions, not a stale one.
+    setTimeout(() => {
+      try {
+        map.resize();
+      } catch {}
+    }, 150);
 
     map.on('load', () => {
       // Full route trail source (dotted grey ghost path)
@@ -266,11 +300,16 @@ const PlaybackMap: React.FC<PlaybackMapProps> = ({
 
       mapLoadedRef.current = true;
 
+      // Use the latest route via ref — interpolatedRoute may still have been
+      // empty (route still loading) when this 'load' handler was registered.
+      const latestRoute = interpolatedRouteRef.current;
+
       // Fit to full route
-      if (interpolatedRoute.length > 1) {
+      if (latestRoute.length > 1) {
         const bounds = new maplibregl.LngLatBounds();
-        interpolatedRoute.forEach((p) => bounds.extend([p.longitude, p.latitude]));
+        latestRoute.forEach((p) => bounds.extend([p.longitude, p.latitude]));
         if (!bounds.isEmpty()) {
+          map.resize();
           map.fitBounds(bounds, { padding: 60, maxZoom: 16, duration: 600 });
         }
       }
@@ -280,7 +319,7 @@ const PlaybackMap: React.FC<PlaybackMapProps> = ({
         type: 'Feature',
         geometry: {
           type: 'LineString',
-          coordinates: interpolatedRoute.map((p) => [p.longitude, p.latitude]),
+          coordinates: latestRoute.map((p) => [p.longitude, p.latitude]),
         },
         properties: {},
       } as any);
@@ -310,11 +349,14 @@ const PlaybackMap: React.FC<PlaybackMapProps> = ({
       properties: {},
     } as any);
 
-    // Re-fit bounds
+    // Re-fit bounds (resize first in case the container was 0-sized when the map initialized)
     if (interpolatedRoute.length > 1) {
       const bounds = new maplibregl.LngLatBounds();
       interpolatedRoute.forEach((p) => bounds.extend([p.longitude, p.latitude]));
       if (!bounds.isEmpty()) {
+        try {
+          mapRef.current.resize();
+        } catch {}
         mapRef.current.fitBounds(bounds, { padding: 60, maxZoom: 16, duration: 600 });
       }
     }
@@ -323,15 +365,36 @@ const PlaybackMap: React.FC<PlaybackMapProps> = ({
   // ── Update played path (called on every playIndex tick) ───────────────
   useEffect(() => {
     if (!mapLoadedRef.current || !mapRef.current) return;
+
+    // New route loaded (date/employee changed) — reset the incremental buffer.
+    if (lastRouteRef.current !== interpolatedRoute) {
+      playedCoordsRef.current = [];
+      lastPlayIndexRef.current = -1;
+      lastRouteRef.current = interpolatedRoute;
+    }
+
+    if (playIndex < lastPlayIndexRef.current) {
+      // Scrubbed/seeked backward — rebuild once instead of trying to "un-append".
+      playedCoordsRef.current = interpolatedRoute
+        .slice(0, playIndex + 1)
+        .map((p) => [p.longitude, p.latitude] as [number, number]);
+    } else {
+      for (let i = lastPlayIndexRef.current + 1; i <= playIndex && i < interpolatedRoute.length; i++) {
+        const p = interpolatedRoute[i];
+        if (p) playedCoordsRef.current.push([p.longitude, p.latitude]);
+      }
+    }
+    lastPlayIndexRef.current = playIndex;
+
     (mapRef.current.getSource('played-path') as maplibregl.GeoJSONSource | undefined)?.setData({
       type: 'Feature',
       geometry: {
         type: 'LineString',
-        coordinates: playedPath.map((p) => [p.longitude, p.latitude]),
+        coordinates: playedCoordsRef.current,
       },
       properties: {},
     } as any);
-  }, [playedPath]);
+  }, [playIndex, interpolatedRoute]);
 
   // ── Move animated player marker ───────────────────────────────────────
   useEffect(() => {
@@ -540,7 +603,6 @@ export const RoutePlaybackModal: React.FC<Props> = ({ employee, onClose }) => {
   }, [rawRoute]);
 
   const currentPoint = interpolatedRoute[playIndex] || interpolatedRoute[0];
-  const playedPath = interpolatedRoute.slice(0, playIndex + 1);
 
   // Date navigation
   const shiftDate = (days: number) => {
@@ -613,7 +675,7 @@ export const RoutePlaybackModal: React.FC<Props> = ({ employee, onClose }) => {
           <PlaybackMap
             interpolatedRoute={interpolatedRoute}
             rawRoute={rawRoute}
-            playedPath={playedPath}
+            playIndex={playIndex}
             currentPoint={currentPoint}
             destinationClusters={destinationClusters}
             employeeName={employee.name}

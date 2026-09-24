@@ -1,3 +1,4 @@
+import { LegacyWorkflowNotice } from './LegacyWorkflowNotice';
 import React, { useEffect, useState } from 'react';
 import { expenseApi, ExpenseClaim, ExpenseCategory, ExpenseItemInput } from '../api/expenseApi';
 import { apiClient } from '@/config/api';
@@ -18,14 +19,18 @@ import {
   Trash2,
   Upload,
   Calendar,
-  DollarSign,
   Building,
   Info,
   ChevronRight,
   FileCheck,
-  Filter
+  Filter,
+  ShieldCheck,
+  AlertTriangle
 } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
+
+import { useExpenseMoney } from '../utils/useExpenseMoney';
+import { ExpensePolicy } from '../api/expenseApi';
 
 export const MyExpensesPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -35,10 +40,12 @@ export const MyExpensesPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [claims, setClaims] = useState<ExpenseClaim[]>([]);
   const [categories, setCategories] = useState<ExpenseCategory[]>([]);
+  const [policies, setPolicies] = useState<ExpensePolicy[]>([]);
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [selectedDepartment, setSelectedDepartment] = useState<string>('');
   const [departments, setDepartments] = useState<Array<{ id: string | number; name: string }>>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const money = useExpenseMoney();
   const [processingId, setProcessingId] = useState<number | string | null>(null);
 
   // Modal / Drawer state
@@ -48,7 +55,7 @@ export const MyExpensesPage: React.FC = () => {
 
   // Form State
   const [formTitle, setFormTitle] = useState('');
-  const [formDate, setFormDate] = useState(new Date().toISOString().slice(0, 10));
+  const [formDate, setFormDate] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 1); return d.toISOString().slice(0, 10); });
   const [formCategoryId, setFormCategoryId] = useState<number | undefined>(undefined);
   const [formPaymentMethod, setFormPaymentMethod] = useState('bank_transfer');
   const [formMerchant, setFormMerchant] = useState('');
@@ -57,7 +64,7 @@ export const MyExpensesPage: React.FC = () => {
   const [items, setItems] = useState<ExpenseItemInput[]>([
     {
       categoryId: undefined,
-      expenseDate: new Date().toISOString().slice(0, 10),
+      expenseDate: (() => { const d = new Date(); d.setDate(d.getDate() - 1); return d.toISOString().slice(0, 10); })(),
       claimedAmount: 0,
       merchantName: '',
       description: '',
@@ -77,15 +84,17 @@ export const MyExpensesPage: React.FC = () => {
   const fetchClaimsAndCategories = async () => {
     try {
       setLoading(true);
-      const [claimsRes, catRes, deptRes] = await Promise.all([
-        expenseApi.getClaims({ mode: isManagement ? undefined : 'my_expenses' }),
-        expenseApi.getCategories(),
-        apiClient.get('/settings/departments', { params: { pageSize: 200 } }).catch(() => ({ data: { data: [] } }))
+      const [claimsRes, catRes, deptRes, polRes] = await Promise.all([
+        expenseApi.getClaims({ mode: 'my_expenses' }),
+        expenseApi.getCategories().catch(() => []),
+        apiClient.get('/settings/departments', { params: { pageSize: 200 } }).catch(() => ({ data: { data: [] } })),
+        expenseApi.getPolicies().catch(() => [])
       ]);
 
       const fetchedClaims = claimsRes || [];
       setClaims(fetchedClaims);
       setCategories(catRes || []);
+      setPolicies(polRes || []);
 
       const rawDepts = deptRes.data?.data || deptRes.data || [];
       const deptMap = new Map<string, string>();
@@ -103,7 +112,14 @@ export const MyExpensesPage: React.FC = () => {
       setDepartments(Array.from(deptMap.entries()).map(([id, name]) => ({ id, name })));
 
       if (catRes && catRes.length > 0) {
-        setFormCategoryId(catRes[0].id);
+        const defaultCatId = catRes[0].id;
+        setFormCategoryId(defaultCatId);
+        setItems((prevItems) =>
+          prevItems.map((item) => ({
+            ...item,
+            categoryId: item.categoryId || defaultCatId
+          }))
+        );
       }
     } catch (err) {
       console.error('Error fetching expenses:', err);
@@ -111,6 +127,15 @@ export const MyExpensesPage: React.FC = () => {
       setLoading(false);
     }
   };
+
+  // Toast Notification State
+  const [toast, setToast] = useState<{ type: 'success' | 'error' | 'warning'; title?: string; message: string } | null>(null);
+
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 6000);
+    return () => clearTimeout(t);
+  }, [toast]);
 
   const handleQuickApprove = async (claim: any) => {
     try {
@@ -120,23 +145,25 @@ export const MyExpensesPage: React.FC = () => {
       } else {
         await expenseApi.managerApproveClaim(claim.id, 'Approved by Reporting Manager');
       }
+      setToast({ type: 'success', title: 'Claim Approved', message: 'Expense claim approved successfully.' });
       fetchClaimsAndCategories();
     } catch (err: any) {
-      alert(err.response?.data?.message || err.message || 'Failed to approve claim');
+      setToast({ type: 'error', title: 'Approval Error', message: err.response?.data?.message || err.message || 'Failed to approve claim' });
     } finally {
       setProcessingId(null);
     }
   };
 
   const handleQuickReject = async (claim: any) => {
-    const reason = prompt('Please enter reason for rejection:', 'Does not comply with expense policy');
+    const reason = await window.appPrompt('Please enter reason for rejection:', 'Does not comply with expense policy');
     if (reason === null) return;
     try {
       setProcessingId(claim.id);
       await expenseApi.rejectClaim(claim.id, reason);
+      setToast({ type: 'success', title: 'Claim Rejected', message: 'Expense claim rejected.' });
       fetchClaimsAndCategories();
     } catch (err: any) {
-      alert(err.response?.data?.message || err.message || 'Failed to reject claim');
+      setToast({ type: 'error', title: 'Rejection Error', message: err.response?.data?.message || err.message || 'Failed to reject claim' });
     } finally {
       setProcessingId(null);
     }
@@ -153,10 +180,11 @@ export const MyExpensesPage: React.FC = () => {
 
   // Validate policy for item
   const checkItemPolicy = async (index: number, catId?: number, amt?: number, receipt?: string) => {
-    if (!catId || !amt || amt <= 0) return;
+    if (!amt || amt <= 0) return;
     try {
-      const res = await expenseApi.validatePolicy(catId, amt, Boolean(receipt));
-      if (!res.isValid && res.violations) {
+      const targetCatId = catId || formCategoryId || 0;
+      const res = await expenseApi.validatePolicy(targetCatId, amt, Boolean(receipt));
+      if (!res.isValid && res.violations && res.violations.length > 0) {
         setPolicyWarnings((prev) => ({ ...prev, [index]: res.violations }));
       } else {
         setPolicyWarnings((prev) => {
@@ -170,11 +198,57 @@ export const MyExpensesPage: React.FC = () => {
     }
   };
 
+  // Helper to compute active policy limit for a category dynamically from Expense Policies
+  const getPolicyLimitInfo = (catId?: number) => {
+    const targetId = catId || formCategoryId;
+    if (!targetId && targetId !== 0) return null;
+
+    const applicablePols = policies.filter((p) => {
+      if (p.isActive === false) return false;
+      const pCatId = p.categoryId !== undefined && p.categoryId !== null ? Number(p.categoryId) : 0;
+      return pCatId === 0 || pCatId === Number(targetId);
+    });
+
+    if (applicablePols.length === 0) return null;
+
+    const catSpecificPols = applicablePols.filter((p) => {
+      const pCatId = p.categoryId !== undefined && p.categoryId !== null ? Number(p.categoryId) : 0;
+      return pCatId === Number(targetId);
+    });
+    const targetPols = catSpecificPols.length > 0 ? catSpecificPols : applicablePols;
+
+    const unlimitedPol = targetPols.find((p) => Number(p.maxLimitPerClaim ?? (p as any).max_limit_per_claim ?? 0) === 0);
+    if (unlimitedPol) {
+      return {
+        limit: 0,
+        isUnlimited: true,
+        policyName: unlimitedPol.policyName || (unlimitedPol as any).policy_name || 'Unlimited Policy'
+      };
+    }
+
+    const numericLimits = targetPols
+      .map((p) => Number(p.maxLimitPerClaim ?? (p as any).max_limit_per_claim ?? 0))
+      .filter((lim) => lim > 0);
+
+    if (numericLimits.length === 0) return null;
+
+    const minLimit = Math.min(...numericLimits);
+    const pol = targetPols.find((p) => Number(p.maxLimitPerClaim ?? (p as any).max_limit_per_claim ?? 0) === minLimit);
+    const policyName = pol?.policyName || (pol as any)?.policy_name || 'Policy Limit';
+
+    return {
+      limit: minLimit,
+      isUnlimited: false,
+      policyName
+    };
+  };
+
   const handleAddItem = () => {
+    const defaultCatId = formCategoryId || (categories.length > 0 ? categories[0].id : undefined);
     setItems([
       ...items,
       {
-        categoryId: formCategoryId,
+        categoryId: defaultCatId,
         expenseDate: formDate,
         claimedAmount: 0,
         merchantName: '',
@@ -208,14 +282,14 @@ export const MyExpensesPage: React.FC = () => {
     // Type validation: PNG, JPG, JPEG, PDF
     const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg', 'application/pdf'];
     if (!allowedTypes.includes(file.type)) {
-      alert('Invalid file type! Only JPG, PNG, and PDF receipts are allowed.');
+      setToast({ type: 'warning', title: 'Invalid File Format', message: 'Only JPG, PNG, and PDF receipt files are allowed.' });
       e.target.value = '';
       return;
     }
 
     // Size validation: max 10MB
     if (file.size > 10 * 1024 * 1024) {
-      alert('File size exceeds maximum limit of 10MB!');
+      setToast({ type: 'warning', title: 'File Size Exceeded', message: 'Receipt file size exceeds maximum limit of 10MB.' });
       e.target.value = '';
       return;
     }
@@ -275,7 +349,8 @@ export const MyExpensesPage: React.FC = () => {
     } else {
       setEditingClaimId(null);
       setFormTitle('');
-      setFormDate(new Date().toISOString().slice(0, 10));
+      const yesterdayStr = (() => { const d = new Date(); d.setDate(d.getDate() - 1); return d.toISOString().slice(0, 10); })();
+      setFormDate(yesterdayStr);
       setFormCategoryId(categories[0]?.id);
       setFormPaymentMethod('bank_transfer');
       setFormMerchant('');
@@ -284,7 +359,7 @@ export const MyExpensesPage: React.FC = () => {
       setItems([
         {
           categoryId: categories[0]?.id,
-          expenseDate: new Date().toISOString().slice(0, 10),
+          expenseDate: yesterdayStr,
           claimedAmount: 0,
           merchantName: '',
           description: '',
@@ -298,12 +373,17 @@ export const MyExpensesPage: React.FC = () => {
   };
 
   const handleSaveClaim = async (isDraft: boolean) => {
+    const todayStr = new Date().toISOString().slice(0, 10);
+    if (formDate >= todayStr) {
+      setToast({ type: 'warning', title: 'Invalid Claim Date', message: 'Claim date must be a previous date. Current date and future dates are not allowed.' });
+      return;
+    }
     if (!formTitle.trim()) {
-      alert('Please enter a claim title.');
+      setToast({ type: 'warning', title: 'Title Required', message: 'Please enter a claim title.' });
       return;
     }
     if (!formCategoryId) {
-      alert('Please select an expense category.');
+      setToast({ type: 'warning', title: 'Category Required', message: 'Please select an expense category.' });
       return;
     }
     const normalizedItems = items.map((item) => ({
@@ -312,7 +392,7 @@ export const MyExpensesPage: React.FC = () => {
     }));
     const total = normalizedItems.reduce((sum, item) => sum + Number(item.claimedAmount || 0), 0);
     if (total <= 0) {
-      alert('Please enter valid expense item amounts.');
+      setToast({ type: 'warning', title: 'Invalid Amount', message: 'Please enter valid expense item amounts greater than ₹0.' });
       return;
     }
 
@@ -320,11 +400,15 @@ export const MyExpensesPage: React.FC = () => {
       const item = normalizedItems[i];
       const cat = categories.find((c) => c.id === item.categoryId);
       if (!item.categoryId) {
-        alert(`Item #${i + 1} needs a category.`);
+        setToast({ type: 'warning', title: 'Category Required', message: `Item #${i + 1} needs a category.` });
+        return;
+      }
+      if (item.expenseDate && item.expenseDate >= todayStr) {
+        setToast({ type: 'warning', title: 'Invalid Item Date', message: `Item #${i + 1} date must be a previous date. Current date and future dates are not allowed.` });
         return;
       }
       if (Number(item.claimedAmount || 0) <= 0) {
-        alert(`Item #${i + 1} needs an amount greater than 0.`);
+        setToast({ type: 'warning', title: 'Amount Required', message: `Item #${i + 1} needs an amount greater than ₹0.` });
         return;
       }
       if (
@@ -334,15 +418,40 @@ export const MyExpensesPage: React.FC = () => {
         Number(item.claimedAmount) >= Number(cat.minAmountForReceipt || 0) &&
         !String(item.receiptUrl || '').trim()
       ) {
-        alert(`${cat.name} requires a receipt for this amount. Attach a receipt on item #${i + 1} before submitting.`);
+        setToast({
+          type: 'warning',
+          title: '📷 Receipt Mandatory',
+          message: `${cat.name} requires a receipt for amounts over ${money(cat.minAmountForReceipt || 0)}. Please attach a receipt on Item #${i + 1} before submitting.`
+        });
         return;
       }
     }
 
     if (!isDraft) {
       for (let i = 0; i < normalizedItems.length; i++) {
+        const itemCatId = normalizedItems[i].categoryId;
+        const limitInfo = getPolicyLimitInfo(itemCatId);
+        const itemAmt = Number(normalizedItems[i].claimedAmount || 0);
+
+        if (limitInfo && !limitInfo.isUnlimited && limitInfo.limit > 0 && itemAmt > limitInfo.limit) {
+          const cat = categories.find((c) => c.id === itemCatId);
+          const catName = cat?.name || `Item #${i + 1}`;
+          setToast({
+            type: 'warning',
+            title: '⚠️ Policy Limit Exceeded',
+            message: `Amount for '${catName}' (${money(itemAmt)}) exceeds the set policy limit of ${money(limitInfo.limit)}. Cannot submit above set policy limit.`
+          });
+          return;
+        }
+
         if (policyWarnings[i] && policyWarnings[i].length > 0 && !normalizedItems[i].employeeJustification?.trim()) {
-          alert(`Item #${i + 1} triggers policy violation rules (${policyWarnings[i].join(', ')}). Please provide an employee justification before submitting for approval.`);
+          const cat = categories.find((c) => c.id === itemCatId);
+          const catName = cat?.name || `Item #${i + 1}`;
+          setToast({
+            type: 'warning',
+            title: '⚠️ Policy Limit Exceeded',
+            message: `Policy violation on '${catName}': ${policyWarnings[i].join('. ')}. Please enter an Employee Justification before submitting.`
+          });
           return;
         }
       }
@@ -364,15 +473,21 @@ export const MyExpensesPage: React.FC = () => {
 
       if (editingClaimId) {
         await expenseApi.updateClaim(editingClaimId, payload);
+        setToast({ type: 'success', title: 'Claim Updated', message: 'Expense claim updated successfully.' });
       } else {
         await expenseApi.createClaim(payload);
+        setToast({
+          type: 'success',
+          title: 'Claim Submitted',
+          message: isDraft ? 'Expense claim saved as draft.' : 'Expense claim submitted and sent for approval.'
+        });
       }
 
       setIsCreateModalOpen(false);
       fetchClaimsAndCategories();
     } catch (err: any) {
       const errMsg = err.response?.data?.message || err.message || 'Failed to save expense claim';
-      alert(errMsg);
+      setToast({ type: 'error', title: 'Submission Error', message: errMsg });
     } finally {
       setSubmitting(false);
     }
@@ -380,7 +495,12 @@ export const MyExpensesPage: React.FC = () => {
 
   const filteredClaims = claims.filter((claim: any) => {
     if (selectedStatus === 'drafts' && claim.status !== 'draft') return false;
-    if (selectedStatus === 'pending' && !['submitted', 'pending_manager', 'pending_finance', 'pending'].includes(claim.status)) return false;
+    if (selectedStatus === 'pending') {
+      const isPendingWorkflow =
+        ['submitted', 'pending_manager', 'pending_finance', 'pending'].includes(claim.status) ||
+        /^pending_level_\d+$/.test(String(claim.status || ''));
+      if (!isPendingWorkflow) return false;
+    }
     if (selectedStatus === 'approved' && !['approved', 'payment_pending'].includes(claim.status)) return false;
     if (selectedStatus === 'returned' && claim.status !== 'returned') return false;
     if (selectedStatus === 'paid' && claim.status !== 'paid') return false;
@@ -416,32 +536,90 @@ export const MyExpensesPage: React.FC = () => {
     return true;
   });
 
-  const getStatusBadge = (status: string) => {
+  const getStatusLabel = (status: string, currentApproverRole?: string): string => {
+    if (status.startsWith('pending_level_') && currentApproverRole && currentApproverRole.trim()) {
+      return `Pending ${currentApproverRole.trim()}`;
+    }
+    switch (status) {
+      case 'draft': return 'Draft';
+      case 'submitted':
+      case 'pending': return 'Submitted – Pending Approval';
+      case 'pending_manager': return 'Pending Manager Approval';
+      case 'pending_level_1': return 'Pending Team Lead Approval';
+      case 'pending_level_2': return 'Pending Manager Approval';
+      case 'pending_level_3': return 'Pending HR / Admin Approval';
+      case 'pending_finance': return 'Pending Finance Verification';
+      case 'payment_pending': return 'Finance Approved – Payment Pending';
+      case 'approved': return 'Approved';
+      case 'returned': return 'Returned for Correction';
+      case 'rejected': return 'Rejected';
+      case 'paid': return 'Reimbursed / Paid';
+      default: {
+        // Handle dynamic pending_level_N (e.g. pending_level_4, pending_level_5)
+        const lvlMatch = /^pending_level_(\d+)$/.exec(status);
+        if (lvlMatch) return `Pending Level ${lvlMatch[1]} Approval`;
+        return status.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+      }
+    }
+  };
+
+  const getStatusBadge = (status: string, currentApproverRole?: string) => {
     const base = 'inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap';
+    const label = getStatusLabel(status, currentApproverRole);
     switch (status) {
       case 'draft':
-        return <span className={`${base} bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300`}>Draft</span>;
+        return <span className={`${base} bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300`}>{label}</span>;
       case 'submitted':
+      case 'pending':
       case 'pending_manager':
-        return <span className={`${base} bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300`}>Pending manager</span>;
+      case 'pending_level_1':
+        return <span className={`${base} bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300`}>{label}</span>;
+      case 'pending_level_2':
+      case 'pending_level_3':
+        return <span className={`${base} bg-orange-100 text-orange-800 dark:bg-orange-950/60 dark:text-orange-300`}>{label}</span>;
       case 'pending_finance':
-        return <span className={`${base} bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300`}>Pending finance</span>;
+        return <span className={`${base} bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300`}>{label}</span>;
       case 'approved':
+        return <span className={`${base} bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300`}>{label}</span>;
       case 'payment_pending':
-        return <span className={`${base} bg-indigo-100 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300`}>Payment pending</span>;
+        return <span className={`${base} bg-indigo-100 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300`}>{label}</span>;
       case 'returned':
-        return <span className={`${base} bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300`}>Returned</span>;
+        return <span className={`${base} bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300`}>{label}</span>;
       case 'rejected':
-        return <span className={`${base} bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300`}>Rejected</span>;
+        return <span className={`${base} bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300`}>{label}</span>;
       case 'paid':
-        return <span className={`${base} bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300`}>Paid</span>;
-      default:
-        return <span className={`${base} bg-slate-100 text-slate-700`}>{status}</span>;
+        return <span className={`${base} bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300`}>{label}</span>;
+      default: {
+        const lvlMatch = /^pending_level_(\d+)$/.exec(status);
+        if (lvlMatch) return <span className={`${base} bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300`}>{label}</span>;
+        return <span className={`${base} bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300`}>{label}</span>;
+      }
     }
   };
 
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
+      <LegacyWorkflowNotice rows={claims} prefix="" onComplete={fetchClaimsAndCategories} />
+      {/* Toast Notification */}
+      {toast && (
+        <div className="fixed top-5 right-5 z-[200] flex max-w-md items-start gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3 text-xs font-medium text-gray-900 shadow-2xl transition-all sm:text-sm">
+          {toast.type === 'success' ? (
+            <CheckCircle className="mt-0.5 h-5 w-5 shrink-0 text-gray-500" />
+          ) : toast.type === 'warning' ? (
+            <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-gray-500" />
+          ) : (
+            <XCircle className="mt-0.5 h-5 w-5 shrink-0 text-gray-500" />
+          )}
+          <div className="flex-1">
+            {toast.title && <div className="font-bold text-xs uppercase tracking-wide mb-0.5">{toast.title}</div>}
+            <div>{toast.message}</div>
+          </div>
+          <button onClick={() => setToast(null)} className="opacity-60 hover:opacity-100 p-0.5 rounded shrink-0">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -584,12 +762,12 @@ export const MyExpensesPage: React.FC = () => {
                         {formattedDate}
                       </td>
                       <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white">
-                        ₹{totClaimed.toLocaleString('en-IN')}
+                        {money(totClaimed)}
                       </td>
                       <td className="py-3.5 px-4 font-semibold text-emerald-600 dark:text-emerald-400">
-                        ₹{totApproved.toLocaleString('en-IN')}
+                        {money(totApproved)}
                       </td>
-                      <td className="py-3.5 px-4">{getStatusBadge(claim.status)}</td>
+                      <td className="py-3.5 px-4">{getStatusBadge(claim.status, claim.currentApproverRole || claim.current_approver_role)}</td>
                       <td className="py-3.5 px-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
                           {isManagement && ['submitted', 'pending_manager', 'pending_finance', 'pending'].includes(claim.status) && (
@@ -685,12 +863,21 @@ export const MyExpensesPage: React.FC = () => {
                   <input
                     type="date"
                     value={formDate}
-                    onChange={(e) => setFormDate(e.target.value)}
+                    max={(() => { const d = new Date(); d.setDate(d.getDate() - 1); return d.toISOString().slice(0, 10); })()}
+                    onChange={(e) => {
+                      const selected = e.target.value;
+                      const yesterday = (() => { const d = new Date(); d.setDate(d.getDate() - 1); return d.toISOString().slice(0, 10); })();
+                      if (selected > yesterday) return;
+                      setFormDate(selected);
+                    }}
                     className="w-full px-2.5 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
                   />
+                  <p className="mt-1 text-[10px] text-slate-400 dark:text-slate-500">
+                    Select a past date — today's or future dates are not allowed
+                  </p>
                 </div>
 
-                <div>
+                {/* <div>
                   <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
                     Primary Category
                   </label>
@@ -705,7 +892,7 @@ export const MyExpensesPage: React.FC = () => {
                       </option>
                     ))}
                   </select>
-                </div>
+                </div> */}
 
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
@@ -736,7 +923,7 @@ export const MyExpensesPage: React.FC = () => {
 
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                    Merchant / Vendor
+                    Travel Sourse
                   </label>
                   <input
                     type="text"
@@ -788,13 +975,14 @@ export const MyExpensesPage: React.FC = () => {
                           Category
                         </label>
                         <select
-                          value={item.categoryId || formCategoryId || ''}
+                          value={item.categoryId || formCategoryId || (categories.length > 0 ? categories[0].id : '')}
                           onChange={(e) => handleItemChange(idx, 'categoryId', Number(e.target.value))}
-                          className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs"
+                          className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-medium text-slate-800 dark:text-slate-200"
                         >
+                          <option value="">-- Select Category --</option>
                           {categories.map((c) => (
                             <option key={c.id} value={c.id}>
-                              {c.name}
+                              {c.name} {c.spendingLimit ? `(Limit: ₹${c.spendingLimit.toLocaleString()})` : ''}
                             </option>
                           ))}
                         </select>
@@ -804,25 +992,61 @@ export const MyExpensesPage: React.FC = () => {
                         <label className="block text-[11px] font-medium text-slate-600 dark:text-slate-400 mb-1">
                           Amount (₹) *
                         </label>
-                        <input
-                          type="number"
-                          placeholder="0.00"
-                          value={item.claimedAmount || ''}
-                          onChange={(e) => handleItemChange(idx, 'claimedAmount', Number(e.target.value))}
-                          className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold text-slate-900 dark:text-white"
-                        />
+                        {(() => {
+                          const limitInfo = getPolicyLimitInfo(item.categoryId || formCategoryId);
+                          const isExceeded = Boolean(limitInfo && !limitInfo.isUnlimited && limitInfo.limit > 0 && Number(item.claimedAmount || 0) > limitInfo.limit);
+
+                          return (
+                            <>
+                              <input
+                                type="number"
+                                placeholder="0.00"
+                                value={item.claimedAmount || ''}
+                                onChange={(e) => handleItemChange(idx, 'claimedAmount', Number(e.target.value))}
+                                className={`w-full px-2 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                                  isExceeded
+                                    ? 'bg-rose-50 dark:bg-rose-950/50 border-2 border-rose-500 text-rose-700 dark:text-rose-300 focus:ring-2 focus:ring-rose-500 focus:outline-none'
+                                    : limitInfo?.isUnlimited
+                                    ? 'bg-emerald-50/50 dark:bg-emerald-950/30 border border-emerald-300 dark:border-emerald-700 text-emerald-900 dark:text-emerald-100'
+                                    : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white'
+                                }`}
+                              />
+                              {isExceeded && limitInfo && (
+                                <p className="mt-1 text-[11px] font-bold text-rose-600 dark:text-rose-400 flex items-center gap-1">
+                                  <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                                  Amount exceeds set policy limit of {money(limitInfo.limit)}! Cannot claim above set limit.
+                                </p>
+                              )}
+                              {limitInfo?.isUnlimited && (
+                                <p className="mt-1 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                                  <ShieldCheck className="w-3 h-3 text-emerald-600 shrink-0" />
+                                  Policy: Unlimited / No Cap Applies
+                                </p>
+                              )}
+                            </>
+                          );
+                        })()}
                       </div>
 
                       <div>
                         <label className="block text-[11px] font-medium text-slate-600 dark:text-slate-400 mb-1">
-                          Date
+                          Date <span className="text-slate-400 font-normal">(past dates only)</span>
                         </label>
                         <input
                           type="date"
                           value={item.expenseDate || formDate}
-                          onChange={(e) => handleItemChange(idx, 'expenseDate', e.target.value)}
+                          max={(() => { const d = new Date(); d.setDate(d.getDate() - 1); return d.toISOString().slice(0, 10); })()}
+                          onChange={(e) => {
+                            const selected = e.target.value;
+                            const yesterday = (() => { const d = new Date(); d.setDate(d.getDate() - 1); return d.toISOString().slice(0, 10); })();
+                            if (selected > yesterday) return;
+                            handleItemChange(idx, 'expenseDate', selected);
+                          }}
                           className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs"
                         />
+                        <p className="mt-0.5 text-[10px] text-slate-400">
+                          Select a previous date only
+                        </p>
                       </div>
 
                       <div>
@@ -904,18 +1128,18 @@ export const MyExpensesPage: React.FC = () => {
                     </div>
 
                     {/* Policy Warning Box */}
-                    {policyWarnings[idx] && (
-                      <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 p-2 rounded-lg text-xs text-amber-800 dark:text-amber-300 flex items-start gap-2">
+                    {policyWarnings[idx] && policyWarnings[idx].length > 0 && (
+                      <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 p-2.5 rounded-lg text-xs text-amber-800 dark:text-amber-300 flex items-start gap-2 border-l-4 border-l-amber-500 shadow-xs">
                         <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                         <div>
-                          <p className="font-semibold">Policy Violation Warning:</p>
-                          <ul className="list-disc list-inside mt-0.5 space-y-0.5">
+                          <p className="font-bold text-amber-900 dark:text-amber-200">⚠️ Policy Limit Warning:</p>
+                          <ul className="list-disc list-inside mt-1 space-y-0.5 font-medium">
                             {policyWarnings[idx].map((v, vIdx) => (
                               <li key={vIdx}>{v}</li>
                             ))}
                           </ul>
-                          <p className="mt-1 text-[11px] text-amber-700 dark:text-amber-400 font-medium">
-                            * Please ensure you provide a clear employee justification above for approval exception.
+                          <p className="mt-1 text-[11px] text-amber-700 dark:text-amber-400 font-semibold">
+                            * Please enter an Employee Justification above before submitting.
                           </p>
                         </div>
                       </div>
@@ -928,7 +1152,7 @@ export const MyExpensesPage: React.FC = () => {
               <div className="p-3 bg-slate-900 text-white rounded-xl flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <span className="text-[11px] text-slate-400">Total Claimed Amount</span>
-                  <div className="text-base sm:text-lg font-bold">₹{calculateTotal().toLocaleString('en-IN')}</div>
+                  <div className="text-base sm:text-lg font-bold">{money(calculateTotal())}</div>
                 </div>
                 <div className="text-[11px] text-slate-400 text-right">
                   <span>Items: {items.length}</span>
@@ -993,13 +1217,13 @@ export const MyExpensesPage: React.FC = () => {
                 <div>
                   <span className="text-slate-500 block">Claimed Amount</span>
                   <span className="text-sm sm:text-base font-bold text-slate-900 dark:text-white">
-                    ₹{Number(selectedClaimDetails.totalClaimedAmount).toLocaleString('en-IN')}
+                    {money(Number(selectedClaimDetails.totalClaimedAmount))}
                   </span>
                 </div>
                 <div>
                   <span className="text-slate-500 block">Approved Amount</span>
                   <span className="text-sm sm:text-base font-bold text-emerald-600 dark:text-emerald-400">
-                    ₹{Number(selectedClaimDetails.totalApprovedAmount || 0).toLocaleString('en-IN')}
+                    {money(Number(selectedClaimDetails.totalApprovedAmount || 0))}
                   </span>
                 </div>
                 <div>
@@ -1016,7 +1240,7 @@ export const MyExpensesPage: React.FC = () => {
                     <div key={i} className="p-3 border border-slate-200 dark:border-slate-800 rounded-lg space-y-1">
                       <div className="flex justify-between font-semibold">
                         <span>{it.categoryName || 'Expense Item'}</span>
-                        <span className="font-bold">₹{Number(it.claimedAmount).toLocaleString('en-IN')}</span>
+                        <span className="font-bold">{money(it.claimedAmount)}</span>
                       </div>
                       <p className="text-slate-500">{it.description || 'No description provided'}</p>
                       {it.receiptUrl && (
@@ -1094,3 +1318,6 @@ export const MyExpensesPage: React.FC = () => {
     </div>
   );
 };
+
+export default MyExpensesPage;
+

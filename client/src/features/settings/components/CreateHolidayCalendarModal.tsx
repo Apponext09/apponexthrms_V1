@@ -90,7 +90,7 @@ export function CreateHolidayCalendarModal({
         : [];
 
       setCompanies(compList);
-      setLocations(locList);
+      setLocations(locList.filter((l: any) => l.status !== 'inactive' && l.status !== 'Inactive' && l.is_active !== 'No' && l.isActive !== 'No'));
 
       // Default company if not selected
       if (!companyId && compList.length > 0) {
@@ -173,7 +173,7 @@ export function CreateHolidayCalendarModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-[550px] p-6 rounded-2xl bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 shadow-2xl">
+      <DialogContent className="sm:max-w-[550px] p-6 rounded-2xl bg-background dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 shadow-2xl">
         <DialogHeader className="space-y-2 pb-3 border-b border-neutral-100 dark:border-neutral-800">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">

@@ -9,6 +9,9 @@ import { AuditService } from '../../audit/audit.service';
 import { NotFoundError } from '../../../common/errors/index';
 import type { TenantContext } from '../../../db/types';
 import { withSnakeAliases } from '../utils/payroll.utils';
+import { assertCanAccessEmployeePayroll } from '../utils/payroll.access';
+import { resolvePeriodContext } from '../utils/payroll.period';
+import { SalaryCalculationService } from './SalaryCalculationService';
 
 export class PayslipService {
   private payslipRepo: PayslipRepository;
@@ -50,6 +53,7 @@ export class PayslipService {
     const fyStart = `${fyStartYear}-04-01`;
 
     const ytdData: any = await db('payslips')
+      .where('organization_id', ctx.organizationId)
       .where('employee_id', runEmployee.employee_id)
       .where('payslip_month', '>=', fyStart)
       .where('payslip_month', '<', `${runMonthPrefix}-01`)
@@ -71,12 +75,11 @@ export class PayslipService {
     // Compute CTC from the employee's assigned salary structure
     let annualCtcForPayslip = 0;
     try {
-      const structRow = await db('employee_salary_structures as ess')
-        .join('salary_structures as ss', 'ess.salary_structure_id', 'ss.id')
-        .where('ess.employee_id', runEmployee.employee_id)
-        .where('ess.is_current', 1)
-        .whereNull('ess.deleted_at')
-        .select('ss.annual_ctc', 'ss.gross_monthly')
+      const structRow = await db('salary_structures')
+        .where('employee_id', runEmployee.employee_id)
+        .whereNull('deleted_at')
+        .orderBy('id', 'desc')
+        .select('annual_ctc', 'gross_monthly')
         .first()
         .catch(() => null);
       if (structRow) {
@@ -90,9 +93,17 @@ export class PayslipService {
 
     const payslipEmployeeId = (runEmployee as any).employeeId ?? (runEmployee as any).employee_id;
     const payslipRunId = (runEmployee as any).payrollRunId ?? (runEmployee as any).payroll_run_id;
-    const basicSalaryVal = earnings.find(e => (e as any).componentId === 1 || (e as any).component_id === 1)?.actualValue || earnings.find(e => (e as any).componentId === 1 || (e as any).component_id === 1)?.actual_value || Math.round(totalEarnings * 0.5);
+    // Resolve basic salary by component name — never by hardcoded component_id.
+    // Component IDs are auto-incremented per tenant; id=1 is meaningless here.
+    const basicEarning =
+      earnings.find((e: any) => /\bbasic\b/i.test(e.componentName || e.component_name || '')) ||
+      earnings.find((e: any) => /\bbasic\b/i.test(e.groupName || e.group_name || ''));
+    const basicSalaryVal = basicEarning
+      ? (Number(basicEarning.actualValue ?? basicEarning.actual_value) || 0)
+      : Math.round(totalEarnings * 0.5);  // last-resort estimate only
 
     const existingPayslip = await db('payslips')
+      .where('organization_id', ctx.organizationId)
       .where('employee_id', payslipEmployeeId)
       .whereRaw("DATE_FORMAT(payslip_month, '%Y-%m') = ?", [runMonthPrefix])
       .whereNull('deleted_at')
@@ -160,6 +171,7 @@ export class PayslipService {
 
     // 1. Check if a payslip record already exists for this employee and month
     const existingPayslip = await db('payslips')
+      .where('organization_id', ctx.organizationId)
       .where('employee_id', employeeId)
       .whereRaw("DATE_FORMAT(payslip_month, '%Y-%m') = ?", [monthStr])
       .whereNull('deleted_at')
@@ -200,25 +212,17 @@ export class PayslipService {
     }
     const sEmp = withSnakeAliases(empRow) || empRow;
 
-    const struct = withSnakeAliases(
-      await db('employee_salary_structures as ess')
-        .leftJoin('salary_structures as ss', 'ess.salary_structure_id', 'ss.id')
-        .where({ 'ess.employee_id': employeeId, 'ess.is_current': true })
-        .whereNull('ess.deleted_at')
-        .select('ss.*')
-        .first()
-        .catch(() => null)
-      || await db('salary_structures').where('employee_id', employeeId).whereNull('deleted_at').orderBy('id', 'desc').first().catch(() => null)
-    );
+    const calcService = new SalaryCalculationService();
+    const dynamicResult = await calcService.calculateDynamicSalaryStructure({
+      orgId: ctx.organizationId,
+      employeeId,
+      companyId: ctx.companyId,
+    }).catch(() => null);
 
-    const gross = Number(struct?.gross_monthly || sEmp.gross_salary || (struct?.annual_ctc ? Math.round(Number(struct.annual_ctc) / 12) : (sEmp.annual_ctc ? Math.round(Number(sEmp.annual_ctc) / 12) : 50000)));
-    const basic = Number(struct?.basic_monthly || Math.round(gross * 0.5));
-    const pf = Number(struct?.pf_deduction || Math.round(Math.min(basic, 15000) * 0.12));
-    const pt = Number(struct?.pt_deduction || 200);
-    const tds = Number(struct?.tds_deduction || 0);
-    const esic = Number(struct?.esic_deduction || (gross <= 21000 ? Math.round(gross * 0.0075) : 0));
-    const totalDeductions = pf + pt + tds + esic;
-    const netSalary = gross - totalDeductions;
+    const gross = dynamicResult ? Number(dynamicResult.grossMonthly) : Number(sEmp.gross_salary || 50000);
+    const basic = dynamicResult ? Number(dynamicResult.basicMonthly) : Math.round(gross * 0.5);
+    const totalDeductions = dynamicResult ? Number(dynamicResult.totalDeductions) : 0;
+    const netSalary = dynamicResult ? Number(dynamicResult.netTakeHome) : gross;
     const psMonth = `${monthStr}-01`;
 
     const newPayslip = await this.createDirectPayslip(ctx, {
@@ -262,7 +266,14 @@ export class PayslipService {
   }
 
   async getPayslip(ctx: TenantContext, payslipId: number) {
-    return this.payslipRepo.getById(ctx, payslipId);
+    const payslip = await this.payslipRepo.getById(ctx, payslipId);
+    if (payslip) {
+      await assertCanAccessEmployeePayroll(
+        ctx,
+        (payslip as any).employeeId ?? (payslip as any).employee_id
+      );
+    }
+    return payslip;
   }
 
   async getEmployeePayslips(ctx: TenantContext, employeeId: number, limit = 12) {
@@ -317,46 +328,55 @@ export class PayslipService {
       groupMap.set(Number(sG.id), sG);
     }
 
-    // Fallback: If no child breakdown rows exist, synthesize them from the employee's assigned salary structure
+    let employeeCompanyId: number | null = null;
+    let employee: any = null;
+
+    // Fallback: If no child breakdown rows exist, synthesize them dynamically using SalaryCalculationService
     if (earnings.length === 0 || deductions.length === 0) {
-      const struct = await db('salary_structures')
-        .where('employee_id', employeeIdVal)
-        .whereNull('deleted_at')
-        .orderBy('id', 'desc')
-        .first()
-        .catch(() => null);
+      const calcService = new SalaryCalculationService();
+      const dynamicResult = await calcService.calculateDynamicSalaryStructure({
+        orgId: ctx.organizationId,
+        employeeId: employeeIdVal,
+        companyId: employeeCompanyId || ctx.companyId,
+        ctc: Number((payslip as any).ctc || 0),
+        grossMonthly: Number((payslip as any).grossSalary ?? (payslip as any).gross_salary ?? 0)
+      }).catch(() => null);
 
-      const sStruct = withSnakeAliases(struct) || {};
-      const gross = Number((payslip as any).grossSalary ?? (payslip as any).gross_salary ?? sStruct.gross_monthly ?? 0);
-      const basic = Number((payslip as any).basicSalary ?? (payslip as any).basic_salary ?? sStruct.basic_monthly ?? 0);
-      const hra = Number(sStruct.hra_monthly || 0);
-      const std = Math.max(0, gross - (basic + hra));
-
-      if (earnings.length === 0 && gross > 0) {
-        earnings = [
-          ...(basic > 0 ? [{ name: 'Basic Salary', formula_used: 'Basic Salary', actual_value: basic, actualValue: basic, group_name: 'Standard Earnings', group_for_payslip: 'Earnings', category: 'Earning' }] : []),
-          ...(hra > 0 ? [{ name: 'House Rent Allowance (HRA)', formula_used: 'House Rent Allowance (HRA)', actual_value: hra, actualValue: hra, group_name: 'Standard Earnings', group_for_payslip: 'Earnings', category: 'Earning' }] : []),
-          ...(std > 0 ? [{ name: 'Special Allowance', formula_used: 'Special Allowance', actual_value: std, actualValue: std, group_name: 'Standard Earnings', group_for_payslip: 'Earnings', category: 'Earning' }] : [])
-        ];
+      if (earnings.length === 0 && dynamicResult?.earningsBreakup && dynamicResult.earningsBreakup.length > 0) {
+        earnings = dynamicResult.earningsBreakup.map((e: any) => ({
+          name: e.name,
+          component_name: e.name,
+          formula_used: e.formula || e.name,
+          actual_value: e.amount,
+          actualValue: e.amount,
+          group_name: e.group_name || 'Standard Earnings',
+          group_for_payslip: 'Earnings',
+          category: 'Earning'
+        }));
       }
 
-      if (deductions.length === 0) {
-        const totalDed = Number((payslip as any).totalDeductions ?? (payslip as any).total_deductions ?? sStruct.total_deductions ?? 0);
-        const pf = Number(sStruct.pf_deduction || 0);
-        const esic = Number(sStruct.esic_deduction || 0);
-        const pt = Number(sStruct.pt_deduction || 0);
-        const tds = Number(sStruct.tds_deduction || Math.max(0, totalDed - (pf + esic + pt)));
+      if (deductions.length === 0 && dynamicResult?.deductionsBreakup && dynamicResult.deductionsBreakup.length > 0) {
+        deductions = dynamicResult.deductionsBreakup.map((d: any) => ({
+          name: d.name,
+          component_name: d.name,
+          formula_used: d.formula || d.name,
+          actual_value: d.amount,
+          actualValue: d.amount,
+          group_name: d.group_name || 'Statutory Deductions',
+          group_for_payslip: 'Deductions',
+          category: 'Deduction'
+        }));
+      }
 
-        deductions = [
-          ...(pf > 0 ? [{ name: 'Provident Fund (EPF)', component_name: 'Provident Fund (EPF)', actual_value: pf, actualValue: pf, group_name: 'Statutory Deductions', group_for_payslip: 'Deductions', category: 'Deduction' }] : []),
-          ...(esic > 0 ? [{ name: 'ESIC Contribution', component_name: 'ESIC Contribution', actual_value: esic, actualValue: esic, group_name: 'Statutory Deductions', group_for_payslip: 'Deductions', category: 'Deduction' }] : []),
-          ...(pt > 0 ? [{ name: 'Professional Tax (PT)', component_name: 'Professional Tax (PT)', actual_value: pt, actualValue: pt, group_name: 'Statutory Deductions', group_for_payslip: 'Deductions', category: 'Deduction' }] : []),
-          ...(tds > 0 ? [{ name: 'Tax Deducted at Source (TDS)', component_name: 'Tax Deducted at Source (TDS)', actual_value: tds, actualValue: tds, group_name: 'Statutory Deductions', group_for_payslip: 'Deductions', category: 'Deduction' }] : [])
-        ];
+      // If still empty (e.g. employee has no structure or components configured), do a minimal fallback
+      if (earnings.length === 0) {
+        const gross = Number((payslip as any).grossSalary ?? (payslip as any).gross_salary ?? 0);
+        const basic = Number((payslip as any).basicSalary ?? (payslip as any).basic_salary ?? Math.round(gross * 0.5));
+        const rem = Math.max(0, gross - basic);
+        if (basic > 0) earnings.push({ name: 'Basic Salary', formula_used: 'Basic Salary', actual_value: basic, actualValue: basic, group_name: 'Earnings', group_for_payslip: 'Earnings', category: 'Earning' });
+        if (rem > 0) earnings.push({ name: 'Special Allowance', formula_used: 'Residual', actual_value: rem, actualValue: rem, group_name: 'Earnings', group_for_payslip: 'Earnings', category: 'Earning' });
       }
     }
-      let employee: any = null;
-    let employeeCompanyId: number | null = null;
     if (employeeIdVal) {
       employee = await db('employees as e')
         .leftJoin('designations as des', 'des.id', 'e.current_designation_id')
@@ -432,7 +452,7 @@ export class PayslipService {
           .select('status');
         for (const rec of attRecs) {
           const s = (rec.status || '').toLowerCase();
-          if (s === 'present' || s === 'work_from_home' || s === 'sick') presentDays++;
+          if (s === 'present' || s === 'work_from_home') presentDays++;
           else if (s === 'half_day') halfDayCount++;
           else if (s === 'absent') absentDays++;
           else if (s === 'weekly_off') weeklyOffDays++;
@@ -460,52 +480,32 @@ export class PayslipService {
       } catch { /* silent */ }
     }
 
-    let paidDaysCalc = totalDaysInMonth;
-    let unpaidDaysCalc = unpaidLeaveDays;
-
-    // ── Effective Date, Date of Joining (DOJ) & Exit Date calculation ───────
-    let activeStartDay = 1;
-    let activeEndDay = totalDaysInMonth;
-
-    if (employee?.dateOfJoining || employee?.date_of_joining || employee?.doj) {
-      const dojRaw = employee.dateOfJoining || employee.date_of_joining || employee.doj;
-      const dojDate = new Date(dojRaw);
-      if (!isNaN(dojDate.getTime())) {
-        const dojY = dojDate.getFullYear();
-        const dojM = dojDate.getMonth() + 1;
-        if (dojY === tYear && dojM === tMon) {
-          activeStartDay = Math.max(1, dojDate.getDate());
-        } else if (dojY > tYear || (dojY === tYear && dojM > tMon)) {
-          activeStartDay = totalDaysInMonth + 1; // Future joiner
+    // ── Pay period / proration — SAME engine as PayrollService.processPayroll ──
+    // so the payslip's attendance summary always matches what was actually paid.
+    let cycleRowForPayslip: any = null;
+    let policyRowForPayslip: any = null;
+    try {
+      if (payrollRunId) {
+        const runRow = await db('payroll_runs').where('id', payrollRunId).first().catch(() => null);
+        if (runRow?.payroll_cycle_id) {
+          cycleRowForPayslip = await db('payroll_cycles').where('id', runRow.payroll_cycle_id).first().catch(() => null);
         }
       }
-    }
-
-    if (employee?.relieving_date || employee?.exit_date || employee?.resignation_date) {
-      const exitRaw = employee.relieving_date || employee.exit_date || employee.resignation_date;
-      const exitDate = new Date(exitRaw);
-      if (!isNaN(exitDate.getTime())) {
-        const exitY = exitDate.getFullYear();
-        const exitM = exitDate.getMonth() + 1;
-        if (exitY === tYear && exitM === tMon) {
-          activeEndDay = Math.min(totalDaysInMonth, exitDate.getDate());
-        } else if (exitY < tYear || (exitY === tYear && exitM < tMon)) {
-          activeEndDay = 0; // Exited in past
-        }
-      }
-    }
-
-    const maxEligibleDays = Math.max(0, activeEndDay - activeStartDay + 1);
+      policyRowForPayslip = await db('payroll_policies')
+        .where('organization_id', ctx.organizationId).whereNull('deleted_at').first().catch(() => null);
+    } catch { /* fall back to calendar month */ }
 
     const hasAttRecords = (presentDays + halfDayCount + absentDays + weeklyOffDays + holidayDays + paidLeaveDays) > 0;
-    if (hasAttRecords) {
-      paidDaysCalc = Math.round(presentDays + (halfDayCount * 0.5) + weeklyOffDays + holidayDays + paidLeaveDays);
-      paidDaysCalc = Math.max(0, Math.min(maxEligibleDays, paidDaysCalc - unpaidLeaveDays));
-      unpaidDaysCalc = Math.max(0, totalDaysInMonth - paidDaysCalc);
-    } else {
-      paidDaysCalc = Math.max(0, maxEligibleDays - unpaidLeaveDays);
-      unpaidDaysCalc = Math.max(0, totalDaysInMonth - paidDaysCalc);
-    }
+    const period = resolvePeriodContext({
+      runMonthStr: targetMonthStr,
+      cycleRow: cycleRowForPayslip,
+      empRow: employee || {},
+      policyRow: policyRowForPayslip,
+      unpaidLeaveDays,
+      attendance: { recordCount: hasAttRecords ? (presentDays + halfDayCount + absentDays + weeklyOffDays + holidayDays + paidLeaveDays) : 0, absentDays, halfDays: halfDayCount },
+    });
+    const paidDaysCalc = period.payableDays;
+    const unpaidDaysCalc = Number((period.lopDays + period.nonEmployedDays).toFixed(2));
 
     // Dynamic Leave Balance from leave_balances
     let totalLeaveBalance = 0;
@@ -581,12 +581,15 @@ export class PayslipService {
       earnings,
       deductions,
       attendance: {
-        salaryDays: totalDaysInMonth,
+        salaryDays: period.totalDays,
         paidDays: paidDaysCalc,
         unpaidDays: unpaidDaysCalc,
         presentDays,
         paidLeave: paidLeaveDays,
         leaveBalance: totalLeaveBalance,
+        lopDays: period.lopDays,
+        joinedMidMonth: period.isNewJoiner,
+        exitingMidMonth: period.isExiting,
       },
       company: companyInfo,
       settings: payslipSetting
@@ -627,6 +630,7 @@ export class PayslipService {
     const fyStart = `${fyStartYear}-04-01`;
 
     const ytdData: any = await db('payslips')
+      .where('organization_id', ctx.organizationId)
       .where('employee_id', data.employeeId)
       .where('payslip_month', '>=', fyStart)
       .where('payslip_month', '<', `${psMonth.slice(0, 7)}-01`)

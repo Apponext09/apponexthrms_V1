@@ -70,7 +70,7 @@ export function SuperAdminSidebar({ open, onOpenChange }: SuperAdminSidebarProps
       color: 'text-emerald-500',
     },
     {
-      name: 'Help Desk',
+      name: 'Helpdesk',
       href: '/superadmin/helpdesk',
       icon: HelpCircle,
       badge: 'Inquiries',
@@ -87,11 +87,11 @@ export function SuperAdminSidebar({ open, onOpenChange }: SuperAdminSidebarProps
       className="flex flex-col h-screen bg-card text-foreground border-r border-border/70 shadow-2xs overflow-hidden select-none"
     >
       {/* Header Logo Banner */}
-      <div className="h-14 px-3 border-b border-border/60 flex items-center justify-between flex-shrink-0 bg-muted/20">
+      <div className="h-16 px-3 border-b border-border/60 flex items-center justify-between flex-shrink-0 bg-muted/20">
         {open ? (
           <div className="flex items-center justify-between w-full">
             <div className="flex items-center gap-2 overflow-hidden">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white p-1 shadow-xs border border-border/60 flex-shrink-0 overflow-hidden">
+              <div className="flex size-9 items-center justify-center flex-shrink-0 overflow-hidden">
                 <img src={hrmsLogo} alt="Apponext HRMS Logo" className="h-full w-full object-contain" />
               </div>
               <div className="flex items-center gap-1.5 overflow-hidden whitespace-nowrap">
@@ -109,20 +109,20 @@ export function SuperAdminSidebar({ open, onOpenChange }: SuperAdminSidebarProps
             </Button>
           </div>
         ) : (
-          <div className="flex items-center justify-center w-full">
+          <div className="flex items-center justify-center size-full min-h-0 overflow-hidden">
             <button
               onClick={() => onOpenChange(true)}
-              className="flex h-8 w-8 items-center justify-center rounded-lg bg-white p-0.5 shadow-2xs border border-border/60 flex-shrink-0 overflow-hidden"
+              className="flex items-center justify-center size-full"
               title="Expand Sidebar"
             >
-              <img src={hrmsLogo} alt="HRMS Logo" className="h-full w-full object-contain" />
+              <img src={hrmsLogo} alt="HRMS Logo" className="h-12 w-auto max-w-[85%] object-contain scale-[1.35] origin-center drop-shadow-xs" />
             </button>
           </div>
         )}
       </div>
 
       {/* Navigation List */}
-      <nav className="flex-1 overflow-y-auto no-scrollbar [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden px-2 py-2 space-y-0.5">
+      <nav className="flex-1 overflow-y-auto sidebar-scrollbar px-2 py-2 space-y-0.5">
         {open && (
           <div className="px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-muted-foreground/70">
             Main Controls
@@ -188,16 +188,19 @@ export function SuperAdminSidebar({ open, onOpenChange }: SuperAdminSidebarProps
             <div
               onClick={() => navigate('/superadmin/profile')}
               className={cn(
-                'flex items-center justify-between p-1 rounded-md border cursor-pointer transition group',
+                'flex cursor-pointer transition group',
+                open
+                  ? 'items-center justify-between p-1 rounded-md border'
+                  : 'flex-col items-center justify-center p-0.5',
                 isProfileActive
                   ? 'bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-300 shadow-2xs'
                   : 'bg-transparent hover:bg-muted/80 border-transparent'
               )}
               title="Click to view SuperAdmin Profile"
             >
-              <div className="flex items-center gap-2 overflow-hidden">
-                <Avatar className="h-7 w-7 border border-amber-500/40 flex-shrink-0 shadow-2xs">
-                  <AvatarFallback className="bg-amber-500 text-white font-bold text-[10px]">
+              <div className={cn('flex overflow-hidden', open ? 'items-center gap-2' : 'flex-col items-center justify-center')}>
+                <Avatar className="size-8.5 border border-amber-500/40 flex-shrink-0 shadow-2xs">
+                  <AvatarFallback className="bg-amber-500 text-white font-bold text-xs">
                     {getInitials()}
                   </AvatarFallback>
                 </Avatar>
@@ -216,6 +219,11 @@ export function SuperAdminSidebar({ open, onOpenChange }: SuperAdminSidebarProps
                     </motion.div>
                   )}
                 </AnimatePresence>
+                {!open && (
+                  <span className="text-[8.5px] font-bold tracking-tight text-amber-600 dark:text-amber-400 text-center leading-tight truncate max-w-[68px] mt-1">
+                    Super Admin
+                  </span>
+                )}
               </div>
 
               {open && (
@@ -239,4 +247,3 @@ export function SuperAdminSidebar({ open, onOpenChange }: SuperAdminSidebarProps
     </motion.div>
   );
 }
-

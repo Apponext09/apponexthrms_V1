@@ -9,7 +9,7 @@ import { apiClient } from '@/config/api';
 import {
   Play,
   FileText,
-  DollarSign,
+  IndianRupee,
   TrendingUp,
   Users,
   Building2,
@@ -19,7 +19,7 @@ import {
   CheckCircle2,
   UserX,
   ArrowRight,
-  Receipt,
+  ReceiptIndianRupee,
   Compass,
   UploadCloud,
   ShieldCheck,
@@ -85,6 +85,7 @@ export const PayrollDashboard: React.FC = () => {
   const [realEmployees, setRealEmployees] = useState<any[]>([]);
   const [realDepartments, setRealDepartments] = useState<any[]>([]);
   const [realSlabs, setRealSlabs] = useState<any[]>([]);
+  const [salaryStructures, setSalaryStructures] = useState<any[]>([]);
   const [activeCycle, setActiveCycle] = useState<any>(null);
   const [recentRuns, setRecentRuns] = useState<any[]>([]);
   const [pendingApprovals, setPendingApprovals] = useState<number>(0);
@@ -102,42 +103,58 @@ export const PayrollDashboard: React.FC = () => {
       apiClient.get('/payroll/cycles').catch(() => ({ data: null })),
       apiClient.get('/payroll/runs').catch(() => ({ data: null })),
       apiClient.get('/payroll').catch(() => ({ data: null })),
-    ]).then(([empRes, deptRes, slabRes, cycleRes, runRes, allRunsRes]) => {
+      apiClient.get('/payroll/salary-structure').catch(() => ({ data: null })),
+    ]).then(([empRes, deptRes, slabRes, cycleRes, runRes, allRunsRes, structureRes]) => {
       const emps = empRes?.data?.data || empRes?.data?.items || empRes?.data || [];
       const depts = deptRes?.data?.data || deptRes?.data || [];
       const slabs = slabRes?.data?.data || slabRes?.data || [];
       const cycles: any[] = cycleRes?.data?.data || cycleRes?.data || [];
       const runs: any[] = runRes?.data?.data || runRes?.data || [];
       const allRuns: any[] = allRunsRes?.data?.data || allRunsRes?.data || [];
+      const structures: any[] = structureRes?.data?.data || structureRes?.data || [];
 
       if (Array.isArray(emps)) setRealEmployees(emps);
       if (Array.isArray(depts)) setRealDepartments(depts);
       if (Array.isArray(slabs)) setRealSlabs(slabs);
+      if (Array.isArray(structures)) setSalaryStructures(structures);
       if (Array.isArray(runs)) setRecentRuns(runs.slice(0, 6));
       if (Array.isArray(allRuns)) {
         setPendingApprovals(allRuns.filter((r: any) => String(r.status || '').toLowerCase() === 'locked').length);
       }
 
-      const open = cycles.find((c: any) => c.status === 'open') || cycles[0] || null;
+      const open = cycles.find((c: any) => c.isActive === true || c.is_active === true || c.is_active === 1) || cycles[0] || null;
       setActiveCycle(open);
     }).finally(() => {
       setLoading(false);
     });
   }, []);
 
-  // Compute Department Outlays
+  const activeEmployees = realEmployees.filter((employee) =>
+    ['active', 'probation', 'confirmed', 'onboarding'].includes(String(employee.status || employee.employee_status || '').toLowerCase())
+  );
+  const structureByEmployeeId = useMemo(() => {
+    const structures = new Map<string, any>();
+    salaryStructures.forEach((structure) => {
+      const employeeId = structure.employee_id ?? structure.employeeId;
+      if (employeeId !== undefined && employeeId !== null && !structures.has(String(employeeId))) structures.set(String(employeeId), structure);
+    });
+    return structures;
+  }, [salaryStructures]);
+  const getMonthlyGross = (structure?: any) => {
+    const gross = Number(structure?.gross_monthly ?? structure?.grossMonthly ?? structure?.gross ?? 0);
+    return gross > 0 ? gross : Math.max(0, Number(structure?.annual_ctc ?? structure?.annualCtc ?? 0) / 12);
+  };
+  const getTotalDeductions = (structure?: any) => Math.max(0, Number(structure?.total_deductions ?? structure?.totalDeductions ?? 0));
+
+  // Compute Department Outlays from salary structures assigned to active employees.
   const groupedDeptMap: Record<string, { count: number; totalCost: number }> = {};
-  realEmployees.forEach((e) => {
+  activeEmployees.forEach((e) => {
     const deptName =
       e.department_name ||
       e.department?.name ||
       (typeof e.department === 'string' ? e.department : '') ||
       'General Operations';
-    const gross = Number(
-      e.gross_salary ||
-        e.grossSalary ||
-        (e.annual_ctc ? Math.round(e.annual_ctc / 12) : 40000)
-    );
+    const gross = getMonthlyGross(structureByEmployeeId.get(String(e.id)));
     if (!groupedDeptMap[deptName]) groupedDeptMap[deptName] = { count: 0, totalCost: 0 };
     groupedDeptMap[deptName].count += 1;
     groupedDeptMap[deptName].totalCost += gross;
@@ -148,24 +165,29 @@ export const PayrollDashboard: React.FC = () => {
     if (dName && !groupedDeptMap[dName]) groupedDeptMap[dName] = { count: 0, totalCost: 0 };
   });
 
-  const totalEmployeesCount = realEmployees.length || 19;
+  const totalEmployeesCount = activeEmployees.length;
   const grandTotalGross =
-    Object.values(groupedDeptMap).reduce((acc, curr) => acc + curr.totalCost, 0) || 760000;
-  const estimatedStatutoryDeductions = Math.round(grandTotalGross * 0.12);
-  const estimatedNetPayout = grandTotalGross - estimatedStatutoryDeductions;
+    Object.values(groupedDeptMap).reduce((acc, curr) => acc + curr.totalCost, 0);
+  const totalDeductions = activeEmployees.reduce((total, employee) => total + getTotalDeductions(structureByEmployeeId.get(String(employee.id))), 0);
+  const estimatedNetPayout = Math.max(0, grandTotalGross - totalDeductions);
+  const assignedStructureCount = activeEmployees.filter((employee) => structureByEmployeeId.has(String(employee.id))).length;
+  const slabAssignmentPercent = totalEmployeesCount ? Math.round((assignedStructureCount / totalEmployeesCount) * 100) : 0;
+  const priorGross = recentRuns.map((run) => Number(run.total_gross ?? run.totalGross ?? 0)).find((gross) => gross > 0);
+  const monthOverMonth = priorGross ? ((grandTotalGross - priorGross) / priorGross) * 100 : null;
 
   // Slabs Distribution Data
   const slabDistributionData = useMemo(() => {
     const map: Record<string, { name: string; count: number; totalCost: number }> = {};
-    realEmployees.forEach(e => {
-      const slabName = e.slab_name || e.slabName || 'Standard Pay Slab';
+    activeEmployees.forEach(e => {
+      const structure = structureByEmployeeId.get(String(e.id));
+      const slabName = structure?.slab_name || structure?.slabName || structure?.structure_name || structure?.structureName || 'Unassigned';
       if (!map[slabName]) map[slabName] = { name: slabName, count: 0, totalCost: 0 };
-      const gross = Number(e.gross_salary || e.grossSalary || (e.annual_ctc ? Math.round(e.annual_ctc / 12) : 35000));
+      const gross = getMonthlyGross(structure);
       map[slabName].count += 1;
       map[slabName].totalCost += gross;
     });
     return Object.values(map).sort((a, b) => b.totalCost - a.totalCost);
-  }, [realEmployees]);
+  }, [activeEmployees, structureByEmployeeId]);
 
   // Department Breakdown for Bar Chart
   const departmentChartData = Object.entries(groupedDeptMap)
@@ -177,36 +199,22 @@ export const PayrollDashboard: React.FC = () => {
     }))
     .sort((a, b) => b.cost - a.cost);
 
-  // Dynamic Historical Trend Outlay Data
+  // Historical trend is sourced from actual payroll runs only.
   const monthlyTrendData = useMemo(() => {
-    const months6 = ['Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug'];
-    const mults6 = [0.88, 0.92, 0.95, 0.97, 0.99, 1.0];
-    const months12 = ['Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug'];
-    const mults12 = [0.75, 0.78, 0.80, 0.83, 0.85, 0.86, 0.88, 0.92, 0.95, 0.97, 0.99, 1.0];
-
-    const months = trendViewRange === '12m' ? months12 : months6;
-    const mults = trendViewRange === '12m' ? mults12 : mults6;
-
-    return months.map((m, idx) => {
-      const gross = Math.round(grandTotalGross * mults[idx]);
-      const ded = Math.round(gross * 0.12);
-      const net = gross - ded;
-      return {
-        month: m,
-        Gross: gross,
-        Net: net,
-        Statutory: ded,
-      };
-    });
-  }, [grandTotalGross, trendViewRange]);
+    const limit = trendViewRange === '12m' ? 12 : 6;
+    return recentRuns.map((run) => ({
+      month: run.payroll_month || run.payrollMonth || run.month || 'Payroll run',
+      Gross: Number(run.total_gross ?? run.totalGross ?? 0),
+      Net: Number(run.total_net ?? run.totalNet ?? run.net_disbursal ?? run.netDisbursal ?? 0),
+      Statutory: Number(run.total_deductions ?? run.totalDeductions ?? 0),
+    })).filter((run) => run.Gross > 0 || run.Net > 0).slice(0, limit).reverse();
+  }, [recentRuns, trendViewRange]);
 
   // Salary Pie Breakdown
   const salaryPieData = [
-    { name: 'Basic & Fixed Pay', value: Math.round(grandTotalGross * 0.5), color: '#3b82f6' },
-    { name: 'House Rent Allowance (HRA)', value: Math.round(grandTotalGross * 0.2), color: '#10b981' },
-    { name: 'Special & Other Allowances', value: Math.round(grandTotalGross * 0.18), color: '#8b5cf6' },
-    { name: 'Statutory Taxes (PF/ESI/PT)', value: estimatedStatutoryDeductions, color: '#f59e0b' },
-  ];
+    { name: 'Gross Pay', value: grandTotalGross, color: '#3b82f6' },
+    { name: 'Salary Structure Deductions', value: totalDeductions, color: '#f59e0b' },
+  ].filter((item) => item.value > 0);
 
   // Quick Action Tiles
   const quickActions = [
@@ -270,8 +278,10 @@ export const PayrollDashboard: React.FC = () => {
   ];
 
   const now = new Date();
-  const nextDisbursal = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-  const daysRemaining = Math.max(0, Math.ceil((nextDisbursal.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
+  const disbursementDay = Number(activeCycle?.disbursementDate ?? activeCycle?.disbursement_date ?? activeCycle?.disbursement_date_str);
+  const nextDisbursal = Number.isInteger(disbursementDay) && disbursementDay > 0 ? new Date(now.getFullYear(), now.getMonth(), disbursementDay) : null;
+  if (nextDisbursal && nextDisbursal < now) nextDisbursal.setMonth(nextDisbursal.getMonth() + 1);
+  const daysRemaining = nextDisbursal ? Math.max(0, Math.ceil((nextDisbursal.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))) : null;
 
   if (loading && hookLoading) {
     return (
@@ -365,11 +375,11 @@ export const PayrollDashboard: React.FC = () => {
               <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Total Outlay (Gross)</p>
               <p className="text-xl font-black text-foreground truncate">₹{grandTotalGross.toLocaleString('en-IN')}</p>
               <p className="text-[10px] font-bold text-emerald-600 flex items-center gap-1">
-                <TrendingUp className="w-3 h-3" /> +3.8% MoM
+                <TrendingUp className="w-3 h-3" /> {monthOverMonth === null ? 'No prior payroll baseline' : `${monthOverMonth >= 0 ? '+' : ''}${monthOverMonth.toFixed(1)}% MoM`}
               </p>
             </div>
             <div className="p-3 rounded-xl bg-blue-500/10 text-blue-600 shrink-0 group-hover:scale-110 transition-transform">
-              <DollarSign className="w-5 h-5" />
+              <IndianRupee className="w-5 h-5" />
             </div>
           </CardContent>
         </Card>
@@ -381,7 +391,7 @@ export const PayrollDashboard: React.FC = () => {
             <div className="space-y-1 min-w-0">
               <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Est. Net Take-Home</p>
               <p className="text-xl font-black text-emerald-600 truncate">₹{estimatedNetPayout.toLocaleString('en-IN')}</p>
-              <p className="text-[10px] font-medium text-muted-foreground">Bank Transfer NEFT</p>
+              <p className="text-[10px] font-medium text-muted-foreground">From assigned salary structures</p>
             </div>
             <div className="p-3 rounded-xl bg-emerald-500/10 text-emerald-600 shrink-0 group-hover:scale-110 transition-transform">
               <CreditCard className="w-5 h-5" />
@@ -397,7 +407,7 @@ export const PayrollDashboard: React.FC = () => {
               <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Enrolled Staff</p>
               <p className="text-xl font-black text-foreground truncate">{totalEmployeesCount} Active</p>
               <p className="text-[10px] font-bold text-violet-600 flex items-center gap-1">
-                <Check className="w-3 h-3" /> 100% Slabs Assigned
+                <Check className="w-3 h-3" /> {slabAssignmentPercent}% Slabs Assigned
               </p>
             </div>
             <div className="p-3 rounded-xl bg-violet-500/10 text-violet-600 shrink-0 group-hover:scale-110 transition-transform">
@@ -412,9 +422,9 @@ export const PayrollDashboard: React.FC = () => {
           <CardContent className="p-4 flex items-center justify-between gap-3">
             <div className="space-y-1 min-w-0">
               <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">PF & Statutory</p>
-              <p className="text-xl font-black text-foreground truncate">₹{estimatedStatutoryDeductions.toLocaleString('en-IN')}</p>
+              <p className="text-xl font-black text-foreground truncate">₹{totalDeductions.toLocaleString('en-IN')}</p>
               <p className="text-[10px] font-bold text-amber-600 flex items-center gap-1">
-                <ShieldCheck className="w-3 h-3" /> EPFO & ESIC Ready
+                <ShieldCheck className="w-3 h-3" /> From salary-structure deductions
               </p>
             </div>
             <div className="p-3 rounded-xl bg-amber-500/10 text-amber-600 shrink-0 group-hover:scale-110 transition-transform">
@@ -429,9 +439,9 @@ export const PayrollDashboard: React.FC = () => {
           <CardContent className="p-4 flex items-center justify-between gap-3">
             <div className="space-y-1 min-w-0">
               <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Next Disbursal</p>
-              <p className="text-xl font-black text-foreground truncate">1st {nextDisbursal.toLocaleString('default', { month: 'short' })}</p>
+              <p className="text-xl font-black text-foreground truncate">{nextDisbursal ? nextDisbursal.toLocaleString('default', { day: 'numeric', month: 'short' }) : 'Not configured'}</p>
               <p className="text-[10px] font-bold text-cyan-600 flex items-center gap-1">
-                <Clock className="w-3 h-3" /> in {daysRemaining} days
+                <Clock className="w-3 h-3" /> {daysRemaining === null ? 'Set a cycle disbursement date' : `in ${daysRemaining} days`}
               </p>
             </div>
             <div className="p-3 rounded-xl bg-cyan-500/10 text-cyan-600 shrink-0 group-hover:scale-110 transition-transform">
@@ -450,7 +460,7 @@ export const PayrollDashboard: React.FC = () => {
               <CardTitle className="text-sm font-bold text-foreground">Active Payroll Processing Lifecycle</CardTitle>
             </div>
             <Badge variant="outline" className="text-[10px] font-bold border-indigo-200 text-indigo-600">
-              Step 3 of 4 Ready
+              {assignedStructureCount} of {totalEmployeesCount} structures ready
             </Badge>
           </div>
         </CardHeader>
@@ -462,7 +472,7 @@ export const PayrollDashboard: React.FC = () => {
               </div>
               <div>
                 <p className="text-xs font-bold text-foreground">1. Attendance Cutoff</p>
-                <p className="text-[10px] text-emerald-700 dark:text-emerald-300 font-semibold">Synced (Cutoff: 25th)</p>
+                <p className="text-[10px] text-emerald-700 dark:text-emerald-300 font-semibold">{activeCycle?.cutoffDay ?? activeCycle?.cutoff_day ? `Configured cutoff: ${activeCycle.cutoffDay ?? activeCycle.cutoff_day}` : 'Cutoff not configured'}</p>
               </div>
             </div>
 
@@ -472,7 +482,7 @@ export const PayrollDashboard: React.FC = () => {
               </div>
               <div>
                 <p className="text-xs font-bold text-foreground">2. LOP & Leave Ingest</p>
-                <p className="text-[10px] text-emerald-700 dark:text-emerald-300 font-semibold">Pro-rations Applied</p>
+                <p className="text-[10px] text-emerald-700 dark:text-emerald-300 font-semibold">Available after payroll calculation</p>
               </div>
             </div>
 
@@ -482,7 +492,7 @@ export const PayrollDashboard: React.FC = () => {
               </div>
               <div>
                 <p className="text-xs font-bold text-foreground">3. Live Calculation</p>
-                <p className="text-[10px] text-blue-700 dark:text-blue-300 font-semibold">19 Employees Ready</p>
+                <p className="text-[10px] text-blue-700 dark:text-blue-300 font-semibold">{assignedStructureCount} employees with structures</p>
               </div>
             </div>
 
@@ -745,7 +755,7 @@ export const PayrollDashboard: React.FC = () => {
           <div className="flex items-center justify-between">
             <div>
               <CardTitle className="text-sm font-bold text-foreground flex items-center gap-2">
-                <Receipt className="w-4 h-4 text-blue-600" />
+                <ReceiptIndianRupee className="w-4 h-4 text-blue-600" />
                 Recent Payroll Runs &amp; Disbursal History
               </CardTitle>
               <CardDescription className="text-xs mt-0.5">

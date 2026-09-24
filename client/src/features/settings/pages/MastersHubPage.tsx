@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, lazy, Suspense } from 'react';
 import { useSearchParams, useLocation, useNavigate } from 'react-router-dom';
 import {
   Building2,
@@ -24,7 +24,8 @@ import {
   Users,
   Grid,
   Code2,
-  ChevronRight
+  ChevronRight,
+  Boxes
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -38,27 +39,41 @@ import {
   DialogFooter
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
-import { LocationMasterForm } from '../components/LocationMasterForm';
-import { EmployeeStatusMasterForm } from '../components/EmployeeStatusMasterForm';
-import { GeneralShiftMasterForm } from '../components/GeneralShiftMasterForm';
-import { RosterShiftMasterForm } from '../components/RosterShiftMasterForm';
-import { DepartmentMasterForm } from '../components/DepartmentMasterForm';
-import { GradeMasterCustomUI } from '../components/GradeMasterCustomUI';
-import { EmploymentTypeMasterCustomUI } from '../components/EmploymentTypeMasterCustomUI';
-import { DesignationMaster } from '../components/DesignationMaster';
+import { showToast } from '@/components/ui/toast';
 import { CompanyMasterForm, CompanyRecordItem } from '../components/CompanyMasterForm';
+import { masterBuilderApi, CustomMasterItem } from '@/features/master-builder/api/masterBuilderApi';
 
-import { BreakMasterForm } from '../components/BreakMasterForm';
-import { RolesResponsibilityMasterForm } from '../components/RolesResponsibilityMasterForm';
-import { KraMasterForm } from '../components/KraMasterForm';
-import { NotificationTemplateMasterForm } from '../components/NotificationTemplateMasterForm';
-import { NotificationMergeCodeMasterForm } from '../components/NotificationMergeCodeMasterForm';
-import { OfferTemplateMasterForm } from '../components/OfferTemplateMasterForm';
-import { ResourcePlanMasterForm } from '../components/ResourcePlanMasterForm';
-import { EventMasterForm } from '../components/EventMasterForm';
-import { HolidayMasterForm } from '../components/HolidayMasterForm';
+// Lazy-load all heavy master components so only the active tab loads
+const LocationMasterForm = lazy(() => import('../components/LocationMasterForm').then(m => ({ default: m.LocationMasterForm })));
+const EmployeeStatusMasterForm = lazy(() => import('../components/EmployeeStatusMasterForm').then(m => ({ default: m.EmployeeStatusMasterForm })));
+const GeneralShiftMasterForm = lazy(() => import('../components/GeneralShiftMasterForm').then(m => ({ default: m.GeneralShiftMasterForm })));
+const RosterShiftMasterForm = lazy(() => import('../components/RosterShiftMasterForm').then(m => ({ default: m.RosterShiftMasterForm })));
+const DepartmentMasterForm = lazy(() => import('../components/DepartmentMasterForm').then(m => ({ default: m.DepartmentMasterForm })));
+const GradeMasterCustomUI = lazy(() => import('../components/GradeMasterCustomUI').then(m => ({ default: m.GradeMasterCustomUI })));
+const EmploymentTypeMasterCustomUI = lazy(() => import('../components/EmploymentTypeMasterCustomUI').then(m => ({ default: m.EmploymentTypeMasterCustomUI })));
+const DesignationMaster = lazy(() => import('../components/DesignationMaster').then(m => ({ default: m.DesignationMaster })));
+const BreakMasterForm = lazy(() => import('../components/BreakMasterForm').then(m => ({ default: m.BreakMasterForm })));
+const RolesResponsibilityMasterForm = lazy(() => import('../components/RolesResponsibilityMasterForm').then(m => ({ default: m.RolesResponsibilityMasterForm })));
+const KraMasterForm = lazy(() => import('../components/KraMasterForm').then(m => ({ default: m.KraMasterForm })));
+const NotificationTemplateMasterForm = lazy(() => import('../components/NotificationTemplateMasterForm').then(m => ({ default: m.NotificationTemplateMasterForm })));
+const NotificationMergeCodeMasterForm = lazy(() => import('../components/NotificationMergeCodeMasterForm').then(m => ({ default: m.NotificationMergeCodeMasterForm })));
+const OfferTemplateMasterForm = lazy(() => import('../components/OfferTemplateMasterForm').then(m => ({ default: m.OfferTemplateMasterForm })));
+const ResourcePlanMasterForm = lazy(() => import('../components/ResourcePlanMasterForm').then(m => ({ default: m.ResourcePlanMasterForm })));
+const EventMasterForm = lazy(() => import('../components/EventMasterForm').then(m => ({ default: m.EventMasterForm })));
+const HolidayMasterForm = lazy(() => import('../components/HolidayMasterForm').then(m => ({ default: m.HolidayMasterForm })));
+const OTRulePage = lazy(() => import('../components/ot-rules/OTRulePage').then(m => ({ default: m.OTRulePage })));
+const MasterBuilderPage = lazy(() => import('@/features/master-builder/pages/MasterBuilderPage').then(m => ({ default: m.MasterBuilderPage })));
+const DynamicMasterView = lazy(() => import('@/features/master-builder/components/DynamicMasterView').then(m => ({ default: m.DynamicMasterView })));
 
-import { OTRulePage } from '../components/ot-rules/OTRulePage';
+// Lightweight spinner shown while a lazy tab loads
+function MasterTabLoader() {
+  return (
+    <div className="flex items-center justify-center py-20 text-muted-foreground gap-3 text-sm font-medium">
+      <div className="h-5 w-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+      Loading...
+    </div>
+  );
+}
 
 // Exact master categories list
 export interface MasterCategory {
@@ -68,27 +83,19 @@ export interface MasterCategory {
   category: 'Core & Structure' | 'Policies & Rules' | 'Templates & System' | 'Events & Planning';
   description: string;
   defaultItemCount: number;
+  isCustom?: boolean;
 }
 
 export const MASTER_CATEGORIES: MasterCategory[] = [
+  { id: 'master-builder', name: 'Master Builder', icon: Boxes, category: 'Templates & System', description: 'Define custom master entities, dynamic fields, validation rules and choice lists.', defaultItemCount: 4 },
+  // System Masters — backed by real DB tables, fields managed via Master Builder
   { id: 'company', name: 'Company', icon: Building2, category: 'Core & Structure', description: 'Manage company profiles, legal entities, and organization details.', defaultItemCount: 3 },
   { id: 'location', name: 'Location', icon: MapPin, category: 'Core & Structure', description: 'Configure office locations, branches, and geographic sites.', defaultItemCount: 8 },
   { id: 'department', name: 'Department', icon: Layers, category: 'Core & Structure', description: 'Manage organizational departments, divisions, and teams.', defaultItemCount: 12 },
   { id: 'designation', name: 'Designation', icon: Briefcase, category: 'Core & Structure', description: 'Job designations, roles, and title hierarchies.', defaultItemCount: 24 },
-  { id: 'general-shift', name: 'General Shift', icon: Clock, category: 'Policies & Rules', description: 'General work shift timings, start/end hours, and attendance rules.', defaultItemCount: 5 },
-  { id: 'roster-shift', name: 'Roster Shift', icon: Clock, category: 'Policies & Rules', description: 'Rotational & roster shift patterns, weekly shift rosters, and cycle schedules.', defaultItemCount: 4 },
-  { id: 'ot-rule', name: 'OT Rule', icon: Sliders, category: 'Policies & Rules', description: 'Overtime calculation rules, rate multipliers, and cap limits.', defaultItemCount: 3 },
   { id: 'grade', name: 'Grade', icon: Award, category: 'Core & Structure', description: 'Employee pay grades, bands, and seniority levels.', defaultItemCount: 7 },
-  { id: 'holiday', name: 'Holiday', icon: Calendar, category: 'Events & Planning', description: 'Holiday calendar schedules, regional lists, and floaters.', defaultItemCount: 14 },
   { id: 'employee-status', name: 'Employee Status', icon: Users, category: 'Core & Structure', description: 'Active, On-Probation, Suspended, and Exit employee states.', defaultItemCount: 5 },
   { id: 'emp-type', name: 'Emp. Type', icon: Users, category: 'Core & Structure', description: 'Employment classification (Full-Time, Contract, Intern, Part-Time).', defaultItemCount: 4 },
-  { id: 'offer-templates', name: 'Letter & Offer Master', icon: FileText, category: 'Templates & System', description: 'Design MNC letter formats for Hiring, Onboarding (Appointment/NDA), Employment (Increment/Promotion/Warning), and Exit (Relieving/Experience).', defaultItemCount: 14 },
-  { id: 'notification-templates', name: 'Notification Templates', icon: Bell, category: 'Templates & System', description: 'Email, SMS, and Push notification message templates.', defaultItemCount: 18 },
-  { id: 'notification-merge-codes', name: 'Notification Merge Codes', icon: Code2, category: 'Templates & System', description: 'Store module and sub-module merge tags for notification templates.', defaultItemCount: 8 },
-  { id: 'break', name: 'Break', icon: Coffee, category: 'Policies & Rules', description: 'Break duration limits, meal breaks, and relaxation policies.', defaultItemCount: 3 },
-  { id: 'roles-responsibility', name: 'Roles & Responsibility', icon: ShieldCheck, category: 'Templates & System', description: 'RBAC user permissions, access controls, and security roles.', defaultItemCount: 8 },
-  { id: 'kra', name: 'KRA Form', icon: FileText, category: 'Templates & System', description: 'Key Result Area forms, evaluation templates, and performance metrics.', defaultItemCount: 5 },
-  { id: 'resource-plan', name: 'Resource Plan', icon: Grid, category: 'Events & Planning', description: 'Headcount planning, project allocation, and resource capacity.', defaultItemCount: 6 },
 ];
 
 interface MasterItemRecord {
@@ -101,10 +108,7 @@ interface MasterItemRecord {
 }
 
 const INITIAL_RECORDS: Record<string, MasterItemRecord[]> = {
-  company: [
-    { id: 'c1', code: 'HQ-MAIN', name: 'Apponext Technolabs Pvt Ltd', description: 'Primary Headquarters Entity', status: 'Active', createdAt: '2026-01-01' },
-    { id: 'c2', code: 'GLOBAL-US', name: 'Apponext Global Inc', description: 'US Subsidiary Operations', status: 'Active', createdAt: '2026-02-15' },
-  ],
+  company: [],
   location: [
     { id: 'l1', code: 'LOC-HQ', name: 'Main Corporate Office - Tech Park', description: 'Primary headquarters and R&D facility', status: 'Active', createdAt: '2026-01-10' },
     { id: 'l2', code: 'LOC-DEL', name: 'Regional Office - Delhi NCR', description: 'Sales and North Region Support Operations', status: 'Active', createdAt: '2026-02-01' },
@@ -129,9 +133,6 @@ const INITIAL_RECORDS: Record<string, MasterItemRecord[]> = {
   shift: [
     { id: 's1', code: 'SHIFT-GEN', name: 'General Shift (09:00 AM - 06:00 PM)', description: 'Standard 9-hour business shift', status: 'Active', createdAt: '2026-01-01' },
     { id: 's2', code: 'SHIFT-EVE', name: 'Evening Support Shift (02:00 PM - 11:00 PM)', description: 'US & Europe client alignment shift', status: 'Active', createdAt: '2026-01-15' },
-  ],
-  'ot-rule': [
-    { id: 'ot1', code: 'OT-STD', name: 'Standard 1.5x Multiplier Overtime', description: 'Calculates 150% hourly rate beyond 45 weekly hours', status: 'Active', createdAt: '2026-02-01' },
   ],
   grade: [
     { id: 'g1', code: 'GRD-L1', name: 'Grade L1 - Associate / Junior', description: 'Entry level workforce band', status: 'Active', createdAt: '2026-01-01' },
@@ -183,27 +184,155 @@ export function MastersHubPage() {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [selectedMasterId, setSelectedMasterId] = useState<string>('company');
+  const [customMasters, setCustomMasters] = useState<CustomMasterItem[]>([]);
+
+  useEffect(() => {
+    const fetchCustomMasters = async () => {
+      try {
+        const list = await masterBuilderApi.getMasters();
+        setCustomMasters(list);
+      } catch (err) {
+        console.error('Failed to load custom masters list in MastersHubPage:', err);
+      }
+    };
+    fetchCustomMasters();
+
+    window.addEventListener('custom_masters_updated', fetchCustomMasters);
+    return () => {
+      window.removeEventListener('custom_masters_updated', fetchCustomMasters);
+    };
+  }, []);
+
+  const getIconForMaster = (iconName?: string, code?: string) => {
+    const i = (iconName || '').toLowerCase();
+    const c = (code || '').toLowerCase();
+    if (c === 'master-builder') return Boxes;
+    if (c === 'company' || i === 'building2' || i === 'building') return Building2;
+    if (c === 'location' || i === 'mappin' || i === 'map-pin') return MapPin;
+    if (c === 'department' || i === 'layers') return Layers;
+    if (c === 'designation' || i === 'briefcase') return Briefcase;
+    if (c === 'grade' || i === 'award') return Award;
+    if (c === 'employee-status' || c === 'employment_status' || i === 'users' || i === 'user') return Users;
+    if (c === 'emp-type' || c === 'employee_types' || c === 'employment_type') return Users;
+    if (c === 'holiday' || i === 'calendar') return Calendar;
+    if (c === 'general-shift' || c === 'roster-shift' || c === 'shift' || i === 'clock') return Clock;
+    if (c === 'break' || i === 'coffee') return Coffee;
+    if (c === 'roles-responsibility' || i === 'shieldcheck' || i === 'shield') return ShieldCheck;
+    if (c === 'kra' || c === 'resource-plan' || c === 'offer-templates' || i === 'filetext') return FileText;
+    if (c === 'notification-templates' || i === 'bell') return Bell;
+    if (c === 'notification-merge-codes' || i === 'code2') return Code2;
+    if (c === 'ot-rule' || i === 'sliders') return Sliders;
+    if (c === 'event' || i === 'smile') return Smile;
+    return Boxes;
+  };
+
+  const getCategoryForMaster = (code: string) => {
+    const c = code.toLowerCase();
+    if (['company', 'location', 'department', 'designation', 'grade', 'employee-status', 'emp-type', 'branch', 'cost-center'].includes(c)) {
+      return 'Core & Structure';
+    }
+    if (['general-shift', 'roster-shift', 'shift', 'break', 'holiday', 'ot-rule', 'policy'].includes(c)) {
+      return 'Policies & Rules';
+    }
+    if (['events', 'event', 'resource-plan'].includes(c)) {
+      return 'Events & Planning';
+    }
+    return 'Templates & System';
+  };
+
+  const mergedCategories = useMemo(() => {
+    const builderTab: MasterCategory = {
+      id: 'master-builder',
+      name: 'Master Builder',
+      icon: Boxes,
+      category: 'Templates & System',
+      description: 'Define custom master entities, dynamic fields, validation rules and choice lists.',
+      defaultItemCount: customMasters.length,
+    };
+
+    if (customMasters.length === 0) {
+      return [builderTab, ...MASTER_CATEGORIES.filter(m => m.id !== 'master-builder')];
+    }
+
+    const dynamicCategories: MasterCategory[] = customMasters.map((cm) => ({
+      id: cm.code,
+      name: cm.name,
+      icon: getIconForMaster(cm.icon, cm.code),
+      category: getCategoryForMaster(cm.code),
+      description: cm.description || `Manage ${cm.name} records and configurations.`,
+      defaultItemCount: cm.recordsCount || 0,
+      isCustom: !cm.isSystem,
+    }));
+
+    return [builderTab, ...dynamicCategories];
+  }, [customMasters]);
+
+  // Normalize common URL alias variants to canonical master IDs
+  const TAB_ALIASES: Record<string, string> = {
+    events: 'event',
+    'event-master': 'event',
+    shifts: 'general-shift',
+    'general-shifts': 'general-shift',
+    'roster-shifts': 'roster-shift',
+    departments: 'department',
+    designations: 'designation',
+    grades: 'grade',
+    locations: 'location',
+    companies: 'company',
+    holidays: 'holiday',
+    breaks: 'break',
+    templates: 'offer-templates',
+    'notification-template': 'notification-templates',
+    'merge-codes': 'notification-merge-codes',
+    'resource-plans': 'resource-plan',
+    'ot-rules': 'ot-rule',
+  };
+
+  const resolveTabId = (raw: string | null | undefined): string | null => {
+    if (!raw) return null;
+    // 1. Check mergedCategories
+    if (mergedCategories.some(m => m.id === raw)) return raw;
+    // 2. Check URL aliases
+    if (TAB_ALIASES[raw]) return TAB_ALIASES[raw];
+    // 3. Check dynamically loaded custom master codes
+    if (customMasters.some(cm => cm.code === raw)) return raw;
+    return null;
+  };
 
   useEffect(() => {
     const pathSegments = location.pathname.split('/').filter(Boolean);
-    let masterId = null;
+    const rawParam = searchParams.get('tab');
+    const rawFromPath = pathSegments.includes('masters') ? pathSegments[pathSegments.indexOf('masters') + 1] : null;
+    const rawTab = rawFromPath || rawParam;
 
-    if (pathSegments.includes('masters')) {
-      const masterIndex = pathSegments.indexOf('masters');
-      masterId = pathSegments[masterIndex + 1];
+    const OPERATIONAL_TABS = [
+      'general-shift', 'roster-shift', 'ot-rule', 'break', 'breaks', 'holiday', 'events', 'event',
+      'notification-templates', 'notification-merge-codes', 'offer-templates',
+      'roles-responsibility', 'kra', 'resource-plan'
+    ];
+
+    if (rawTab && OPERATIONAL_TABS.includes(rawTab)) {
+      const opBasePath = location.pathname.includes('/hr/') ? '/hr/operational-masters' : '/operational-masters';
+      navigate(`${opBasePath}?tab=${rawTab}`, { replace: true });
+      return;
     }
 
-    if (masterId && MASTER_CATEGORIES.some(m => m.id === masterId)) {
+    let masterId: string | null = null;
+
+    if (rawFromPath) {
+      masterId = resolveTabId(rawFromPath);
+    }
+
+    if (masterId) {
       setSelectedMasterId(masterId);
-    } else if (searchParams.get('tab')) {
-      const tabFromUrl = searchParams.get('tab');
-      if (tabFromUrl && MASTER_CATEGORIES.some(m => m.id === tabFromUrl)) {
+    } else {
+      const tabFromUrl = resolveTabId(rawParam);
+      if (tabFromUrl) {
         setSelectedMasterId(tabFromUrl);
       }
-    } else {
-      setSelectedMasterId('company');
+      // If neither path nor ?tab resolves, keep current selection (don't reset to 'company')
     }
-  }, [location.pathname, searchParams]);
+  }, [location.pathname, searchParams, mergedCategories, customMasters]);
 
   const handleSelectMaster = (id: string) => {
     setSelectedMasterId(id);
@@ -278,13 +407,13 @@ export function MastersHubPage() {
   const [formStatus, setFormStatus] = useState<'Active' | 'Inactive'>('Active');
 
   const selectedMaster = useMemo(() => {
-    return MASTER_CATEGORIES.find(m => m.id === selectedMasterId) || MASTER_CATEGORIES[0];
-  }, [selectedMasterId]);
+    return mergedCategories.find(m => m.id === selectedMasterId) || mergedCategories[0];
+  }, [selectedMasterId, mergedCategories]);
 
   const filteredCategories = useMemo(() => {
-    if (categoryFilter === 'all') return MASTER_CATEGORIES;
-    return MASTER_CATEGORIES.filter(m => m.category === categoryFilter);
-  }, [categoryFilter]);
+    if (categoryFilter === 'all') return mergedCategories;
+    return mergedCategories.filter(m => m.category === categoryFilter);
+  }, [categoryFilter, mergedCategories]);
 
   const currentRecords = useMemo(() => {
     let list = records[selectedMasterId] || [];
@@ -332,7 +461,10 @@ export function MastersHubPage() {
 
   const handleSaveRecord = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formName.trim()) return;
+    if (!formName.trim()) {
+      showToast.error('Record name required', 'Enter a name before saving this master record.');
+      return;
+    }
 
     if (editingRecord) {
       // Update existing record
@@ -344,6 +476,7 @@ export function MastersHubPage() {
             : item
         )
       }));
+      showToast.success('Master record updated', `“${formName}” has been updated successfully.`);
     } else {
       // Add new record
       const newRec: MasterItemRecord = {
@@ -358,27 +491,33 @@ export function MastersHubPage() {
         ...prev,
         [selectedMasterId]: [newRec, ...(prev[selectedMasterId] || [])]
       }));
+      showToast.success('Master record created', `“${newRec.name}” has been added to ${selectedMaster.name} successfully.`);
     }
 
     setIsAddModalOpen(false);
   };
 
-  const handleDeleteRecord = (id: string) => {
-    if (window.confirm('Are you sure you want to delete this master record?')) {
-      setRecords(prev => ({
-        ...prev,
-        [selectedMasterId]: (prev[selectedMasterId] || []).filter(item => item.id !== id)
-      }));
-    }
+  const handleDeleteRecord = async (id: string) => {
+    const record = (records[selectedMasterId] || []).find((item) => item.id === id);
+    if (!await window.appConfirm(`Delete “${record?.name || 'this master record'}”? This action cannot be undone.`)) return;
+
+    setRecords(prev => ({
+      ...prev,
+      [selectedMasterId]: (prev[selectedMasterId] || []).filter(item => item.id !== id)
+    }));
+    showToast.success('Master record deleted', `“${record?.name || 'Master record'}” has been deleted successfully.`);
   };
 
   const handleToggleStatus = (id: string) => {
+    const record = (records[selectedMasterId] || []).find((item) => item.id === id);
+    const nextStatus = record?.status === 'Active' ? 'Inactive' : 'Active';
     setRecords(prev => ({
       ...prev,
       [selectedMasterId]: (prev[selectedMasterId] || []).map(item =>
         item.id === id ? { ...item, status: item.status === 'Active' ? 'Inactive' : 'Active' } : item
       )
     }));
+    showToast.success('Master record updated', `“${record?.name || 'Master record'}” is now ${nextStatus.toLowerCase()}.`);
   };
 
   const IconComponent = selectedMaster.icon;
@@ -388,220 +527,208 @@ export function MastersHubPage() {
 
 
 
-      {selectedMasterId === 'grade' ? (
-        <GradeMasterCustomUI />
-      ) : selectedMasterId === 'emp-type' ? (
-        <EmploymentTypeMasterCustomUI />
-      ) : selectedMasterId === 'company' ? (
-        <CompanyMasterForm
-          companiesList={fullCompanyRecords}
-          onCancel={() => handleSelectMaster('company')}
-          onSave={handleCompanySave}
-        />
-      ) : selectedMasterId === 'location' ? (
-        <LocationMasterForm
-          onCancel={() => handleSelectMaster('company')}
-          onSave={(data) => {
-            const newRec: MasterItemRecord = {
-              id: `loc-${Date.now()}`,
-              code: `LOC-${Math.floor(100 + Math.random() * 900)}`,
-              name: data.locationName || 'New Office Location',
-              description: `${data.officeType} - ${data.city}, ${data.state}`,
-              status: data.isActive ? 'Active' : 'Inactive',
-              createdAt: new Date().toISOString().split('T')[0]
-            };
-            setRecords(prev => ({
-              ...prev,
-              location: [newRec, ...(prev.location || [])]
-            }));
-          }}
-        />
-      ) : selectedMasterId === 'employee-status' ? (
-        <EmployeeStatusMasterForm onBack={() => handleSelectMaster('company')} />
-      ) : selectedMasterId === 'holiday' ? (
-        <HolidayMasterForm onCancel={() => handleSelectMaster('company')} />
-      ) : (selectedMasterId === 'general-shift' || selectedMasterId === 'shift') ? (
-        <GeneralShiftMasterForm
-          onCancel={() => handleSelectMaster('company')}
-        />
-      ) : selectedMasterId === 'roster-shift' ? (
-        <RosterShiftMasterForm
-          onCancel={() => handleSelectMaster('company')}
-        />
-      ) : selectedMasterId === 'department' ? (
-        <DepartmentMasterForm
-          onCancel={() => handleSelectMaster('company')}
-        />
-      ) : selectedMasterId === 'designation' ? (
-        <DesignationMaster onCancel={() => handleSelectMaster('company')} />
-      ) : selectedMasterId === 'break' ? (
-        <BreakMasterForm onCancel={() => handleSelectMaster('company')} />
-      ) : selectedMasterId === 'roles-responsibility' ? (
-        <RolesResponsibilityMasterForm onCancel={() => handleSelectMaster('company')} />
-      ) : selectedMasterId === 'kra' ? (
-        <KraMasterForm onCancel={() => handleSelectMaster('company')} />
-      ) : selectedMasterId === 'offer-templates' ? (
-        <OfferTemplateMasterForm onCancel={() => handleSelectMaster('company')} />
-      ) : (selectedMasterId === 'notification-templates' || selectedMasterId === 'template') ? (
-        <NotificationTemplateMasterForm onCancel={() => handleSelectMaster('company')} />
-      ) : (selectedMasterId === 'notification-merge-codes' || selectedMasterId === 'merge-codes') ? (
-        <NotificationMergeCodeMasterForm onCancel={() => handleSelectMaster('company')} />
-      ) : selectedMasterId === 'resource-plan' ? (
-        <ResourcePlanMasterForm onCancel={() => handleSelectMaster('company')} />
-      ) : selectedMasterId === 'ot-rule' ? (
-        <OTRulePage />
-      ) : (
+      <Suspense fallback={<MasterTabLoader />}>
+        {selectedMasterId === 'company' ? (
+          <CompanyMasterForm />
+        ) : selectedMasterId === 'department' ? (
+          <DepartmentMasterForm onCancel={() => handleSelectMaster('company')} />
+        ) : selectedMasterId === 'location' ? (
+          <LocationMasterForm onCancel={() => handleSelectMaster('company')} />
+        ) : selectedMasterId === 'designation' ? (
+          <DesignationMaster onCancel={() => handleSelectMaster('company')} />
+        ) : selectedMasterId === 'grade' ? (
+          <GradeMasterCustomUI />
+        ) : selectedMasterId === 'emp-type' ? (
+          <EmploymentTypeMasterCustomUI />
+        ) : selectedMasterId === 'employee-status' ? (
+          <EmployeeStatusMasterForm onBack={() => handleSelectMaster('company')} />
+        ) : selectedMasterId === 'holiday' ? (
+          <HolidayMasterForm onCancel={() => handleSelectMaster('company')} />
+        ) : (selectedMasterId === 'general-shift' || selectedMasterId === 'shift') ? (
+          <GeneralShiftMasterForm
+            onCancel={() => handleSelectMaster('company')}
+          />
+        ) : selectedMasterId === 'roster-shift' ? (
+          <RosterShiftMasterForm
+            onCancel={() => handleSelectMaster('company')}
+          />
+        ) : selectedMasterId === 'break' ? (
+          <BreakMasterForm onCancel={() => handleSelectMaster('company')} />
+        ) : selectedMasterId === 'roles-responsibility' ? (
+          <RolesResponsibilityMasterForm onCancel={() => handleSelectMaster('company')} />
+        ) : selectedMasterId === 'kra' ? (
+          <KraMasterForm onCancel={() => handleSelectMaster('company')} />
+        ) : selectedMasterId === 'offer-templates' ? (
+          <OfferTemplateMasterForm onCancel={() => handleSelectMaster('company')} />
+        ) : (selectedMasterId === 'notification-templates' || selectedMasterId === 'template') ? (
+          <NotificationTemplateMasterForm onCancel={() => handleSelectMaster('company')} />
+        ) : (selectedMasterId === 'notification-merge-codes' || selectedMasterId === 'merge-codes') ? (
+          <NotificationMergeCodeMasterForm onCancel={() => handleSelectMaster('company')} />
+        ) : selectedMasterId === 'resource-plan' ? (
+          <ResourcePlanMasterForm onCancel={() => handleSelectMaster('company')} />
+        ) : selectedMasterId === 'ot-rule' ? (
+          <OTRulePage />
+        ) : selectedMasterId === 'event' ? (
+          <EventMasterForm onCancel={() => handleSelectMaster('company')} />
+        ) : selectedMasterId === 'master-builder' ? (
+          <MasterBuilderPage />
+        ) : selectedMaster?.isCustom ? (
+          // Dynamic Master View for user-created custom masters
+          <DynamicMasterView masterIdOrCode={selectedMasterId} />
+        ) : (
 
-        /* Active Master Details Card & Actions Bar */
-        <div className="bg-card border border-border rounded-2xl p-5 shadow-xs space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-border">
-            <div className="flex items-center gap-3">
-              <div className="p-3 rounded-xl bg-primary text-white">
-                <IconComponent className="h-6 w-6" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h2 className="text-xl font-bold text-foreground">{selectedMaster.name}</h2>
-                  <Badge variant="outline" className="text-[11px] font-semibold">
-                    {selectedMaster.category}
-                  </Badge>
+          /* Active Master Details Card & Actions Bar */
+          <div className="bg-card border border-border rounded-2xl p-5 shadow-xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-border">
+              <div className="flex items-center gap-3">
+                <div className="p-3 rounded-xl bg-primary text-white">
+                  <IconComponent className="h-6 w-6" />
                 </div>
-                <p className="text-xs text-muted-foreground mt-0.5">{selectedMaster.description}</p>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-xl font-bold text-foreground">{selectedMaster.name}</h2>
+                    <Badge variant="outline" className="text-[11px] font-semibold">
+                      {selectedMaster.category}
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5">{selectedMaster.description}</p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2.5">
+                {/* Field Filter Dropdown: Name and Code only */}
+                <select
+                  value={searchField}
+                  onChange={e => setSearchField(e.target.value as 'all' | 'name' | 'code')}
+                  className="h-9 px-3 text-xs border border-input rounded-xl bg-background text-foreground font-semibold cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary shadow-xs"
+                  title="Filter search by field"
+                >
+                  <option value="all">All</option>
+                  <option value="name">{selectedMaster.name} Name</option>
+                  <option value="code">{selectedMaster.name} Code</option>
+                </select>
+
+                {/* Search Term Input */}
+                <div className="relative w-full sm:w-60">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    type="text"
+                    placeholder="Search term..."
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                    className="pl-9 text-xs h-9 bg-background rounded-xl"
+                  />
+                </div>
+
+                {/* Status Filter Dropdown: All, Active, Inactive */}
+                <select
+                  value={statusFilter}
+                  onChange={e => setStatusFilter(e.target.value as 'all' | 'Active' | 'Inactive')}
+                  className="h-9 px-3 text-xs border border-input rounded-xl bg-background text-foreground font-semibold cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary shadow-xs"
+                  title="Filter by status"
+                >
+                  <option value="all">All</option>
+                  <option value="Active">Active</option>
+                  <option value="Inactive">Inactive</option>
+                </select>
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2.5">
-              {/* Field Filter Dropdown: Name and Code only */}
-              <select
-                value={searchField}
-                onChange={e => setSearchField(e.target.value as 'all' | 'name' | 'code')}
-                className="h-9 px-3 text-xs border border-input rounded-xl bg-background text-foreground font-semibold cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary shadow-xs"
-                title="Filter search by field"
-              >
-                <option value="all">All</option>
-                <option value="name">{selectedMaster.name} Name</option>
-                <option value="code">{selectedMaster.name} Code</option>
-              </select>
-
-              {/* Search Term Input */}
-              <div className="relative w-full sm:w-60">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  type="text"
-                  placeholder="Search term..."
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  className="pl-9 text-xs h-9 bg-background rounded-xl"
-                />
-              </div>
-
-              {/* Status Filter Dropdown: All, Active, Inactive */}
-              <select
-                value={statusFilter}
-                onChange={e => setStatusFilter(e.target.value as 'all' | 'Active' | 'Inactive')}
-                className="h-9 px-3 text-xs border border-input rounded-xl bg-background text-foreground font-semibold cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary shadow-xs"
-                title="Filter by status"
-              >
-                <option value="all">All</option>
-                <option value="Active">Active</option>
-                <option value="Inactive">Inactive</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Master Records Data Table */}
-          <div className="overflow-x-auto border border-border rounded-xl">
-            <table className="w-full text-left text-xs font-medium text-foreground">
-              <thead className="bg-muted/60 text-muted-foreground border-b border-border uppercase tracking-wider text-[11px]">
-                <tr>
-                  <th className="px-4 py-3 font-semibold">Code</th>
-                  <th className="px-4 py-3 font-semibold">{selectedMaster.name} Name</th>
-                  <th className="px-4 py-3 font-semibold">Description</th>
-                  <th className="px-4 py-3 font-semibold">Status</th>
-                  <th className="px-4 py-3 font-semibold">Created Date</th>
-                  <th className="px-4 py-3 font-semibold text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border bg-card">
-                {currentRecords.map(rec => (
-                  <tr key={rec.id} className="hover:bg-accent/40 transition-colors">
-                    <td className="px-4 py-3.5 font-mono text-xs font-semibold text-primary">
-                      {rec.code}
-                    </td>
-                    <td className="px-4 py-3.5 font-semibold text-foreground">
-                      {rec.name}
-                    </td>
-                    <td className="px-4 py-3.5 text-muted-foreground max-w-xs truncate">
-                      {rec.description || '—'}
-                    </td>
-                    <td className="px-4 py-3.5">
-                      <button
-                        onClick={() => handleToggleStatus(rec.id)}
-                        className="cursor-pointer"
-                        title="Click to toggle status"
-                      >
-                        {rec.status === 'Active' ? (
-                          <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/25 flex items-center gap-1 w-fit">
-                            <CheckCircle2 className="h-3 w-3" /> Active
-                          </Badge>
-                        ) : (
-                          <Badge className="bg-rose-500/15 text-rose-700 dark:text-rose-400 border-rose-500/30 hover:bg-rose-500/25 flex items-center gap-1 w-fit">
-                            <XCircle className="h-3 w-3" /> Inactive
-                          </Badge>
-                        )}
-                      </button>
-                    </td>
-                    <td className="px-4 py-3.5 text-muted-foreground">
-                      {rec.createdAt}
-                    </td>
-                    <td className="px-4 py-3.5 text-right">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg"
-                          onClick={() => handleOpenAddModal(rec)}
-                          title="Edit Master Record"
-                        >
-                          <Edit2 className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-muted-foreground hover:text-rose-600 hover:bg-rose-500/10 rounded-lg"
-                          onClick={() => handleDeleteRecord(rec.id)}
-                          title="Delete Master Record"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-
-                {currentRecords.length === 0 && (
+            {/* Master Records Data Table */}
+            <div className="overflow-x-auto border border-border rounded-xl">
+              <table className="w-full text-left text-xs font-medium text-foreground">
+                <thead className="bg-muted/60 text-muted-foreground border-b border-border uppercase tracking-wider text-[11px]">
                   <tr>
-                    <td colSpan={6} className="px-4 py-12 text-center text-muted-foreground">
-                      <div className="flex flex-col items-center justify-center gap-2">
-                        <IconComponent className="h-8 w-8 text-muted-foreground/40" />
-                        <p className="text-sm font-semibold text-foreground">No {selectedMaster.name} records found</p>
-                        <p className="text-xs text-muted-foreground">Click below to add a new record to this master list.</p>
-                        <Button
-                          onClick={() => handleOpenAddModal()}
-                          size="sm"
-                          className="mt-2 bg-primary text-primary-foreground font-semibold text-xs rounded-xl"
-                        >
-                          <Plus className="h-3.5 w-3.5 mr-1.5" /> Add {selectedMaster.name} Record
-                        </Button>
-                      </div>
-                    </td>
+                    <th className="px-4 py-3 font-semibold">Code</th>
+                    <th className="px-4 py-3 font-semibold">{selectedMaster.name} Name</th>
+                    <th className="px-4 py-3 font-semibold">Description</th>
+                    <th className="px-4 py-3 font-semibold">Status</th>
+                    <th className="px-4 py-3 font-semibold">Created Date</th>
+                    <th className="px-4 py-3 font-semibold text-right">Actions</th>
                   </tr>
-                )}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-border bg-card">
+                  {currentRecords.map(rec => (
+                    <tr key={rec.id} className="hover:bg-accent/40 transition-colors">
+                      <td className="px-4 py-3.5 font-mono text-xs font-semibold text-primary">
+                        {rec.code}
+                      </td>
+                      <td className="px-4 py-3.5 font-semibold text-foreground">
+                        {rec.name}
+                      </td>
+                      <td className="px-4 py-3.5 text-muted-foreground max-w-xs truncate">
+                        {rec.description || '—'}
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <button
+                          onClick={() => handleToggleStatus(rec.id)}
+                          className="cursor-pointer"
+                          title="Click to toggle status"
+                        >
+                          {rec.status === 'Active' ? (
+                            <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/25 flex items-center gap-1 w-fit">
+                              <CheckCircle2 className="h-3 w-3" /> Active
+                            </Badge>
+                          ) : (
+                            <Badge className="bg-rose-500/15 text-rose-700 dark:text-rose-400 border-rose-500/30 hover:bg-rose-500/25 flex items-center gap-1 w-fit">
+                              <XCircle className="h-3 w-3" /> Inactive
+                            </Badge>
+                          )}
+                        </button>
+                      </td>
+                      <td className="px-4 py-3.5 text-muted-foreground">
+                        {rec.createdAt}
+                      </td>
+                      <td className="px-4 py-3.5 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg"
+                            onClick={() => handleOpenAddModal(rec)}
+                            title="Edit Master Record"
+                          >
+                            <Edit2 className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-muted-foreground hover:text-rose-600 hover:bg-rose-500/10 rounded-lg"
+                            onClick={() => handleDeleteRecord(rec.id)}
+                            title="Delete Master Record"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+
+                  {currentRecords.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="px-4 py-12 text-center text-muted-foreground">
+                        <div className="flex flex-col items-center justify-center gap-2">
+                          <IconComponent className="h-8 w-8 text-muted-foreground/40" />
+                          <p className="text-sm font-semibold text-foreground">No {selectedMaster.name} records found</p>
+                          <p className="text-xs text-muted-foreground">Click below to add a new record to this master list.</p>
+                          <Button
+                            onClick={() => handleOpenAddModal()}
+                            size="sm"
+                            className="mt-2 bg-primary text-primary-foreground font-semibold text-xs rounded-xl"
+                          >
+                            <Plus className="h-3.5 w-3.5 mr-1.5" /> Add {selectedMaster.name} Record
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+
+      </Suspense>
 
       {/* Add / Edit Master Record Modal */}
       <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
@@ -620,9 +747,7 @@ export function MastersHubPage() {
             <CompanyMasterForm
               hideFiltersAndList={true}
               isNew={!editingRecord}
-              companiesList={fullCompanyRecords}
               onCancel={() => setIsAddModalOpen(false)}
-              onSave={handleCompanySave}
             />
           ) : (
             <form onSubmit={handleSaveRecord} className="space-y-4">

@@ -113,7 +113,19 @@ router.get('/regularization/logs', controller.getAdminRegularizationLogs);
 router.get('/overtime', controller.getMyOvertime);
 router.get('/overtime/all', controller.getAllOvertimeRequests);
 router.post('/overtime', controller.requestOvertime);
-router.patch('/overtime/:id/status', controller.updateOvertimeStatus);
+router.patch(
+  '/overtime/:id/status',
+  requirePermission('attendance.overtime_approve'),
+  controller.updateOvertimeStatus
+);
+
+// OT Rules (Masters Hub CRUD)
+router.get('/ot-rules',                   controller.listOTRules);
+router.post('/ot-rules',                  controller.createOTRule);
+router.get('/ot-rules/:id',               controller.getOTRule);
+router.put('/ot-rules/:id',               controller.updateOTRule);
+router.delete('/ot-rules/:id',            controller.deleteOTRule);
+router.put('/ot-rules/:id/eligibility',   controller.setOTRuleEligibility);
 
 
 // Geofence and location

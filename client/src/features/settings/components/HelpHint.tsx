@@ -3,26 +3,32 @@ import { HelpCircle, Info, Sparkles, X } from 'lucide-react';
 
 export interface HelpHintProps {
   title: string;
-  titleHi?: string;
+  titleHi?: string;   // Hindi (legacy, kept for backward compatibility)
+  titleMr?: string;   // Marathi
   description: string;
   descriptionHi?: string;
+  descriptionMr?: string;
   effect?: string;
   effectHi?: string;
+  effectMr?: string;
   example?: string;
   exampleHi?: string;
+  exampleMr?: string;
   className?: string;
 }
+
+type LangCode = 'en' | 'hi' | 'mr';
 
 // Global active hint tracker to ensure ONLY 1 hint is ever open at a time
 let currentActiveHintId: string | null = null;
 
 // Global language state hook synced with localStorage
 export function useHintLanguage() {
-  const [lang, setLang] = useState<'en' | 'hi'>(() => {
-    return (localStorage.getItem('hrms_hint_lang') as 'en' | 'hi') || 'en';
+  const [lang, setLang] = useState<LangCode>(() => {
+    return (localStorage.getItem('hrms_hint_lang') as LangCode) || 'en';
   });
 
-  const changeLang = (newLang: 'en' | 'hi') => {
+  const changeLang = (newLang: LangCode) => {
     setLang(newLang);
     localStorage.setItem('hrms_hint_lang', newLang);
     window.dispatchEvent(new Event('hrms_hint_lang_change'));
@@ -30,7 +36,7 @@ export function useHintLanguage() {
 
   useEffect(() => {
     const handleSync = () => {
-      const stored = (localStorage.getItem('hrms_hint_lang') as 'en' | 'hi') || 'en';
+      const stored = (localStorage.getItem('hrms_hint_lang') as LangCode) || 'en';
       setLang(stored);
     };
     window.addEventListener('hrms_hint_lang_change', handleSync);
@@ -43,12 +49,16 @@ export function useHintLanguage() {
 export const HelpHint: React.FC<HelpHintProps> = ({
   title,
   titleHi,
+  titleMr,
   description,
   descriptionHi,
+  descriptionMr,
   effect,
   effectHi,
+  effectMr,
   example,
   exampleHi,
+  exampleMr,
   className = '',
 }) => {
   const hintId = useId();
@@ -138,10 +148,39 @@ export const HelpHint: React.FC<HelpHintProps> = ({
     }
   };
 
-  const activeTitle = (lang === 'hi' && titleHi) ? titleHi : title;
-  const activeDesc = (lang === 'hi' && descriptionHi) ? descriptionHi : description;
-  const activeEffect = (lang === 'hi' && effectHi) ? effectHi : (effect || effectHi);
-  const activeExample = (lang === 'hi' && exampleHi) ? exampleHi : (example || exampleHi);
+  // Resolve active content based on language priority: mr > hi > en
+  const activeTitle =
+    lang === 'mr' && titleMr ? titleMr :
+    lang === 'hi' && titleHi ? titleHi :
+    title;
+
+  const activeDesc =
+    lang === 'mr' && descriptionMr ? descriptionMr :
+    lang === 'hi' && descriptionHi ? descriptionHi :
+    description;
+
+  const activeEffect =
+    lang === 'mr' && effectMr ? effectMr :
+    lang === 'hi' && effectHi ? effectHi :
+    effect;
+
+  const activeExample =
+    lang === 'mr' && exampleMr ? exampleMr :
+    lang === 'hi' && exampleHi ? exampleHi :
+    example;
+
+  // Labels for "What happens" and "Example" sections
+  const effectLabel =
+    lang === 'mr' ? '⚙️ बदल केल्यावर काय होईल:' :
+    lang === 'hi' ? '⚙️ Change karne par kya hoga:' :
+    '⚙️ What happens when changed:';
+
+  const exampleLabel =
+    lang === 'mr' ? 'उदाहरण:' :
+    lang === 'hi' ? 'Example / Udaharan:' :
+    'Example:';
+
+  const tooltipTitle = 'माहिती पहा (इंग्रजी / मराठी)';
 
   return (
     <div className={`relative inline-flex items-center align-middle ${className}`} ref={hintRef}>
@@ -151,9 +190,9 @@ export const HelpHint: React.FC<HelpHintProps> = ({
         className={`inline-flex items-center justify-center w-4 h-4 rounded-full transition-all cursor-pointer focus:outline-none ml-1.5 shrink-0 ${
           isOpen
             ? 'text-indigo-600 bg-indigo-100 dark:bg-indigo-900/60 dark:text-indigo-300 ring-2 ring-indigo-500/30'
-            : 'text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 dark:text-slate-500 dark:hover:text-indigo-400'
+            : 'text-muted-foreground/70 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 dark:text-muted-foreground dark:hover:text-indigo-400'
         }`}
-        title="Click to view setting guidance (English & Hindi)"
+        title={tooltipTitle}
       >
         <HelpCircle className="w-3.5 h-3.5" />
       </button>
@@ -165,7 +204,7 @@ export const HelpHint: React.FC<HelpHintProps> = ({
             placement === 'bottom' ? 'top-full mt-2' : 'bottom-full mb-2'
           }`}
         >
-          {/* Header with EN / HI Language Switcher & Close Button */}
+          {/* Header with Language Switcher & Close Button */}
           <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-slate-800">
             <div className="flex items-center gap-1.5 min-w-0">
               <span className="p-1 rounded-md bg-indigo-500/20 text-indigo-400 shrink-0">
@@ -175,7 +214,7 @@ export const HelpHint: React.FC<HelpHintProps> = ({
             </div>
 
             <div className="flex items-center gap-2 shrink-0">
-              {/* Language Switcher Badge */}
+              {/* Language Switcher — EN / मराठी / हिन्दी */}
               <div className="flex items-center bg-slate-800 border border-slate-700 rounded-lg p-0.5 text-[10px] font-bold">
                 <button
                   type="button"
@@ -183,7 +222,7 @@ export const HelpHint: React.FC<HelpHintProps> = ({
                   className={`px-1.5 py-0.5 rounded transition-all cursor-pointer ${
                     lang === 'en'
                       ? 'bg-indigo-600 text-white shadow-xs'
-                      : 'text-slate-400 hover:text-white'
+                      : 'text-muted-foreground/70 hover:text-white'
                   }`}
                   title="Switch to English"
                 >
@@ -191,23 +230,38 @@ export const HelpHint: React.FC<HelpHintProps> = ({
                 </button>
                 <button
                   type="button"
-                  onClick={() => changeLang('hi')}
+                  onClick={() => changeLang('mr')}
                   className={`px-1.5 py-0.5 rounded transition-all cursor-pointer ${
-                    lang === 'hi'
+                    lang === 'mr'
                       ? 'bg-indigo-600 text-white shadow-xs'
-                      : 'text-slate-400 hover:text-white'
+                      : 'text-muted-foreground/70 hover:text-white'
                   }`}
-                  title="हिंदी में देखें"
+                  title="मराठीत पाहा"
                 >
-                  हिन्दी
+                  मराठी
                 </button>
+                {/* Hindi — shown only if any Hindi prop is provided */}
+                {(titleHi || descriptionHi) && (
+                  <button
+                    type="button"
+                    onClick={() => changeLang('hi')}
+                    className={`px-1.5 py-0.5 rounded transition-all cursor-pointer ${
+                      lang === 'hi'
+                        ? 'bg-indigo-600 text-white shadow-xs'
+                        : 'text-muted-foreground/70 hover:text-white'
+                    }`}
+                    title="हिंदी में देखें"
+                  >
+                    हिन्दी
+                  </button>
+                )}
               </div>
 
               <button
                 type="button"
                 onClick={closeHint}
-                className="text-slate-400 hover:text-white p-0.5 rounded-md focus:outline-none cursor-pointer"
-                title="Close Hint"
+                className="text-muted-foreground/70 hover:text-white p-0.5 rounded-md focus:outline-none cursor-pointer"
+                title="बंद करा"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -222,7 +276,7 @@ export const HelpHint: React.FC<HelpHintProps> = ({
             {activeEffect && (
               <div className="p-2 rounded-xl bg-slate-800/80 border border-slate-700/50 space-y-1">
                 <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider block">
-                  {lang === 'hi' ? '⚙️ Change karne par kya hoga:' : '⚙️ What happens when changed:'}
+                  {effectLabel}
                 </span>
                 <p className="text-slate-300 text-[11px] leading-normal">{activeEffect}</p>
               </div>
@@ -233,7 +287,7 @@ export const HelpHint: React.FC<HelpHintProps> = ({
               <div className="p-2 rounded-xl bg-indigo-950/40 border border-indigo-800/40 space-y-1">
                 <span className="text-[10px] font-bold text-indigo-300 uppercase tracking-wider flex items-center gap-1">
                   <Sparkles className="w-3 h-3 text-indigo-400" />
-                  {lang === 'hi' ? 'Example / Udaharan:' : 'Example:'}
+                  {exampleLabel}
                 </span>
                 <p className="text-indigo-200 text-[11px] leading-normal">{activeExample}</p>
               </div>

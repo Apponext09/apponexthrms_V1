@@ -60,7 +60,7 @@ export function LocationManagementPage(): JSX.Element {
   };
 
   const handleDelete = async (id: number, name: string) => {
-    if (window.confirm(`Are you sure you want to delete geofence location "${name}"?`)) {
+    if (await window.appConfirm(`Are you sure you want to delete geofence location "${name}"?`)) {
       await deleteGeofence(id);
     }
   };
@@ -120,48 +120,7 @@ export function LocationManagementPage(): JSX.Element {
         </Button>
       </div>
 
-      {/* Metrics Row */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <Card className="border border-border/80 shadow-2xs rounded-xl bg-card p-3.5 flex flex-col justify-between">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">Total Geofences</span>
-            <div className="p-1.5 rounded bg-primary/10 text-primary">
-              <Globe className="w-3.5 h-3.5" />
-            </div>
-          </div>
-          <p className="text-xl font-black text-foreground mt-2">{totalGeofences}</p>
-        </Card>
 
-        <Card className="border border-border/80 shadow-2xs rounded-xl bg-card p-3.5 flex flex-col justify-between">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold uppercase text-emerald-600 tracking-wider">Office Sites</span>
-            <div className="p-1.5 rounded bg-emerald-50 text-emerald-600 border border-emerald-200">
-              <Building2 className="w-3.5 h-3.5" />
-            </div>
-          </div>
-          <p className="text-xl font-black text-foreground mt-2">{officeLocationsCount}</p>
-        </Card>
-
-        <Card className="border border-border/80 shadow-2xs rounded-xl bg-card p-3.5 flex flex-col justify-between">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold uppercase text-primary tracking-wider">Avg Radius</span>
-            <div className="p-1.5 rounded bg-primary/10 text-primary">
-              <Radio className="w-3.5 h-3.5" />
-            </div>
-          </div>
-          <p className="text-xl font-black text-foreground mt-2">{avgRadius} <span className="text-xs font-normal text-muted-foreground">m</span></p>
-        </Card>
-
-        <Card className="border border-border/80 shadow-2xs rounded-xl bg-card p-3.5 flex flex-col justify-between">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold uppercase text-amber-600 tracking-wider">WiFi IP Locked</span>
-            <div className="p-1.5 rounded bg-amber-50 text-amber-600 border border-amber-200">
-              <Wifi className="w-3.5 h-3.5" />
-            </div>
-          </div>
-          <p className="text-xl font-black text-foreground mt-2">{ipRestrictedCount}</p>
-        </Card>
-      </div>
 
       {/* Main Table / Location List Card */}
       <Card className="border border-border/80 shadow-2xs rounded-xl bg-card">

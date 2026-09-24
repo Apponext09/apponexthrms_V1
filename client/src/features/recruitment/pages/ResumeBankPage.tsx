@@ -17,25 +17,18 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { AiAnalysisModal } from '../components/AiAnalysisModal';
 import { AiSuggestionsTab } from '../components/AiSuggestionsTab';
-import { ResumeViewerModal } from '../components/ResumeViewerModal';
+import { ResumeViewerModal, resolveResumeUrl } from '../components/ResumeViewerModal';
 
 const INITIAL_FILTERS = {
   trackerId: '',
   search: '',
   source: 'all',
   position: 'all',
-  status: 'all'
+  status: 'Applied'
 };
 
 const getResumeViewUrl = (url: string | null | undefined): string => {
-  if (!url) return '#';
-  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) {
-    return url;
-  }
-  const rawApiUrl = (import.meta as any).env.VITE_API_URL || `http://${window.location.hostname}:5000/api/v1`;
-  const base = rawApiUrl.replace('/api/v1', '');
-  const formattedPath = url.startsWith('/') ? url : `/${url}`;
-  return `${base}${formattedPath}`;
+  return resolveResumeUrl(url);
 };
 
 const getJobTitle = (j: any): string => {
@@ -108,7 +101,7 @@ export const ResumeBankPage: React.FC = () => {
     resumesData.forEach(r => {
       if (r.source && r.source !== '-' && r.source.trim().length > 0) set.add(r.source);
     });
-    ['Referral', 'direct_apply', 'job_board', 'bulk_import', 'Consultant', 'Career Portal', 'Candidate', 'Guest User'].forEach(s => set.add(s));
+    ['Internal Job Posting (IJP)', 'Referral', 'direct_apply', 'job_board', 'bulk_import', 'Consultant', 'Career Portal', 'Candidate', 'Guest User'].forEach(s => set.add(s));
     return Array.from(set);
   }, [resumesData]);
 
@@ -272,6 +265,9 @@ export const ResumeBankPage: React.FC = () => {
             atsScore: item.atsScore ?? item.ats_score ?? null,
             jdMatchScore: item.jdMatchScore ?? item.jd_match_score ?? null,
             status: item.status || '-',
+            skills: item.candidateSkills || item.candidate_skills || item.skills || null,
+            university: item.candidateUniversity || item.candidate_university || item.university || null,
+            resumeText: item.resumeText || item.resume_text || null,
             resumeUrl: item.resumeFileUrl || item.resume_file_url || item.candidateResumeUrl || item.candidate_resume_url || item.resumeUrl || item.resume_url || item.resume || null
           }));
           setResumesData(mapped);
@@ -678,11 +674,11 @@ export const ResumeBankPage: React.FC = () => {
   const paginatedLogs = logsData;
 
   return (
-    <div className="flex-1 space-y-6 max-w-full overflow-hidden p-6 min-h-[calc(100vh-4rem)]">
+    <div className="recruitment-page flex-1 min-w-0 space-y-4">
       {/* ── Top Header Banner ────────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card p-6 rounded-2xl border border-border/80 shadow-2xs relative overflow-hidden">
+      <div className="recruitment-page-header flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card p-6 rounded-2xl border border-border/80 shadow-2xs relative overflow-hidden">
         <div className="flex items-center gap-3.5 relative z-10">
-          <div className="w-11 h-11 rounded-2xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center font-bold shrink-0 border border-purple-500/20 shadow-xs">
+          <div className="w-11 h-11 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold shrink-0 border border-primary/20 shadow-xs">
             <Briefcase className="w-5 h-5" />
           </div>
           <div className="space-y-0.5">
@@ -708,28 +704,28 @@ export const ResumeBankPage: React.FC = () => {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="mb-6 bg-muted/70 p-1.5 rounded-2xl border border-border/80 flex flex-wrap gap-1">
+        <TabsList className="mb-4 flex h-auto max-w-full flex-wrap gap-1 rounded-xl border border-border bg-muted/60 p-1">
           <TabsTrigger value="source" className="rounded-xl text-xs font-bold px-4 py-2 transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs">
-            <FileText className="w-3.5 h-3.5 mr-1.5 text-primary" />
+            <FileText className="w-3.5 h-3.5 mr-1.5" />
             Resume Source Screen
           </TabsTrigger>
-          <TabsTrigger value="ats" className="rounded-xl text-xs font-bold px-4 py-2 transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs text-amber-600 dark:text-amber-400">
-            <Sparkles className="w-3.5 h-3.5 mr-1.5 text-amber-500 fill-amber-500 animate-pulse" />
+          <TabsTrigger value="ats" className="rounded-xl text-xs font-bold px-4 py-2 transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs">
+            <Sparkles className="w-3.5 h-3.5 mr-1.5" />
             AI ATS Screening & Top-N Rank
           </TabsTrigger>
           <TabsTrigger value="upload" className="rounded-xl text-xs font-bold px-4 py-2 transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs">
-            <FileUp className="w-3.5 h-3.5 mr-1.5 text-purple-500" />
+            <FileUp className="w-3.5 h-3.5 mr-1.5" />
             Bulk Upload (PDF / ZIP / Word)
           </TabsTrigger>
           <TabsTrigger value="logs" className="rounded-xl text-xs font-bold px-4 py-2 transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs">
-            <History className="w-3.5 h-3.5 mr-1.5 text-emerald-500" />
+            <History className="w-3.5 h-3.5 mr-1.5" />
             Bulk Upload Logs
           </TabsTrigger>
         </TabsList>
 
         {/* TAB 1: RESUME SOURCE SCREEN */}
         <TabsContent value="source" className="space-y-6">
-          <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-visible relative z-30">
+          <Card className="bg-card border-border shadow-sm rounded-xl overflow-visible relative z-30">
             <CardHeader className="py-4 px-6 border-b border-border/60 bg-muted/30 rounded-t-2xl">
               <CardTitle className="text-sm font-extrabold text-foreground">Resume Bank Search & Filters</CardTitle>
             </CardHeader>
@@ -827,7 +823,7 @@ export const ResumeBankPage: React.FC = () => {
           </Card>
 
           {/* TABLE CONTAINER */}
-          <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+          <Card className="bg-card border-border shadow-sm rounded-xl overflow-hidden">
             <CardHeader className="flex flex-row items-center justify-between py-4 px-6 border-b border-border/60">
               <CardTitle className="text-sm font-extrabold text-foreground">Candidates Database ({totalEntries})</CardTitle>
             </CardHeader>
@@ -898,8 +894,21 @@ export const ResumeBankPage: React.FC = () => {
                               </div>
                             </TableCell>
                             <TableCell className="text-xs py-3 px-4 whitespace-nowrap">
-                              <Badge variant="outline" className="text-[10px] bg-muted text-muted-foreground border-border rounded-lg capitalize px-2 py-0.5 font-bold">
-                                {item.source === 'bulk_import' ? 'Bulk Import' : item.source}
+                              <Badge 
+                                variant="outline" 
+                                className={`text-[10px] rounded-lg capitalize px-2.5 py-0.5 font-bold border ${
+                                  (item.source || '').toLowerCase().includes('internal') || (item.source || '').toLowerCase().includes('ijp')
+                                    ? 'bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/30'
+                                    : (item.source || '').toLowerCase().includes('referral')
+                                    ? 'bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/30'
+                                    : (item.source || '').toLowerCase().includes('bulk')
+                                    ? 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border-indigo-500/30'
+                                    : (item.source || '').toLowerCase().includes('career')
+                                    ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30'
+                                    : 'bg-muted text-muted-foreground border-border'
+                                }`}
+                              >
+                                {item.source === 'bulk_import' ? 'Bulk Import' : (item.source === 'internal_opening' ? 'Internal Job Posting (IJP)' : (item.source || '-'))}
                               </Badge>
                             </TableCell>
                             <TableCell className="text-xs py-3 px-4 font-semibold text-foreground whitespace-nowrap">{item.position}</TableCell>
@@ -913,21 +922,17 @@ export const ResumeBankPage: React.FC = () => {
                               </span>
                             </TableCell>
                             <TableCell className="text-xs py-3 px-4 whitespace-nowrap text-center">
-                              {item.resumeUrl ? (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => {
-                                    setSelectedResumeForModal(item);
-                                    setIsResumeModalOpen(true);
-                                  }}
-                                  className="h-7 px-2.5 text-[11px] font-bold text-primary border-primary/30 hover:bg-primary/10 rounded-lg cursor-pointer"
-                                >
-                                  <FileText className="w-3.5 h-3.5 mr-1" /> View CV
-                                </Button>
-                              ) : (
-                                <span className="text-[11px] text-muted-foreground italic">No file</span>
-                              )}
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  setSelectedResumeForModal(item);
+                                  setIsResumeModalOpen(true);
+                                }}
+                                className="h-7 px-2.5 text-[11px] font-bold text-primary border-primary/30 hover:bg-primary/10 rounded-lg cursor-pointer transition-all"
+                              >
+                                <FileText className="w-3.5 h-3.5 mr-1 text-purple-600 dark:text-purple-400" /> View CV
+                              </Button>
                             </TableCell>
                             <TableCell className="text-xs py-3 px-5 whitespace-nowrap text-right">
                               <Button 
@@ -2020,10 +2025,7 @@ export const ResumeBankPage: React.FC = () => {
       <ResumeViewerModal
         open={isResumeModalOpen}
         onOpenChange={setIsResumeModalOpen}
-        resumeUrl={selectedResumeForModal?.resumeUrl}
-        candidateName={selectedResumeForModal?.name}
-        candidateEmail={selectedResumeForModal?.email}
-        qualification={selectedResumeForModal?.qualification}
+        candidate={selectedResumeForModal}
       />
     </div>
   );

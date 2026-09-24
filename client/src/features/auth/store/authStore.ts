@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { apiClient } from '@/config/api';
+import { policiesApi } from '@/features/policies/api/policiesApi';
+import { useSubscriptionStore } from '@/features/subscriptions/store/subscriptionStore';
 
 export interface User {
   id: number;
@@ -34,10 +36,13 @@ export interface User {
 interface AuthState {
   user: User | null;
   isAuthenticated: boolean;
+  pendingPolicies: any[];
   setUser: (user: User | null) => void;
   updateUser: (partialUser: Partial<User>) => void;
   login: (email: string, password: string) => Promise<void>;
   fetchCurrentUser: () => Promise<void>;
+  fetchPendingPolicies: () => Promise<any[]>;
+  acceptPendingPolicy: (policyId: number) => Promise<void>;
   acceptPolicy: () => Promise<void>;
   logout: () => void;
 }
@@ -49,9 +54,10 @@ export function hasStoredAccessToken(): boolean {
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       user: null,
       isAuthenticated: false,
+      pendingPolicies: [],
 
       setUser: (user) => set({ user, isAuthenticated: !!user }),
 
@@ -60,6 +66,18 @@ export const useAuthStore = create<AuthState>()(
           if (!state.user) return state;
           return { user: { ...state.user, ...partialUser } };
         }),
+
+      fetchPendingPolicies: async () => {
+        try {
+          const pending = await policiesApi.getPendingPolicies();
+          set({ pendingPolicies: pending });
+          return pending;
+        } catch (error) {
+          console.warn('Failed to fetch pending policies:', error);
+          set({ pendingPolicies: [] });
+          return [];
+        }
+      },
 
       login: async (email: string, password: string) => {
         try {
@@ -91,7 +109,8 @@ export const useAuthStore = create<AuthState>()(
             organizationLocation: orgObj.location || userObj.organizationLocation || '',
             // Deny by default: an empty/missing roles or permissions list from
             // the server must never be masked by an admin-level fallback here.
-            roles: loginData.roles || userObj.roles || [],
+            roles: userObj.roles || loginData.roles || [],
+            accessRole: userObj.accessRole || userObj.access_role || (userObj.roles?.includes('finance') || loginData.roles?.includes('finance') ? 'finance' : undefined),
             permissions: loginData.permissions || userObj.permissions || [],
             employeeId: userObj.employeeId || userObj.employee_id || null,
             avatarUrl: userObj.avatarUrl || userObj.avatar_url || undefined,
@@ -112,7 +131,6 @@ export const useAuthStore = create<AuthState>()(
           }
           localStorage.removeItem('last-logout-time');
 
-          // If logging in as a company/branch admin, set the companyStore active company context automatically
           if (compId) {
             try {
               const { useCompanyStore } = await import('@/features/settings/store/companyStore');
@@ -123,6 +141,22 @@ export const useAuthStore = create<AuthState>()(
           }
 
           set({ user, isAuthenticated: true });
+
+          // Sync subscription module gating
+          try {
+            const enabledModules = loginData.enabledModules ?? loginData.user?.enabledModules ?? null;
+            useSubscriptionStore.getState().setEnabledModules(enabledModules);
+          } catch (e) {
+            console.warn('Unable to sync subscription modules on login:', e);
+          }
+
+          // Fetch pending mandatory policies immediately after login
+          try {
+            const pending = await policiesApi.getPendingPolicies();
+            set({ pendingPolicies: pending });
+          } catch (e) {
+            console.warn('Unable to fetch pending policies on login:', e);
+          }
         } catch (error) {
           console.error('Login error:', error);
           throw error;
@@ -146,17 +180,56 @@ export const useAuthStore = create<AuthState>()(
                   firstName: data.user.firstName || data.user.first_name || previous?.firstName || '',
                   lastName: data.user.lastName || data.user.last_name || previous?.lastName || '',
                   organizationId: data.user.organizationId || data.user.organization_id || previous?.organizationId,
-                  roles: data.roles || data.user.roles || previous?.roles || [],
-                  permissions: data.permissions || data.user.permissions || previous?.permissions || [],
+                  roles: data.user?.roles || data.roles || previous?.roles || [],
+                  accessRole: data.user?.accessRole || data.user?.access_role || previous?.accessRole,
+                  permissions: data.permissions || data.user?.permissions || previous?.permissions || [],
                   departmentName: data.user.departmentName || previous?.departmentName || '',
                   policyAccepted: Boolean(data.user.policyAccepted ?? data.user.policy_accepted ?? previous?.policyAccepted ?? false),
                   policyAcceptedAt: data.user.policyAcceptedAt || data.user.policy_accepted_at || previous?.policyAcceptedAt || null,
                 } as User,
               };
             });
+
+            // Sync subscription module gating
+            try {
+              const enabledModules = data.enabledModules ?? data.user?.enabledModules ?? null;
+              useSubscriptionStore.getState().setEnabledModules(enabledModules);
+            } catch (e) {
+              console.warn('Unable to sync subscription modules on fetchCurrentUser:', e);
+            }
+
+            // Re-fetch pending policies upon fetching current user
+            try {
+              const pending = await policiesApi.getPendingPolicies();
+              set({ pendingPolicies: pending });
+            } catch (e) {
+              console.warn('Unable to fetch pending policies on fetchCurrentUser:', e);
+            }
           }
         } catch (error) {
           console.warn('fetchCurrentUser skipped:', error);
+        }
+      },
+
+      acceptPendingPolicy: async (policyId: number) => {
+        try {
+          await policiesApi.acknowledgePolicy(policyId);
+          set((state) => {
+            const remaining = state.pendingPolicies.filter((p) => p.id !== policyId);
+            return {
+              pendingPolicies: remaining,
+              user: state.user
+                ? {
+                    ...state.user,
+                    policyAccepted: remaining.length === 0,
+                    policyAcceptedAt: remaining.length === 0 ? new Date().toISOString() : state.user.policyAcceptedAt,
+                  }
+                : null,
+            };
+          });
+        } catch (error) {
+          console.error('acceptPendingPolicy failed:', error);
+          throw error;
         }
       },
 
@@ -172,6 +245,7 @@ export const useAuthStore = create<AuthState>()(
                   policyAccepted: true,
                   policyAcceptedAt: new Date().toISOString(),
                 },
+                pendingPolicies: [],
               };
             });
           }
@@ -215,6 +289,11 @@ export const useAuthStore = create<AuthState>()(
         window.addEventListener('popstate', preventBack);
 
         set({ user: null, isAuthenticated: false });
+
+        // Reset subscription module gating
+        try {
+          useSubscriptionStore.getState().reset();
+        } catch (e) { /* ignore */ }
 
         // Force hard redirect with cache busting
         const timestamp = new Date().getTime();

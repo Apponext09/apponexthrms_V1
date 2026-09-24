@@ -99,7 +99,7 @@ export class LeaveApplicationRepository extends BaseRepository<LeaveApplication>
       .select('roles.code');
       
     const roles = userRoles.map((r: any) => r.code);
-    const isHrOrAdmin = roles.includes('hr_manager') || roles.includes('tenant_admin') || roles.includes('system_admin') || roles.includes('organization_admin');
+    const isHrOrAdmin = roles.includes('hr') || roles.includes('hr_manager') || roles.includes('hr_admin') || roles.includes('tenant_admin') || roles.includes('system_admin') || roles.includes('organization_admin');
     const isDeptHead = roles.some((r: any) => ['department_head', 'cto', 'cfo', 'coo', 'cxo'].includes(r));
 
     // 2b. Department employees for department_head role users
@@ -341,7 +341,7 @@ export class LeaveApplicationRepository extends BaseRepository<LeaveApplication>
       .select('roles.code');
       
     const roles = userRoles.map((r: any) => r.code);
-    const isHrOrAdmin = roles.includes('hr_manager') || roles.includes('tenant_admin') || roles.includes('system_admin') || roles.includes('organization_admin');
+    const isHrOrAdmin = roles.includes('hr') || roles.includes('hr_manager') || roles.includes('hr_admin') || roles.includes('tenant_admin') || roles.includes('system_admin') || roles.includes('organization_admin');
     const isDeptHead = roles.some((r: any) => ['department_head', 'cto', 'cfo', 'coo', 'cxo'].includes(r));
 
     // 2b. Department employees for department_head

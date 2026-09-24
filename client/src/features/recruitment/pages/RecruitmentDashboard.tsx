@@ -173,18 +173,21 @@ export const RecruitmentDashboard: React.FC = () => {
   const sourcingPieData = useMemo(() => {
     const rawSources = dashboard?.sourceMetrics;
     if (Array.isArray(rawSources) && rawSources.length > 0) {
-      return rawSources;
+      return rawSources.filter((item: any) => Number(item?.value || item?.count || 0) > 0);
     }
     if (rawSources && typeof rawSources === 'object') {
       const entries = Object.entries(rawSources);
       if (entries.length > 0) {
         return entries.map(([key, val]: [string, any]) => ({
           name: !key || key === 'null' || key === 'undefined' ? 'Direct Apply' : key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
-          value: Number(val.totalCandidates || val.appliedCount || val.value || val || 0),
+          value: Number(val?.totalCandidates || val?.appliedCount || val?.value || val || 0),
         })).filter(item => item.value > 0);
       }
     }
-    return [{ name: 'Direct Sourcing', value: stats.totalApplications > 0 ? stats.totalApplications : 1 }];
+    if (stats.totalApplications > 0) {
+      return [{ name: 'Direct Sourcing', value: stats.totalApplications }];
+    }
+    return [];
   }, [dashboard, stats.totalApplications]);
 
   // Monthly Trend Data
@@ -208,9 +211,9 @@ export const RecruitmentDashboard: React.FC = () => {
   }, [dashboard]);
 
   return (
-    <div className="p-6 space-y-6 max-w-full min-h-screen">
+    <div className="recruitment-page min-w-0 space-y-4">
       {/* ── Top Header Banner ────────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card p-6 rounded-2xl border border-border/80 shadow-2xs relative overflow-hidden">
+      <div className="recruitment-page-header flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card p-6 rounded-2xl border border-border/80 shadow-2xs relative overflow-hidden">
         <div className="flex items-center gap-3.5 relative z-10">
           <div className="w-11 h-11 rounded-2xl bg-primary/10 text-primary flex items-center justify-center font-bold shrink-0 border border-primary/20 shadow-xs">
             <Sparkles className="w-5 h-5" />
@@ -251,7 +254,7 @@ export const RecruitmentDashboard: React.FC = () => {
       </div>
 
       {/* ── Interactive Multi-Criteria Filter Bar ──────────────────────────── */}
-      <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+      <Card className="bg-card border-border shadow-sm rounded-xl overflow-hidden">
         <CardContent className="p-5 space-y-3.5">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 pb-3">
             <div className="flex items-center gap-2">
@@ -427,7 +430,7 @@ export const RecruitmentDashboard: React.FC = () => {
       {/* ── KPI Stats Grid ──────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         {/* Open Positions */}
-        <Card className="bg-card border-border/80 shadow-2xs rounded-2xl hover:shadow-md transition-all group overflow-hidden relative">
+        <Card className="bg-card border-border shadow-sm rounded-xl hover:shadow-md transition-all group overflow-hidden relative">
           <div className="absolute top-0 left-0 right-0 h-1 bg-blue-500" />
           <CardContent className="p-5 flex items-center justify-between">
             <div className="space-y-1">
@@ -444,7 +447,7 @@ export const RecruitmentDashboard: React.FC = () => {
         </Card>
 
         {/* Total Applications */}
-        <Card className="bg-card border-border/80 shadow-2xs rounded-2xl hover:shadow-md transition-all group overflow-hidden relative">
+        <Card className="bg-card border-border shadow-sm rounded-xl hover:shadow-md transition-all group overflow-hidden relative">
           <div className="absolute top-0 left-0 right-0 h-1 bg-purple-500" />
           <CardContent className="p-5 flex items-center justify-between">
             <div className="space-y-1">
@@ -461,7 +464,7 @@ export const RecruitmentDashboard: React.FC = () => {
         </Card>
 
         {/* In Interview */}
-        <Card className="bg-card border-border/80 shadow-2xs rounded-2xl hover:shadow-md transition-all group overflow-hidden relative">
+        <Card className="bg-card border-border shadow-sm rounded-xl hover:shadow-md transition-all group overflow-hidden relative">
           <div className="absolute top-0 left-0 right-0 h-1 bg-amber-500" />
           <CardContent className="p-5 flex items-center justify-between">
             <div className="space-y-1">
@@ -478,7 +481,7 @@ export const RecruitmentDashboard: React.FC = () => {
         </Card>
 
         {/* Offers Released */}
-        <Card className="bg-card border-border/80 shadow-2xs rounded-2xl hover:shadow-md transition-all group overflow-hidden relative">
+        <Card className="bg-card border-border shadow-sm rounded-xl hover:shadow-md transition-all group overflow-hidden relative">
           <div className="absolute top-0 left-0 right-0 h-1 bg-indigo-500" />
           <CardContent className="p-5 flex items-center justify-between">
             <div className="space-y-1">
@@ -495,7 +498,7 @@ export const RecruitmentDashboard: React.FC = () => {
         </Card>
 
         {/* Hired / Joined */}
-        <Card className="bg-card border-border/80 shadow-2xs rounded-2xl hover:shadow-md transition-all group overflow-hidden relative sm:col-span-2 lg:col-span-1">
+        <Card className="bg-card border-border shadow-sm rounded-xl hover:shadow-md transition-all group overflow-hidden relative sm:col-span-2 lg:col-span-1">
           <div className="absolute top-0 left-0 right-0 h-1 bg-emerald-500" />
           <CardContent className="p-5 flex items-center justify-between">
             <div className="space-y-1">
@@ -515,7 +518,7 @@ export const RecruitmentDashboard: React.FC = () => {
       {/* ── Row 1: Pipeline Stage Distribution (Bar) & Sourcing Channels (Pie) ── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Pipeline Bar Chart */}
-        <Card className="bg-card border-border/80 shadow-2xs rounded-2xl lg:col-span-2 overflow-hidden">
+        <Card className="bg-card border-border shadow-sm rounded-xl lg:col-span-2 overflow-hidden">
           <CardHeader className="py-4 px-6 border-b border-border/60 flex flex-row items-center justify-between">
             <CardTitle className="text-sm font-extrabold text-foreground flex items-center gap-2">
               <BarChart2 className="w-4 h-4 text-primary" />
@@ -543,7 +546,7 @@ export const RecruitmentDashboard: React.FC = () => {
         </Card>
 
         {/* Sourcing Channel Pie Chart */}
-        <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+        <Card className="bg-card border-border shadow-sm rounded-xl overflow-hidden">
           <CardHeader className="py-4 px-6 border-b border-border/60 flex flex-row items-center justify-between">
             <CardTitle className="text-sm font-extrabold text-foreground flex items-center gap-2">
               <PieIcon className="w-4 h-4 text-purple-600 dark:text-purple-400" />
@@ -552,35 +555,49 @@ export const RecruitmentDashboard: React.FC = () => {
             <span className="text-xs text-muted-foreground font-medium">Share Breakdown</span>
           </CardHeader>
           <CardContent className="p-6">
-            <div className="h-52 w-full relative">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={sourcingPieData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={55}
-                    outerRadius={82}
-                    paddingAngle={4}
-                    dataKey="value"
-                  >
-                    {sourcingPieData.map((entry: any, index: number) => (
-                      <Cell key={`cell-${index}`} fill={SOURCE_COLORS[index % SOURCE_COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip content={<ChartTooltip />} />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="grid grid-cols-2 gap-2 mt-2 pt-3 border-t border-border/60 text-xs">
-              {sourcingPieData.slice(0, 6).map((src: any, i: number) => (
-                <div key={src.name || i} className="flex items-center gap-2 p-1.5 rounded-lg bg-muted/40 border border-border/50">
-                  <span className="w-2.5 h-2.5 rounded-full shrink-0 shadow-xs" style={{ backgroundColor: SOURCE_COLORS[i % SOURCE_COLORS.length] }} />
-                  <span className="text-muted-foreground font-medium truncate text-[11px]">{src.name}</span>
-                  <span className="text-foreground font-bold ml-auto text-xs">{src.value}</span>
+            {sourcingPieData.length > 0 ? (
+              <>
+                <div className="h-52 w-full relative">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={sourcingPieData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={55}
+                        outerRadius={82}
+                        paddingAngle={4}
+                        dataKey="value"
+                      >
+                        {sourcingPieData.map((entry: any, index: number) => (
+                          <Cell key={`cell-${index}`} fill={SOURCE_COLORS[index % SOURCE_COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip content={<ChartTooltip />} />
+                    </PieChart>
+                  </ResponsiveContainer>
                 </div>
-              ))}
-            </div>
+                <div className="grid grid-cols-2 gap-2 mt-2 pt-3 border-t border-border/60 text-xs">
+                  {sourcingPieData.slice(0, 6).map((src: any, i: number) => (
+                    <div key={src.name || i} className="flex items-center gap-2 p-1.5 rounded-lg bg-muted/40 border border-border/50">
+                      <span className="w-2.5 h-2.5 rounded-full shrink-0 shadow-xs" style={{ backgroundColor: SOURCE_COLORS[i % SOURCE_COLORS.length] }} />
+                      <span className="text-muted-foreground font-medium truncate text-[11px]">{src.name}</span>
+                      <span className="text-foreground font-bold ml-auto text-xs">{src.value}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="h-52 flex flex-col items-center justify-center text-center p-4">
+                <div className="w-12 h-12 rounded-2xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center mb-3">
+                  <PieIcon className="w-6 h-6" />
+                </div>
+                <p className="text-xs font-bold text-foreground">No Sourcing Data</p>
+                <p className="text-[11px] text-muted-foreground mt-1 max-w-[200px]">
+                  Candidate sourcing channels will appear once applications are received.
+                </p>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -588,7 +605,7 @@ export const RecruitmentDashboard: React.FC = () => {
       {/* ── Row 2: Applications & Hires Growth Trend + Stage Conversions ─────── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Application Inflow Area Chart */}
-        <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+        <Card className="bg-card border-border shadow-sm rounded-xl overflow-hidden">
           <CardHeader className="py-4 px-6 border-b border-border/60 flex flex-row items-center justify-between">
             <CardTitle className="text-sm font-extrabold text-foreground flex items-center gap-2">
               <TrendingUp className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
@@ -624,7 +641,7 @@ export const RecruitmentDashboard: React.FC = () => {
         </Card>
 
         {/* Conversion Rate Funnel Metrics */}
-        <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+        <Card className="bg-card border-border shadow-sm rounded-xl overflow-hidden">
           <CardHeader className="py-4 px-6 border-b border-border/60 flex flex-row items-center justify-between">
             <CardTitle className="text-sm font-extrabold text-foreground flex items-center gap-2">
               <Layers className="w-4 h-4 text-primary" />
@@ -638,7 +655,7 @@ export const RecruitmentDashboard: React.FC = () => {
               <FunnelStep label="Screening to Interview" rate={conversions.screeningToInterview || 0} count={`${funnel.interview}/${funnel.screening}`} color="bg-purple-500" />
               <FunnelStep label="Interview to Offer" rate={conversions.interviewToOffer || 0} count={`${funnel.offer}/${funnel.interview}`} color="bg-amber-500" />
               <FunnelStep label="Offer to Hired" rate={conversions.offerToHired || 0} count={`${funnel.hired}/${funnel.offer}`} color="bg-emerald-500" />
-              <FunnelStep label="Overall Funnel Conversion (Applied → Hired)" rate={conversions.appliedToHired || 0} count={`${funnel.hired}/${stats.totalApplications || funnel.applied || 1}`} color="bg-primary" isHighlight />
+              <FunnelStep label="Overall Funnel Conversion (Applied → Hired)" rate={conversions.appliedToHired || 0} count={`${funnel.hired}/${stats.totalApplications || funnel.applied || 0}`} color="bg-primary" isHighlight />
             </div>
           </CardContent>
         </Card>
@@ -647,7 +664,7 @@ export const RecruitmentDashboard: React.FC = () => {
 
 
       {/* ── Recent Applications Table ────────────────────────────────────────── */}
-      <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+      <Card className="bg-card border-border shadow-sm rounded-xl overflow-hidden">
         <CardHeader className="py-4 px-6 border-b border-border/60 flex flex-row items-center justify-between">
           <div>
             <CardTitle className="text-sm font-extrabold text-foreground flex items-center gap-2">

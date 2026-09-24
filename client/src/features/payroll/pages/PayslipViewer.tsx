@@ -558,7 +558,7 @@ export const PayslipViewer: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const isAdmin = user?.roles?.some((r: string) =>
-    ['super_admin', 'organization_admin', 'admin'].includes(r.toLowerCase())
+    ['super_admin', 'organization_admin', 'admin', 'hr', 'hr_admin', 'hr_manager', 'ceo'].includes(r.toLowerCase())
   ) ?? false;
 
   const { selectedCompanyName, selectedCompanyId } = useCompanyStore();

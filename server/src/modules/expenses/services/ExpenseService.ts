@@ -2,6 +2,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { getKnex } from '../../../db/knex';
 import type { TenantContext } from '../../../db/types';
 import { ExpenseDbService } from './ExpenseDbService';
+import { ExpenseConfigService, type ExpenseConfig } from './ExpenseConfigService';
 
 export interface ExpenseItemInput {
   categoryId?: number;
@@ -33,8 +34,13 @@ export interface ClaimInput {
 }
 
 export class ExpenseService {
-  private async ensureInitialized(orgId: number) {
-    await ExpenseDbService.ensureTablesAndSeed(orgId);
+  private async ensureInitialized(_orgId: number) {
+    // Schema changes belong to migrations; reads must never reroute requests.
+  }
+
+  // Single source of truth for module config (currency, prefixes, labels, defaults).
+  private async getConfig(ctx: TenantContext, db?: any): Promise<ExpenseConfig> {
+    return ExpenseConfigService.load(ctx.organizationId, db || getKnex());
   }
 
   // Helper to get active employee record for current user context
@@ -60,9 +66,12 @@ export class ExpenseService {
   }
 
   private async getPeopleVisibility(ctx: TenantContext, employeeIdColumn: string, employeeId?: number): Promise<{
-    type: 'all' | 'eq' | 'none' | 'dept' | 'reportees' | 'submitter';
+    type: 'all' | 'eq' | 'none' | 'dept' | 'reportees' | 'team_lead' | 'submitter';
     column?: string;
     value?: number;
+    departmentId?: number;
+    organizationId?: number;
+    configuredLevel?: number;  // which workflow level this role is configured at
   }> {
     if (employeeId) {
       return { type: 'eq', column: employeeIdColumn, value: employeeId };
@@ -90,7 +99,45 @@ export class ExpenseService {
     if (isHrOrAdmin) return { type: 'all' };
 
     const emp = await this.getEmployeeForCtx(ctx);
+    if (emp?.current_department_id) {
+      const dept = await db('departments').where('id', emp.current_department_id).first().catch(() => null);
+      if (dept && String(dept.name || '').toLowerCase().includes('finance')) {
+        return { type: 'all' };
+      }
+    }
+
+    const isTeamLeadRole = allRoles.some((c: string) => ['team_lead'].includes(c) || c.includes('team_lead'));
+
+    // Helper: get the configured workflow level number for a given approver_type pattern
+    const getConfiguredLevel = async (approverTypePattern: RegExp, defaultLevel: number): Promise<number> => {
+      try {
+        const wfLevels = await db('expense_workflow_levels as ewl')
+          .join('expense_workflows as ew', 'ewl.workflow_id', 'ew.id')
+          .where('ew.organization_id', ctx.organizationId)
+          .where('ew.is_active', true)
+          .select('ewl.level_order', 'ewl.approver_type')
+          .orderBy('ewl.level_order', 'asc')
+          .catch(() => []);
+        const match = (wfLevels || []).find((l: any) =>
+          approverTypePattern.test(String(l.approver_type || l.approverType || '').toLowerCase())
+        );
+        return match ? Number(match.level_order || match.levelOrder || defaultLevel) : defaultLevel;
+      } catch {
+        return defaultLevel;
+      }
+    };
+
     if (!emp) {
+      if (isTeamLeadRole) {
+        const configuredLevel = await getConfiguredLevel(/team.?lead/, 1);
+        return { type: 'team_lead', column: employeeIdColumn, value: 0, departmentId: undefined, organizationId: ctx.organizationId, configuredLevel };
+      }
+      const isManagementRole = allRoles.some((c: string) =>
+        ['manager', 'department_head', 'dept_head'].includes(c) || c.includes('manager')
+      );
+      if (isManagementRole) {
+        return { type: 'all' };
+      }
       return {
         type: 'submitter',
         column: employeeIdColumn.replace('employee_id', 'submitted_by_user_id'),
@@ -99,70 +146,350 @@ export class ExpenseService {
     }
 
     const deptId = emp.current_department_id ?? emp.currentDepartmentId;
+    if (isTeamLeadRole) {
+      const configuredLevel = await getConfiguredLevel(/team.?lead/, 1);
+      return { type: 'team_lead', column: employeeIdColumn, value: Number(emp.id), departmentId: deptId ? Number(deptId) : undefined, organizationId: ctx.organizationId, configuredLevel };
+    }
+
     const isDeptHead = allRoles.some((c: string) => ['department_head', 'dept_head'].includes(c) || c.includes('department_head'));
     if (isDeptHead && deptId) {
       return { type: 'dept', value: Number(deptId) };
     }
-    const isManagerLike = allRoles.some((c: string) => ['manager', 'team_lead'].includes(c) || c.includes('team_lead') || c.includes('manager'));
+
+    const isManagerLike = allRoles.some((c: string) => ['manager'].includes(c) || c.includes('manager'));
     if (isManagerLike) {
-      return { type: 'reportees', value: Number(emp.id) };
+      const configuredLevel = await getConfiguredLevel(/manager|reporting.?manager|department.?head/, 2);
+      return { type: 'reportees', column: employeeIdColumn, value: Number(emp.id), departmentId: deptId ? Number(deptId) : undefined, organizationId: ctx.organizationId, configuredLevel };
     }
     return { type: 'eq', column: employeeIdColumn, value: Number(emp.id) };
   }
 
   private applyVisibilityToQuery(query: any, vis: {
-    type: 'all' | 'eq' | 'none' | 'dept' | 'reportees' | 'submitter';
+    type: 'all' | 'eq' | 'none' | 'dept' | 'reportees' | 'team_lead' | 'submitter';
     column?: string;
     value?: number;
+    departmentId?: number;
+    organizationId?: number;
+    configuredLevel?: number;
   }) {
     if (vis.type === 'all') return query;
     if (vis.type === 'none') return query.whereRaw('1 = 0');
     if (vis.type === 'dept') return query.where('e.current_department_id', vis.value);
-    if (vis.type === 'reportees') return query.where('e.reporting_manager_id', vis.value);
+
+    if (vis.type === 'team_lead') {
+      const db = getKnex();
+      const empId = vis.value || 0;
+      const deptId = vis.departmentId;
+      const tablePrefix = vis.column && vis.column.includes('.') ? vis.column.split('.')[0] + '.' : 'ec.';
+      const roleCol = `${tablePrefix}submitted_by_role`;
+      const empCol = `${tablePrefix}employee_id`;
+      const statusCol = `${tablePrefix}status`;
+      const levelCol = `${tablePrefix}current_level`;
+      // Use the pre-resolved configured level (fetched async in getPeopleVisibility)
+      const tlLevel = vis.configuredLevel ?? 1;
+
+      return query.where(function (this: any) {
+        // 1. Team Lead never sees their own submitted claims
+        if (empId > 0) {
+          this.whereRaw(`COALESCE(${empCol}, 0) != ?`, [empId]);
+        }
+
+        // 2. Team Lead only sees requests submitted by regular employees
+        this.whereRaw(`LOWER(COALESCE(${roleCol}, 'employee')) NOT IN ('ceo', 'organization_admin', 'super_admin', 'admin', 'hr', 'hr_admin', 'hr_manager', 'manager', 'department_head', 'dept_head', 'team_lead')`);
+
+        // 3. Team Lead sees requests at their configured workflow level
+        this.where(function (this: any) {
+          this.where(db.raw(`COALESCE(${levelCol}, 1)`), tlLevel)
+            .orWhereIn(statusCol, ['pending', 'submitted', 'pending_manager', `pending_level_${tlLevel}`]);
+        });
+
+        // 4. Scope to direct reportees OR same department
+        if (empId > 0 || deptId) {
+          this.where(function (this: any) {
+            if (empId > 0) {
+              this.where('e.reporting_manager_id', empId)
+                .orWhereIn('e.reporting_manager_id', db('employees').select('id').where('reporting_manager_id', empId));
+            }
+            if (deptId) {
+              this.orWhere('e.current_department_id', deptId);
+            }
+            // Fallback: employees with no manager/dept assigned
+            this.orWhere(function (this: any) {
+              this.whereNull('e.reporting_manager_id').whereNull('e.current_department_id');
+            });
+          });
+        }
+      });
+    }
+
+    if (vis.type === 'reportees') {
+      const db = getKnex();
+      const empId = vis.value || 0;
+      const deptId = vis.departmentId;
+      const tablePrefix = vis.column && vis.column.includes('.') ? vis.column.split('.')[0] + '.' : 'ec.';
+      const roleCol = `${tablePrefix}submitted_by_role`;
+      const empCol = `${tablePrefix}employee_id`;
+      const statusCol = `${tablePrefix}status`;
+      const levelCol = `${tablePrefix}current_level`;
+      // Use the pre-resolved configured level (fetched async in getPeopleVisibility)
+      const mgLevel = vis.configuredLevel ?? 2;
+
+      return query.where(function (this: any) {
+        // 1. Manager never sees own submitted claims
+        if (empId > 0) {
+          this.whereRaw(`COALESCE(${empCol}, 0) != ?`, [empId]);
+        }
+
+        // 2. Manager never sees requests submitted by CEO / Super Admin / Admin
+        this.whereRaw(`LOWER(COALESCE(${roleCol}, 'employee')) NOT IN ('ceo', 'organization_admin', 'super_admin', 'admin')`);
+
+        // 3. Manager sees requests at their configured level
+        this.where(function (this: any) {
+          this.where(db.raw(`COALESCE(${levelCol}, 1)`), mgLevel)
+            .orWhere(statusCol, `pending_level_${mgLevel}`);
+          // If Manager is also a direct reporting manager for some employees at Level 1
+          if (empId > 0) {
+            this.orWhere(function (this: any) {
+              this.whereIn(statusCol, ['pending', 'submitted', 'pending_manager', 'pending_level_1'])
+                .where('e.reporting_manager_id', empId);
+            });
+          }
+        });
+
+        // 4. Hierarchy / Department scope
+        if (empId > 0 || deptId) {
+          this.where(function (this: any) {
+            if (empId > 0) {
+              this.where('e.reporting_manager_id', empId)
+                .orWhereIn('e.reporting_manager_id', db('employees').select('id').where('reporting_manager_id', empId));
+            }
+            if (deptId) {
+              this.orWhere('e.current_department_id', deptId);
+            }
+          });
+        }
+      });
+    }
+
     if (vis.type === 'submitter' && vis.column) return query.where(vis.column, vis.value);
     if (vis.type === 'eq' && vis.column) return query.where(vis.column, vis.value);
     return query;
   }
 
-  private async assertCanManageEmployeeClaim(ctx: TenantContext, claim: any) {
+  private async assertCanManageEmployeeClaim(ctx: TenantContext, claim: any, actionType?: 'manager' | 'finance' | 'payout') {
     if (!claim) throw new Error('Claim not found');
     if (Number(claim.organization_id ?? claim.organizationId) !== Number(ctx.organizationId)) {
       throw new Error('Claim not found');
     }
     const vis = await this.getPeopleVisibility(ctx, 'ec.employee_id');
     if (vis.type === 'all') return;
+
     const db = getKnex();
+    // For finance verification and payout, users in Finance department or with finance permissions can act org-wide
+    if (actionType === 'finance' || actionType === 'payout') {
+      const emp = await this.getEmployeeForCtx(ctx);
+      if (emp?.current_department_id) {
+        const dept = await db('departments').where('id', emp.current_department_id).first().catch(() => null);
+        if (dept && String(dept.name || '').toLowerCase().includes('finance')) {
+          return;
+        }
+      }
+    }
+
     const claimEmpId = Number(claim.employee_id ?? claim.employeeId);
-    const emp = await db('employees').where('id', claimEmpId).where('organization_id', ctx.organizationId).first();
-    if (!emp) throw new Error('You can only act on claims for your team.');
-    const deptId = emp.current_department_id ?? emp.currentDepartmentId;
-    const managerId = emp.reporting_manager_id ?? emp.reportingManagerId;
+    const emp = await db('employees').where('id', claimEmpId).where('organization_id', ctx.organizationId).first().catch(() => null);
+    const deptId = emp ? (emp.current_department_id ?? emp.currentDepartmentId) : null;
+    const managerId = emp ? (emp.reporting_manager_id ?? emp.reportingManagerId) : null;
     if (vis.type === 'dept' && Number(deptId) === vis.value) return;
-    if (vis.type === 'reportees' && Number(managerId) === vis.value) return;
+    if (vis.type === 'reportees' && (Number(managerId) === vis.value || (vis.departmentId && Number(deptId) === vis.departmentId) || claimEmpId === vis.value)) return;
     if (vis.type === 'eq' && claimEmpId === vis.value) return;
+    // Team Lead can approve claims at pending_level_1 (their designated workflow level).
+    // They are allowed if the claim is at their level OR if they manage the submitter's dept/hierarchy.
+    if (vis.type === 'team_lead') {
+      const claimStatus = String(claim.status || claim.currentStatus || '');
+      const submitterRole = String(claim.submitted_by_role || claim.submittedByRole || 'employee').toLowerCase();
+      const isTeamLeadLevel = claimStatus === 'pending_level_1' || claimStatus === 'pending' || claimStatus === 'submitted';
+      const notSuperiorRole = !['team_lead', 'manager', 'department_head', 'hr', 'hr_admin', 'ceo', 'admin', 'organization_admin', 'super_admin'].includes(submitterRole);
+      if (isTeamLeadLevel && notSuperiorRole) return; // Employee's claim at Level 1 — TL can approve
+      if (vis.departmentId && Number(deptId) === vis.departmentId) return; // Same dept
+      if (vis.value && vis.value > 0 && Number(managerId) === vis.value) return; // Direct reportee
+    }
     throw new Error('You can only act on claims for your team.');
   }
 
+  private getCurrentLevelNum(status: string, dbLevel?: number | null): number {
+    const st = String(status || '').toLowerCase().trim();
+    let lvl = Number(dbLevel || 1);
+    if (isNaN(lvl) || lvl < 1) lvl = 1;
+
+    if (st === 'pending_level_2' || st === 'pending_manager') {
+      lvl = Math.max(lvl, 2);
+    } else if (st === 'pending_level_3') {
+      lvl = Math.max(lvl, 3);
+    } else if (st.startsWith('pending_level_')) {
+      const parsed = parseInt(st.replace('pending_level_', ''), 10);
+      if (!isNaN(parsed) && parsed > 0) {
+        lvl = Math.max(lvl, parsed);
+      }
+    }
+
+    return lvl;
+  }
+
+  /**
+   * Validate that the current user's role matches the required approverType
+   * for the current workflow level. Allows HR/Admin to approve any level.
+   * For 'reporting_manager' type: checks org hierarchy; falls back to dept head.
+   */
+  private async assertApproverMatchesWorkflowLevel(
+    ctx: TenantContext,
+    claim: any,
+    levels: any[],
+    options?: { isAbsenteeOverride?: boolean; delegatedForId?: number }
+  ): Promise<void> {
+    const claimStatus = String(claim.status || '').toLowerCase();
+    if (!['pending_level_1', 'pending_level_2', 'pending_level_3', 'pending', 'submitted', 'pending_manager'].includes(claimStatus) && !claimStatus.startsWith('pending_level_')) {
+      return;
+    }
+
+    if (!levels || levels.length === 0) return; // No workflow levels configured, skip
+
+    // If Absentee Override toggle is enabled (with audit reason recorded), allow approval on behalf of absent approver
+    if (options?.isAbsenteeOverride) return;
+
+    const currentLevelNum = this.getCurrentLevelNum(claimStatus, claim.current_level ?? claim.currentLevel);
+    const currentLevelConfig = levels.find(
+      (l: any) => Number(l.level_order ?? l.levelOrder ?? l.level) === currentLevelNum
+    );
+
+    if (!currentLevelConfig) return; // No config for this level, allow
+
+    const requiredType = String(
+      currentLevelConfig.approver_type ?? currentLevelConfig.approverType ?? ''
+    ).toLowerCase().trim();
+
+    if (!requiredType) return; // No approver type set, allow
+
+    const db = getKnex();
+
+    // Fetch current user's role codes from DB
+    const userRoleRows = await db('user_roles')
+      .join('roles', 'user_roles.role_id', 'roles.id')
+      .where('user_roles.user_id', ctx.userId)
+      .where('user_roles.organization_id', ctx.organizationId)
+      .select('roles.code')
+      .catch(() => []);
+
+    const userRoleCodes = (userRoleRows || []).map((r: any) =>
+      String(r.code ?? '').toLowerCase()
+    );
+
+    // Merge context roles
+    const ctxRoles = [ctx.role, ...(ctx.roles || [])].map((r) => String(r || '').toLowerCase()).filter(Boolean);
+    const allUserRoles = [...new Set([...userRoleCodes, ...ctxRoles])];
+
+    const isTeamLead = allUserRoles.some((c) => ['team_lead'].includes(c) || c.includes('team_lead') || c.includes('team lead'));
+    const isManager = allUserRoles.some((c) => ['manager', 'reporting_manager', 'department_head', 'dept_head'].includes(c) || c.includes('manager') || c.includes('department_head'));
+    const isHr = allUserRoles.some((c) => ['hr_admin', 'hr_manager', 'hr'].includes(c) || c.startsWith('hr'));
+    const isAdmin = allUserRoles.some((c) => ['organization_admin', 'super_admin', 'admin', 'ceo'].includes(c) || c.includes('admin') || c.includes('ceo'));
+    const isFinance = allUserRoles.some((c) => ['finance', 'finance_manager', 'accounts'].includes(c) || c.includes('finance'));
+
+    const stepName = String(currentLevelConfig.step_name || currentLevelConfig.stepName || '').toLowerCase();
+
+    // Check direct reporting manager hierarchy
+    const emp = await this.getEmployeeForCtx(ctx);
+    const claimEmpId = Number(claim.employee_id ?? claim.employeeId);
+    let isDirectReportingManager = false;
+    if (emp && claimEmpId) {
+      const claimEmp = await db('employees')
+        .where('id', claimEmpId)
+        .where('organization_id', ctx.organizationId)
+        .first()
+        .catch(() => null);
+      if (claimEmp && Number(claimEmp.reporting_manager_id) === Number(emp.id)) {
+        isDirectReportingManager = true;
+      }
+    }
+
+    let isAuthorized = false;
+
+    // 1. Team Lead step (requiredType is team_lead)
+    if (requiredType === 'team_lead' || stepName.includes('team') || stepName.includes('lead')) {
+      if (isTeamLead || isDirectReportingManager) isAuthorized = true;
+    }
+    // 2. Department Manager / Reporting Manager step
+    else if (['department_head', 'reporting_manager', 'manager', 'reporting_officer', 'dept_head'].some(x => requiredType.includes(x)) || stepName.includes('manager')) {
+      if (isManager || isDirectReportingManager) isAuthorized = true;
+    }
+    // 3. HR step
+    else if (['hr', 'hr_admin', 'hr_manager'].some(x => requiredType.includes(x)) || stepName.includes('hr')) {
+      if (isHr) isAuthorized = true;
+    }
+    // 4. CEO / Admin step
+    else if (['ceo', 'admin', 'organization_admin', 'super_admin', 'owner'].some(x => requiredType.includes(x)) || stepName.includes('admin') || stepName.includes('ceo')) {
+      if (isAdmin) isAuthorized = true;
+    }
+    // 5. Finance step
+    else if (['finance', 'finance_manager', 'accounts'].some(x => requiredType.includes(x)) || stepName.includes('finance')) {
+      if (isFinance) isAuthorized = true;
+    }
+    else {
+      // Fallback exact role matching
+      const legacyMap: Record<string, string[]> = {
+        'team_lead': ['team_lead'],
+        'department_head': ['department_head', 'dept_head', 'manager'],
+        'hr': ['hr_admin', 'hr_manager', 'hr'],
+        'admin': ['organization_admin', 'super_admin', 'admin', 'ceo'],
+        'ceo': ['organization_admin', 'ceo'],
+        'finance': ['finance_manager', 'finance', 'accounts'],
+      };
+      const allowedCodes = legacyMap[requiredType] || [requiredType];
+      isAuthorized = allUserRoles.some((code) => allowedCodes.some((acc) => code.includes(acc))) || isDirectReportingManager;
+    }
+
+    if (!isAuthorized) {
+      const stepDisplay = currentLevelConfig.step_name || currentLevelConfig.stepName || `Level ${currentLevelNum}`;
+      throw new Error(`You are not an authorized approver for Level ${currentLevelNum} (${stepDisplay}). CEO, HR, and Admin cannot approve workflow steps that do not include their role.`);
+    }
+  }
+
+  // --- EXPENSE CATEGORIES ---
   private mapCategory(row: any) {
     if (!row) return row;
     return {
       ...row,
+      id: Number(row.id),
+      name: row.name,
+      code: row.code,
+      description: row.description || '',
       spendingLimit: Number(row.spending_limit ?? row.spendingLimit ?? 0),
       isReceiptMandatory: Boolean(row.is_receipt_mandatory ?? row.isReceiptMandatory),
       minAmountForReceipt: Number(row.min_amount_for_receipt ?? row.minAmountForReceipt ?? 0),
       autoApprovalThreshold: Number(row.auto_approval_threshold ?? row.autoApprovalThreshold ?? 0),
-      isActive: row.is_active !== undefined ? Boolean(row.is_active) : Boolean(row.isActive ?? true),
+      isActive: Boolean(row.is_active ?? row.isActive ?? true),
+      createdAt: row.created_at || row.createdAt,
+      updatedAt: row.updated_at || row.updatedAt
     };
   }
 
-  // --- EXPENSE CATEGORIES ---
-  async getCategories(ctx: TenantContext) {
-    await this.ensureInitialized(ctx.organizationId);
+  async getCategories(ctx: TenantContext, includeInactive: boolean = false) {
+    const orgId = ctx?.organizationId;
+    if (!orgId) return [];
+    await this.ensureInitialized(orgId);
     const db = getKnex();
-    const rows = await db('expense_categories')
-      .where('organization_id', ctx.organizationId)
-      .where('is_active', true)
+
+    let rows = await db('expense_categories')
+      .where((b: any) => {
+        b.where('organization_id', orgId).orWhereNull('organization_id');
+      })
+      .modify((q: any) => {
+        if (!includeInactive) {
+          q.where('is_active', true);
+        }
+      })
       .orderBy('id', 'asc');
+
+
     const mapped = (rows || []).map((r: any) => this.mapCategory(r));
     const unique: any[] = [];
     const seen = new Set<string>();
@@ -184,10 +511,10 @@ export class ExpenseService {
       name: data.name,
       code,
       description: data.description || null,
-      spending_limit: data.spendingLimit || 0,
+      spending_limit: Number(data.spendingLimit) || 0,
       is_receipt_mandatory: Boolean(data.isReceiptMandatory),
-      min_amount_for_receipt: data.minAmountForReceipt || 0,
-      auto_approval_threshold: data.autoApprovalThreshold ?? 0,
+      min_amount_for_receipt: Number(data.minAmountForReceipt) || 0,
+      auto_approval_threshold: Number(data.autoApprovalThreshold) || 0,
       is_active: data.isActive !== undefined ? Boolean(data.isActive) : true,
       created_at: new Date(),
       updated_at: new Date()
@@ -198,33 +525,47 @@ export class ExpenseService {
   async updateCategory(ctx: TenantContext, categoryId: number, data: any) {
     await this.ensureInitialized(ctx.organizationId);
     const db = getKnex();
+
+    const updatePayload: Record<string, any> = {
+      updated_at: new Date()
+    };
+
+    if (data.name !== undefined) updatePayload.name = data.name;
+    if (data.code !== undefined) updatePayload.code = data.code;
+    if (data.description !== undefined) updatePayload.description = data.description;
+    if (data.spendingLimit !== undefined) updatePayload.spending_limit = Number(data.spendingLimit) || 0;
+    if (data.isReceiptMandatory !== undefined) updatePayload.is_receipt_mandatory = Boolean(data.isReceiptMandatory);
+    if (data.minAmountForReceipt !== undefined) updatePayload.min_amount_for_receipt = Number(data.minAmountForReceipt) || 0;
+    if (data.autoApprovalThreshold !== undefined) updatePayload.auto_approval_threshold = Number(data.autoApprovalThreshold) || 0;
+    if (data.isActive !== undefined) updatePayload.is_active = Boolean(data.isActive);
+
     await db('expense_categories')
       .where('id', categoryId)
-      .where('organization_id', ctx.organizationId)
-      .update({
-        name: data.name,
-        code: data.code,
-        description: data.description,
-        spending_limit: data.spendingLimit,
-        is_receipt_mandatory: Boolean(data.isReceiptMandatory),
-        min_amount_for_receipt: data.minAmountForReceipt,
-        ...(data.autoApprovalThreshold !== undefined
-          ? { auto_approval_threshold: Number(data.autoApprovalThreshold) || 0 }
-          : {}),
-        is_active: data.isActive,
-        updated_at: new Date()
-      });
+      .where(function (this: any) {
+        this.where('organization_id', ctx.organizationId).orWhereNull('organization_id');
+      })
+      .update(updatePayload);
+
     return this.mapCategory(await db('expense_categories').where('id', categoryId).first());
   }
 
   async deleteCategory(ctx: TenantContext, categoryId: number) {
     await this.ensureInitialized(ctx.organizationId);
     const db = getKnex();
+
+    // Unlink category from any existing claims, claim line items, or policies before hard deletion
+    await db('expense_claims').where('category_id', categoryId).update({ category_id: null }).catch(() => null);
+    await db('expense_claim_items').where('category_id', categoryId).update({ category_id: null }).catch(() => null);
+    await db('expense_policies').where('category_id', categoryId).update({ category_id: null }).catch(() => null);
+
     await db('expense_categories')
       .where('id', categoryId)
-      .where('organization_id', ctx.organizationId)
-      .update({ is_active: false, updated_at: new Date() });
-    return { success: true };
+      .where(function (this: any) {
+        this.where('organization_id', ctx.organizationId).orWhereNull('organization_id');
+      })
+      .delete();
+
+    return { success: true, message: 'Category deleted successfully.' };
   }
 
   // --- EXPENSE POLICIES ---
@@ -232,18 +573,19 @@ export class ExpenseService {
     if (!row) return row;
     return {
       ...row,
+      id: Number(row.id),
       policyName: row.policy_name || row.policyName,
-      categoryId: row.category_id || row.categoryId,
+      categoryId: row.category_id ? Number(row.category_id) : (row.categoryId ? Number(row.categoryId) : undefined),
       categoryName: row.category_name || row.categoryName,
       grade: row.grade,
       designation: row.designation,
-      departmentId: row.department_id || row.departmentId,
+      departmentId: row.department_id ? Number(row.department_id) : (row.departmentId ? Number(row.departmentId) : undefined),
       location: row.location,
-      maxLimitPerClaim: row.max_limit_per_claim ?? row.maxLimitPerClaim,
-      maxLimitPerMonth: row.max_limit_per_month ?? row.maxLimitPerMonth,
-      requireReceiptAbove: row.require_receipt_above ?? row.requireReceiptAbove,
-      allowException: row.allow_exception ?? row.allowException,
-      isActive: row.is_active ?? row.isActive,
+      maxLimitPerClaim: Number(row.max_limit_per_claim ?? row.maxLimitPerClaim ?? 0),
+      maxLimitPerMonth: Number(row.max_limit_per_month ?? row.maxLimitPerMonth ?? 0),
+      requireReceiptAbove: Number(row.require_receipt_above ?? row.requireReceiptAbove ?? 0),
+      allowException: Boolean(row.allow_exception ?? row.allowException ?? true),
+      isActive: Boolean(row.is_active ?? row.isActive ?? true),
       createdAt: row.created_at || row.createdAt
     };
   }
@@ -253,7 +595,9 @@ export class ExpenseService {
     const db = getKnex();
     const rows = await db('expense_policies as ep')
       .leftJoin('expense_categories as ec', 'ep.category_id', 'ec.id')
-      .where('ep.organization_id', ctx.organizationId)
+      .where(function (this: any) {
+        this.where('ep.organization_id', ctx.organizationId).orWhereNull('ep.organization_id');
+      })
       .select('ep.*', 'ec.name as category_name')
       .orderBy('ep.id', 'desc');
     return (rows || []).map((r: any) => this.mapExpensePolicy(r));
@@ -270,39 +614,54 @@ export class ExpenseService {
       designation: data.designation || 'All',
       department_id: data.departmentId || null,
       location: data.location || 'All',
-      max_limit_per_claim: data.maxLimitPerClaim || 0,
-      max_limit_per_month: data.maxLimitPerMonth || 0,
-      require_receipt_above: data.requireReceiptAbove || 0,
+      max_limit_per_claim: Number(data.maxLimitPerClaim) || 0,
+      max_limit_per_month: Number(data.maxLimitPerMonth) || 0,
+      require_receipt_above: Number(data.requireReceiptAbove) || 0,
       allow_exception: data.allowException !== undefined ? Boolean(data.allowException) : true,
       is_active: data.isActive !== undefined ? Boolean(data.isActive) : true,
       created_at: new Date(),
       updated_at: new Date()
     });
-    const row = await db('expense_policies').where('id', id).first();
+    const row = await db('expense_policies as ep')
+      .leftJoin('expense_categories as ec', 'ep.category_id', 'ec.id')
+      .where('ep.id', id)
+      .select('ep.*', 'ec.name as category_name')
+      .first();
     return this.mapExpensePolicy(row);
   }
 
   async updatePolicy(ctx: TenantContext, policyId: number, data: any) {
     await this.ensureInitialized(ctx.organizationId);
     const db = getKnex();
+
+    const updatePayload: Record<string, any> = {
+      updated_at: new Date()
+    };
+
+    if (data.policyName !== undefined) updatePayload.policy_name = data.policyName;
+    if (data.categoryId !== undefined) updatePayload.category_id = data.categoryId || null;
+    if (data.grade !== undefined) updatePayload.grade = data.grade;
+    if (data.designation !== undefined) updatePayload.designation = data.designation;
+    if (data.departmentId !== undefined) updatePayload.department_id = data.departmentId || null;
+    if (data.location !== undefined) updatePayload.location = data.location;
+    if (data.maxLimitPerClaim !== undefined) updatePayload.max_limit_per_claim = Number(data.maxLimitPerClaim) || 0;
+    if (data.maxLimitPerMonth !== undefined) updatePayload.max_limit_per_month = Number(data.maxLimitPerMonth) || 0;
+    if (data.requireReceiptAbove !== undefined) updatePayload.require_receipt_above = Number(data.requireReceiptAbove) || 0;
+    if (data.allowException !== undefined) updatePayload.allow_exception = Boolean(data.allowException);
+    if (data.isActive !== undefined) updatePayload.is_active = Boolean(data.isActive);
+
     await db('expense_policies')
       .where('id', policyId)
-      .where('organization_id', ctx.organizationId)
-      .update({
-        policy_name: data.policyName,
-        category_id: data.categoryId || null,
-        grade: data.grade,
-        designation: data.designation,
-        department_id: data.departmentId || null,
-        location: data.location,
-        max_limit_per_claim: data.maxLimitPerClaim,
-        max_limit_per_month: data.maxLimitPerMonth,
-        require_receipt_above: data.requireReceiptAbove,
-        allow_exception: data.allowException,
-        is_active: data.isActive,
-        updated_at: new Date()
-      });
-    const row = await db('expense_policies').where('id', policyId).first();
+      .where(function (this: any) {
+        this.where('organization_id', ctx.organizationId).orWhereNull('organization_id');
+      })
+      .update(updatePayload);
+
+    const row = await db('expense_policies as ep')
+      .leftJoin('expense_categories as ec', 'ep.category_id', 'ec.id')
+      .where('ep.id', policyId)
+      .select('ep.*', 'ec.name as category_name')
+      .first();
     return this.mapExpensePolicy(row);
   }
 
@@ -311,45 +670,131 @@ export class ExpenseService {
     const db = getKnex();
     await db('expense_policies')
       .where('id', policyId)
-      .where('organization_id', ctx.organizationId)
+      .where(function (this: any) {
+        this.where('organization_id', ctx.organizationId).orWhereNull('organization_id');
+      })
       .delete();
-    return { success: true };
+    return { success: true, message: 'Policy deleted successfully.' };
   }
 
   async validatePolicyForClaim(ctx: TenantContext, categoryId: number, amount: number, receiptProvided: boolean) {
     await this.ensureInitialized(ctx.organizationId);
     const db = getKnex();
+    const config = await this.getConfig(ctx);
+    const cur = (n: number) => ExpenseConfigService.formatAmount(n, config);
     const category = categoryId ? await db('expense_categories').where('id', categoryId).first() : null;
-    const policies = await db('expense_policies')
-      .where('organization_id', ctx.organizationId)
-      .where('is_active', true)
-      .where(function () {
-        this.whereNull('category_id').orWhere('category_id', categoryId);
-      });
 
-    const violations: string[] = [];
+    let empGrade: string | null = null;
+    let empDesignation: string | null = null;
+    let empLocation: string | null = null;
 
-    if (category) {
-      if (category.spending_limit > 0 && amount > category.spending_limit) {
-        violations.push(`Amount ₹${amount} exceeds category limit ₹${category.spending_limit}`);
-      }
-      if (category.is_receipt_mandatory && amount >= category.min_amount_for_receipt && !receiptProvided) {
-        violations.push(`Receipt mandatory for ${category.name} above ₹${category.min_amount_for_receipt}`);
+    if (ctx.userId) {
+      try {
+        const user = await db('users').where({ id: ctx.userId, organization_id: ctx.organizationId }).first('employee_id');
+        if (user?.employee_id) {
+          const emp = await db('employees')
+            .leftJoin('designations', 'employees.current_designation_id', 'designations.id')
+            .leftJoin('locations', 'employees.current_location_id', 'locations.id')
+            .where('employees.id', user.employee_id)
+            .first(
+              'employees.grade',
+              db.raw('COALESCE(designations.name, designations.designation_name) as designation_name'),
+              db.raw('COALESCE(locations.name, locations.location_name) as location_name')
+            );
+          if (emp) {
+            empGrade = emp.grade ? String(emp.grade).trim().toLowerCase() : null;
+            empDesignation = emp.designation_name ? String(emp.designation_name).trim().toLowerCase() : null;
+            empLocation = emp.location_name ? String(emp.location_name).trim().toLowerCase() : null;
+          }
+        }
+      } catch (e) {
+        console.error('Error fetching applicant employee details for policy validation:', e);
       }
     }
 
-    for (const pol of policies) {
-      if (pol.max_limit_per_claim > 0 && amount > pol.max_limit_per_claim) {
-        violations.push(`Amount exceeds policy limit of ₹${pol.max_limit_per_claim} for ${pol.policy_name}`);
+    const allPolicies = await db('expense_policies')
+      .where('organization_id', ctx.organizationId)
+      .where(function () {
+        this.where('is_active', true).orWhere('is_active', 1);
+      })
+      .where(function () {
+        this.whereNull('category_id')
+          .orWhere('category_id', 0)
+          .orWhere('category_id', categoryId || 0);
+      });
+
+    const matchesAttr = (polVal: string | null | undefined, empVal: string | null | undefined) => {
+      if (!polVal) return true;
+      const p = String(polVal).trim().toLowerCase();
+      if (p === 'all' || p === '') return true;
+      if (!empVal) return true;
+      const e = String(empVal).trim().toLowerCase();
+      return p === e || p.includes(e) || e.includes(p);
+    };
+
+    const policies = allPolicies.filter((pol: any) => {
+      const pGrade = pol.grade ? String(pol.grade).trim().toLowerCase() : 'all';
+      const pDesig = pol.designation ? String(pol.designation).trim().toLowerCase() : 'all';
+      const pLoc = pol.location ? String(pol.location).trim().toLowerCase() : 'all';
+
+      if (pGrade === 'all' || pGrade === '' || !empGrade || matchesAttr(pol.grade, empGrade)) {
+        if (pDesig === 'all' || pDesig === '' || !empDesignation || matchesAttr(pol.designation, empDesignation)) {
+          if (pLoc === 'all' || pLoc === '' || !empLocation || matchesAttr(pol.location, empLocation)) {
+            return true;
+          }
+        }
+      }
+      return true;
+    });
+
+    // Prioritize category-specific policies if defined for this category
+    const catSpecificPolicies = policies.filter((pol: any) => {
+      const pCatId = pol.category_id !== null && pol.category_id !== undefined ? Number(pol.category_id) : 0;
+      return categoryId && pCatId === Number(categoryId);
+    });
+
+    const activePoliciesToApply = catSpecificPolicies.length > 0
+      ? catSpecificPolicies
+      : policies;
+
+    const violations: string[] = [];
+    let allowException = true;
+
+    // Check if an unlimited policy (max_limit_per_claim === 0) applies to this category
+    const hasUnlimitedPolicy = activePoliciesToApply.some((pol: any) => {
+      return Number(pol.max_limit_per_claim || 0) === 0;
+    });
+
+    if (category) {
+      if (!hasUnlimitedPolicy && category.spending_limit > 0 && amount > category.spending_limit) {
+        violations.push(`Amount ${cur(amount)} exceeds category limit of ${cur(category.spending_limit)} for category '${category.name}'`);
+      }
+      if (category.is_receipt_mandatory && amount >= category.min_amount_for_receipt && !receiptProvided) {
+        violations.push(`Receipt mandatory for ${category.name} above ${cur(category.min_amount_for_receipt)}`);
+      }
+    }
+
+    for (const pol of activePoliciesToApply) {
+      const polMax = Number(pol.max_limit_per_claim || 0);
+      const polMin = Number(pol.min_limit_per_claim || 0);
+      if (!hasUnlimitedPolicy && polMax > 0 && amount > polMax) {
+        violations.push(`Amount ${cur(amount)} exceeds the set policy limit of ${cur(polMax)} for policy '${pol.policy_name}'`);
+        if (pol.allow_exception === 0 || pol.allow_exception === false) {
+          allowException = false;
+        }
+      }
+      if (polMin > 0 && amount < polMin) {
+        violations.push(`Amount ${cur(amount)} is below the minimum set policy limit of ${cur(polMin)} for policy '${pol.policy_name}'`);
       }
       if (pol.require_receipt_above > 0 && amount > pol.require_receipt_above && !receiptProvided) {
-        violations.push(`Receipt mandatory for amounts over ₹${pol.require_receipt_above} per policy '${pol.policy_name}'`);
+        violations.push(`Receipt mandatory for amounts over ${cur(pol.require_receipt_above)} per policy '${pol.policy_name}'`);
       }
     }
 
     return {
       isValid: violations.length === 0,
-      violations
+      violations,
+      allowException
     };
   }
 
@@ -369,6 +814,9 @@ export class ExpenseService {
       projectCostCenter: claim.project_cost_center || claim.projectCostCenter,
       receiptUrl: claim.receipt_url || claim.receiptUrl,
       currentApproverId: claim.current_approver_id || claim.currentApproverId,
+      currentApproverRole: claim.current_approver_role || claim.currentApproverRole,
+      currentLevel: claim.current_level ?? claim.currentLevel ?? 1,
+      workflowId: claim.workflow_id || claim.workflowId,
       rejectionReason: claim.rejection_reason || claim.rejectionReason,
       returnComments: claim.return_comments || claim.returnComments,
       travelRequestId: claim.travel_request_id || claim.travelRequestId,
@@ -379,6 +827,10 @@ export class ExpenseService {
       paymentDate: claim.payment_date || claim.paymentDate,
       paidAmount: claim.paid_amount ?? claim.paidAmount,
       paymentReference: claim.payment_reference || claim.paymentReference,
+      bankName: claim.bank_name || claim.bankName,
+      accountNumber: claim.account_no || claim.account_number || claim.accountNo || claim.accountNumber,
+      ifscCode: claim.ifsc_code || claim.ifscCode,
+      pan: claim.pan,
       firstName: claim.first_name || claim.firstName || claim.submitter_first_name || claim.submitterFirstName,
       lastName: claim.last_name || claim.lastName || claim.submitter_last_name || claim.submitterLastName,
       email: claim.email || claim.submitter_email || claim.submitterEmail,
@@ -438,6 +890,10 @@ export class ExpenseService {
         'e.last_name',
         'e.email',
         'e.employee_code',
+        'e.bank_name',
+        'e.account_no',
+        'e.ifsc_code',
+        'e.pan_number as pan',
         'd.name as department_name',
         'des.name as designation_name',
         'loc.name as location_name',
@@ -458,22 +914,89 @@ export class ExpenseService {
     } else if (params.mode === 'finance' || params.mode === 'payout' || params.status === 'pending_finance' || params.status === 'payment_pending') {
       const vis = await this.getPeopleVisibility(ctx, 'ec.employee_id', params.employeeId);
       if (vis.type !== 'all') {
-        query = this.applyVisibilityToQuery(query, vis);
+        const emp = await this.getEmployeeForCtx(ctx);
+        const dept = emp?.current_department_id ? await db('departments').where('id', emp.current_department_id).first().catch(() => null) : null;
+        if (!dept || !String(dept.name || '').toLowerCase().includes('finance')) {
+          query = this.applyVisibilityToQuery(query, vis);
+        }
       }
     } else {
       const vis = await this.getPeopleVisibility(ctx, 'ec.employee_id', params.employeeId);
       query = this.applyVisibilityToQuery(query, vis);
     }
 
+    if (params.employeeId && params.mode !== 'my_expenses') {
+      query = query.where('ec.employee_id', params.employeeId);
+    }
+
     if (params.status && params.status !== 'all') {
       if (params.status === 'pending_manager') {
-        query = query.whereIn('ec.status', ['submitted', 'pending_manager', 'pending']);
+        // Legacy: pending_manager maps to any active workflow level
+        query = query.where(function (this: any) {
+          this.whereIn('ec.status', ['submitted', 'pending_manager', 'pending']).orWhere('ec.status', 'like', 'pending_level_%');
+        });
+      } else if (params.status === 'pending_level_1') {
+        // Exact Level 1 only (Team Lead queue) — do NOT include other levels
+        query = query.where(function (this: any) {
+          this.whereIn('ec.status', ['submitted', 'pending', 'pending_level_1']);
+        });
+      } else if (params.status === 'pending_level_2') {
+        // Exact Level 2 only (Manager queue)
+        query = query.where('ec.status', 'pending_level_2');
+      } else if (params.status === 'pending_level_3') {
+        // Exact Level 3 (HR queue) only — pending_finance is reserved for Finance queue
+        query = query.where('ec.status', 'pending_level_3');
       } else if (params.status === 'pending_finance') {
         query = query.whereIn('ec.status', ['pending_finance']);
       } else if (params.status === 'pending_approvals') {
-        query = query.whereIn('ec.status', ['submitted', 'pending_manager', 'pending_finance', 'pending']);
+        const extractRoleCode = (r: any): string => {
+          if (!r) return '';
+          if (typeof r === 'string') return r.toLowerCase().trim();
+          if (typeof r === 'object') {
+            return String(r.code || r.name || r.roleCode || r.role_code || '').toLowerCase().trim();
+          }
+          return String(r).toLowerCase().trim();
+        };
+
+        const allUserRoles = Array.from(
+          new Set(
+            [
+              extractRoleCode(ctx.role),
+              extractRoleCode((ctx as any).roleCode),
+              ...((ctx.roles || []).map(extractRoleCode))
+            ].filter(Boolean)
+          )
+        );
+        const isFinance = allUserRoles.some((c) => ['finance', 'finance_manager', 'accounts'].some(x => c.includes(x)));
+        const isHr = allUserRoles.some((c) => ['hr_admin', 'hr_manager', 'hr'].some(x => c.includes(x)));
+        const isManager = allUserRoles.some((c) => ['manager', 'department_head', 'dept_head'].some(x => c.includes(x)));
+        const isTeamLead = allUserRoles.some((c) => c.includes('team_lead'));
+        const isCeoOrAdmin = allUserRoles.some((c) => ['organization_admin', 'super_admin', 'admin', 'ceo'].some(x => c.includes(x)));
+
+        query = query.where(function (this: any) {
+          const conditions: string[] = [];
+          if (isFinance) conditions.push('pending_finance');
+          if (isHr) conditions.push('pending_level_3');
+          if (isManager) conditions.push('pending_level_2', 'pending_manager');
+          if (isTeamLead) conditions.push('pending_level_1', 'submitted', 'pending');
+          if (isCeoOrAdmin && conditions.length === 0) {
+            conditions.push('pending_level_3');
+          }
+
+          if (conditions.length > 0) {
+            this.whereIn('ec.status', conditions);
+          } else {
+            this.whereRaw('1 = 0');
+          }
+        });
+      } else if (params.status === 'payment_pending') {
+        query = query.whereIn('ec.status', ['payment_pending']);
+      } else if (params.status === 'paid' || params.status === 'reimbursed') {
+        query = query.whereIn('ec.status', ['paid', 'reimbursed']);
       } else if (params.status === 'approved') {
-        query = query.whereIn('ec.status', ['approved', 'payment_pending', 'paid']);
+        query = query.whereIn('ec.status', ['approved', 'payment_pending', 'paid', 'reimbursed']);
+      } else if (params.status === 'returned') {
+        query = query.whereIn('ec.status', ['returned']);
       } else if (params.status === 'rejected') {
         query = query.whereIn('ec.status', ['rejected']);
       } else {
@@ -512,10 +1035,18 @@ export class ExpenseService {
 
     // Attach items count and items preview
     for (const claim of claims) {
+      if (claim.receipt_url && String(claim.receipt_url).length > 256 && String(claim.receipt_url).startsWith('data:')) {
+        claim.receipt_url = '[attachment]';
+      }
       const items = await db('expense_claim_items as eci')
         .leftJoin('expense_categories as c', 'eci.category_id', 'c.id')
         .where('eci.claim_id', claim.id)
         .select('eci.*', 'c.name as category_name');
+      for (const item of items) {
+        if (item.receipt_url && String(item.receipt_url).length > 256 && String(item.receipt_url).startsWith('data:')) {
+          item.receipt_url = '[attachment]';
+        }
+      }
       claim.items = items;
       claim.itemCount = items.length;
     }
@@ -528,16 +1059,51 @@ export class ExpenseService {
         const trs = await this.getTravelRequests(ctx, params.employeeId);
         for (const tr of trs || []) {
           const st = String(tr.status || '').toLowerCase();
-          let appStatus = 'pending_manager';
-          if (st === 'pending' || st === 'submitted') appStatus = 'pending_manager';
+          // Preserve the actual workflow level status for filtering
+          let appStatus = st || 'pending_level_1';
+          if (st === 'pending' || st === 'submitted') appStatus = 'pending_level_1';
+          else if (st === 'pending_manager') appStatus = 'pending_level_1';
           else if (st === 'pending_finance') appStatus = 'pending_finance';
           else if (st === 'approved' || st === 'completed') appStatus = 'approved';
           else if (st === 'rejected') appStatus = 'rejected';
+          // Keep pending_level_N as-is for accurate level-specific filtering
 
           if (params.status && params.status !== 'all') {
-            if (params.status === 'pending_manager' && appStatus !== 'pending_manager') continue;
+            // Level 1 (Team Lead queue): show only pending_level_1 / pending / submitted
+            if (params.status === 'pending_level_1' && appStatus !== 'pending_level_1') continue;
+            // Level 2 (Manager queue): only pending_level_2
+            if (params.status === 'pending_level_2' && appStatus !== 'pending_level_2') continue;
+            // Level 3 (HR queue): only pending_level_3
+            if (params.status === 'pending_level_3' && appStatus !== 'pending_level_3') continue;
+            // Legacy pending_manager: any active workflow level
+            if (params.status === 'pending_manager' && !['pending_level_1', 'pending_manager', 'pending_finance', 'pending', 'submitted'].includes(appStatus) && !appStatus.startsWith('pending_level_')) continue;
             if (params.status === 'pending_finance' && appStatus !== 'pending_finance') continue;
-            if (params.status === 'pending_approvals' && !['pending_manager', 'pending_finance'].includes(appStatus)) continue;
+            if (params.status === 'pending_approvals') {
+              const extractRoleCode = (r: any): string => {
+                if (!r) return '';
+                if (typeof r === 'string') return r.toLowerCase().trim();
+                if (typeof r === 'object') return String(r.code || r.name || r.roleCode || r.role_code || '').toLowerCase().trim();
+                return String(r).toLowerCase().trim();
+              };
+              const allUserRoles = Array.from(
+                new Set(
+                  [
+                    extractRoleCode(ctx.role),
+                    extractRoleCode((ctx as any).roleCode),
+                    ...((ctx.roles || []).map(extractRoleCode))
+                  ].filter(Boolean)
+                )
+              );
+              const isHrOrAdmin = allUserRoles.some((c) =>
+                ['hr_admin', 'hr_manager', 'hr', 'organization_admin', 'super_admin', 'admin', 'ceo'].some(x => c.includes(x))
+              );
+              const isManagerOnly = allUserRoles.some((c) => ['manager', 'department_head'].some(x => c.includes(x))) && !isHrOrAdmin;
+              const isTeamLeadOnly = allUserRoles.some((c) => c.includes('team_lead')) && !isHrOrAdmin && !isManagerOnly;
+
+              if (isHrOrAdmin && !['pending_level_3', 'pending_finance'].includes(appStatus)) continue;
+              if (isManagerOnly && !['pending_level_2', 'pending_manager'].includes(appStatus)) continue;
+              if (isTeamLeadOnly && !['pending_level_1', 'pending', 'submitted'].includes(appStatus)) continue;
+            }
             if (params.status === 'approved' && appStatus !== 'approved') continue;
             if (params.status === 'rejected' && appStatus !== 'rejected') continue;
           }
@@ -660,6 +1226,10 @@ export class ExpenseService {
         'e.last_name',
         'e.email',
         'e.employee_code',
+        'e.bank_name',
+        'e.account_no',
+        'e.ifsc_code',
+        'e.pan_number as pan',
         'd.name as department_name',
         'des.name as designation_name',
         'cat.name as category_name',
@@ -699,40 +1269,311 @@ export class ExpenseService {
     return fallback;
   }
 
+  private async getWorkflowLevelsForClaim(
+    db: any,
+    organizationId: number,
+    totalClaimed: number,
+    departmentId?: number | null,
+    submitterRole?: string | null,
+    workflowId?: number | null
+  ) {
+    try {
+      if (!organizationId) return { workflow: null, levels: [] };
+
+      const targetDeptId = departmentId ? Number(departmentId) : null;
+      const roleKey = String(submitterRole || '').toLowerCase();
+      let matched = null;
+
+      // 0. If explicit workflowId is provided, load that workflow directly
+      if (workflowId) {
+        matched = await db('expense_workflows')
+          .where('id', workflowId)
+          .where('organization_id', organizationId)
+          .where('is_active', true)
+          .first().catch(() => null);
+      }
+
+      if (!matched) {
+        const workflows = await db('expense_workflows')
+          .where('organization_id', organizationId)
+          .where('is_active', true)
+          .orderBy('min_amount', 'asc');
+
+        if (!workflows || workflows.length === 0) return { workflow: null, levels: [] };
+
+        // 1. Department match with role / amount preference
+        if (targetDeptId) {
+          matched = workflows.find((wf: any) => {
+            const deptId = Number(wf.department_id || wf.departmentId || 0);
+            const targetRole = String(wf.target_role || wf.targetRole || 'all').toLowerCase();
+            const min = Number(wf.min_amount || wf.minAmount || 0);
+            const max = Number(wf.max_amount || wf.maxAmount || 999999999);
+            const roleMatch = !roleKey || targetRole === 'all' || targetRole === '' || targetRole === roleKey || (roleKey === 'employee' && targetRole === 'employee');
+            return deptId === targetDeptId && roleMatch && totalClaimed >= min && totalClaimed <= max;
+          }) || workflows.find((wf: any) => {
+            const deptId = Number(wf.department_id || wf.departmentId || 0);
+            return deptId === targetDeptId;
+          });
+        }
+
+        // 2. Submitter role-specific match (e.g. target_role = 'ceo' or 'hr' or 'manager' or 'employee')
+        if (!matched && roleKey) {
+          matched = workflows.find((wf: any) => {
+            const targetRole = String(wf.target_role || wf.targetRole || 'all').toLowerCase();
+            const min = Number(wf.min_amount || wf.minAmount || 0);
+            const max = Number(wf.max_amount || wf.maxAmount || 999999999);
+            const roleMatch = targetRole === roleKey || ((roleKey === 'ceo' || roleKey === 'admin') && (targetRole === 'ceo' || targetRole === 'admin'));
+            return roleMatch && totalClaimed >= min && totalClaimed <= max;
+          }) || workflows.find((wf: any) => {
+            const targetRole = String(wf.target_role || wf.targetRole || 'all').toLowerCase();
+            return targetRole === roleKey || ((roleKey === 'ceo' || roleKey === 'admin') && (targetRole === 'ceo' || targetRole === 'admin'));
+          });
+        }
+
+        // 3. Fallback: Organization-wide workflow (department_id is null / 0)
+        if (!matched) {
+          matched = workflows.find((wf: any) => {
+            const deptId = Number(wf.department_id || wf.departmentId || 0);
+            const min = Number(wf.min_amount || wf.minAmount || 0);
+            const max = Number(wf.max_amount || wf.maxAmount || 999999999);
+            return deptId === 0 && totalClaimed >= min && totalClaimed <= max;
+          }) || workflows.find((wf: any) => {
+            const deptId = Number(wf.department_id || wf.departmentId || 0);
+            return deptId === 0;
+          });
+        }
+
+        // 4. Ultimate Fallback: Any active workflow for the org
+        if (!matched && workflows.length > 0) {
+          matched = workflows[0];
+        }
+      }
+
+      let levels: any[] = [];
+      if (matched) {
+        const rawLevels = await db('expense_workflow_levels')
+          .where('workflow_id', matched.id)
+          .orderBy('level_order', 'asc');
+
+        levels = (rawLevels || []).map((l: any) => ({
+          ...l,
+          level_order: Number(l.level_order ?? l.levelOrder ?? l.level ?? 1),
+          levelOrder:  Number(l.level_order ?? l.levelOrder ?? l.level ?? 1),
+          approver_type: String(l.approver_type ?? l.approverType ?? '').toLowerCase(),
+          approverType:  String(l.approver_type ?? l.approverType ?? '').toLowerCase(),
+          approver_role: String(l.approver_role ?? l.approverRole ?? ''),
+          approverRole:  String(l.approver_role ?? l.approverRole ?? ''),
+          step_name: String(l.step_name ?? l.stepName ?? ''),
+          stepName:  String(l.step_name ?? l.stepName ?? ''),
+          is_mandatory: Boolean(l.is_mandatory ?? l.isMandatory ?? true),
+          isMandatory:  Boolean(l.is_mandatory ?? l.isMandatory ?? true),
+        }));
+      }
+
+      return { workflow: matched, levels };
+    } catch (err) {
+      console.error('Failed to resolve workflow levels:', err);
+      return { workflow: null, levels: [] };
+    }
+  }
+
+  private getRoleRank(role: string): number {
+    const r = String(role || '').toLowerCase();
+    if (['ceo', 'organization_admin', 'super_admin', 'admin'].includes(r) || r.includes('admin') || r.includes('ceo')) return 4;
+    if (['hr', 'hr_admin', 'hr_manager'].includes(r) || r.startsWith('hr')) return 3;
+    if (['manager', 'department_head', 'dept_head'].includes(r) || r.includes('manager') || r.includes('department_head')) return 2;
+    if (['team_lead'].includes(r) || r.includes('team_lead')) return 1;
+    return 0; // employee
+  }
+
+  private async getSubmitterRole(ctx: TenantContext, db: any): Promise<string> {
+    try {
+      const userRoleRows = ctx.userId ? await db('user_roles')
+        .join('roles', 'user_roles.role_id', 'roles.id')
+        .where('user_roles.user_id', ctx.userId)
+        .where('user_roles.organization_id', ctx.organizationId)
+        .select('roles.code as role_code', 'roles.name as role_name')
+        .catch(() => []) : [];
+
+      const dbRoleCodes = (userRoleRows || []).map((r: any) =>
+        String(r.role_code || r.roleCode || r.code || r.role_name || r.roleName || '').toLowerCase().trim()
+      );
+
+      const userRow = ctx.userId ? await db('users').where('id', ctx.userId).first('role').catch(() => null) : null;
+      const primaryUserRole = userRow?.role ? String(userRow.role).toLowerCase().trim() : '';
+
+      const ctxRoles = [ctx.role, ...(ctx.roles || []), (ctx as any).roleCode].map(r => String(r || '').toLowerCase().trim()).filter(Boolean);
+
+      const allRoles = [...new Set([...dbRoleCodes, primaryUserRole, ...ctxRoles])];
+
+      // Organization Admin / CEO / Super Admin is unconditionally CEO
+      const isCEO = allRoles.some(r =>
+        ['ceo', 'super_admin', 'superadmin', 'organization_admin', 'owner', 'executive'].includes(r) ||
+        r.includes('ceo') || r.includes('organization_admin')
+      );
+
+      if (isCEO) {
+        return 'ceo';
+      }
+
+      // HR Admin / HR staff is unconditionally HR
+      const isHR = allRoles.some(r =>
+        ['hr_admin', 'hr_manager', 'hr'].includes(r) || r.startsWith('hr')
+      );
+      if (isHR) {
+        return 'hr';
+      }
+
+      const emp = await this.getEmployeeForCtx(ctx);
+      if (emp) {
+        const isManagerToOthers = await db('employees')
+          .where('organization_id', ctx.organizationId)
+          .where('reporting_manager_id', emp.id)
+          .first('id')
+          .catch(() => null);
+
+        const isDeptHead = emp.current_department_id ? await db('departments')
+          .where('id', emp.current_department_id)
+          .where('manager_id', emp.id)
+          .first('id')
+          .catch(() => null) : null;
+
+        const isManagerRole = allRoles.some(r => r.includes('manager') || r.includes('dept_head')) || Boolean(isDeptHead);
+
+        if (isManagerRole && isManagerToOthers) {
+          return 'manager';
+        }
+
+        const isTeamLeadRole = allRoles.some(r => r.includes('team_lead') || r.includes('lead'));
+        if (isTeamLeadRole) {
+          return 'team_lead';
+        }
+
+        if (isManagerToOthers) {
+          return 'team_lead';
+        }
+
+        return 'employee';
+      }
+
+      if (allRoles.some(r => r.includes('manager'))) return 'manager';
+      if (allRoles.some(r => r.includes('team_lead'))) return 'team_lead';
+    } catch (err) {
+      console.error('Error resolving submitter role:', err);
+    }
+    return 'employee';
+  }
+
+  private resolveInitialWorkflowStatus(
+    levels: any[]
+  ): { status: string; currentLevel: number; currentApproverRole: string; workflowId: number | null } {
+    // Strict enforcement: all roles follow the configured workflow levels exactly.
+    // No role-based filtering (CEO, HR, etc.) — the admin controls routing via workflow config.
+    const validLevels = (levels || []).slice();
+
+    if (validLevels && validLevels.length > 0) {
+      const firstLevel = validLevels[0];
+      const lvlOrder = Number(firstLevel.levelOrder ?? firstLevel.level_order ?? 1);
+      const roleName = String(
+        firstLevel.stepName || firstLevel.step_name || firstLevel.approverRole || firstLevel.approver_role || `Level ${lvlOrder} Approver`
+      ).trim();
+
+      const approverType = String(
+        firstLevel.approverType || firstLevel.approver_type || firstLevel.approverRole || firstLevel.approver_role || ''
+      ).toLowerCase().trim();
+
+      // Map approver type to a canonical status string.
+      // Finance approver types get 'pending_finance'; all others use 'pending_level_N'.
+      let statusStr = `pending_level_${lvlOrder}`;
+      if (approverType === 'finance' || approverType.includes('finance')) {
+        statusStr = 'pending_finance';
+      }
+
+      return {
+        status: statusStr,
+        currentLevel: lvlOrder,
+        currentApproverRole: roleName,
+        workflowId: firstLevel.workflow_id ? Number(firstLevel.workflow_id) : null,
+      };
+    }
+
+    // No valid levels — caller (resolveSubmitStatus) will throw before reaching here.
+    // Return a sentinel that will trigger the error path.
+    return {
+      status: '__no_workflow__',
+      currentLevel: 0,
+      currentApproverRole: '',
+      workflowId: null,
+    };
+  }
+
   private async resolveSubmitStatus(
     ctx: TenantContext,
     items: Array<{ categoryId?: number | null; claimedAmount: number; policyValidated?: boolean }>,
-    isDraft: boolean
-  ): Promise<string> {
-    if (isDraft) return 'draft';
-    const settings = await this.getSettings(ctx);
-    if (!settings.requireManagerApproval) {
-      return settings.requireFinanceApproval ? 'pending_finance' : 'payment_pending';
+    isDraft: boolean,
+    submittedByRoleParam?: string,
+    departmentId?: number | null
+  ): Promise<{ status: string; currentLevel: number; currentRole: string; workflowId: number | null }> {
+    if (isDraft) {
+      return { status: 'draft', currentLevel: 0, currentRole: 'Draft', workflowId: null };
     }
-
     const db = getKnex();
-    for (const item of items) {
-      if (item.policyValidated === false) return 'pending_manager';
-      let threshold = 0;
-      if (item.categoryId) {
-        const cat = await db('expense_categories').where('id', item.categoryId).first().catch(() => null);
-        threshold = Number(cat?.auto_approval_threshold ?? cat?.autoApprovalThreshold ?? 0);
-      }
-      if (threshold <= 0 || Number(item.claimedAmount) > threshold) {
-        return 'pending_manager';
-      }
+    const submittedByRole = submittedByRoleParam || await this.getSubmitterRole(ctx, db);
+    const totalClaimed = items.reduce((sum, item) => sum + Number(item.claimedAmount || 0), 0);
+    const { workflow, levels } = await this.getWorkflowLevelsForClaim(db, ctx.organizationId, totalClaimed, departmentId, submittedByRole);
+
+    // STRICT ENFORCEMENT: No workflow = no submission.
+    // Admin must configure at least one active workflow with at least one level before claims can be submitted.
+    if (!workflow) {
+      throw new Error(
+        'No expense approval workflow is configured for your role and department. ' +
+        'Please contact the administrator to set up a workflow before submitting claims.'
+      );
+    }
+    if (!levels || levels.length === 0) {
+      throw new Error(
+        'The configured expense workflow has no approval levels defined. ' +
+        'Please contact the administrator to add at least one approval level to the workflow.'
+      );
     }
 
-    return settings.requireFinanceApproval ? 'pending_finance' : 'payment_pending';
+    const resolved = this.resolveInitialWorkflowStatus(levels);
+
+    if (resolved.status === '__no_workflow__') {
+      throw new Error(
+        'No expense approval workflow is configured for your role and department. ' +
+        'Please contact the administrator to set up a workflow before submitting claims.'
+      );
+    }
+
+    return {
+      status: resolved.status,
+      currentLevel: resolved.currentLevel,
+      currentRole: resolved.currentApproverRole,
+      workflowId: Number(workflow.id),
+    };
   }
 
   async createClaim(ctx: TenantContext, input: ClaimInput) {
     await this.ensureInitialized(ctx.organizationId);
+    const todayStr = new Date().toISOString().slice(0, 10);
+    if (input.claimDate && input.claimDate >= todayStr) {
+      throw new Error('Claim date must be a previous date. Today or future dates are not allowed.');
+    }
+    if (input.items && input.items.length > 0) {
+      for (const item of input.items) {
+        if (item.expenseDate && item.expenseDate >= todayStr) {
+          throw new Error('Expense item date must be a previous date. Today or future dates are not allowed.');
+        }
+      }
+    }
     const db = getKnex();
     const emp = await this.getEmployeeForCtx(ctx);
     const empId = emp ? emp.id : null;
+    const deptId = emp ? (emp.current_department_id ?? emp.currentDepartmentId ?? null) : null;
 
-    const claimNumber = `EXP-${Date.now().toString().slice(-6)}-${Math.floor(100 + Math.random() * 900)}`;
+    const config = await this.getConfig(ctx);
+    const claimNumber = await ExpenseConfigService.nextNumber(ctx.organizationId, 'claim', config.claimNumberPrefix, config.numberSequenceDigits);
     const isDraft = Boolean(input.isDraft);
 
     const itemsInput: ExpenseItemInput[] = input.items && input.items.length > 0 ? input.items : [
@@ -766,7 +1607,7 @@ export class ExpenseService {
         ...item,
         categoryId: catId,
         claimedAmount: amt,
-        approvedAmount: amt,
+        approvedAmount: 0,
         rejectedAmount: 0,
         policyValidated: validation.isValid,
         policyViolations: validation.violations.length > 0 ? JSON.stringify(validation.violations) : null
@@ -774,7 +1615,9 @@ export class ExpenseService {
     }
 
     const orgId = ctx.organizationId;
-    const status = await this.resolveSubmitStatus(ctx, validatedItems, isDraft);
+    const submittedByRole = await this.getSubmitterRole(ctx, db);
+
+    const wfSubmit = await this.resolveSubmitStatus(ctx, validatedItems, isDraft, submittedByRole, deptId);
 
     const res = await db('expense_claims').insert({
       uuid: uuidv4(),
@@ -786,16 +1629,20 @@ export class ExpenseService {
       category_id: input.categoryId || (validatedItems[0]?.categoryId || null),
       claim_date: input.claimDate || new Date().toISOString().slice(0, 10),
       total_claimed_amount: totalClaimed,
-      total_approved_amount: isDraft ? 0 : totalClaimed,
+      total_approved_amount: 0,
       total_rejected_amount: 0,
-      payment_method: input.paymentMethod || 'bank_transfer',
-      merchant_name: input.merchantName || null,
+      payment_method: input.paymentMethod || config.defaultPaymentMethod,
+      merchant_name: input.merchantName || (validatedItems[0]?.merchantName || null),
       description: input.description || null,
       project_cost_center: input.projectCostCenter || null,
-      receipt_url: input.receiptUrl || null,
+      receipt_url: input.receiptUrl || (validatedItems[0]?.receiptUrl || null),
       travel_request_id: input.travelRequestId || null,
       travel_advance_id: input.travelAdvanceId || null,
-      status: status,
+      submitted_by_role: submittedByRole,
+      status: wfSubmit.status,
+      current_level: wfSubmit.currentLevel,
+      current_approver_role: wfSubmit.currentRole,
+      workflow_id: wfSubmit.workflowId,
       submitted_at: isDraft ? null : new Date(),
       created_at: new Date(),
       updated_at: new Date()
@@ -836,7 +1683,7 @@ export class ExpenseService {
       action: isDraft ? 'Draft Created' : 'Claim Submitted',
       comments: isDraft
         ? 'Saved as draft'
-        : (status === 'pending_manager' ? 'Claim submitted for approval' : 'Claim auto-approved based on category threshold'),
+        : (wfSubmit.status === 'draft' ? 'Saved as draft' : 'Claim submitted for approval'),
       created_at: new Date()
     });
 
@@ -845,12 +1692,23 @@ export class ExpenseService {
 
   async updateClaim(ctx: TenantContext, claimId: number, input: ClaimInput) {
     await this.ensureInitialized(ctx.organizationId);
+    const todayStr = new Date().toISOString().slice(0, 10);
+    if (input.claimDate && input.claimDate >= todayStr) {
+      throw new Error('Claim date must be a previous date. Today or future dates are not allowed.');
+    }
+    if (input.items && input.items.length > 0) {
+      for (const item of input.items) {
+        if (item.expenseDate && item.expenseDate >= todayStr) {
+          throw new Error('Expense item date must be a previous date. Today or future dates are not allowed.');
+        }
+      }
+    }
     const db = getKnex();
     const existing = await db('expense_claims').where('id', claimId).where('organization_id', ctx.organizationId).first();
     if (!existing) throw new Error('Claim not found');
 
     const isSubmit = Boolean(!input.isDraft);
-    let newStatus = isSubmit ? 'pending_manager' : 'draft';
+    // newStatus is resolved via resolveSubmitStatus below — no hardcoded 'pending_manager'
 
     const itemsInput: ExpenseItemInput[] = input.items && input.items.length > 0 ? input.items : [
       {
@@ -904,7 +1762,30 @@ export class ExpenseService {
       });
     }
 
-    newStatus = await this.resolveSubmitStatus(ctx, validatedItems, !isSubmit);
+    // Reuse the original submitted_by_role from the existing claim for routing consistency
+    const submittedByRole = String(existing.submitted_by_role || existing.submittedByRole || 'employee');
+
+    // Special case: if the claim was returned for correction, re-enter at the very first
+    // workflow level (respecting amount-based routing) — do not skip levels based on role.
+    const existingStatus = String(existing.status || '');
+    const isReturnedResubmit = isSubmit && existingStatus === 'returned';
+
+    let wfSub: { status: string; currentLevel: number; currentRole: string; workflowId: number | null };
+
+    let updateDeptId: number | null = null;
+    if (existing.employee_id) {
+      const claimEmp = await db('employees').where('id', existing.employee_id).first('current_department_id').catch(() => null);
+      updateDeptId = claimEmp?.current_department_id ? Number(claimEmp.current_department_id) : null;
+    }
+
+    if (isReturnedResubmit) {
+      // Re-enter workflow from scratch for returned claims (treat submitter as employee
+      // so all approval levels are preserved regardless of the original role)
+      wfSub = await this.resolveSubmitStatus(ctx, validatedItems, false, 'employee', updateDeptId);
+    } else {
+      wfSub = await this.resolveSubmitStatus(ctx, validatedItems, !isSubmit, submittedByRole, updateDeptId);
+    }
+
 
     await db('expense_claims')
       .where('id', claimId)
@@ -913,7 +1794,7 @@ export class ExpenseService {
         category_id: input.categoryId || existing.category_id,
         claim_date: input.claimDate || existing.claim_date,
         total_claimed_amount: totalClaimed,
-        total_approved_amount: isSubmit ? totalClaimed : 0,
+        total_approved_amount: 0,
         payment_method: input.paymentMethod || existing.payment_method,
         merchant_name: input.merchantName || existing.merchant_name,
         description: input.description || existing.description,
@@ -921,7 +1802,11 @@ export class ExpenseService {
         receipt_url: input.receiptUrl || existing.receipt_url,
         travel_request_id: input.travelRequestId || existing.travel_request_id,
         travel_advance_id: input.travelAdvanceId || existing.travel_advance_id,
-        status: newStatus,
+        submitted_by_role: submittedByRole,
+        status: wfSub.status,
+        current_level: wfSub.currentLevel,
+        current_approver_role: wfSub.currentRole,
+        workflow_id: wfSub.workflowId,
         submitted_at: isSubmit ? new Date() : existing.submitted_at,
         updated_at: new Date()
       });
@@ -933,8 +1818,10 @@ export class ExpenseService {
       approver_id: ctx.userId || null,
       approver_name: empName,
       approver_role: 'Employee',
-      action: isSubmit ? 'Resubmitted Claim' : 'Updated Draft',
-      comments: isSubmit ? 'Claim resubmitted with updated items' : 'Draft updated',
+      action: isReturnedResubmit ? 'Return Correction Resubmitted' : (isSubmit ? 'Resubmitted Claim' : 'Updated Draft'),
+      comments: isReturnedResubmit
+        ? 'Employee addressed the return comments and resubmitted the claim for approval'
+        : (isSubmit ? 'Claim resubmitted with updated items' : 'Draft updated'),
       created_at: new Date()
     });
 
@@ -942,40 +1829,137 @@ export class ExpenseService {
   }
 
   // --- APPROVAL ACTIONS ---
-  async approveClaimByManager(ctx: TenantContext, claimId: number | string, comments?: string) {
+  async approveClaimByManager(ctx: TenantContext, claimId: number | string, comments?: string, options?: { isAbsenteeOverride?: boolean; delegatedForId?: number }) {
     if (typeof claimId === 'string' && (claimId as string).startsWith('tr_')) {
       const trId = Number((claimId as string).replace('tr_', ''));
-      return this.updateTravelRequestStatus(ctx, trId, 'approved', comments);
+      return this.updateTravelRequestStatus(ctx, trId, 'approved', comments, options);
     }
 
     await this.ensureInitialized(ctx?.organizationId || 1);
     const db = getKnex();
     const claim = await db('expense_claims').where('id', claimId).first();
     if (!claim) throw new Error('Claim not found');
-    await this.assertCanManageEmployeeClaim(ctx, claim);
+    await this.assertCanManageEmployeeClaim(ctx, claim, 'manager');
 
-    const nextStatus = 'pending_finance';
+    const totalClaimed = Number(claim.total_claimed_amount || 0);
+
+    let claimDeptId: number | null = null;
+    if (claim.employee_id) {
+      const claimEmp = await db('employees').where('id', claim.employee_id).first('current_department_id').catch(() => null);
+      claimDeptId = claimEmp?.current_department_id ? Number(claimEmp.current_department_id) : null;
+    }
+
+    const submittedByRole = String(claim.submitted_by_role || claim.submittedByRole || 'employee');
+    const claimWorkflowId = claim.workflow_id || claim.workflowId || null;
+    const { levels } = await this.getWorkflowLevelsForClaim(db, ctx.organizationId, totalClaimed, claimDeptId, submittedByRole, claimWorkflowId);
+
+    // Validate that current user's role matches the required approver for this level
+    await this.assertApproverMatchesWorkflowLevel(ctx, claim, levels);
+
+    const currentLevelNum = this.getCurrentLevelNum(claim.status, claim.currentLevel ?? claim.current_level);
+    let nextStatus = 'pending_finance';
+    let nextLevelNum = currentLevelNum + 1;
+    let nextRoleName = 'Finance Verification';
+    let isFinalStep = true;
+
+    if (levels && levels.length > 0) {
+      const nextLvlIndex = levels.findIndex((l: any) => Number(l.levelOrder ?? l.level_order) > currentLevelNum);
+      if (nextLvlIndex >= 0) {
+        const nextLvl = levels[nextLvlIndex];
+        nextLevelNum = Number(nextLvl.levelOrder ?? nextLvl.level_order ?? (currentLevelNum + 1));
+        const lvlType = String(nextLvl.approverType || nextLvl.approver_type || nextLvl.approverRole || nextLvl.approver_role || '').toLowerCase();
+        if (lvlType === 'finance' || lvlType.includes('finance')) {
+          nextStatus = 'pending_finance';
+          nextRoleName = 'Finance Verification';
+          isFinalStep = true;
+        } else if (lvlType === 'team_lead' || lvlType.includes('team_lead')) {
+          nextStatus = 'pending_level_1';
+          nextRoleName = String(nextLvl.stepName || nextLvl.step_name || 'Team Lead Review');
+          isFinalStep = false;
+        } else if (['department_head', 'reporting_manager', 'manager', 'reporting_officer', 'dept_head'].some(x => lvlType.includes(x))) {
+          nextStatus = 'pending_level_2';
+          nextRoleName = String(nextLvl.stepName || nextLvl.step_name || 'Manager Approval');
+          isFinalStep = false;
+        } else if (['hr', 'hr_admin', 'hr_manager', 'admin'].some(x => lvlType.includes(x))) {
+          nextStatus = 'pending_level_3';
+          nextRoleName = String(nextLvl.stepName || nextLvl.step_name || 'HR Approval');
+          isFinalStep = false;
+        } else {
+          nextStatus = `pending_level_${nextLevelNum}`;
+          nextRoleName = String(nextLvl.stepName || nextLvl.step_name || nextLvl.approverRole || nextLvl.approver_role || `Level ${nextLevelNum} Approver`).trim();
+          isFinalStep = false;
+        }
+      } else {
+        const settings = await this.getSettings(ctx);
+        if (settings.requireFinanceApproval) {
+          nextStatus = 'pending_finance';
+          nextRoleName = 'Finance Verification';
+          isFinalStep = true;
+        } else {
+          nextStatus = 'approved';
+          nextRoleName = 'Approved';
+          isFinalStep = true;
+        }
+      }
+    } else {
+      const settings = await this.getSettings(ctx);
+      if (settings.requireFinanceApproval) {
+        nextStatus = 'pending_finance';
+        nextRoleName = 'Finance Verification';
+        isFinalStep = true;
+      } else {
+        nextStatus = 'approved';
+        nextRoleName = 'Approved';
+        isFinalStep = true;
+      }
+    }
+
     await db('expense_claims')
       .where('id', claimId)
       .update({
         status: nextStatus,
+        current_level: nextLevelNum,
+        current_approver_role: nextRoleName,
         updated_at: new Date()
       });
 
     await db('expense_claim_items').where('claim_id', claimId).update({ status: 'manager_approved' });
 
-    const approverName = await this.getApproverName(ctx, 'Reporting Manager');
+    const currentRoleLabel = claim.current_approver_role || `Level ${currentLevelNum} Reviewer`;
+    const approverName = await this.getApproverName(ctx, currentRoleLabel);
+
+    const isOverride = Boolean(options?.isAbsenteeOverride);
+    const actionText = isOverride
+      ? 'Approved (Absent Team Lead Override)'
+      : `Approved Level ${currentLevelNum}`;
+
+    const auditMessage = isOverride
+      ? (comments ? `[Team Lead Absent Override] Remark: ${comments}` : '[Team Lead Absent Override] Approved on behalf of absent Team Lead')
+      : (isFinalStep
+          ? (comments || 'Claim approved by all workflow levels and forwarded to Finance Verification.')
+          : (comments || `Claim approved at Level ${currentLevelNum} (${currentRoleLabel}) and forwarded to Level ${nextLevelNum} (${nextRoleName}).`));
+
     await db('expense_approval_logs').insert({
       claim_id: claimId,
       approver_id: ctx?.userId || null,
       approver_name: approverName,
-      approver_role: 'Reporting Manager',
-      action: 'Approved by Manager',
-      comments: comments || 'Claim approved and forwarded to Finance for verification.',
+      approver_role: currentRoleLabel,
+      action: actionText,
+      comments: auditMessage,
+      is_absentee_override: isOverride,
+      delegated_for_user_id: options?.delegatedForId || null,
       created_at: new Date()
     });
 
-    return this.getClaimById(ctx, claimId);
+    const updatedClaim = await this.getClaimById(ctx, claimId);
+    return {
+      ...updatedClaim,
+      nextStepName: nextRoleName,
+      isFinalStep,
+      message: isFinalStep
+        ? 'Request approved and sent to Finance Verification'
+        : `Request approved and sent to next approver: ${nextRoleName}`
+    };
   }
 
   async bulkApproveClaims(ctx: TenantContext, ids: (number | string)[], comments?: string) {
@@ -994,8 +1978,12 @@ export class ExpenseService {
         const db = getKnex();
         const claim = await db('expense_claims').where('id', id).first();
         if (!claim) throw new Error('Claim not found');
-        const status = claim.status;
-        if (['submitted', 'pending_manager', 'pending'].includes(status)) {
+        const status = String(claim.status || '');
+
+        // Handle multi-step workflow levels (pending_level_1, pending_level_2, pending_level_3, etc.)
+        const isWorkflowLevel = /^pending_level_\d+$/.test(status);
+
+        if (isWorkflowLevel || ['submitted', 'pending_manager', 'pending'].includes(status)) {
           await this.approveClaimByManager(ctx, Number(id), comments);
         } else if (status === 'pending_finance') {
           await this.verifyAndApproveByFinance(ctx, Number(id), {
@@ -1013,17 +2001,47 @@ export class ExpenseService {
     return { approved, failed };
   }
 
+
   async verifyAndApproveByFinance(ctx: TenantContext, claimId: number | string, body: { items?: Array<{ id: number; approvedAmount: number; adjustmentReason?: string }>; comments?: string }) {
     if (typeof claimId === 'string' && (claimId as string).startsWith('tr_')) {
       const trId = Number((claimId as string).replace('tr_', ''));
-      return this.updateTravelRequestStatus(ctx, trId, 'approved', body?.comments || 'Verified by Finance');
+      await this.ensureInitialized(ctx?.organizationId || 1);
+      const db = getKnex();
+      await db('travel_requests')
+        .where('id', trId)
+        .where('organization_id', ctx.organizationId)
+        .update({
+          status: 'approved',
+          current_approver_role: 'Approved by Finance',
+          approver_id: ctx.userId || null,
+          approver_notes: body?.comments || 'Verified & approved by Finance',
+          updated_at: new Date()
+        });
+      const row = await db('travel_requests as tr')
+        .leftJoin('employees as e', 'tr.employee_id', 'e.id')
+        .leftJoin('departments as d', 'e.current_department_id', 'd.id')
+        .where('tr.id', trId)
+        .select('tr.*', 'e.first_name', 'e.last_name', 'e.employee_code', 'd.name as department_name')
+        .first();
+      const mapped = this.mapTravelRequest(row);
+      return {
+        ...mapped,
+        id: `tr_${row.id}`,
+        claimNumber: row.request_number || `TRV-${row.id}`,
+        status: 'approved',
+        currentApproverRole: 'Approved by Finance',
+        nextStepName: 'Approved',
+        isFinalStep: true,
+        message: 'Travel request verified & approved by Finance'
+      };
     }
 
     await this.ensureInitialized(ctx?.organizationId || 1);
     const db = getKnex();
+    const config = await this.getConfig(ctx);
     const claim = await db('expense_claims').where('id', claimId).first();
     if (!claim) throw new Error('Claim not found');
-    await this.assertCanManageEmployeeClaim(ctx, claim);
+    await this.assertCanManageEmployeeClaim(ctx, claim, 'finance');
 
     const comments = String(body.comments || '').trim();
     if (comments.length < 5) {
@@ -1086,15 +2104,64 @@ export class ExpenseService {
       });
     }
 
-    const nextStatus = 'payment_pending';
+    const totalClaimed = Number(claim.total_claimed_amount || 0);
+    let claimDeptId: number | null = null;
+    if (claim.employee_id) {
+      const claimEmp = await db('employees').where('id', claim.employee_id).first('current_department_id').catch(() => null);
+      claimDeptId = claimEmp?.current_department_id ? Number(claimEmp.current_department_id) : null;
+    }
+
+    const submittedByRole = String(claim.submitted_by_role || claim.submittedByRole || 'employee');
+    const claimWorkflowId = claim.workflow_id || claim.workflowId || null;
+    const { levels } = await this.getWorkflowLevelsForClaim(db, ctx.organizationId, totalClaimed, claimDeptId, submittedByRole, claimWorkflowId);
+
+    const currentLevelNum = this.getCurrentLevelNum(claim.status, claim.current_level ?? claim.currentLevel);
+
+    let nextStatus = 'payment_pending';
+    let nextLevelNum = currentLevelNum + 1;
+    let nextRoleName = 'Payout Processing';
+    let isFinalStep = true;
+
+    if (levels && levels.length > 0) {
+      const nextLvlIndex = levels.findIndex((l: any) => Number(l.levelOrder ?? l.level_order) > currentLevelNum);
+      if (nextLvlIndex >= 0) {
+        const nextLvl = levels[nextLvlIndex];
+        nextLevelNum = Number(nextLvl.levelOrder ?? nextLvl.level_order ?? (currentLevelNum + 1));
+        const lvlType = String(nextLvl.approverType || nextLvl.approver_type || nextLvl.approverRole || nextLvl.approver_role || '').toLowerCase();
+
+        if (['department_head', 'reporting_manager', 'manager', 'reporting_officer', 'dept_head'].some(x => lvlType.includes(x))) {
+          nextStatus = 'pending_level_2';
+          nextRoleName = String(nextLvl.stepName || nextLvl.step_name || 'Manager Approval');
+          isFinalStep = false;
+        } else if (lvlType === 'team_lead' || lvlType.includes('team_lead')) {
+          nextStatus = 'pending_level_1';
+          nextRoleName = String(nextLvl.stepName || nextLvl.step_name || 'Team Lead Review');
+          isFinalStep = false;
+        } else if (['hr', 'hr_admin', 'hr_manager', 'admin'].some(x => lvlType.includes(x))) {
+          nextStatus = 'pending_level_3';
+          nextRoleName = String(nextLvl.stepName || nextLvl.step_name || 'HR Approval');
+          isFinalStep = false;
+        } else if (lvlType === 'finance' || lvlType.includes('finance')) {
+          nextStatus = 'pending_finance';
+          nextRoleName = String(nextLvl.stepName || nextLvl.step_name || 'Finance Verification');
+          isFinalStep = false;
+        } else {
+          nextStatus = `pending_level_${nextLevelNum}`;
+          nextRoleName = String(nextLvl.stepName || nextLvl.step_name || `Level ${nextLevelNum} Approver`).trim();
+          isFinalStep = false;
+        }
+      }
+    }
 
     await db('expense_claims')
       .where('id', claimId)
       .update({
         status: nextStatus,
+        current_level: nextLevelNum,
+        current_approver_role: nextRoleName,
         total_approved_amount: totalApproved,
         total_rejected_amount: totalRejected,
-        approved_at: new Date(),
+        approved_at: isFinalStep ? new Date() : claim.approved_at,
         updated_at: new Date()
       });
 
@@ -1125,12 +2192,22 @@ export class ExpenseService {
       approver_id: ctx.userId || null,
       approver_name: approverName,
       approver_role: 'Finance / Accounts',
-      action: 'Verified & Approved by Finance',
-      comments: body.comments || `Finance verified claim. Approved amount: ₹${totalApproved.toLocaleString('en-IN')}`,
+      action: isFinalStep ? 'Verified & Approved by Finance' : `Level ${currentLevelNum} Finance Verification Approved`,
+      comments: isFinalStep
+        ? (body.comments || `Finance verified claim. Approved amount: ${ExpenseConfigService.formatAmount(totalApproved, config)}`)
+        : (body.comments || `Finance verified claim and forwarded to next approver: ${nextRoleName}`),
       created_at: new Date()
     });
 
-    return this.getClaimById(ctx, claimId);
+    const updatedClaim = await this.getClaimById(ctx, claimId);
+    return {
+      ...updatedClaim,
+      nextStepName: nextRoleName,
+      isFinalStep,
+      message: isFinalStep
+        ? 'Claim verified by Finance and moved to payout processing'
+        : `Claim verified by Finance and forwarded to next approver: ${nextRoleName}`
+    };
   }
 
   async rejectClaim(ctx: TenantContext, claimId: number | string, reason: string) {
@@ -1144,7 +2221,7 @@ export class ExpenseService {
     if (!reason || !reason.trim()) throw new Error('Rejection reason is mandatory');
     const claim = await db('expense_claims').where('id', claimId).first();
     if (!claim) throw new Error('Claim not found');
-    await this.assertCanManageEmployeeClaim(ctx, claim);
+    await this.assertCanManageEmployeeClaim(ctx, claim, 'finance');
 
     await db('expense_claims')
       .where('id', claimId)
@@ -1179,17 +2256,36 @@ export class ExpenseService {
   }
 
   async returnClaimForCorrection(ctx: TenantContext, claimId: number | string, comments: string) {
+    if (!comments || !comments.trim()) throw new Error('Correction comments are mandatory');
+
     if (typeof claimId === 'string' && (claimId as string).startsWith('tr_')) {
       const trId = Number((claimId as string).replace('tr_', ''));
-      return this.updateTravelRequestStatus(ctx, trId, 'rejected', comments);
+      const db = getKnex();
+      const travelReq = await db('travel_requests').where('id', trId).where('organization_id', ctx.organizationId).first();
+      if (!travelReq) throw new Error('Travel request not found');
+
+      const currentLevel = Number(travelReq.current_level || 1);
+      const currentStatus = String(travelReq.status || 'pending');
+
+      if (currentLevel > 1 || ['pending_level_2', 'pending_level_3', 'pending_finance'].includes(currentStatus)) {
+        throw new Error('Only Level 1 Team Lead approvers can return applications for correction. Managers can only approve or reject.');
+      }
+
+      return this.updateTravelRequestStatus(ctx, trId, 'returned', comments);
     }
 
     await this.ensureInitialized(ctx?.organizationId || 1);
     const db = getKnex();
-    if (!comments || !comments.trim()) throw new Error('Correction comments are mandatory');
     const claim = await db('expense_claims').where('id', claimId).first();
     if (!claim) throw new Error('Claim not found');
-    await this.assertCanManageEmployeeClaim(ctx, claim);
+    await this.assertCanManageEmployeeClaim(ctx, claim, 'finance');
+
+    const currentLevel = Number(claim.current_level ?? claim.currentLevel ?? 1);
+    const currentStatus = String(claim.status || 'pending');
+
+    if (currentLevel > 1 || ['pending_level_2', 'pending_level_3', 'pending_finance'].includes(currentStatus)) {
+      throw new Error('Only Level 1 Team Lead approvers can return applications for correction. Managers can only approve or reject.');
+    }
 
     await db('expense_claims')
       .where('id', claimId)
@@ -1228,9 +2324,16 @@ export class ExpenseService {
 
     await this.ensureInitialized(ctx?.organizationId || 1);
     const db = getKnex();
+    const config = await this.getConfig(ctx);
     const claim = await db('expense_claims').where('id', claimId).first();
     if (!claim) throw new Error('Claim not found');
-    await this.assertCanManageEmployeeClaim(ctx, claim);
+    await this.assertCanManageEmployeeClaim(ctx, claim, 'payout');
+
+    const method = String(body.paymentMethod || config.defaultPaymentMethod).toLowerCase();
+    const ref = String(body.paymentReference || '').trim();
+    if (method !== 'cash' && !ref) {
+      throw new Error('Transaction Reference / UTR number is mandatory for Bank Transfer / Online payment.');
+    }
 
     const rawAmt = claim.totalApprovedAmount ?? claim.total_approved_amount ?? claim.totalClaimedAmount ?? claim.total_claimed_amount;
     const numAmt = Number(rawAmt || 0);
@@ -1244,7 +2347,7 @@ export class ExpenseService {
         payment_date: body.paymentDate || new Date().toISOString().slice(0, 10),
         paid_amount: paidAmt,
         payment_method: body.paymentMethod || 'bank_transfer',
-        payment_reference: body.paymentReference || null,
+        payment_reference: ref || null,
         reimbursed_at: new Date(),
         updated_at: new Date()
       });
@@ -1257,7 +2360,7 @@ export class ExpenseService {
       approver_name: financeName,
       approver_role: 'Finance / Accounts',
       action: 'Reimbursement Disbursed',
-      comments: `Payment processed via ${body.paymentMethod || 'Bank Transfer'}. Ref #${body.paymentReference || 'N/A'}. Amount: ₹${paidAmt.toLocaleString('en-IN')}`,
+      comments: `Payment processed via ${body.paymentMethod || config.defaultPaymentMethod}. Ref #${ref || 'N/A'}. Amount: ${ExpenseConfigService.formatAmount(paidAmt, config)}`,
       created_at: new Date()
     });
 
@@ -1281,6 +2384,11 @@ export class ExpenseService {
       lastName: row.last_name || row.lastName || row.submitter_last_name || row.submitterLastName,
       employeeCode: row.employee_code || row.employeeCode,
       departmentName: row.department_name || row.departmentName,
+      submittedByRole: row.submitted_by_role || row.submittedByRole || 'employee',
+      currentLevel: row.current_level || row.currentLevel || 1,
+      currentApproverRole: row.current_approver_role || row.currentApproverRole,
+      workflowId: row.workflow_id || row.workflowId,
+      rejectionReason: row.rejection_reason || row.rejectionReason,
       approverNotes: row.approver_notes || row.approverNotes,
       createdAt: row.created_at || row.createdAt
     };
@@ -1299,11 +2407,19 @@ export class ExpenseService {
       balanceAmount: row.balance_amount ?? row.balanceAmount,
       purpose: row.purpose,
       status: row.status,
+      submittedByRole: row.submitted_by_role || row.submittedByRole || 'employee',
+      currentLevel: row.current_level || row.currentLevel || 1,
+      currentApproverRole: row.current_approver_role || row.currentApproverRole,
+      workflowId: row.workflow_id || row.workflowId,
       firstName: row.first_name || row.firstName || row.submitter_first_name || row.submitterFirstName,
       lastName: row.last_name || row.lastName || row.submitter_last_name || row.submitterLastName,
       employeeCode: row.employee_code || row.employeeCode,
+      departmentName: row.department_name || row.departmentName,
       requestNumber: row.request_number || row.requestNumber,
       travelPurpose: row.travel_purpose || row.travelPurpose,
+      financeNotes: row.finance_notes || row.financeNotes,
+      rejectionReason: row.rejection_reason || row.rejectionReason,
+      financeApprovedAt: row.finance_approved_at || row.financeApprovedAt,
       disbursedAt: row.disbursed_at || row.disbursedAt,
       createdAt: row.created_at || row.createdAt
     };
@@ -1330,7 +2446,7 @@ export class ExpenseService {
     };
   }
 
-  async getTravelRequests(ctx: TenantContext, employeeId?: number) {
+  async getTravelRequests(ctx: TenantContext, employeeId?: number, filters?: { status?: string; departmentId?: number; search?: string }) {
     await this.ensureInitialized(ctx.organizationId);
     const db = getKnex();
     let query = db('travel_requests as tr')
@@ -1343,6 +2459,72 @@ export class ExpenseService {
 
     const vis = await this.getPeopleVisibility(ctx, 'tr.employee_id', employeeId);
     query = this.applyVisibilityToQuery(query, vis);
+
+    if (filters?.status && filters.status !== 'all') {
+      if (filters.status === 'pending_approvals' || filters.status === 'pending_manager') {
+        const allUserRoles = Array.from(
+          new Set(
+            [ctx.role, ...(ctx.roles || [])]
+              .filter(Boolean)
+              .map((r: any) => String(r).toLowerCase().trim())
+          )
+        );
+        const isHrOrAdmin = allUserRoles.some((c) =>
+          ['hr_admin', 'hr_manager', 'hr', 'organization_admin', 'super_admin', 'admin', 'ceo'].includes(c)
+        );
+        const isManagerOnly = allUserRoles.some((c) => ['manager', 'department_head'].includes(c)) && !isHrOrAdmin;
+        const isTeamLeadOnly = allUserRoles.some((c) => c === 'team_lead') && !isHrOrAdmin && !isManagerOnly;
+
+        query = query.where(function (this: any) {
+          if (isHrOrAdmin) {
+            this.where('tr.status', 'pending_level_3');
+          } else if (isManagerOnly) {
+            this.whereIn('tr.status', ['pending_level_2', 'pending_manager']);
+          } else if (isTeamLeadOnly) {
+            this.whereIn('tr.status', ['pending', 'submitted', 'pending_level_1']);
+          } else {
+            this.whereIn('tr.status', ['pending', 'submitted', 'pending_manager', 'pending_level_1']).orWhere('tr.status', 'like', 'pending_level_%');
+          }
+        });
+      } else if (filters.status === 'pending' || filters.status === 'pending_level_1') {
+        // Exact Level 1 only (Team Lead queue)
+        query = query.where(function (this: any) {
+          this.whereIn('tr.status', ['pending', 'submitted', 'pending_level_1']);
+        });
+      } else if (filters.status === 'pending_level_2') {
+        // Exact Level 2 only (Manager queue)
+        query = query.where('tr.status', 'pending_level_2');
+      } else if (filters.status === 'pending_level_3') {
+        // Exact Level 3 only (HR queue)
+        query = query.where('tr.status', 'pending_level_3');
+      } else if (filters.status === 'pending_finance') {
+        query = query.where('tr.status', 'pending_finance');
+      } else if (filters.status === 'approved') {
+        query = query.where('tr.status', 'approved');
+      } else if (filters.status === 'rejected') {
+        query = query.where('tr.status', 'rejected');
+      } else {
+        query = query.where('tr.status', filters.status);
+      }
+    }
+
+    if (filters?.departmentId) {
+      query = query.where('e.current_department_id', filters.departmentId);
+    }
+
+    if (filters?.search) {
+      const s = `%${filters.search.toLowerCase()}%`;
+      query = query.where(function (this: any) {
+        this.whereRaw('LOWER(tr.purpose) LIKE ?', [s])
+          .orWhereRaw('LOWER(tr.from_location) LIKE ?', [s])
+          .orWhereRaw('LOWER(tr.to_location) LIKE ?', [s])
+          .orWhereRaw('LOWER(tr.request_number) LIKE ?', [s])
+          .orWhereRaw('LOWER(e.first_name) LIKE ?', [s])
+          .orWhereRaw('LOWER(e.last_name) LIKE ?', [s])
+          .orWhereRaw('LOWER(e.employee_code) LIKE ?', [s]);
+      });
+    }
+
     const rows = await query;
     return (rows || []).map((r: any) => this.mapTravelRequest(r));
   }
@@ -1351,7 +2533,38 @@ export class ExpenseService {
     await this.ensureInitialized(ctx.organizationId);
     const db = getKnex();
     const emp = await this.getEmployeeForCtx(ctx);
-    const reqNum = `TRV-${Date.now().toString().slice(-6)}`;
+    const config = await this.getConfig(ctx);
+    const reqNum = await ExpenseConfigService.nextNumber(ctx.organizationId, 'travel_request', config.travelRequestNumberPrefix, config.numberSequenceDigits);
+
+    const submittedByRole = await this.getSubmitterRole(ctx, db);
+
+    // Resolve initial workflow status (same as expense claims)
+    const estimatedBudget = Number(data.estimatedBudget || 0);
+
+    // Validate against Travel category & expense policies
+    const travelCat = await db('expense_categories')
+      .where('organization_id', ctx.organizationId)
+      .where(function() {
+        this.whereRaw('LOWER(name) LIKE ?', ['%travel%']).orWhereRaw('LOWER(code) = ?', ['travel']);
+      })
+      .first();
+
+    const catId = travelCat ? Number(travelCat.id) : 1;
+    const validation = await this.validatePolicyForClaim(ctx, catId, estimatedBudget, false);
+    if (!validation.isValid && validation.violations && validation.violations.length > 0) {
+      const limitViolation = validation.violations.find((v: string) => v.toLowerCase().includes('limit') || v.toLowerCase().includes('exceeds'));
+      if (limitViolation) {
+        throw new Error(`Policy limit exceeded: ${limitViolation}`);
+      }
+    }
+
+    const { workflow, levels } = await this.getWorkflowLevelsForClaim(db, ctx.organizationId, estimatedBudget, emp?.current_department_id);
+    const settings = await this.getSettings(ctx);
+    const resolved = this.resolveInitialWorkflowStatus(levels);
+    let initialStatus = resolved.status;
+    let currentLevel = resolved.currentLevel;
+    let currentApproverRole = resolved.currentApproverRole;
+    let workflowId: number | null = workflow ? Number(workflow.id) : resolved.workflowId;
 
     const [id] = await db('travel_requests').insert({
       uuid: uuidv4(),
@@ -1359,13 +2572,17 @@ export class ExpenseService {
       organization_id: ctx.organizationId,
       employee_id: emp?.id ?? null,
       submitted_by_user_id: ctx.userId || null,
+      submitted_by_role: submittedByRole,
       from_location: data.fromLocation,
       to_location: data.toLocation,
       purpose: data.purpose,
       start_date: data.startDate,
       end_date: data.endDate,
-      estimated_budget: data.estimatedBudget || 0,
-      status: 'pending',
+      estimated_budget: estimatedBudget,
+      status: initialStatus,
+      current_level: currentLevel,
+      current_approver_role: currentApproverRole,
+      workflow_id: workflowId,
       created_at: new Date(),
       updated_at: new Date()
     });
@@ -1378,19 +2595,176 @@ export class ExpenseService {
     return this.mapTravelRequest(row);
   }
 
-  async updateTravelRequestStatus(ctx: TenantContext, id: number, status: string, notes?: string) {
+  async updateTravelRequest(
+    ctx: TenantContext,
+    id: number,
+    data: { fromLocation?: string; toLocation?: string; purpose?: string; startDate?: string; endDate?: string; estimatedBudget?: number }
+  ) {
     await this.ensureInitialized(ctx.organizationId);
     const db = getKnex();
-    const existing = await db('travel_requests')
+    const existing = await db('travel_requests').where('id', id).where('organization_id', ctx.organizationId).first();
+    if (!existing) throw new Error('Travel request not found');
+
+    const estimatedBudget = data.estimatedBudget !== undefined ? Number(data.estimatedBudget) : Number(existing.estimated_budget || 0);
+    const submittedByRole = String(existing.submitted_by_role || 'employee');
+    let trDeptId: number | null = null;
+    if (existing.employee_id) {
+      const trEmp = await db('employees').where('id', existing.employee_id).first('current_department_id').catch(() => null);
+      trDeptId = trEmp?.current_department_id ? Number(trEmp.current_department_id) : null;
+    }
+    const { workflow, levels } = await this.getWorkflowLevelsForClaim(db, ctx.organizationId, estimatedBudget, trDeptId);
+    const settings = await this.getSettings(ctx);
+
+    const resolved = this.resolveInitialWorkflowStatus(levels);
+
+    await db('travel_requests')
+      .where('id', id)
+      .where('organization_id', ctx.organizationId)
+      .update({
+        from_location: data.fromLocation || existing.from_location,
+        to_location: data.toLocation || existing.to_location,
+        purpose: data.purpose || existing.purpose,
+        start_date: data.startDate || existing.start_date,
+        end_date: data.endDate || existing.end_date,
+        estimated_budget: estimatedBudget,
+        status: resolved.status,
+        current_level: resolved.currentLevel,
+        current_approver_role: resolved.currentApproverRole,
+        workflow_id: workflow ? Number(workflow.id) : resolved.workflowId,
+        rejection_reason: null,
+        updated_at: new Date()
+      });
+
+    const row = await db('travel_requests as tr')
+      .leftJoin('employees as e', 'tr.employee_id', 'e.id')
+      .leftJoin('departments as d', 'e.current_department_id', 'd.id')
+      .where('tr.id', id)
+      .select('tr.*', 'e.first_name', 'e.last_name', 'e.employee_code', 'd.name as department_name')
+      .first();
+
+    return this.mapTravelRequest(row);
+  }
+
+  async updateTravelRequestStatus(
+    ctx: TenantContext,
+    id: number,
+    status: string,
+    notes?: string,
+    options?: { isAbsenteeOverride?: boolean; delegatedForId?: number }
+  ) {
+    await this.ensureInitialized(ctx.organizationId);
+    const db = getKnex();
+
+    const travelReq = await db('travel_requests')
       .where('id', id)
       .where('organization_id', ctx.organizationId)
       .first();
-    if (!existing) throw new Error('Travel request not found');
 
-    let nextStatus = status;
-    const current = String(existing.status || '').toLowerCase();
-    if (status === 'approved' && (current === 'pending' || current === 'submitted')) {
-      nextStatus = 'pending_finance';
+    if (!travelReq) {
+      throw new Error('Travel request not found');
+    }
+
+    const emp = await this.getEmployeeForCtx(ctx);
+    if (emp && travelReq.employee_id && Number(travelReq.employee_id) === Number(emp.id)) {
+      throw new Error('Employees cannot approve or reject their own travel requests.');
+    }
+
+    await this.assertCanManageEmployeeClaim(ctx, travelReq, 'manager');
+
+    // Handle rejection or return directly
+    if (status === 'rejected' || status === 'returned') {
+      const isReturned = status === 'returned';
+      await db('travel_requests').where('id', id).where('organization_id', ctx.organizationId).update({
+        status: isReturned ? 'returned' : 'rejected',
+        rejection_reason: isReturned ? null : (notes || 'Rejected'),
+        approver_id: ctx.userId || null,
+        approver_notes: notes || null,
+        updated_at: new Date()
+      });
+      const row = await db('travel_requests as tr')
+        .leftJoin('employees as e', 'tr.employee_id', 'e.id')
+        .leftJoin('departments as d', 'e.current_department_id', 'd.id')
+        .where('tr.id', id)
+        .select('tr.*', 'e.first_name', 'e.last_name', 'e.employee_code', 'd.name as department_name')
+        .first();
+      return this.mapTravelRequest(row);
+    }
+
+    // Advance through workflow levels (same pattern as expense claims)
+    const currentStatus = String(travelReq.status || 'pending');
+    const currentLevelNum = this.getCurrentLevelNum(travelReq.status, travelReq.current_level);
+    const estimatedBudget = Number(travelReq.estimated_budget || 0);
+    let reqDeptId: number | null = null;
+    if (travelReq.employee_id) {
+      const reqEmp = await db('employees').where('id', travelReq.employee_id).first('current_department_id').catch(() => null);
+      reqDeptId = reqEmp?.current_department_id ? Number(reqEmp.current_department_id) : null;
+    }
+    const { workflow, levels } = await this.getWorkflowLevelsForClaim(db, ctx.organizationId, estimatedBudget, reqDeptId);
+
+    // Validate that current user's role matches the required approver for this level
+    const isCurrentlyAtLevel = currentStatus.startsWith('pending_level_') || currentStatus === 'pending' || currentStatus === 'pending_manager';
+    if (isCurrentlyAtLevel && levels && levels.length > 0) {
+      await this.assertApproverMatchesWorkflowLevel(ctx, travelReq, levels);
+    }
+
+    const approverRole = await this.getSubmitterRole(ctx, db);
+    const approverRank = this.getRoleRank(approverRole);
+
+    let nextStatus = 'pending_finance';
+    let nextLevel = currentLevelNum + 1;
+    let nextRoleName = 'Finance Verification';
+
+    if (currentStatus === 'pending_finance') {
+      // Finance is approving
+      nextStatus = 'approved';
+      nextRoleName = 'Approved';
+    } else if (isCurrentlyAtLevel) {
+      if (levels && levels.length > 0) {
+        const nextLvlIndex = levels.findIndex((l: any) => Number(l.levelOrder ?? l.level_order) > currentLevelNum);
+        if (nextLvlIndex >= 0) {
+          const nextLvl = levels[nextLvlIndex];
+          nextLevel = Number(nextLvl.levelOrder ?? nextLvl.level_order ?? (currentLevelNum + 1));
+          const lvlType = String(nextLvl.approverType || nextLvl.approver_type || nextLvl.approverRole || nextLvl.approver_role || '').toLowerCase();
+          if (lvlType === 'finance' || lvlType.includes('finance')) {
+            nextStatus = 'pending_finance';
+            nextRoleName = 'Finance Verification';
+          } else if (lvlType === 'team_lead' || lvlType.includes('team_lead')) {
+            nextStatus = 'pending_level_1';
+            nextRoleName = String(nextLvl.stepName || nextLvl.step_name || 'Team Lead Review');
+          } else if (['department_head', 'reporting_manager', 'manager', 'reporting_officer', 'dept_head'].some(x => lvlType.includes(x))) {
+            nextStatus = 'pending_level_2';
+            nextRoleName = String(nextLvl.stepName || nextLvl.step_name || 'Manager Approval');
+          } else if (['hr', 'hr_admin', 'hr_manager', 'admin'].some(x => lvlType.includes(x))) {
+            nextStatus = 'pending_level_3';
+            nextRoleName = String(nextLvl.stepName || nextLvl.step_name || 'HR Approval');
+          } else {
+            nextStatus = `pending_level_${nextLevel}`;
+            nextRoleName = String(nextLvl.stepName || nextLvl.step_name || nextLvl.approverRole || nextLvl.approver_role || `Level ${nextLevel} Approver`).trim();
+          }
+        } else {
+          const settings = await this.getSettings(ctx);
+          if (settings.requireFinanceApproval) {
+            nextStatus = 'pending_finance';
+            nextRoleName = 'Finance Verification';
+          } else {
+            nextStatus = 'approved';
+            nextRoleName = 'Approved';
+          }
+        }
+      } else {
+        const settings = await this.getSettings(ctx);
+        if (settings.requireFinanceApproval) {
+          nextStatus = 'pending_finance';
+          nextRoleName = 'Finance Verification';
+        } else {
+          nextStatus = 'approved';
+          nextRoleName = 'Approved';
+        }
+      }
+    } else {
+      // Override / direct status set (admin)
+      nextStatus = status === 'pending_manager' ? 'pending_level_1' : status;
+      nextRoleName = nextStatus;
     }
 
     await db('travel_requests')
@@ -1398,6 +2772,9 @@ export class ExpenseService {
       .where('organization_id', ctx.organizationId)
       .update({
         status: nextStatus,
+        current_level: nextLevel,
+        current_approver_role: nextRoleName,
+        workflow_id: workflow ? Number(workflow.id) : (travelReq.workflow_id || null),
         approver_id: ctx.userId || null,
         approver_notes: notes || null,
         updated_at: new Date()
@@ -1408,21 +2785,66 @@ export class ExpenseService {
       .where('tr.id', id)
       .select('tr.*', 'e.first_name', 'e.last_name', 'e.employee_code', 'd.name as department_name')
       .first();
-    return this.mapTravelRequest(row);
+
+    const mapped = this.mapTravelRequest(row);
+    const isFinal = nextStatus === 'approved' || nextStatus === 'pending_finance';
+    return {
+      ...mapped,
+      id: `tr_${row.id}`,
+      claimNumber: row.request_number || `TRV-${row.id}`,
+      nextStepName: nextRoleName,
+      isFinalStep: isFinal,
+      currentApproverRole: nextRoleName,
+      status: nextStatus,
+      message: nextStatus === 'approved'
+        ? 'Travel request fully approved'
+        : (nextStatus === 'pending_finance'
+          ? 'Travel request approved and forwarded to Finance Verification'
+          : `Travel request approved and forwarded to next approver: ${nextRoleName}`)
+    };
   }
 
-  async getTravelAdvances(ctx: TenantContext, employeeId?: number) {
+  async getTravelAdvances(ctx: TenantContext, employeeId?: number, filters?: { status?: string; departmentId?: number; search?: string }) {
     await this.ensureInitialized(ctx.organizationId);
     const db = getKnex();
     let query = db('travel_advances as ta')
       .leftJoin('employees as e', 'ta.employee_id', 'e.id')
+      .leftJoin('departments as d', 'e.current_department_id', 'd.id')
       .leftJoin('travel_requests as tr', 'ta.travel_request_id', 'tr.id')
       .where('ta.organization_id', ctx.organizationId)
-      .select('ta.*', 'e.first_name', 'e.last_name', 'e.employee_code', 'tr.request_number', 'tr.purpose as travel_purpose')
+      .select('ta.*', 'e.first_name', 'e.last_name', 'e.employee_code', 'd.name as department_name', 'tr.request_number', 'tr.purpose as travel_purpose')
       .orderBy('ta.created_at', 'desc');
 
     const vis = await this.getPeopleVisibility(ctx, 'ta.employee_id', employeeId);
     query = this.applyVisibilityToQuery(query, vis);
+
+    if (filters?.status && filters.status !== 'all') {
+      if (filters.status === 'pending_finance' || filters.status === 'pending') {
+        query = query.whereIn('ta.status', ['pending_finance', 'pending', 'requested']);
+      } else if (filters.status === 'approved') {
+        query = query.whereIn('ta.status', ['approved', 'disbursed']);
+      } else if (filters.status === 'rejected') {
+        query = query.where('ta.status', 'rejected');
+      } else {
+        query = query.where('ta.status', filters.status);
+      }
+    }
+
+    if (filters?.departmentId) {
+      query = query.where('e.current_department_id', filters.departmentId);
+    }
+
+    if (filters?.search) {
+      const s = `%${filters.search.toLowerCase()}%`;
+      query = query.where(function (this: any) {
+        this.whereRaw('LOWER(ta.purpose) LIKE ?', [s])
+          .orWhereRaw('LOWER(ta.advance_number) LIKE ?', [s])
+          .orWhereRaw('LOWER(e.first_name) LIKE ?', [s])
+          .orWhereRaw('LOWER(e.last_name) LIKE ?', [s])
+          .orWhereRaw('LOWER(e.employee_code) LIKE ?', [s]);
+      });
+    }
+
     const rows = await query;
     return (rows || []).map((r: any) => this.mapTravelAdvance(r));
   }
@@ -1431,8 +2853,33 @@ export class ExpenseService {
     await this.ensureInitialized(ctx.organizationId);
     const db = getKnex();
     const emp = await this.getEmployeeForCtx(ctx);
-    const advNum = `ADV-${Date.now().toString().slice(-6)}`;
+    const config = await this.getConfig(ctx);
+    const advNum = await ExpenseConfigService.nextNumber(ctx.organizationId, 'travel_advance', config.travelAdvanceNumberPrefix, config.numberSequenceDigits);
     const amt = Number(data.advanceAmount || 0);
+
+    if (data.travelRequestId) {
+      const tr = await db('travel_requests').where('id', data.travelRequestId).where('organization_id', ctx.organizationId).first();
+      if (!tr) throw new Error('Selected travel request does not exist');
+      if (String(tr.status || '').toLowerCase() === 'rejected') {
+        throw new Error('Rejected travel requests cannot be linked to an advance request');
+      }
+    }
+
+    const submittedByRole = await this.getSubmitterRole(ctx, db);
+    const { workflow, levels } = await this.getWorkflowLevelsForClaim(db, ctx.organizationId, amt, emp?.current_department_id);
+
+    let initialStatus = config.defaultAdvanceStatus || 'pending_finance';
+    let initialLevel = 1;
+    let initialRole = 'Finance Verification';
+    let workflowId: number | null = null;
+
+    if (levels && levels.length > 0) {
+      const resolvedWF = this.resolveInitialWorkflowStatus(levels);
+      initialStatus = resolvedWF.status;
+      initialLevel = resolvedWF.currentLevel;
+      initialRole = resolvedWF.currentApproverRole;
+      workflowId = workflow ? Number(workflow.id) : resolvedWF.workflowId;
+    }
 
     const [id] = await db('travel_advances').insert({
       uuid: uuidv4(),
@@ -1440,23 +2887,141 @@ export class ExpenseService {
       organization_id: ctx.organizationId,
       employee_id: emp?.id ?? null,
       submitted_by_user_id: ctx.userId || null,
+      submitted_by_role: submittedByRole,
       travel_request_id: data.travelRequestId || null,
       advance_amount: amt,
-      approved_amount: amt,
+      approved_amount: 0,
       settled_amount: 0,
-      balance_amount: amt,
+      balance_amount: 0,
       purpose: data.purpose || 'Travel Advance Request',
-      status: 'requested',
+      status: initialStatus,
+      current_level: initialLevel,
+      current_approver_role: initialRole,
+      workflow_id: workflowId,
       created_at: new Date(),
       updated_at: new Date()
     });
     const row = await db('travel_advances as ta')
       .leftJoin('employees as e', 'ta.employee_id', 'e.id')
+      .leftJoin('departments as d', 'e.current_department_id', 'd.id')
       .leftJoin('travel_requests as tr', 'ta.travel_request_id', 'tr.id')
       .where('ta.id', id)
-      .select('ta.*', 'e.first_name', 'e.last_name', 'e.employee_code', 'tr.request_number', 'tr.purpose as travel_purpose')
+      .select('ta.*', 'e.first_name', 'e.last_name', 'e.employee_code', 'd.name as department_name', 'tr.request_number', 'tr.purpose as travel_purpose')
       .first();
     return this.mapTravelAdvance(row);
+  }
+
+  async approveTravelAdvance(ctx: TenantContext, id: number, data: { comments?: string; approvedAmount?: number }) {
+    await this.ensureInitialized(ctx.organizationId);
+    const db = getKnex();
+    const config = await this.getConfig(ctx);
+    const advance = await db('travel_advances').where('id', id).where('organization_id', ctx.organizationId).first();
+    if (!advance) throw new Error('Travel advance not found');
+
+    const currentStatus = String(advance.status || '').toLowerCase();
+    if (['approved', 'disbursed', 'rejected'].includes(currentStatus)) {
+      throw new Error('This advance is already processed and cannot be modified');
+    }
+
+    const requestedAmt = Number(advance.advance_amount ?? advance.advanceAmount ?? 0);
+    let approvedAmt = (data.approvedAmount !== undefined && data.approvedAmount !== null && Number(data.approvedAmount) >= 0)
+      ? Number(data.approvedAmount)
+      : requestedAmt;
+
+    if (requestedAmt > 0 && approvedAmt > requestedAmt) {
+      approvedAmt = requestedAmt;
+    }
+    if (approvedAmt < 0) {
+      approvedAmt = 0;
+    }
+
+    const approverEmp = await this.getEmployeeForCtx(ctx);
+    const approverName = approverEmp
+      ? `${approverEmp.first_name || ''} ${approverEmp.last_name || ''}`.trim()
+      : 'Finance Team';
+
+    const emp = advance.employee_id ? await db('employees').where('id', advance.employee_id).first().catch(() => null) : null;
+    const { levels } = await this.getWorkflowLevelsForClaim(db, ctx.organizationId, requestedAmt, emp?.current_department_id);
+    const currentLevelNum = this.getCurrentLevelNum(advance.status, advance.current_level);
+
+    let nextStatus = 'approved';
+    let nextLevelNum = currentLevelNum;
+    let nextRoleName = 'Finance Verification';
+
+    if (levels && levels.length > 0) {
+      const nextLevel = levels.find((l: any) => Number(l.level_order || 0) > currentLevelNum);
+      if (nextLevel) {
+        const lvlOrder = Number(nextLevel.level_order || 1);
+        nextStatus = `pending_level_${lvlOrder}`;
+        nextLevelNum = lvlOrder;
+        nextRoleName = String(nextLevel.step_name || nextLevel.approver_role || `Level ${lvlOrder} Approver`).trim();
+      } else {
+        nextStatus = 'approved';
+      }
+    }
+
+    if (nextStatus === 'approved') {
+      await db('travel_advances').where('id', id).where('organization_id', ctx.organizationId).update({
+        status: 'approved',
+        approved_amount: approvedAmt,
+        balance_amount: approvedAmt,
+        current_level: nextLevelNum,
+        current_approver_role: 'Approved',
+        finance_approver_id: ctx.userId || null,
+        finance_notes: data.comments || null,
+        finance_approved_at: new Date(),
+        disbursed_at: new Date(),
+        updated_at: new Date()
+      });
+    } else {
+      await db('travel_advances').where('id', id).where('organization_id', ctx.organizationId).update({
+        status: nextStatus,
+        current_level: nextLevelNum,
+        current_approver_role: nextRoleName,
+        finance_notes: data.comments || null,
+        updated_at: new Date()
+      });
+    }
+
+    const row = await db('travel_advances as ta')
+      .leftJoin('employees as e', 'ta.employee_id', 'e.id')
+      .leftJoin('departments as d', 'e.current_department_id', 'd.id')
+      .leftJoin('travel_requests as tr', 'ta.travel_request_id', 'tr.id')
+      .where('ta.id', id)
+      .select('ta.*', 'e.first_name', 'e.last_name', 'e.employee_code', 'd.name as department_name', 'tr.request_number', 'tr.purpose as travel_purpose')
+      .first();
+
+    const msg = nextStatus === 'approved'
+      ? `Travel advance approved by ${approverName}. Amount disbursed: ${ExpenseConfigService.formatAmount(approvedAmt, config)}`
+      : `Travel advance approved by ${approverName} and forwarded to next approver: ${nextRoleName}`;
+
+    return { ...this.mapTravelAdvance(row), message: msg };
+  }
+
+  async rejectTravelAdvance(ctx: TenantContext, id: number, reason: string) {
+    await this.ensureInitialized(ctx.organizationId);
+    const db = getKnex();
+    const advance = await db('travel_advances').where('id', id).where('organization_id', ctx.organizationId).first();
+    if (!advance) throw new Error('Travel advance not found');
+    const currentStatus = String(advance.status || '').toLowerCase();
+    if (['approved', 'disbursed', 'rejected'].includes(currentStatus)) throw new Error('This advance is already processed');
+
+    await db('travel_advances').where('id', id).where('organization_id', ctx.organizationId).update({
+      status: 'rejected',
+      rejection_reason: reason || 'Rejected by approver',
+      finance_approver_id: ctx.userId || null,
+      finance_approved_at: new Date(),
+      updated_at: new Date()
+    });
+
+    const row = await db('travel_advances as ta')
+      .leftJoin('employees as e', 'ta.employee_id', 'e.id')
+      .leftJoin('departments as d', 'e.current_department_id', 'd.id')
+      .leftJoin('travel_requests as tr', 'ta.travel_request_id', 'tr.id')
+      .where('ta.id', id)
+      .select('ta.*', 'e.first_name', 'e.last_name', 'e.employee_code', 'd.name as department_name', 'tr.request_number', 'tr.purpose as travel_purpose')
+      .first();
+    return { ...this.mapTravelAdvance(row), message: 'Travel advance rejected' };
   }
 
   // --- MILEAGE CLAIMS ---
@@ -1481,139 +3046,359 @@ export class ExpenseService {
   }
 
   private async listMileageRatesByDesignation(db: any, organizationId: number, fallbackCar: number, fallbackBike: number) {
-    const designations = await db('designations')
-      .where('organization_id', organizationId)
-      .whereNull('deleted_at')
-      .select('id', 'name', 'code', 'status')
-      .orderBy('name', 'asc')
-      .catch(() => []);
+    const rows = await db('designations as d')
+      .leftJoin('expense_mileage_designation_rates as emdr', function (this: any) {
+        this.on('emdr.designation_id', '=', 'd.id').andOn('emdr.organization_id', '=', db.raw('?', [organizationId]));
+      })
+      .where('d.organization_id', organizationId)
+      .select(
+        'd.id as designationId',
+        'd.name as designationName',
+        'emdr.rate_car as rateCar',
+        'emdr.rate_bike as rateBike'
+      )
+      .orderBy('d.name', 'asc');
 
-    const rateRows = await db('expense_mileage_designation_rates')
-      .where('organization_id', organizationId)
-      .catch(() => []);
-
-    const rateMap = new Map<number, any>();
-    for (const row of rateRows || []) {
-      const id = Number(row.designationId ?? row.designation_id);
-      if (id) rateMap.set(id, row);
-    }
-
-    const grouped = new Map<string, {
-      designationId: number;
-      designationIds: number[];
-      designationName: string;
-      rateCar: number;
-      rateBike: number;
-      hasCustomRate: boolean;
-    }>();
-
-    for (const d of designations || []) {
-      if (String(d.status || 'active').toLowerCase() === 'inactive') continue;
-      const name = String(d.name || '').trim();
-      if (!name) continue;
-      const key = name.toLowerCase();
-      const id = Number(d.id);
-      const saved = rateMap.get(id);
-      const rateCar = saved ? this.numOr(saved.rateCar ?? saved.rate_car, fallbackCar) : fallbackCar;
-      const rateBike = saved ? this.numOr(saved.rateBike ?? saved.rate_bike, fallbackBike) : fallbackBike;
-      const hasCustomRate = Boolean(saved);
-      const existing = grouped.get(key);
-      if (!existing) {
-        grouped.set(key, {
-          designationId: id,
-          designationIds: [id],
-          designationName: name,
-          rateCar,
-          rateBike,
-          hasCustomRate,
-        });
-        continue;
-      }
-      existing.designationIds.push(id);
-      if (hasCustomRate && !existing.hasCustomRate) {
-        existing.rateCar = rateCar;
-        existing.rateBike = rateBike;
-        existing.hasCustomRate = true;
-      }
-    }
-
-    return Array.from(grouped.values()).sort((a, b) =>
-      a.designationName.localeCompare(b.designationName, undefined, { sensitivity: 'base' })
-    );
+    return (rows || []).map((r: any) => ({
+      designationId: Number(r.designationId),
+      designationName: r.designationName,
+      rateCar: this.numOr(r.rateCar, fallbackCar),
+      rateBike: this.numOr(r.rateBike, fallbackBike)
+    }));
   }
 
   private async resolveEmployeeMileageRates(
     ctx: TenantContext,
     db: any,
     fallbackCar: number,
-    fallbackBike: number,
-    emp?: any
-  ) {
-    const employee = emp ?? (await this.getEmployeeForCtx(ctx));
-    const designationId = Number(employee?.currentDesignationId ?? employee?.current_designation_id ?? 0) || null;
-    if (!designationId) {
+    fallbackBike: number
+  ): Promise<{ rateCar: number; rateBike: number; designationId: number | null; designationName: string | null }> {
+    try {
+      let emp: any = null;
+      if (ctx.userId) {
+        const user = await db('users').where('id', ctx.userId).first();
+        emp = await db('employees')
+          .where('organization_id', ctx.organizationId)
+          .where(function (this: any) {
+            if (user?.email) this.where('email', user.email);
+            this.orWhere('id', ctx.userId);
+          })
+          .first();
+      }
+
+      if (!emp || !emp.current_designation_id) {
+        return { rateCar: fallbackCar, rateBike: fallbackBike, designationId: null, designationName: null };
+      }
+
+      const desig = await db('designations')
+        .where('id', emp.current_designation_id)
+        .where('organization_id', ctx.organizationId)
+        .first();
+
+      const desigRate = await db('expense_mileage_designation_rates')
+        .where('designation_id', emp.current_designation_id)
+        .where('organization_id', ctx.organizationId)
+        .first();
+
       return {
-        rateCar: fallbackCar,
-        rateBike: fallbackBike,
-        designationId: null,
-        designationName: null,
+        rateCar: desigRate?.rate_car != null ? this.numOr(desigRate.rate_car, fallbackCar) : fallbackCar,
+        rateBike: desigRate?.rate_bike != null ? this.numOr(desigRate.rate_bike, fallbackBike) : fallbackBike,
+        designationId: emp.current_designation_id ? Number(emp.current_designation_id) : null,
+        designationName: desig?.name || null,
       };
+    } catch {
+      return { rateCar: fallbackCar, rateBike: fallbackBike, designationId: null, designationName: null };
     }
+  }
 
-    const saved = await db('expense_mileage_designation_rates')
-      .where('organization_id', ctx.organizationId)
-      .where('designation_id', designationId)
-      .first()
-      .catch(() => null);
+  async getMileageRates(ctx: TenantContext) {
+    await this.ensureInitialized(ctx.organizationId);
+    const db = getKnex();
+    const config = await this.getConfig(ctx);
+    const defaultCar = config.mileageRateCar;
+    const defaultBike = config.mileageRateBike;
 
-    const desig = await db('designations').where('id', designationId).select('id', 'name').first().catch(() => null);
+    const designations = await this.listMileageRatesByDesignation(db, ctx.organizationId, defaultCar, defaultBike);
 
     return {
-      rateCar: saved ? this.numOr(saved.rateCar ?? saved.rate_car, fallbackCar) : fallbackCar,
-      rateBike: saved ? this.numOr(saved.rateBike ?? saved.rate_bike, fallbackBike) : fallbackBike,
-      designationId,
-      designationName: desig?.name || null,
+      defaultCar,
+      defaultBike,
+      designations
     };
+  }
+
+  async updateMileageRates(ctx: TenantContext, payload: {
+    defaultCar?: number;
+    defaultBike?: number;
+    designationRates?: Array<{ designationId: number; rateCar: number; rateBike: number }>;
+  }) {
+    await this.ensureInitialized(ctx.organizationId);
+    const db = getKnex();
+    const config = await this.getConfig(ctx);
+
+    const nextCar = payload.defaultCar !== undefined ? Number(payload.defaultCar) : config.mileageRateCar;
+    const nextBike = payload.defaultBike !== undefined ? Number(payload.defaultBike) : config.mileageRateBike;
+
+    await this.updateSettings(ctx, {
+      mileageRateCar: nextCar,
+      mileageRateBike: nextBike
+    });
+
+    if (Array.isArray(payload.designationRates)) {
+      for (const row of payload.designationRates) {
+        const dId = Number(row.designationId);
+        if (!dId) continue;
+        const car = Number(row.rateCar);
+        const bike = Number(row.rateBike);
+        if (Number.isNaN(car) || Number.isNaN(bike)) continue;
+
+        const existing = await db('expense_mileage_designation_rates')
+          .where('organization_id', ctx.organizationId)
+          .where('designation_id', dId)
+          .first();
+
+        if (existing) {
+          await db('expense_mileage_designation_rates')
+            .where('id', existing.id)
+            .update({
+              rate_car: car,
+              rate_bike: bike,
+              updated_at: new Date()
+            });
+        } else {
+          await db('expense_mileage_designation_rates').insert({
+            organization_id: ctx.organizationId,
+            designation_id: dId,
+            rate_car: car,
+            rate_bike: bike,
+            created_at: new Date(),
+            updated_at: new Date()
+          });
+        }
+      }
+    }
+
+    return this.getMileageRates(ctx);
   }
 
   async createMileageClaim(ctx: TenantContext, data: any) {
     await this.ensureInitialized(ctx.organizationId);
     const db = getKnex();
     const emp = await this.getEmployeeForCtx(ctx);
+    const config = await this.getConfig(ctx);
 
-    const settings = await db('expense_settings').where('organization_id', ctx.organizationId).first();
-    const fallbackCar = settings ? this.numOr(settings.mileageRateCar ?? settings.mileage_rate_car, 12) : 12;
-    const fallbackBike = settings ? this.numOr(settings.mileageRateBike ?? settings.mileage_rate_bike, 6) : 6;
-    const resolved = await this.resolveEmployeeMileageRates(ctx, db, fallbackCar, fallbackBike, emp);
+    let rate = data.vehicleType === 'bike' ? config.mileageRateBike : config.mileageRateCar;
+    const desId = emp?.current_designation_id || emp?.currentDesignationId;
+    if (desId) {
+      const customRate = await db('expense_mileage_designation_rates')
+        .where('organization_id', ctx.organizationId)
+        .where('designation_id', Number(desId))
+        .first()
+        .catch(() => null);
+      if (customRate) {
+        if (data.vehicleType === 'bike' && customRate.rate_bike !== null && customRate.rate_bike !== undefined) {
+          rate = Number(customRate.rate_bike);
+        } else if (data.vehicleType !== 'bike' && customRate.rate_car !== null && customRate.rate_car !== undefined) {
+          rate = Number(customRate.rate_car);
+        }
+      }
+    }
 
-    const vehicle = (data.vehicleType || 'car').toLowerCase();
-    const rate = vehicle === 'bike' ? resolved.rateBike : resolved.rateCar;
-    const distance = this.numOr(data.distanceKm, 0);
-    const calculatedAmount = Number((distance * rate).toFixed(2));
+    const dist = Number(data.distanceKm || 0);
+    const calculatedAmount = Number((dist * rate).toFixed(2));
 
-    const [id] = await db('mileage_claims').insert({
+    // Validate against Mileage category & Expense Policies
+    const mileageCat = await db('expense_categories')
+      .where('organization_id', ctx.organizationId)
+      .where(function() {
+        this.whereRaw('LOWER(name) LIKE ?', ['%mileage%']).orWhereRaw('LOWER(code) = ?', ['mileage']);
+      })
+      .first();
+    const mileageCatId = mileageCat ? Number(mileageCat.id) : 0;
+    const validation = await this.validatePolicyForClaim(ctx, mileageCatId, calculatedAmount, false);
+    if (!validation.isValid && validation.violations && validation.violations.length > 0) {
+      const limitViolation = validation.violations.find((v: string) => v.toLowerCase().includes('limit') || v.toLowerCase().includes('exceeds'));
+      if (limitViolation) {
+        throw new Error(`Policy limit exceeded: ${limitViolation}`);
+      }
+    }
+
+    // Detect submitter role (same as expense claims) for proper workflow routing
+    const mileageSubmittedByRole = await this.getSubmitterRole(ctx, db);
+
+    // Resolve initial workflow status (same engine as expense claims)
+    const mileageWfItems = [{ categoryId: null, claimedAmount: calculatedAmount, policyValidated: true }];
+    const mileageWf = await this.resolveSubmitStatus(ctx, mileageWfItems, false, mileageSubmittedByRole, emp?.current_department_id);
+
+    let empId = emp?.id ?? null;
+    if (!empId) {
+      try {
+        const firstEmp = await db('employees')
+          .where('organization_id', ctx.organizationId)
+          .whereNull('deleted_at')
+          .first('id')
+          .catch(() => null);
+        if (firstEmp?.id) empId = Number(firstEmp.id);
+      } catch { /* ignore fallback */ }
+    }
+
+    if (!data.fromLocation || !data.toLocation || Number(data.distanceKm || 0) <= 0) {
+      throw new Error('Please enter valid trip location details and distance.');
+    }
+
+    const insertRes = await db('mileage_claims').insert({
       uuid: uuidv4(),
       organization_id: ctx.organizationId,
-      employee_id: emp?.id ?? null,
+      employee_id: empId,
       submitted_by_user_id: ctx.userId || null,
+      submitted_by_role: mileageSubmittedByRole,
       trip_date: data.tripDate || new Date().toISOString().slice(0, 10),
       from_location: data.fromLocation,
       to_location: data.toLocation,
-      vehicle_type: vehicle,
-      distance_km: distance,
+      vehicle_type: data.vehicleType || 'car',
+      distance_km: dist,
       rate_per_km: rate,
       calculated_amount: calculatedAmount,
       purpose: data.purpose || null,
-      status: 'pending',
+      status: mileageWf.status,
+      current_level: mileageWf.currentLevel,
+      current_approver_role: mileageWf.currentRole,
+      workflow_id: mileageWf.workflowId,
       created_at: new Date(),
       updated_at: new Date()
     });
+    const id = Number(Array.isArray(insertRes) ? insertRes[0] : insertRes);
     const row = await db('mileage_claims as mc')
       .leftJoin('employees as e', 'mc.employee_id', 'e.id')
       .where('mc.id', id)
       .select('mc.*', 'e.first_name', 'e.last_name', 'e.employee_code')
       .first();
     return this.mapMileageClaim(row);
+  }
+
+  async approveMileageClaim(ctx: TenantContext, id: number, comments?: string) {
+    await this.ensureInitialized(ctx.organizationId);
+    const db = getKnex();
+    const claim = await db('mileage_claims').where('id', id).where('organization_id', ctx.organizationId).first();
+    if (!claim) throw new Error('Mileage claim not found');
+
+    // Prevent submitter from approving their own claim
+    const emp = await this.getEmployeeForCtx(ctx);
+    if (emp && claim.employee_id && Number(claim.employee_id) === Number(emp.id)) {
+      throw new Error('You cannot approve your own mileage claim.');
+    }
+
+    const calculatedAmt = Number(claim.calculated_amount || 0);
+    const { levels } = await this.getWorkflowLevelsForClaim(db, ctx.organizationId, calculatedAmt);
+    await this.assertApproverMatchesWorkflowLevel(ctx, claim, levels);
+
+    const approverRole = await this.getSubmitterRole(ctx, db);
+    const approverRank = this.getRoleRank(approverRole);
+
+    const currentLevelNum = this.getCurrentLevelNum(claim.status, claim.current_level);
+    let nextStatus = 'pending_finance';
+    let nextLevel = currentLevelNum + 1;
+    let nextRole = 'Finance Verification';
+    let isFinalStep = true;
+
+    let foundNext = false;
+    if (levels && levels.length > 0) {
+      for (let i = currentLevelNum; i < levels.length; i++) {
+        const lvl = levels[i];
+        const lvlType = String(lvl.approverType || lvl.approver_type || lvl.approverRole || lvl.approver_role || '').toLowerCase();
+        const lvlStep = String(lvl.stepName || lvl.step_name || '').toLowerCase();
+        let lvlRank = 0;
+        if (lvlType === 'reporting_manager') {
+          if (lvlStep.includes('team') || lvlStep.includes('lead')) lvlRank = 1;
+          else if (i === 0 && levels.length > 1) lvlRank = 1;
+          else lvlRank = 2;
+        } else {
+          lvlRank = this.getRoleRank(lvlType);
+        }
+
+        if (lvlType === 'finance' || lvlType.includes('finance')) {
+          nextStatus = 'pending_finance';
+          nextRole = 'Finance Verification';
+          nextLevel = Number(lvl.levelOrder ?? lvl.level_order ?? (i + 1));
+          foundNext = true;
+          isFinalStep = true;
+          break;
+        }
+
+        if (lvlRank > approverRank) {
+          nextLevel = Number(lvl.levelOrder ?? lvl.level_order ?? (i + 1));
+          nextStatus = `pending_level_${nextLevel}`;
+          nextRole = String(lvl.stepName || lvl.step_name || lvl.approverRole || lvl.approver_role || `Level ${nextLevel} Approver`).trim();
+          foundNext = true;
+          isFinalStep = false;
+          break;
+        }
+      }
+    }
+
+    if (!foundNext) {
+      const settings = await this.getSettings(ctx);
+      if (currentLevelNum === 1) {
+        nextStatus = 'pending_level_2';
+        nextLevel = 2;
+        nextRole = 'Manager Approval';
+        isFinalStep = false;
+      } else if (settings.requireFinanceApproval) {
+        nextStatus = 'pending_finance';
+        nextLevel = Math.max(currentLevelNum, 2);
+        nextRole = 'Finance Verification';
+        isFinalStep = true;
+      } else {
+        nextStatus = 'approved';
+        nextLevel = Math.max(currentLevelNum, 2);
+        nextRole = 'Approved';
+        isFinalStep = true;
+      }
+    }
+
+    await db('mileage_claims').where('id', id).update({
+      status: nextStatus,
+      current_level: isFinalStep ? currentLevelNum : nextLevel,
+      current_approver_role: nextRole,
+      approver_id: ctx.userId || null,
+      approver_notes: comments || null,
+      updated_at: new Date()
+    });
+
+    const row = await db('mileage_claims as mc')
+      .leftJoin('employees as e', 'mc.employee_id', 'e.id')
+      .where('mc.id', id)
+      .select('mc.*', 'e.first_name', 'e.last_name', 'e.employee_code')
+      .first();
+    return {
+      ...this.mapMileageClaim(row),
+      isFinalStep,
+      message: isFinalStep
+        ? (nextStatus === 'pending_finance' ? 'Mileage claim sent to Finance Verification' : 'Mileage claim approved')
+        : `Mileage claim approved and forwarded to: ${nextRole}`
+    };
+  }
+
+  async rejectMileageClaim(ctx: TenantContext, id: number, reason: string) {
+    await this.ensureInitialized(ctx.organizationId);
+    const db = getKnex();
+    if (!reason || !reason.trim()) throw new Error('Rejection reason is mandatory');
+    const claim = await db('mileage_claims').where('id', id).where('organization_id', ctx.organizationId).first();
+    if (!claim) throw new Error('Mileage claim not found');
+
+    await db('mileage_claims').where('id', id).update({
+      status: 'rejected',
+      rejection_reason: reason,
+      approver_id: ctx.userId || null,
+      updated_at: new Date()
+    });
+
+    const row = await db('mileage_claims as mc')
+      .leftJoin('employees as e', 'mc.employee_id', 'e.id')
+      .where('mc.id', id)
+      .select('mc.*', 'e.first_name', 'e.last_name', 'e.employee_code')
+      .first();
+    return { ...this.mapMileageClaim(row), message: 'Mileage claim rejected' };
   }
 
   // --- DASHBOARD ANALYTICS ---
@@ -1645,17 +3430,17 @@ export class ExpenseService {
 
       totalExpenses += claimed;
 
-      if (['submitted', 'pending_manager', 'pending_finance'].includes(row.status)) {
+      if (['submitted', 'pending', 'pending_manager', 'pending_finance'].includes(row.status) || String(row.status || '').startsWith('pending_level_')) {
         pendingApproval += cnt;
       } else if (['approved', 'payment_pending'].includes(row.status)) {
-        approvedExpenses += approved;
+        approvedExpenses += (approved || claimed);
         approvedCount += cnt;
-        if (row.status === 'payment_pending') paymentPending += cnt;
+        if (row.status === 'payment_pending') paymentPending += (approved || claimed);
       } else if (row.status === 'rejected') {
         rejectedExpenses += claimed;
         rejectedCount += cnt;
-      } else if (row.status === 'paid') {
-        totalReimbursedAmount += paid;
+      } else if (row.status === 'paid' || row.status === 'reimbursed') {
+        totalReimbursedAmount += (paid || approved || claimed);
       }
     }
 
@@ -1677,13 +3462,24 @@ export class ExpenseService {
       .orderBy('totalAmount', 'desc');
 
     // Department-wise expenses
-    const departmentExpenses = await db('expense_claims as ec')
+    const departmentExpenses: Array<{ departmentName: string; totalAmount: number }> = (await db('expense_claims as ec')
       .leftJoin('employees as e', 'ec.employee_id', 'e.id')
       .leftJoin('departments as d', 'e.current_department_id', 'd.id')
       .where('ec.organization_id', ctx.organizationId)
-      .select(db.raw("COALESCE(d.name, 'General') as departmentName"), db.raw("SUM(ec.total_claimed_amount) as totalAmount"))
+      .select(db.raw("COALESCE(d.name, 'Unassigned') as departmentName"), db.raw("SUM(ec.total_claimed_amount) as totalAmount"))
       .groupBy('d.name')
-      .orderBy('totalAmount', 'desc');
+      .orderBy('totalAmount', 'desc')) as any;
+
+    // Also include all organization departments so real departments appear even if 0 expenses
+    const orgDepartments = await db('departments').where('organization_id', ctx.organizationId).select('name');
+    for (const d of orgDepartments) {
+      if (!departmentExpenses.some((x) => (x.departmentName || '').toLowerCase() === (d.name || '').toLowerCase())) {
+        departmentExpenses.push({
+          departmentName: d.name,
+          totalAmount: 0
+        });
+      }
+    }
 
     // Policy violations count
     const violationsCount = await db('expense_claim_items as eci')
@@ -1718,11 +3514,211 @@ export class ExpenseService {
     await this.ensureInitialized(ctx.organizationId);
     const db = getKnex();
 
+    const reportType = String(filters.reportType || 'employee');
+
+    // Helper to apply common date / dept / category filters
+    const applyCommonFilters = (q: any) => {
+      if (filters.startDate) q = q.where('ec.claim_date', '>=', filters.startDate);
+      if (filters.endDate) q = q.where('ec.claim_date', '<=', filters.endDate);
+      if (filters.departmentId) q = q.where('e.current_department_id', filters.departmentId);
+      if (filters.categoryId) q = q.where('ec.category_id', filters.categoryId);
+      if (filters.status) q = q.where('ec.status', filters.status);
+      return q;
+    };
+
+    // --- DEPARTMENT-WISE AGGREGATION ---
+    if (reportType === 'department') {
+      let q = db('expense_claims as ec')
+        .leftJoin('employees as e', 'ec.employee_id', 'e.id')
+        .leftJoin('departments as d', 'e.current_department_id', 'd.id')
+        .where('ec.organization_id', ctx.organizationId)
+        .modify((q: any) => { if (ctx.companyId) q.where('ec.company_id', ctx.companyId); });
+      q = applyCommonFilters(q);
+      const rows = await q
+        .select(
+          db.raw("COALESCE(d.name, 'Unassigned') as departmentName"),
+          db.raw('COUNT(ec.id) as totalClaims'),
+          db.raw('SUM(ec.total_claimed_amount) as totalClaimed'),
+          db.raw('SUM(ec.total_approved_amount) as totalApproved'),
+          db.raw('SUM(ec.paid_amount) as totalPaid'),
+          db.raw("SUM(CASE WHEN ec.status = 'rejected' THEN 1 ELSE 0 END) as rejectedCount"),
+          db.raw("SUM(CASE WHEN ec.status = 'paid' THEN 1 ELSE 0 END) as paidCount")
+        )
+        .groupBy('d.name')
+        .orderBy('totalClaimed', 'desc');
+      return (rows || []).map((r: any) => ({
+        departmentName: r.departmentName,
+        totalClaims: Number(r.totalClaims || 0),
+        totalClaimed: Number(r.totalClaimed || 0),
+        totalApproved: Number(r.totalApproved || 0),
+        totalPaid: Number(r.totalPaid || 0),
+        rejectedCount: Number(r.rejectedCount || 0),
+        paidCount: Number(r.paidCount || 0),
+      }));
+    }
+
+    // --- CATEGORY-WISE AGGREGATION ---
+    if (reportType === 'category') {
+      let q = db('expense_claim_items as eci')
+        .leftJoin('expense_claims as ec', 'eci.claim_id', 'ec.id')
+        .leftJoin('expense_categories as cat', 'eci.category_id', 'cat.id')
+        .where('ec.organization_id', ctx.organizationId)
+        .modify((q: any) => { if (ctx.companyId) q.where('ec.company_id', ctx.companyId); });
+      if (filters.startDate) q = q.where('ec.claim_date', '>=', filters.startDate);
+      if (filters.endDate) q = q.where('ec.claim_date', '<=', filters.endDate);
+      if (filters.departmentId) {
+        q = q.leftJoin('employees as e2', 'ec.employee_id', 'e2.id')
+          .where('e2.current_department_id', filters.departmentId);
+      }
+      const rows = await q
+        .select(
+          db.raw("COALESCE(cat.name, 'Uncategorized') as categoryName"),
+          db.raw('COUNT(DISTINCT ec.id) as totalClaims'),
+          db.raw('COUNT(eci.id) as totalItems'),
+          db.raw('SUM(eci.claimed_amount) as totalClaimed'),
+          db.raw('SUM(eci.approved_amount) as totalApproved'),
+          db.raw("SUM(CASE WHEN eci.policy_validated = 0 THEN 1 ELSE 0 END) as violationsCount")
+        )
+        .groupBy('cat.name')
+        .orderBy('totalClaimed', 'desc');
+      return (rows || []).map((r: any) => ({
+        categoryName: r.categoryName,
+        totalClaims: Number(r.totalClaims || 0),
+        totalItems: Number(r.totalItems || 0),
+        totalClaimed: Number(r.totalClaimed || 0),
+        totalApproved: Number(r.totalApproved || 0),
+        violationsCount: Number(r.violationsCount || 0),
+      }));
+    }
+
+    // --- MONTHLY TRENDS AGGREGATION ---
+    if (reportType === 'monthly') {
+      let q = db('expense_claims as ec')
+        .leftJoin('employees as e', 'ec.employee_id', 'e.id')
+        .where('ec.organization_id', ctx.organizationId)
+        .modify((q: any) => { if (ctx.companyId) q.where('ec.company_id', ctx.companyId); });
+      q = applyCommonFilters(q);
+      const rows = await q
+        .select(
+          db.raw("DATE_FORMAT(ec.claim_date, '%b %Y') as month"),
+          db.raw("DATE_FORMAT(ec.claim_date, '%Y-%m') as monthKey"),
+          db.raw('COUNT(ec.id) as totalClaims'),
+          db.raw('SUM(ec.total_claimed_amount) as totalClaimed'),
+          db.raw('SUM(ec.total_approved_amount) as totalApproved'),
+          db.raw('SUM(ec.paid_amount) as totalPaid'),
+          db.raw("SUM(CASE WHEN ec.status = 'rejected' THEN 1 ELSE 0 END) as rejectedCount")
+        )
+        .groupByRaw("DATE_FORMAT(ec.claim_date, '%Y-%m'), DATE_FORMAT(ec.claim_date, '%b %Y')")
+        .orderBy('monthKey', 'asc')
+        .limit(24);
+      return (rows || []).map((r: any) => ({
+        month: r.month,
+        monthKey: r.monthKey,
+        totalClaims: Number(r.totalClaims || 0),
+        totalClaimed: Number(r.totalClaimed || 0),
+        totalApproved: Number(r.totalApproved || 0),
+        totalPaid: Number(r.totalPaid || 0),
+        rejectedCount: Number(r.rejectedCount || 0),
+      }));
+    }
+
+    // --- POLICY VIOLATIONS REPORT ---
+    if (reportType === 'violations') {
+      let q = db('expense_claim_items as eci')
+        .leftJoin('expense_claims as ec', 'eci.claim_id', 'ec.id')
+        .leftJoin('employees as e', 'ec.employee_id', 'e.id')
+        .leftJoin('departments as d', 'e.current_department_id', 'd.id')
+        .leftJoin('expense_categories as cat', 'eci.category_id', 'cat.id')
+        .where('ec.organization_id', ctx.organizationId)
+        .modify((q: any) => { if (ctx.companyId) q.where('ec.company_id', ctx.companyId); })
+        .where('eci.policy_validated', false);
+      if (filters.startDate) q = q.where('ec.claim_date', '>=', filters.startDate);
+      if (filters.endDate) q = q.where('ec.claim_date', '<=', filters.endDate);
+      if (filters.departmentId) q = q.where('e.current_department_id', filters.departmentId);
+      const rows = await q
+        .select(
+          'ec.claim_number as claimNumber',
+          'ec.title as claimTitle',
+          'ec.status',
+          db.raw("CONCAT(e.first_name, ' ', e.last_name) as employeeName"),
+          'e.employee_code as employeeCode',
+          db.raw("COALESCE(d.name, 'Unassigned') as departmentName"),
+          db.raw("COALESCE(cat.name, 'Uncategorized') as categoryName"),
+          'eci.claimed_amount as claimedAmount',
+          'eci.policy_violations as policyViolations',
+          'eci.employee_justification as employeeJustification',
+          'ec.claim_date as claimDate'
+        )
+        .orderBy('ec.claim_date', 'desc')
+        .limit(500);
+      return (rows || []).map((r: any) => ({
+        claimNumber: r.claimNumber,
+        claimTitle: r.claimTitle,
+        status: r.status,
+        employeeName: r.employeeName,
+        employeeCode: r.employeeCode,
+        departmentName: r.departmentName,
+        categoryName: r.categoryName,
+        claimedAmount: Number(r.claimedAmount || 0),
+        policyViolations: r.policyViolations ? (() => { try { return JSON.parse(r.policyViolations); } catch { return [r.policyViolations]; } })() : [],
+        employeeJustification: r.employeeJustification,
+        claimDate: r.claimDate,
+      }));
+    }
+
+    // --- REIMBURSEMENT REPORT ---
+    if (reportType === 'reimbursement') {
+      let q = db('expense_claims as ec')
+        .leftJoin('employees as e', 'ec.employee_id', 'e.id')
+        .leftJoin('departments as d', 'e.current_department_id', 'd.id')
+        .where('ec.organization_id', ctx.organizationId)
+        .modify((q: any) => { if (ctx.companyId) q.where('ec.company_id', ctx.companyId); })
+        .whereIn('ec.status', ['payment_pending', 'paid', 'approved']);
+      q = applyCommonFilters(q);
+      const rows = await q
+        .select(
+          'ec.claim_number as claimNumber',
+          'ec.title',
+          'ec.status',
+          'ec.total_claimed_amount as totalClaimed',
+          'ec.total_approved_amount as totalApproved',
+          'ec.paid_amount as paidAmount',
+          'ec.payment_method as paymentMethod',
+          'ec.payment_reference as paymentReference',
+          'ec.payment_date as paymentDate',
+          'ec.approved_at as approvedAt',
+          'ec.reimbursed_at as reimbursedAt',
+          db.raw("CONCAT(e.first_name, ' ', e.last_name) as employeeName"),
+          'e.employee_code as employeeCode',
+          db.raw("COALESCE(d.name, 'Unassigned') as departmentName")
+        )
+        .orderBy('ec.claim_date', 'desc')
+        .limit(500);
+      return (rows || []).map((r: any) => ({
+        claimNumber: r.claimNumber,
+        title: r.title,
+        status: r.status,
+        totalClaimed: Number(r.totalClaimed || 0),
+        totalApproved: Number(r.totalApproved || 0),
+        paidAmount: Number(r.paidAmount || 0),
+        paymentMethod: r.paymentMethod,
+        paymentReference: r.paymentReference,
+        paymentDate: r.paymentDate,
+        approvedAt: r.approvedAt,
+        reimbursedAt: r.reimbursedAt,
+        employeeName: r.employeeName,
+        employeeCode: r.employeeCode,
+        departmentName: r.departmentName,
+      }));
+    }
+
+    // --- DEFAULT: EMPLOYEE-WISE FLAT CLAIM LIST ---
     let query = db('expense_claims as ec')
       .leftJoin('employees as e', 'ec.employee_id', 'e.id')
       .leftJoin('departments as d', 'e.current_department_id', 'd.id')
       .leftJoin('expense_categories as cat', 'ec.category_id', 'cat.id')
       .where('ec.organization_id', ctx.organizationId)
+        .modify((q: any) => { if (ctx.companyId) q.where('ec.company_id', ctx.companyId); })
       .select(
         'ec.*',
         'e.first_name',
@@ -1733,12 +3729,8 @@ export class ExpenseService {
       )
       .orderBy('ec.claim_date', 'desc');
 
-    if (filters.startDate) query = query.where('ec.claim_date', '>=', filters.startDate);
-    if (filters.endDate) query = query.where('ec.claim_date', '<=', filters.endDate);
-    if (filters.departmentId) query = query.where('e.current_department_id', filters.departmentId);
+    query = applyCommonFilters(query);
     if (filters.employeeId) query = query.where('ec.employee_id', filters.employeeId);
-    if (filters.categoryId) query = query.where('ec.category_id', filters.categoryId);
-    if (filters.status) query = query.where('ec.status', filters.status);
     const rows = await query;
     return (rows || []).map((r: any) => this.mapClaim(r));
   }
@@ -1755,7 +3747,17 @@ export class ExpenseService {
       requireFinanceApproval: Boolean(settings.require_finance_approval ?? settings.requireFinanceApproval ?? true),
       multiLevelApproval: Boolean(settings.multi_level_approval ?? settings.multiLevelApproval ?? true),
       enableTravelModule: Boolean(settings.enable_travel_module ?? settings.enableTravelModule ?? true),
-      enableMileageModule: Boolean(settings.enable_mileage_module ?? settings.enableMileageModule ?? true)
+      enableMileageModule: Boolean(settings.enable_mileage_module ?? settings.enableMileageModule ?? true),
+      currencySymbol: settings.currency_symbol || '₹',
+      currencyCode: settings.currency_code || 'INR',
+      currencyLocale: settings.currency_locale || 'en-IN',
+      claimNumberPrefix: settings.claim_number_prefix || 'EXP',
+      travelRequestNumberPrefix: settings.travel_request_number_prefix || 'TRV',
+      travelAdvanceNumberPrefix: settings.travel_advance_number_prefix || 'ADV',
+      defaultPaymentMethod: settings.default_payment_method || 'bank_transfer',
+      defaultAdvanceStatus: settings.default_advance_status || 'pending_finance',
+      workflowFallbackMaxAmount: Number(settings.workflow_fallback_max_amount || 10000000),
+      numberSequenceDigits: Number(settings.number_sequence_digits || 6)
     };
   }
 
@@ -1789,8 +3791,10 @@ export class ExpenseService {
     const fallbackBike = this.numOr(mapped.mileageRateBike, 6);
     const mileageRatesByDesignation = await this.listMileageRatesByDesignation(db, ctx.organizationId, fallbackCar, fallbackBike);
     const myMileage = await this.resolveEmployeeMileageRates(ctx, db, fallbackCar, fallbackBike);
+    const cfg = await this.getConfig(ctx);
     return {
       ...mapped,
+      labels: cfg.labels,
       mileageRatesByDesignation,
       myMileageRateCar: myMileage.rateCar,
       myMileageRateBike: myMileage.rateBike,
@@ -1822,6 +3826,44 @@ export class ExpenseService {
     const hasMileageCol = await db.schema.hasColumn('expense_settings', 'enable_mileage_module').catch(() => false);
     if (hasMileageCol) {
       updateData.enable_mileage_module = data.enableMileageModule !== undefined ? Boolean(data.enableMileageModule) : true;
+    }
+
+    if (data.currencySymbol !== undefined) updateData.currency_symbol = data.currencySymbol;
+    if (data.currencyCode !== undefined) updateData.currency_code = data.currencyCode;
+    if (data.currencyLocale !== undefined) updateData.currency_locale = data.currencyLocale;
+    if (data.claimNumberPrefix !== undefined) updateData.claim_number_prefix = data.claimNumberPrefix;
+    if (data.travelRequestNumberPrefix !== undefined) updateData.travel_request_number_prefix = data.travelRequestNumberPrefix;
+    if (data.travelAdvanceNumberPrefix !== undefined) updateData.travel_advance_number_prefix = data.travelAdvanceNumberPrefix;
+    if (data.defaultPaymentMethod !== undefined) updateData.default_payment_method = data.defaultPaymentMethod;
+    if (data.defaultAdvanceStatus !== undefined) updateData.default_advance_status = data.defaultAdvanceStatus;
+    if (data.workflowFallbackMaxAmount !== undefined) updateData.workflow_fallback_max_amount = data.workflowFallbackMaxAmount;
+    if (data.numberSequenceDigits !== undefined) updateData.number_sequence_digits = data.numberSequenceDigits;
+
+    // Upsert override display labels (portable across DB engines)
+    if (data.labels && typeof data.labels === 'object') {
+      for (const [labelKey, labelValue] of Object.entries(data.labels)) {
+        if (typeof labelValue !== 'string') continue;
+        const existingLabel = await db('expense_config_labels')
+          .where({ organization_id: ctx.organizationId, label_key: labelKey })
+          .first()
+          .catch(() => null);
+        if (existingLabel) {
+          await db('expense_config_labels')
+            .where({ organization_id: ctx.organizationId, label_key: labelKey })
+            .update({ label_value: labelValue, updated_at: new Date() })
+            .catch(() => null);
+        } else {
+          await db('expense_config_labels')
+            .insert({
+              organization_id: ctx.organizationId,
+              label_key: labelKey,
+              label_value: labelValue,
+              created_at: new Date(),
+              updated_at: new Date(),
+            })
+            .catch(() => null);
+        }
+      }
     }
 
     if (!existing) {
@@ -1892,15 +3934,23 @@ export class ExpenseService {
   async getWorkflows(ctx: TenantContext) {
     await this.ensureInitialized(ctx.organizationId);
     const db = getKnex();
-    const workflows = await db('expense_workflows')
-      .where('organization_id', ctx.organizationId)
-      .orderBy('id', 'desc');
+    const workflows = await db('expense_workflows as ew')
+      .leftJoin('departments as d', 'ew.department_id', 'd.id')
+      .where('ew.organization_id', ctx.organizationId)
+      .select('ew.*', 'd.name as department_name')
+      .orderBy('ew.id', 'desc');
 
     for (const wf of workflows) {
       const levels = await db('expense_workflow_levels')
         .where('workflow_id', wf.id)
         .orderBy('level_order', 'asc');
       wf.levels = levels;
+      wf.targetRole = wf.target_role || wf.targetRole || 'all';
+      wf.departmentId = wf.department_id || wf.departmentId || null;
+      wf.departmentName = wf.department_name || wf.departmentName || 'All Departments';
+      wf.minAmount = wf.min_amount ?? wf.minAmount;
+      wf.maxAmount = wf.max_amount ?? wf.maxAmount;
+      wf.isActive = Boolean(wf.is_active ?? wf.isActive);
     }
     return workflows;
   }
@@ -1911,6 +3961,7 @@ export class ExpenseService {
     const [wfId] = await db('expense_workflows').insert({
       organization_id: ctx.organizationId,
       name: data.name,
+      target_role: data.targetRole || 'all',
       description: data.description || null,
       min_amount: data.minAmount || 0,
       max_amount: data.maxAmount || 10000000,
@@ -1946,6 +3997,7 @@ export class ExpenseService {
       .where('organization_id', ctx.organizationId)
       .update({
         name: data.name,
+        target_role: data.targetRole || 'all',
         description: data.description,
         min_amount: data.minAmount,
         max_amount: data.maxAmount,

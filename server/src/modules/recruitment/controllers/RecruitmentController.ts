@@ -17,7 +17,6 @@ import {
   updateCandidateSchema,
   createApplicationSchema,
   scheduleInterviewSchema,
-  submitFeedbackSchema,
   createAssessmentSchema,
   assignAssessmentSchema,
   generateOfferSchema,
@@ -26,6 +25,7 @@ import {
   assignRecruiterSchema,
 } from '../types/index';
 import { ResumeParserService } from '../services/ResumeParserService';
+import { IjpService } from '../services/IjpService';
 
 export class RecruitmentController {
   private recruitmentService: RecruitmentService;
@@ -36,6 +36,7 @@ export class RecruitmentController {
   private offerService: OfferService;
   private referralService: ReferralService;
   private analyticsService: AnalyticsService;
+  private ijpService: IjpService;
 
   constructor() {
     this.recruitmentService = new RecruitmentService();
@@ -46,6 +47,7 @@ export class RecruitmentController {
     this.offerService = new OfferService();
     this.referralService = new ReferralService();
     this.analyticsService = new AnalyticsService();
+    this.ijpService = new IjpService();
   }
 
   // ==================== Job Endpoints ====================
@@ -73,6 +75,8 @@ export class RecruitmentController {
       noOfPositions: validated.noOfPositions,
       expiryDate: validated.expiryDate,
       jobTemplateId: validated.jobTemplateId,
+      isInternal: validated.isInternal,
+      isPublishedExternal: validated.isPublishedExternal,
       skills: validated.skills,
       locations: validated.locations,
     });
@@ -88,6 +92,79 @@ export class RecruitmentController {
 
     res.status(201).json({ success: true, data: job });
   });
+
+  // ==================== IJP (Internal Job Posting) Endpoints ====================
+
+  listInternalJobs = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { page = 1, pageSize = 20, search, department_id, job_type, experience_level, employment_type } = req.query;
+
+    const result = await this.ijpService.listInternalJobs(ctx, {
+      page: parseInt(page as string, 10),
+      pageSize: parseInt(pageSize as string, 10),
+      search: search as string,
+      filters: {
+        department_id: department_id ? parseInt(department_id as string, 10) : undefined,
+        job_type: job_type as string,
+        experience_level: experience_level as string,
+        employment_type: employment_type as string,
+      },
+    });
+
+    res.json({ success: true, data: result.items, meta: result.meta });
+  });
+
+  applyToInternalJob = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { jobId, coverLetter, reasonForMove, availability, relevantExperienceYears, currentProjects, managerInformed, resumeFile, resumeName } = req.body;
+
+    if (!jobId) {
+      throw new ValidationError('Job ID is required');
+    }
+
+    const application = await this.ijpService.applyToJob(ctx, {
+      jobId: parseInt(String(jobId), 10),
+      coverLetter,
+      reasonForMove,
+      availability,
+      relevantExperienceYears,
+      currentProjects,
+      managerInformed,
+      resumeFile,
+      resumeName,
+    });
+
+    res.status(201).json({ success: true, data: application });
+  });
+
+  getMyIjpApplications = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const applications = await this.ijpService.getMyApplications(ctx);
+    res.json({ success: true, data: applications });
+  });
+
+  getManagerIjpApprovals = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const approvals = await this.ijpService.getManagerPendingIjpApprovals(ctx);
+    res.json({ success: true, data: approvals });
+  });
+
+  approveManagerIjp = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { id } = req.params;
+    const { comments } = req.body;
+    const result = await this.ijpService.approveIjpApplication(ctx, parseInt(id, 10), { comments });
+    res.json({ success: true, data: result });
+  });
+
+  rejectManagerIjp = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { id } = req.params;
+    const { comments } = req.body;
+    const result = await this.ijpService.rejectIjpApplication(ctx, parseInt(id, 10), { comments });
+    res.json({ success: true, data: result });
+  });
+
 
   listJobs = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
@@ -112,6 +189,46 @@ export class RecruitmentController {
     const { id } = req.params;
 
     const job = await this.jobService.getJob(ctx, parseInt(id, 10));
+
+    res.json({ success: true, data: job });
+  });
+
+  updateJob = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { id } = req.params;
+    const body = req.body;
+
+    const payload: any = {};
+    if (body.jobTitle !== undefined || body.job_title !== undefined) payload.job_title = body.jobTitle ?? body.job_title;
+    if (body.jobCode !== undefined || body.job_code !== undefined) payload.job_code = body.jobCode ?? body.job_code;
+    if (body.jobDescription !== undefined || body.job_description !== undefined) payload.job_description = body.jobDescription ?? body.job_description;
+    if (body.departmentId !== undefined || body.department_id !== undefined) payload.department_id = body.departmentId ?? body.department_id;
+    if (body.designationId !== undefined || body.designation_id !== undefined) payload.designation_id = body.designationId ?? body.designation_id;
+    if (body.locationId !== undefined || body.location_id !== undefined) payload.location_id = body.locationId ?? body.location_id;
+    if (body.jobType !== undefined || body.job_type !== undefined) payload.job_type = body.jobType ?? body.job_type;
+    if (body.experienceLevel !== undefined || body.experience_level !== undefined) payload.experience_level = body.experienceLevel ?? body.experience_level;
+    if (body.minExperienceYears !== undefined || body.min_experience_years !== undefined) payload.min_experience_years = body.minExperienceYears ?? body.min_experience_years;
+    if (body.maxExperienceYears !== undefined || body.max_experience_years !== undefined) payload.max_experience_years = body.maxExperienceYears ?? body.max_experience_years;
+    if (body.minSalary !== undefined || body.min_salary !== undefined) payload.min_salary = body.minSalary ?? body.min_salary;
+    if (body.maxSalary !== undefined || body.max_salary !== undefined) payload.max_salary = body.maxSalary ?? body.max_salary;
+    if (body.currency !== undefined) payload.currency = body.currency;
+    if (body.employmentType !== undefined || body.employment_type !== undefined) payload.employment_type = body.employmentType ?? body.employment_type;
+    if (body.noOfPositions !== undefined || body.no_of_positions !== undefined) payload.no_of_positions = body.noOfPositions ?? body.no_of_positions;
+    if (body.expiryDate !== undefined || body.expiry_date !== undefined) payload.expiry_date = body.expiryDate ?? body.expiry_date;
+    if (body.isInternal !== undefined || body.is_internal !== undefined) payload.is_internal = Boolean(body.isInternal ?? body.is_internal);
+    if (body.isPublishedExternal !== undefined || body.is_published_external !== undefined) payload.is_published_external = Boolean(body.isPublishedExternal ?? body.is_published_external);
+    if (body.status !== undefined) payload.status = body.status;
+
+    const job = await this.jobService.updateJob(ctx, parseInt(id, 10), payload);
+
+    if (body.aiSettings) {
+      try {
+        const { jobAiService } = await import('../services/JobAiService');
+        await jobAiService.saveJobAiSettings(ctx, parseInt(id, 10), body.aiSettings);
+      } catch (aiErr) {
+        console.warn('Failed to save AI settings for job:', aiErr);
+      }
+    }
 
     res.json({ success: true, data: job });
   });
@@ -252,7 +369,9 @@ export class RecruitmentController {
       gradeId,
       typeId,
       designationId,
-      stage
+      stage,
+      mrfRequestId,
+      mrf_request_id,
     } = req.query;
 
     const filters: any = {};
@@ -263,6 +382,9 @@ export class RecruitmentController {
     if (typeId && typeId !== 'all') filters.type_id = typeId as string;
     if (designationId && designationId !== 'all') filters.designation_id = parseInt(designationId as string, 10);
     if (stage && stage !== 'all') filters.application_status = stage as string;
+    // MRF-scoped application listing
+    const rawMrfId = mrfRequestId || mrf_request_id;
+    if (rawMrfId && rawMrfId !== 'all') filters.mrfRequestId = parseInt(rawMrfId as string, 10);
 
     const result = await this.recruitmentService.getApplications(ctx, {
       page: parseInt(page as string, 10),
@@ -289,10 +411,10 @@ export class RecruitmentController {
           const candId = item.candidate_id || item.candidateId;
           const jId = item.job_id || item.jobId;
           if (candId && jId && (item.ats_score == null || item.jd_match_score == null)) {
-            await resumeScreeningEngine.screenCandidateForJob(ctx, Number(candId), Number(jId), { persist: true }).catch(() => {});
+            await resumeScreeningEngine.screenCandidateForJob(ctx, Number(candId), Number(jId), { persist: true }).catch(() => { });
           }
         }
-      } catch (e) {}
+      } catch (e) { }
     })();
 
     res.json({ success: true, data: cleanItems, meta: result.meta });
@@ -488,7 +610,7 @@ export class RecruitmentController {
 
     const userFullName = formatCleanName(rawUserFullName) || 'HR Panel';
 
-    const items = await db('interviews')
+    const items: any[] = await db('interviews')
       .leftJoin('applications', 'interviews.application_id', 'applications.id')
       .leftJoin('candidates', 'applications.candidate_id', 'candidates.id')
       .where(function () {
@@ -561,7 +683,7 @@ export class RecruitmentController {
       }
     });
 
-    items.forEach(item => {
+    items.forEach((item: any) => {
       const interviewerIds: (number | string)[] = [];
       if (panelMap[item.id]) {
         interviewerIds.push(...panelMap[item.id]);
@@ -635,10 +757,10 @@ export class RecruitmentController {
         : (userFullName || 'Assigned Interviewer');
     });
 
-    let resultItems = items;
+    let resultItems: any[] = items;
 
     if (assignedOnly === 'true') {
-      resultItems = items.filter(item => {
+      resultItems = items.filter((item: any) => {
         const panelEmpIds = panelMap[item.id] || [];
         for (const pId of panelEmpIds) {
           if (possibleUserIds.has(pId) || possibleUserIds.has(Number(pId)) || possibleUserIds.has(String(pId))) {
@@ -697,7 +819,7 @@ export class RecruitmentController {
 
     // Strict deduplication by interview ID
     const uniqueMap = new Map();
-    resultItems.forEach(item => {
+    resultItems.forEach((item: any) => {
       if (!uniqueMap.has(item.id)) {
         uniqueMap.set(item.id, item);
       }
@@ -783,7 +905,7 @@ export class RecruitmentController {
 
     const todayStr = new Date().toISOString().split('T')[0];
 
-    let items = await db('interviews')
+    let items: any[] = await db('interviews')
       .leftJoin('applications', 'interviews.application_id', 'applications.id')
       .leftJoin('candidates', 'applications.candidate_id', 'candidates.id')
       .where(function () {
@@ -857,7 +979,7 @@ export class RecruitmentController {
       }
     });
 
-    items.forEach(item => {
+    items.forEach((item: any) => {
       const interviewerIds: (number | string)[] = [];
       if (panelMap[item.id]) {
         interviewerIds.push(...panelMap[item.id]);
@@ -931,10 +1053,10 @@ export class RecruitmentController {
         : (userFullName || 'Assigned Interviewer');
     });
 
-    let resultItems = items;
+    let resultItems: any[] = items;
 
     if (assignedOnly === 'true') {
-      resultItems = items.filter(item => {
+      resultItems = items.filter((item: any) => {
         const panelEmpIds = panelMap[item.id] || [];
         for (const pId of panelEmpIds) {
           if (possibleUserIds.has(pId) || possibleUserIds.has(Number(pId)) || possibleUserIds.has(String(pId))) {
@@ -993,7 +1115,7 @@ export class RecruitmentController {
 
     // Strict deduplication by interview ID
     const uniqueMap = new Map();
-    resultItems.forEach(item => {
+    resultItems.forEach((item: any) => {
       if (!uniqueMap.has(item.id)) {
         uniqueMap.set(item.id, item);
       }
@@ -1075,29 +1197,18 @@ export class RecruitmentController {
     const db = (await import('../../../db/knex')).getKnex();
 
     const attempts = await db('assessment_attempts')
-      .where({ assessment_id: assessmentId, organization_id: ctx.organizationId })
-      .orderBy('created_at', 'desc');
+      .leftJoin('applications', 'assessment_attempts.application_id', 'applications.id')
+      .leftJoin('candidates', 'applications.candidate_id', 'candidates.id')
+      .select(
+        'assessment_attempts.*',
+        db.raw(`CONCAT(candidates.first_name, ' ', COALESCE(candidates.last_name, '')) as candidate_name`),
+        'candidates.email as candidate_email'
+      )
+      .where('assessment_attempts.organization_id', ctx.organizationId)
+      .where('assessment_attempts.assessment_id', assessmentId)
+      .orderBy('assessment_attempts.created_at', 'desc');
 
-    // Enrich with candidate info
-    const enriched = await Promise.all(attempts.map(async (attempt: any) => {
-      const application = await db('applications').where('id', attempt.application_id).first();
-      let candidateName = `App #${attempt.application_id}`;
-      let candidateEmail = '';
-      if (application) {
-        const candidate = await db('candidates').where('id', application.candidate_id).first();
-        if (candidate) {
-          candidateName = `${candidate.first_name || ''} ${candidate.last_name || ''}`.trim();
-          candidateEmail = candidate.email || '';
-        }
-      }
-      return {
-        ...attempt,
-        candidate_name: candidateName,
-        candidate_email: candidateEmail,
-      };
-    }));
-
-    res.json({ success: true, data: enriched });
+    res.json({ success: true, data: attempts });
   });
 
   // ==================== Offer Endpoints ====================
@@ -1124,11 +1235,14 @@ export class RecruitmentController {
 
   listOffers = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
-    const { page = 1, pageSize = 20 } = req.query;
+    const { page = 1, pageSize = 100, status } = req.query;
 
     const result = await this.offerService.listOffers(ctx, {
       page: parseInt(page as string, 10),
       pageSize: parseInt(pageSize as string, 10),
+      filters: {
+        status: status && status !== 'all' ? (status as string) : undefined
+      }
     });
 
     res.json({ success: true, data: result.items, meta: result.meta });
@@ -1283,14 +1397,6 @@ export class RecruitmentController {
 
   // ==================== Additional Interview Endpoints ====================
 
-  submitInterviewFeedback = asyncHandler(async (req: Request, res: Response) => {
-    const ctx = req.ctx!;
-    const validated = validate(req.body, submitFeedbackSchema);
-
-    const feedback = await this.interviewService.submitFeedback(ctx, validated.interviewId, validated);
-
-    res.status(201).json({ success: true, data: feedback });
-  });
 
   recordInterviewDecision = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
@@ -1472,21 +1578,6 @@ export class RecruitmentController {
     res.json({ success: true, data: items });
   });
 
-  listPipelineStages = asyncHandler(async (req: Request, res: Response) => {
-    const ctx = req.ctx!;
-    const { getKnex } = await import('../../../db/knex');
-    const db = getKnex();
-
-    const hasStageOrder = await db.schema.hasColumn('pipeline_stages', 'stage_order');
-    const orderCol = hasStageOrder ? 'stage_order' : 'sequence_order';
-
-    const stages = await db('pipeline_stages')
-      .where('organization_id', ctx.organizationId)
-      .whereNull('deleted_at')
-      .orderBy(orderCol, 'asc');
-
-    res.json({ success: true, data: stages });
-  });
 
   onboardCandidate = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
@@ -1791,26 +1882,6 @@ export class RecruitmentController {
     res.json({ success: true, data: attempts });
   });
 
-  getAttemptsByAssessment = asyncHandler(async (req: Request, res: Response) => {
-    const ctx = req.ctx!;
-    const { assessmentId } = req.params;
-    const { getKnex } = await import('../../../db/knex');
-    const db = getKnex();
-
-    const attempts = await db('assessment_attempts')
-      .leftJoin('applications', 'assessment_attempts.application_id', 'applications.id')
-      .leftJoin('candidates', 'applications.candidate_id', 'candidates.id')
-      .select(
-        'assessment_attempts.*',
-        db.raw(`CONCAT(candidates.first_name, ' ', COALESCE(candidates.last_name, '')) as candidate_name`),
-        'candidates.email as candidate_email'
-      )
-      .where('assessment_attempts.organization_id', ctx.organizationId)
-      .where('assessment_attempts.assessment_id', parseInt(assessmentId, 10));
-
-    res.json({ success: true, data: attempts });
-  });
-
   // ==================== Additional Offer Endpoints ====================
 
   rejectOffer = asyncHandler(async (req: Request, res: Response) => {
@@ -1851,7 +1922,6 @@ export class RecruitmentController {
 
     const appId = offer.application_id || (offer as any).applicationId;
     const application = appId ? await db('applications').where('id', appId).first().catch(() => null) : null;
-    
     let candidate: any = null;
     if (application?.candidate_id) {
       candidate = await db('candidates').where('id', application.candidate_id).first().catch(() => null);
@@ -1860,8 +1930,8 @@ export class RecruitmentController {
       candidate = await db('candidates').where('id', (offer as any).candidate_id).first().catch(() => null);
     }
 
-    const org = offer.organization_id 
-      ? await db('organizations').where('id', offer.organization_id).first().catch(() => null) 
+    const org = offer.organization_id
+      ? await db('organizations').where('id', offer.organization_id).first().catch(() => null)
       : null;
 
     let departmentName = 'N/A';
@@ -1881,7 +1951,6 @@ export class RecruitmentController {
     const candidateName = candidate
       ? ([candidate.first_name, candidate.last_name].filter(Boolean).join(' ') || candidate.name || 'Candidate')
       : (meta.candidateName || (offer as any).candidate_name || 'Candidate');
-    
     const candidateEmail = candidate?.email || meta.candidateEmail || (offer as any).candidate_email || '';
 
     res.json({
@@ -1939,39 +2008,15 @@ export class RecruitmentController {
     res.json({ success: true, data: result });
   });
 
-  runPublicAssessmentCode = asyncHandler(async (req: Request, res: Response) => {
-    const result = await this.assessmentService.executeCandidateCode(req.body);
+  verifyPublicAssessmentProctoring = asyncHandler(async (req: Request, res: Response) => {
+    const { uuid } = req.params;
+    const result = await this.assessmentService.verifyProctoringFrame(uuid, req.body);
     res.json({ success: true, data: result });
   });
 
-  // ==================== Job Update ====================
-
-  updateJob = asyncHandler(async (req: Request, res: Response) => {
-    const ctx = req.ctx!;
-    const { id } = req.params;
-    const validated = validate(req.body, updateJobSchema);
-
-    const updateData: any = {};
-    if (validated.jobTitle !== undefined) updateData.job_title = validated.jobTitle;
-    if (validated.jobDescription !== undefined) updateData.job_description = validated.jobDescription;
-    if (validated.departmentId !== undefined) updateData.department_id = validated.departmentId;
-    if (validated.designationId !== undefined) updateData.designation_id = validated.designationId;
-    if (validated.locationId !== undefined) updateData.location_id = validated.locationId;
-    if (validated.jobType !== undefined) updateData.job_type = validated.jobType;
-    if (validated.experienceLevel !== undefined) updateData.experience_level = validated.experienceLevel;
-    if (validated.minExperienceYears !== undefined) updateData.min_experience_years = validated.minExperienceYears;
-    if (validated.maxExperienceYears !== undefined) updateData.max_experience_years = validated.maxExperienceYears;
-    if (validated.minSalary !== undefined) updateData.min_salary = validated.minSalary;
-    if (validated.maxSalary !== undefined) updateData.max_salary = validated.maxSalary;
-    if (validated.currency !== undefined) updateData.currency = validated.currency;
-    if (validated.employmentType !== undefined) updateData.employment_type = validated.employmentType;
-    if (validated.noOfPositions !== undefined) updateData.no_of_positions = validated.noOfPositions;
-    if (validated.expiryDate !== undefined) updateData.expiry_date = validated.expiryDate;
-    if (validated.jobCode !== undefined) updateData.job_code = validated.jobCode;
-
-    const job = await this.jobService.updateJob(ctx, parseInt(id, 10), updateData);
-
-    res.json({ success: true, data: job });
+  runPublicAssessmentCode = asyncHandler(async (req: Request, res: Response) => {
+    const result = await this.assessmentService.executeCandidateCode(req.body);
+    res.json({ success: true, data: result });
   });
 
   // ==================== Interview Reschedule & Cancel ====================
@@ -2111,7 +2156,8 @@ export class RecruitmentController {
 
   createReferral = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
-    const { employeeId, candidateId, candidateName, candidateEmail, candidatePhone, positionTitle, referralRewardAmount } = req.body;
+    const { employeeId, candidateId, candidateName, candidateEmail, candidatePhone, positionTitle, referralRewardAmount, resumeUrl, resume_url, resume } = req.body;
+    const resumeFile = (req as any).file;
 
     const referral = await this.referralService.submitReferral(ctx, {
       employeeId: employeeId ? parseInt(employeeId, 10) : undefined,
@@ -2121,6 +2167,8 @@ export class RecruitmentController {
       candidatePhone,
       positionTitle,
       referralRewardAmount: referralRewardAmount ? parseFloat(referralRewardAmount) : undefined,
+      resumeFile,
+      resumeUrl: resumeUrl || resume_url || resume,
     });
 
     res.status(201).json({ success: true, data: referral });
@@ -2131,15 +2179,186 @@ export class RecruitmentController {
     const { getKnex } = await import('../../../db/knex');
     const db = getKnex();
 
-    let empId = ctx.userId;
-    const emp = await db('employees')
-      .where('organization_id', ctx.organizationId)
-      .where((b) => b.where('user_id', ctx.userId).orWhere('id', ctx.userId))
-      .first();
-    if (emp) empId = emp.id;
+    // Step 1: Get the user record to find their email
+    const user = await db('users').where('id', ctx.userId).first();
+    const userEmail = user?.email || '';
 
-    const result = await this.referralService.getEmployeeReferrals(ctx, empId);
-    res.json({ success: true, data: result.data });
+    // Step 2: Find matching employee record by email or id
+    // NOTE: employees table does NOT have a user_id column — match by email only
+    let empId: number | undefined;
+    if (userEmail) {
+      const emp = await db('employees')
+        .where('organization_id', ctx.organizationId)
+        .where('email', userEmail)
+        .whereNull('deleted_at')
+        .first();
+      empId = emp?.id;
+    }
+
+    // Step 3: Build all IDs we might have stored as referrer_employee_id
+    // Also include user?.employee_id in case the users table links to employees
+    const linkedEmpId = user?.employee_id || user?.employeeId;
+    const possibleEmpIds = [empId, linkedEmpId]
+      .filter((id): id is number => typeof id === 'number' && id > 0);
+
+    // Step 4: Query referrals — match on referrer_employee_id OR created_by
+    // This ensures we always find referrals submitted by this employee
+    const items: any[] = await db('referrals')
+      .leftJoin('candidates', 'referrals.candidate_id', 'candidates.id')
+      .leftJoin('employees as ref_emp', 'referrals.referrer_employee_id', 'ref_emp.id')
+      .select(
+        'referrals.*',
+        'candidates.first_name as candidate_first_name',
+        'candidates.last_name as candidate_last_name',
+        'candidates.email as candidate_email',
+        'candidates.phone as candidate_phone',
+        'candidates.current_company as candidate_position',
+        'candidates.resume_url as candidate_resume_url',
+        'ref_emp.first_name as referrer_first_name',
+        'ref_emp.last_name as referrer_last_name',
+        'ref_emp.email as referrer_email'
+      )
+      .where('referrals.organization_id', ctx.organizationId)
+      .whereNull('referrals.deleted_at')
+      .where((builder) => {
+        // Match by employee ID(s) if resolved
+        if (possibleEmpIds.length > 0) {
+          builder.whereIn('referrals.referrer_employee_id', possibleEmpIds);
+        }
+        // Always also include any referral created_by this user's userId
+        builder.orWhere('referrals.created_by', ctx.userId);
+      })
+      .orderBy('referrals.id', 'desc');
+
+    // Step 5: Enrich the rows
+    const enriched = items.map((r: any) => {
+      const fn = r.candidateFirstName || r.candidate_first_name || '';
+      const ln = r.candidateLastName || r.candidate_last_name || '';
+      const candId = r.candidateId || r.candidate_id;
+      const candName = `${fn} ${ln}`.trim() || `Candidate #${candId}`;
+
+      const rfn = r.referrerFirstName || r.referrer_first_name || '';
+      const rln = r.referrerLastName || r.referrer_last_name || '';
+      const refId = r.referrerEmployeeId || r.referrer_employee_id;
+      const refName = `${rfn} ${rln}`.trim() || `Employee #${refId}`;
+
+      const statusVal = r.status || r.referralStatus || r.referral_status || 'submitted';
+      const resumeUrl = r.candidateResumeUrl || r.candidate_resume_url || null;
+      const rewardAmt = r.referralRewardAmount || r.referral_reward_amount || null;
+
+      return {
+        ...r,
+        candidateId: candId,
+        candidate_id: candId,
+        candidateName: candName,
+        candidate_name: candName,
+        candidateEmail: r.candidateEmail || r.candidate_email || '',
+        candidate_email: r.candidateEmail || r.candidate_email || '',
+        candidatePhone: r.candidatePhone || r.candidate_phone || '',
+        candidateResumeUrl: resumeUrl,
+        candidate_resume_url: resumeUrl,
+        resumeUrl,
+        positionTitle: r.candidatePosition || r.candidate_position || 'Open Role',
+        referrerEmployeeId: refId,
+        referrer_employee_id: refId,
+        referrerName: refName,
+        referrer_name: refName,
+        referrerEmail: r.referrerEmail || r.referrer_email || '',
+        referralRewardAmount: rewardAmt,
+        referral_reward_amount: rewardAmt,
+        status: statusVal,
+        referral_status: statusVal,
+        referralStatus: statusVal,
+        rewardStatus: r.rewardStatus || r.reward_status || 'pending',
+        reward_status: r.rewardStatus || r.reward_status || 'pending',
+      };
+    });
+
+    res.json({ success: true, data: enriched });
+  });
+
+  getReferralPositions = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx;
+    const { getKnex } = await import('../../../db/knex');
+    const db = getKnex();
+
+    const positions: Array<{ id: string | number; title: string; code?: string; department?: string; source?: string }> = [];
+    const titlesSet = new Set<string>();
+
+    const addPos = (title: string, id?: any, code?: string, department?: string, source?: string) => {
+      const clean = (title || '').trim();
+      if (!clean || titlesSet.has(clean.toLowerCase())) return;
+      titlesSet.add(clean.toLowerCase());
+      positions.push({
+        id: id || clean,
+        title: clean,
+        code: code || undefined,
+        department: department || undefined,
+        source: source || undefined,
+      });
+    };
+
+    // 1. Fetch from jobs table
+    try {
+      const jobsQuery = db('jobs as j')
+        .leftJoin('departments as d', 'j.department_id', 'd.id')
+        .leftJoin('designations as des', 'j.designation_id', 'des.id')
+        .whereNull('j.deleted_at')
+        .whereNull('j.closed_at')
+        .where((q) => {
+          q.whereNull('j.status')
+            .orWhereNotIn('j.status', ['closed', 'archived', 'rejected']);
+        });
+
+      if (ctx?.organizationId) {
+        jobsQuery.andWhere((q) => {
+          q.where('j.organization_id', ctx.organizationId)
+            .orWhereNull('j.organization_id');
+        });
+      }
+
+      const jobs = await jobsQuery.select(
+        'j.id', 'j.job_code', 'j.job_title', 'd.name as dept_name', 'des.name as desig_name'
+      ).orderBy('j.created_at', 'desc');
+
+      for (const j of jobs) {
+        const title = (j as any).jobTitle || (j as any).job_title || (j as any).desigName || (j as any).desig_name;
+        if (title) {
+          addPos(title, j.id, (j as any).jobCode || (j as any).job_code, (j as any).deptName || (j as any).dept_name, 'job');
+        }
+      }
+    } catch (err) {
+      console.warn('Error fetching jobs in getReferralPositions:', err);
+    }
+
+    // 2. Fetch active designations from designations table
+    try {
+      const desigQuery = db('designations as des')
+        .leftJoin('departments as d', 'des.department_id', 'd.id')
+        .whereNull('des.deleted_at');
+
+      if (ctx?.organizationId) {
+        desigQuery.andWhere((q) => {
+          q.where('des.organization_id', ctx.organizationId)
+            .orWhereNull('des.organization_id');
+        });
+      }
+
+      const desigs = await desigQuery.select(
+        'des.id', 'des.name', 'des.title', 'des.code', 'd.name as dept_name'
+      ).limit(100);
+
+      for (const d of desigs) {
+        const title = (d as any).name || (d as any).title;
+        if (title) {
+          addPos(title, d.id, (d as any).code, (d as any).deptName || (d as any).dept_name, 'designation');
+        }
+      }
+    } catch (err) {
+      console.warn('Error fetching designations in getReferralPositions:', err);
+    }
+
+    res.json({ success: true, data: positions });
   });
 
   listReferrals = asyncHandler(async (req: Request, res: Response) => {
@@ -2166,7 +2385,7 @@ export class RecruitmentController {
   rewardReferral = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
     const { id } = req.params;
-    const { rewardAmount, rewardType } = req.body;
+    const { rewardAmount, rewardType, newStatus } = req.body;
 
     if (!rewardAmount) {
       throw new ValidationError('rewardAmount is required');
@@ -2175,9 +2394,10 @@ export class RecruitmentController {
     const result = await this.referralService.rewardReferral(ctx, parseInt(id, 10), {
       rewardAmount,
       rewardType: rewardType || 'cash',
+      newStatus: newStatus || 'hired',
     });
 
-    res.json({ success: true, data: result, message: 'Referral reward processed successfully' });
+    res.json({ success: true, data: result, message: 'Referral reward assigned successfully' });
   });
 
   deleteReferral = asyncHandler(async (req: Request, res: Response) => {
@@ -2212,23 +2432,74 @@ export class RecruitmentController {
 
     const { getKnex } = await import('../../../db/knex');
     const { v4: uuidv4 } = await import('uuid');
+    const fs = await import('fs');
+    const path = await import('path');
     const db = getKnex();
     const now = new Date().toISOString().replace('T', ' ').substring(0, 19);
 
-    const [docId] = await db('candidate_documents').insert({
-      uuid: uuidv4(),
+    const hasTable = await db.schema.hasTable('candidate_documents');
+    if (!hasTable) {
+      res.status(400).json({ success: false, error: 'candidate_documents table not available' });
+      return;
+    }
+
+    const hasUuidCol = await db.schema.hasColumn('candidate_documents', 'uuid');
+    const hasFileNameCol = await db.schema.hasColumn('candidate_documents', 'file_name');
+    const hasFileUrlCol = await db.schema.hasColumn('candidate_documents', 'file_url');
+    const hasDocumentUrlCol = await db.schema.hasColumn('candidate_documents', 'document_url');
+    const hasFileSizeCol = await db.schema.hasColumn('candidate_documents', 'file_size');
+    const hasUploadedAtCol = await db.schema.hasColumn('candidate_documents', 'uploaded_at');
+    const hasUpdatedAtCol = await db.schema.hasColumn('candidate_documents', 'updated_at');
+    const hasDocumentTypeCol = await db.schema.hasColumn('candidate_documents', 'document_type');
+
+    let docType = documentType || 'other';
+    if (!hasFileNameCol && !['cover_letter', 'certificate', 'portfolio', 'other'].includes(docType)) {
+      docType = 'other';
+    }
+
+    // Ensure uploads directory exists and persist file buffer to disk
+    const uploadDir = path.join(process.cwd(), 'uploads');
+    const publicUploadDir = path.join(process.cwd(), 'public', 'uploads');
+    if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+    if (!fs.existsSync(publicUploadDir)) fs.mkdirSync(publicUploadDir, { recursive: true });
+
+    const safeBaseName = (file.originalname || 'document.pdf').replace(/[^a-zA-Z0-9._-]/g, '_');
+    const diskFilename = `${Date.now()}-${safeBaseName}`;
+    const targetPath = path.join(uploadDir, diskFilename);
+    const publicTargetPath = path.join(publicUploadDir, diskFilename);
+
+    if (file.buffer) {
+      fs.writeFileSync(targetPath, file.buffer);
+      fs.writeFileSync(publicTargetPath, file.buffer);
+    }
+
+    const fileUrl = `/uploads/${diskFilename}`;
+    const insertData: any = {
       organization_id: ctx.organizationId,
       candidate_id: parseInt(id, 10),
-      document_type: documentType || 'general',
-      file_name: file.originalname,
-      file_url: `/uploads/${file.filename}`,
-      file_size: file.size,
-      uploaded_at: now,
       created_at: now,
-      updated_at: now,
-    });
+    };
 
-    res.status(201).json({ success: true, data: { id: docId, fileName: file.originalname, fileUrl: `/uploads/${file.filename}` } });
+    if (hasUuidCol) insertData.uuid = uuidv4();
+    if (hasDocumentTypeCol) insertData.document_type = docType;
+    if (hasFileNameCol) insertData.file_name = file.originalname;
+    if (hasFileUrlCol) insertData.file_url = fileUrl;
+    if (hasDocumentUrlCol) insertData.document_url = fileUrl;
+    if (hasFileSizeCol) insertData.file_size = file.size;
+    if (hasUploadedAtCol) insertData.uploaded_at = now;
+    if (hasUpdatedAtCol) insertData.updated_at = now;
+
+    const [docId] = await db('candidate_documents').insert(insertData);
+
+    res.status(201).json({
+      success: true,
+      data: {
+        id: docId,
+        fileName: file.originalname,
+        fileUrl,
+        documentType: docType
+      }
+    });
   });
 
   listCandidateDocuments = asyncHandler(async (req: Request, res: Response) => {
@@ -2237,11 +2508,35 @@ export class RecruitmentController {
     const { getKnex } = await import('../../../db/knex');
     const db = getKnex();
 
+    const hasTable = await db.schema.hasTable('candidate_documents');
+    if (!hasTable) {
+      res.json({ success: true, data: [] });
+      return;
+    }
+
     const documents = await db('candidate_documents')
       .where({ organization_id: ctx.organizationId, candidate_id: parseInt(id, 10) })
       .orderBy('created_at', 'desc');
 
-    res.json({ success: true, data: documents });
+    const mapped = documents.map((doc: any) => {
+      const fUrl = doc.fileUrl || doc.file_url || doc.documentUrl || doc.document_url || '';
+      let fName = doc.fileName || doc.file_name;
+      if (!fName && fUrl) {
+        const parts = fUrl.split('/');
+        fName = parts[parts.length - 1];
+        if (fName && fName.includes('-')) {
+          fName = fName.substring(fName.indexOf('-') + 1);
+        }
+      }
+      return {
+        ...doc,
+        fileName: fName || 'Document',
+        fileUrl: fUrl,
+        documentType: doc.documentType || doc.document_type || 'other',
+      };
+    });
+
+    res.json({ success: true, data: mapped });
   });
 
   deleteCandidateDocument = asyncHandler(async (req: Request, res: Response) => {
@@ -2306,7 +2601,11 @@ export class RecruitmentController {
     }
 
     if (hasProficiencyLevelCol) {
-      insertData.proficiency_level = proficiency || 'intermediate';
+      const validProficiencies = ['beginner', 'intermediate', 'expert'];
+      let prof = (proficiency || 'intermediate').toLowerCase();
+      if (prof === 'advanced') prof = 'expert';
+      if (!validProficiencies.includes(prof)) prof = 'intermediate';
+      insertData.proficiency_level = prof;
     } else {
       insertData.proficiency = proficiency || 'intermediate';
     }
@@ -2365,10 +2664,10 @@ export class RecruitmentController {
       return;
     }
 
+    const hasUuidCol = await db.schema.hasColumn('candidate_education', 'uuid');
     const hasGraduationYearCol = await db.schema.hasColumn('candidate_education', 'graduation_year');
     const hasUpdatedAtCol = await db.schema.hasColumn('candidate_education', 'updated_at');
     const insertData: any = {
-      uuid: uuidv4(),
       organization_id: ctx.organizationId,
       candidate_id: parseInt(id, 10),
       degree: degree || '',
@@ -2377,12 +2676,16 @@ export class RecruitmentController {
       created_at: now,
     };
 
+    if (hasUuidCol) {
+      insertData.uuid = uuidv4();
+    }
+
     if (hasUpdatedAtCol) {
       insertData.updated_at = now;
     }
 
     if (hasGraduationYearCol) {
-      insertData.graduation_year = graduationYear || null;
+      insertData.graduation_year = graduationYear ? parseInt(graduationYear, 10) || null : null;
     } else {
       insertData.end_date = graduationYear ? `${graduationYear}-12-31` : null;
     }
@@ -2440,28 +2743,50 @@ export class RecruitmentController {
       return;
     }
 
+    const hasUuidCol = await db.schema.hasColumn('candidate_experience', 'uuid');
     const hasDesignationCol = await db.schema.hasColumn('candidate_experience', 'designation');
+    const hasJobTitleCol = await db.schema.hasColumn('candidate_experience', 'job_title');
+    const hasCurrentlyWorkingCol = await db.schema.hasColumn('candidate_experience', 'currently_working');
+    const hasIsCurrentCol = await db.schema.hasColumn('candidate_experience', 'is_current');
     const hasUpdatedAtCol = await db.schema.hasColumn('candidate_experience', 'updated_at');
+    const hasDescriptionCol = await db.schema.hasColumn('candidate_experience', 'description');
+
+    const isCurrentlyWorking = Boolean(isCurrent);
+    const validStartDate = (startDate && String(startDate).trim()) ? String(startDate).trim() : new Date().toISOString().substring(0, 10);
+    const validEndDate = isCurrentlyWorking ? null : ((endDate && String(endDate).trim()) ? String(endDate).trim() : null);
+
     const insertData: any = {
-      uuid: uuidv4(),
       organization_id: ctx.organizationId,
       candidate_id: parseInt(id, 10),
       company_name: companyName || '',
-      start_date: startDate || null,
-      end_date: endDate || null,
-      is_current: isCurrent || false,
-      description: description || null,
+      start_date: validStartDate,
+      end_date: validEndDate,
       created_at: now,
     };
+
+    if (hasUuidCol) {
+      insertData.uuid = uuidv4();
+    }
 
     if (hasUpdatedAtCol) {
       insertData.updated_at = now;
     }
 
+    if (hasDescriptionCol) {
+      insertData.description = description || null;
+    }
+
     if (hasDesignationCol) {
       insertData.designation = jobTitle || '';
-    } else {
+    } else if (hasJobTitleCol) {
       insertData.job_title = jobTitle || '';
+    }
+
+    if (hasCurrentlyWorkingCol) {
+      insertData.currently_working = isCurrentlyWorking;
+    }
+    if (hasIsCurrentCol) {
+      insertData.is_current = isCurrentlyWorking;
     }
 
     const [expId] = await db('candidate_experience').insert(insertData);
@@ -2685,12 +3010,6 @@ export class RecruitmentController {
 
     const skills = await skillMasterService.listSkills(ctx);
     res.json({ success: true, data: skills });
-  });
-
-  getCandidateFunnelReport = asyncHandler(async (req: Request, res: Response) => {
-    const ctx = req.ctx!;
-    const funnel = await this.analyticsService.generateHiringFunnel(ctx);
-    res.json({ success: true, data: funnel });
   });
 }
 

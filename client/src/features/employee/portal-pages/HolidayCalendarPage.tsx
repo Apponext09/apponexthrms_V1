@@ -21,10 +21,56 @@ export default function HolidayCalendarPage() {
     const fetchHolidays = async () => {
       try {
         setLoading(true);
-        const res = await apiClient.get('/settings/holidays/my-calendar');
-        if (res.data?.success) {
-          setHolidays(res.data.data || []);
+        setError(null);
+        let list: any[] = [];
+
+        try {
+          const res = await apiClient.get('/settings/holidays/my-calendar');
+          if (res.data?.success && Array.isArray(res.data.data) && res.data.data.length > 0) {
+            list = res.data.data;
+          }
+        } catch (e) {
+          console.warn('my-calendar endpoint error, trying leaves/calendar:', e);
         }
+
+        if (list.length === 0) {
+          try {
+            const calRes = await apiClient.get('/leaves/calendar');
+            if (calRes.data?.data?.holidays && Array.isArray(calRes.data.data.holidays)) {
+              list = calRes.data.data.holidays;
+            }
+          } catch (e) {
+            console.warn('leaves/calendar fallback error:', e);
+          }
+        }
+
+        if (list.length === 0) {
+          try {
+            const masterRes = await apiClient.get('/master/holiday-calendars');
+            const cals = Array.isArray(masterRes.data?.data) ? masterRes.data.data : (masterRes.data?.data?.items || []);
+            if (cals.length > 0) {
+              const activeCal = cals.find((c: any) => c.status === 'Published') || cals[0];
+              if (activeCal?.id) {
+                const detail = await apiClient.get(`/master/holiday-calendars/${activeCal.id}`);
+                if (detail.data?.data?.holidays && Array.isArray(detail.data.data.holidays)) {
+                  list = detail.data.data.holidays;
+                }
+              }
+            }
+          } catch (e) {
+            console.warn('master calendars fallback error:', e);
+          }
+        }
+
+        const normalized: Holiday[] = (list || []).map((h: any) => ({
+          id: h.id,
+          holiday_name: h.holiday_name || h.holidayName || h.name || 'Holiday',
+          holiday_date: h.holiday_date || h.holidayDate || h.date,
+          holiday_type: (h.holiday_type || h.holidayType || (h.is_optional ? 'restricted' : 'national')).toLowerCase(),
+          is_optional: Boolean(h.is_optional ?? h.isOptional),
+        }));
+
+        setHolidays(normalized);
       } catch (err) {
         console.error('Error fetching holiday calendar:', err);
         setError('Failed to load holidays.');

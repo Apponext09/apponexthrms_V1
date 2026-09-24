@@ -11,7 +11,7 @@ export const SYSTEM_ROLES = {
   INTERN: 'intern',
   CLIENT: 'client',
   AUDITOR: 'auditor',
-  FINANCE_MANAGER: 'finance_manager',
+  FINANCE: 'finance',
 } as const;
 
 export const SYSTEM_ROLE_CODES = Object.values(SYSTEM_ROLES);

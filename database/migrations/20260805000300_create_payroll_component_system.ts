@@ -6,7 +6,7 @@ export async function up(knex: Knex): Promise<void> {
   if (!hasGroups) {
     await knex.schema.createTable('payroll_component_groups', (table) => {
       table.bigIncrements('id').primary();
-      table.uuid('uuid').notNullable().defaultTo(knex.raw('(UUID())'));
+      table.uuid('uuid').notNullable().unique();
       table.bigInteger('organization_id').unsigned().notNullable();
       table.string('name', 100).notNullable();
       table.enum('category', ['Earning', 'Deduction']).notNullable().defaultTo('Earning');
@@ -37,7 +37,7 @@ export async function up(knex: Knex): Promise<void> {
   if (!hasComponents) {
     await knex.schema.createTable('payroll_components', (table) => {
       table.bigIncrements('id').primary();
-      table.uuid('uuid').notNullable().defaultTo(knex.raw('(UUID())'));
+      table.uuid('uuid').notNullable().unique();
       table.bigInteger('organization_id').unsigned().notNullable();
       table.bigInteger('group_id').unsigned().nullable();
       table.string('name', 100).notNullable();

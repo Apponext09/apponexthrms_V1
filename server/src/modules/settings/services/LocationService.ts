@@ -4,6 +4,7 @@ import { LocationRepository } from '../repositories/LocationRepository';
 import type { TenantContext } from '../../../db/types';
 import { ConflictError, NotFoundError } from '../../../common/errors/index';
 import { getKnex } from '../../../db/knex';
+import { assertMasterNotInUse } from '../utils/masterUsage';
 
 /**
  * Auto-generate a location code from the location name.
@@ -69,7 +70,7 @@ export class LocationService {
   }
 
   async createLocation(ctx: TenantContext, data: Record<string, any>) {
-    const locationName = data.locationName || data.location_name || 'New Location';
+    const locationName = data.locationName || data.location_name || data.name || 'New Location';
     const autoCode = generateCodeFromName(locationName);
 
     // Ensure code uniqueness — append a short suffix if conflict
@@ -78,6 +79,38 @@ export class LocationService {
     while (!(await this.locationRepo.isCodeUnique(ctx, code))) {
       attempt++;
       code = `${autoCode}-${attempt}`;
+    }
+
+    const db = getKnex();
+    let validUserId = ctx.userId ? Number(ctx.userId) : null;
+    if (!validUserId) {
+      const firstUser = await db('users').where('organization_id', ctx.organizationId).first('id').catch(() => null);
+      validUserId = firstUser ? Number(firstUser.id) : 1;
+    }
+
+    // Resolve company_id: check companies table, then branches, then trust the provided value
+    let companyId: number | null = data.companyId ? parseInt(data.companyId, 10) : null;
+    if (companyId) {
+      const hasCompaniesTable = await db.schema.hasTable('companies').catch(() => false);
+      if (hasCompaniesTable) {
+        const compExists = await db('companies').where('id', companyId).first('id').catch(() => null);
+        if (!compExists) {
+          // Fallback: check branches table
+          const branchExists = await db('branches').where('id', companyId).first('id').catch(() => null);
+          if (!branchExists) {
+            // Neither table confirms this ID; keep it anyway (trust frontend) unless it's completely invalid
+            // Only null it out if it's not a valid positive integer
+            if (isNaN(companyId) || companyId <= 0) companyId = null;
+          }
+        }
+      } else {
+        // No companies table — try branches only
+        const branchExists = await db('branches').where('id', companyId).first('id').catch(() => null);
+        if (!branchExists) {
+          // Keep the ID as-is (trust frontend)
+          if (isNaN(companyId) || companyId <= 0) companyId = null;
+        }
+      }
     }
 
     const location = await this.locationRepo.create(ctx, {
@@ -102,10 +135,10 @@ export class LocationService {
       location_mail: data.locationMail || null,
       contact_name: data.contactName || null,
       contact_number: data.contactNumber || null,
-      company_id: data.companyId ? parseInt(data.companyId) : null,
+      company_id: companyId,
       is_active: data.isActive === 'No' ? 'No' : 'Yes',
-      created_by: ctx.userId,
-      updated_by: ctx.userId,
+      created_by: validUserId,
+      updated_by: validUserId,
     } as any);
 
     await this.auditService.log(ctx, {
@@ -151,12 +184,28 @@ export class LocationService {
       ...(data.locationMail !== undefined ? { location_mail: data.locationMail } : {}),
       ...(data.contactName !== undefined ? { contact_name: data.contactName } : {}),
       ...(data.contactNumber !== undefined ? { contact_number: data.contactNumber } : {}),
-      ...(data.companyId !== undefined ? { company_id: data.companyId ? parseInt(data.companyId) : null } : {}),
+      ...(data.companyId !== undefined ? {
+        company_id: await (async () => {
+          const cid = data.companyId ? parseInt(data.companyId, 10) : null;
+          if (!cid || isNaN(cid) || cid <= 0) return null;
+          const db = getKnex();
+          const hasCompaniesTable = await db.schema.hasTable('companies').catch(() => false);
+          if (hasCompaniesTable) {
+            const compExists = await db('companies').where('id', cid).first('id').catch(() => null);
+            if (compExists) return cid;
+          }
+          // Try branches fallback
+          const branchExists = await db('branches').where('id', cid).first('id').catch(() => null);
+          if (branchExists) return cid;
+          // Trust the frontend-provided ID as-is
+          return cid;
+        })()
+      } : {}),
       ...(data.isActive !== undefined ? {
         is_active: data.isActive === 'No' ? 'No' : 'Yes',
         status: data.isActive === 'No' ? 'inactive' : 'active',
       } : {}),
-      updated_by: ctx.userId,
+      updated_by: ctx.userId || 1,
     } as any);
 
     await this.auditService.log(ctx, {
@@ -172,6 +221,9 @@ export class LocationService {
 
   async deleteLocation(ctx: TenantContext, id: number | string) {
     const location = await this.getLocation(ctx, id);
+    await assertMasterNotInUse(ctx.organizationId, id, 'location', [
+      { table: 'employees', column: 'current_location_id', label: 'employee(s)' },
+    ]);
     await this.locationRepo.delete(ctx, id);
     await this.auditService.log(ctx, {
       action: 'DELETE',

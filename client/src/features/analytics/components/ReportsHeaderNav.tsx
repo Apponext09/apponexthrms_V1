@@ -1,5 +1,5 @@
 import React from 'react';
-import { BarChart3, Clock, Calendar, DollarSign, Sparkles } from 'lucide-react';
+import { BarChart3, Clock, Calendar, IndianRupee, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export type ReportTabType = 'attendance' | 'timelog' | 'leave' | 'payroll';
@@ -33,7 +33,7 @@ export function ReportsHeaderNav({ activeTab, onTabChange }: ReportsHeaderNavPro
     {
       id: 'payroll' as ReportTabType,
       label: 'Payroll Reports',
-      icon: DollarSign,
+      icon: IndianRupee,
       disabled: true,
       badge: 'COMING SOON',
     },

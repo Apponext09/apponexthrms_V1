@@ -6,9 +6,11 @@ import { Input } from '@/components/ui/input';
 import { Compass, Plane, Search, CheckCircle2, XCircle, Clock, MapPin, RefreshCw, FileText } from 'lucide-react';
 import { apiClient } from '@/config/api';
 import { toast } from 'sonner';
+import { useAuthStore } from '../../auth/store/authStore';
 
 interface TravelRequestRecord {
   id: number | string;
+  employeeId?: number | string;
   empName: string;
   code: string;
   destination: string;
@@ -18,6 +20,7 @@ interface TravelRequestRecord {
 }
 
 export const AdminTravelRequests: React.FC = () => {
+  const { user } = useAuthStore();
   const [requests, setRequests] = useState<TravelRequestRecord[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
@@ -48,6 +51,7 @@ export const AdminTravelRequests: React.FC = () => {
           }
           map.set(idKey, {
             id: idKey,
+            employeeId: c.employee_id || c.employeeId || c.userId || c.user_id,
             empName: c.empName || `${c.first_name || ''} ${c.last_name || ''}`.trim() || `Employee #${c.employee_id || idKey}`,
             code: c.code || c.employee_code || `EMP-${c.employee_id || '001'}`,
             destination: dest,
@@ -255,51 +259,66 @@ export const AdminTravelRequests: React.FC = () => {
                     </td>
                   </tr>
                 ) : (
-                  filteredRequests.map((r) => (
-                    <tr key={r.id} className="hover:bg-muted/20 transition-colors">
-                      <td className="px-4 py-3">
-                        <div className="font-bold text-foreground">{r.empName}</div>
-                        <div className="text-[10px] text-muted-foreground font-mono">{r.code}</div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <Badge variant="outline" className="bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800 text-[10px] font-bold gap-1">
-                          <MapPin className="w-3 h-3 text-indigo-600" /> {r.destination}
-                        </Badge>
-                      </td>
-                      <td className="px-4 py-3 text-muted-foreground max-w-[240px] truncate">{r.purpose}</td>
-                      <td className="px-4 py-3 font-mono text-muted-foreground">{r.date}</td>
-                      <td className="px-4 py-3">
-                        {r.status === 'pending' && <Badge variant="outline" className="bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800 text-[10px] font-bold">Pending</Badge>}
-                        {r.status === 'approved' && <Badge variant="outline" className="bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800 text-[10px] font-bold">Approved</Badge>}
-                        {r.status === 'rejected' && <Badge variant="outline" className="bg-rose-50 dark:bg-rose-950 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800 text-[10px] font-bold">Rejected</Badge>}
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        {r.status === 'pending' ? (
-                          <div className="flex items-center justify-end gap-1.5">
-                            <Button
-                              size="sm"
-                              onClick={() => handleApprove(r.id)}
-                              disabled={actionLoadingId === r.id}
-                              className="h-7 text-[11px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer px-2.5"
-                            >
-                              <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> Approve
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleReject(r.id)}
-                              disabled={actionLoadingId === r.id}
-                              className="h-7 text-[11px] font-bold text-rose-600 border-rose-200 hover:bg-rose-50 cursor-pointer px-2.5"
-                            >
-                              <XCircle className="w-3.5 h-3.5 mr-1" /> Reject
-                            </Button>
-                          </div>
-                        ) : (
-                          <span className="text-[11px] font-medium text-muted-foreground capitalize">{r.status}</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))
+                  filteredRequests.map((r) => {
+                    const currentEmpId = Number(user?.employeeId || (user as any)?.employee_id || 0);
+                    const currentUserId = Number(user?.id || 0);
+                    const currentUserName = `${user?.firstName || ''} ${user?.lastName || ''}`.trim().toLowerCase();
+                    const currentUserEmail = (user?.email || '').toLowerCase();
+
+                    const reqEmpId = Number((r as any).employeeId || (r as any).employee_id || 0);
+                    const reqEmpName = (r.empName || '').trim().toLowerCase();
+
+                    const isOwnRequest =
+                      (currentEmpId > 0 && reqEmpId > 0 && currentEmpId === reqEmpId) ||
+                      (currentUserId > 0 && reqEmpId > 0 && currentUserId === reqEmpId) ||
+                      (!!reqEmpName && !!currentUserName && reqEmpName === currentUserName);
+
+                    return (
+                      <tr key={r.id} className="hover:bg-muted/20 transition-colors">
+                        <td className="px-4 py-3">
+                          <div className="font-bold text-foreground">{r.empName}</div>
+                          <div className="text-[10px] text-muted-foreground font-mono">{r.code}</div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <Badge variant="outline" className="bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800 text-[10px] font-bold gap-1">
+                            <MapPin className="w-3 h-3 text-indigo-600" /> {r.destination}
+                          </Badge>
+                        </td>
+                        <td className="px-4 py-3 text-muted-foreground max-w-[240px] truncate">{r.purpose}</td>
+                        <td className="px-4 py-3 font-mono text-muted-foreground">{r.date}</td>
+                        <td className="px-4 py-3">
+                          {r.status === 'pending' && <Badge variant="outline" className="bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800 text-[10px] font-bold">Pending</Badge>}
+                          {r.status === 'approved' && <Badge variant="outline" className="bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800 text-[10px] font-bold">Approved</Badge>}
+                          {r.status === 'rejected' && <Badge variant="outline" className="bg-rose-50 dark:bg-rose-950 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800 text-[10px] font-bold">Rejected</Badge>}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          {r.status === 'pending' && !isOwnRequest ? (
+                            <div className="flex items-center justify-end gap-1.5">
+                              <Button
+                                size="sm"
+                                onClick={() => handleApprove(r.id)}
+                                disabled={actionLoadingId === r.id}
+                                className="h-7 text-[11px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer px-2.5"
+                              >
+                                <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> Approve
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleReject(r.id)}
+                                disabled={actionLoadingId === r.id}
+                                className="h-7 text-[11px] font-bold text-rose-600 border-rose-200 hover:bg-rose-50 cursor-pointer px-2.5"
+                              >
+                                <XCircle className="w-3.5 h-3.5 mr-1" /> Reject
+                              </Button>
+                            </div>
+                          ) : (
+                            <span className="text-[11px] font-medium text-muted-foreground capitalize">{r.status}</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>

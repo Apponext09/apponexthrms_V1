@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { policiesApi } from '../api/policiesApi';
 import type { RolePolicyRecord, PolicyDashboardStats, PolicyVersionRecord } from '../types/policy';
-import { POLICY_CATEGORIES, AVAILABLE_ROLES } from '../types/policy';
+import { POLICY_CATEGORIES } from '../types/policy';
 import { PolicyStatusBadge } from '../components/PolicyStatusBadge';
 import { PolicyReader } from '../components/PolicyReader';
 
@@ -26,11 +26,22 @@ import {
   RefreshCw,
   X,
   Filter,
+  MessageSquare,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
 export const AdminPolicyDashboardPage: React.FC = () => {
   const navigate = useNavigate();
+
+  const [dynamicRoles, setDynamicRoles] = useState<Array<{ id: string | number; name: string; code: string }>>([]);
+
+  useEffect(() => {
+    policiesApi.getTargetOptions().then((res) => {
+      if (res && Array.isArray(res.roles)) {
+        setDynamicRoles(res.roles);
+      }
+    }).catch(() => {});
+  }, []);
 
   const [stats, setStats] = useState<PolicyDashboardStats>({
     totalPolicies: 0,
@@ -89,7 +100,7 @@ export const AdminPolicyDashboardPage: React.FC = () => {
   };
 
   const handleArchivePolicy = async (id: number) => {
-    if (!window.confirm('Are you sure you want to archive this policy document?')) return;
+    if (!await window.appConfirm('Are you sure you want to archive this policy document?')) return;
     try {
       await policiesApi.archivePolicy(id);
       toast.success('Policy archived successfully.');
@@ -145,6 +156,14 @@ export const AdminPolicyDashboardPage: React.FC = () => {
             className="font-bold text-xs gap-1.5 h-9"
           >
             <BarChart3 className="w-3.5 h-3.5 text-primary" /> Policy Reports
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => navigate('/policies/queries')}
+            className="font-bold text-xs gap-1.5 h-9"
+          >
+            <MessageSquare className="w-3.5 h-3.5 text-primary" /> Policy Queries
           </Button>
         </div>
       </div>
@@ -237,9 +256,9 @@ export const AdminPolicyDashboardPage: React.FC = () => {
               className="h-8 rounded-lg border border-input bg-background px-2.5 text-xs font-medium"
             >
               <option value="all">All Roles</option>
-              {AVAILABLE_ROLES.map((r) => (
-                <option key={r.code} value={r.code}>
-                  {r.label}
+              {dynamicRoles.map((r) => (
+                <option key={r.code || r.id} value={r.code}>
+                  {r.name}
                 </option>
               ))}
             </select>
@@ -281,62 +300,62 @@ export const AdminPolicyDashboardPage: React.FC = () => {
           <table className="w-full text-left border-collapse text-xs font-medium">
             <thead>
               <tr className="bg-muted/40 border-b border-border text-muted-foreground font-bold uppercase text-[10px]">
-                <th className="p-3.5">Ref ID & Version</th>
+                <th className="p-3.5">Policy Code & Version</th>
                 <th className="p-3.5">Policy Name</th>
                 <th className="p-3.5">Category</th>
-                <th className="p-3.5">Assigned Roles</th>
+                <th className="p-3.5">Applicable To</th>
+                <th className="p-3.5">Gender</th>
                 <th className="p-3.5">Effective Date</th>
                 <th className="p-3.5">Status</th>
-                <th className="p-3.5">Acknowledged %</th>
                 <th className="p-3.5 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border/60">
-              {policies.map((p) => (
-                <tr key={p.id} className="hover:bg-muted/30 transition-colors">
-                  <td className="p-3.5 font-mono">
-                    <span className="font-bold text-primary">{p.documentRef || `POL-${String(p.id).padStart(3, '0')}`}</span>
-                    <Badge variant="outline" className="ml-1.5 text-[9px] font-bold">
-                      {p.version || 'v1.0'}
-                    </Badge>
-                  </td>
+              {policies.map((p) => {
+                const genderVal = (p.applicableGender || 'all').toLowerCase();
+                const isGenderWise = genderVal !== 'all';
 
-                  <td className="p-3.5 max-w-xs">
-                    <div className="font-bold text-foreground line-clamp-1">{p.title}</div>
-                    <div className="text-[10px] text-muted-foreground line-clamp-1">
-                      {p.description || 'No description provided.'}
-                    </div>
-                  </td>
+                return (
+                  <tr key={p.id} className="hover:bg-muted/30 transition-colors">
+                    <td className="p-3.5 font-mono">
+                      <span className="font-bold text-primary">{p.documentRef || `POL-${String(p.id).padStart(3, '0')}`}</span>
+                      <Badge variant="outline" className="ml-1.5 text-[9px] font-bold">
+                        {p.version || 'v1.0'}
+                      </Badge>
+                    </td>
 
-                  <td className="p-3.5 font-semibold text-foreground whitespace-nowrap">
-                    {p.category || 'HR Policies'}
-                  </td>
+                    <td className="p-3.5 max-w-xs">
+                      <div className="font-bold text-foreground line-clamp-1">{p.title}</div>
+                      <div className="text-[10px] text-muted-foreground line-clamp-1">
+                        {p.description || 'No description provided.'}
+                      </div>
+                    </td>
 
-                  <td className="p-3.5">
-                    <div className="flex flex-wrap gap-1 max-w-xs">
-                      {(p.assignedRoles || [p.roleCode]).map((r) => (
-                        <span key={r} className="bg-primary/10 text-primary border border-primary/20 text-[9px] font-bold px-1.5 py-0.5 rounded">
-                          {r.replace('_', ' ')}
-                        </span>
-                      ))}
-                    </div>
-                  </td>
+                    <td className="p-3.5 font-semibold text-foreground whitespace-nowrap">
+                      {p.category || 'Code of Conduct'}
+                    </td>
 
-                  <td className="p-3.5 whitespace-nowrap text-muted-foreground">
-                    {p.effectiveDate ? new Date(p.effectiveDate).toLocaleDateString() : 'Immediate'}
-                  </td>
+                    <td className="p-3.5 whitespace-nowrap">
+                      <Badge variant="secondary" className="text-[9px] font-bold uppercase">
+                        {isGenderWise ? 'Gender-wise' : 'All Employees'}
+                      </Badge>
+                    </td>
 
-                  <td className="p-3.5 whitespace-nowrap">
-                    <PolicyStatusBadge status={p.status} />
-                  </td>
+                    <td className="p-3.5 whitespace-nowrap">
+                      <span className="text-xs font-semibold capitalize text-foreground">
+                        {isGenderWise ? genderVal.replace(/,/g, ', ') : 'All'}
+                      </span>
+                    </td>
 
-                  <td className="p-3.5 whitespace-nowrap">
-                    <div className="flex items-center gap-1.5 font-bold text-emerald-600">
-                      <span>{p.acknowledgementPercentage ?? 100}%</span>
-                    </div>
-                  </td>
+                    <td className="p-3.5 whitespace-nowrap text-muted-foreground">
+                      {p.effectiveDate ? new Date(p.effectiveDate).toLocaleDateString() : 'Immediate'}
+                    </td>
 
-                  <td className="p-3.5 text-right whitespace-nowrap">
+                    <td className="p-3.5 whitespace-nowrap">
+                      <PolicyStatusBadge status={p.status} />
+                    </td>
+
+                    <td className="p-3.5 text-right whitespace-nowrap">
                     <div className="flex items-center justify-end gap-1">
                       <Button
                         size="icon"
@@ -382,7 +401,8 @@ export const AdminPolicyDashboardPage: React.FC = () => {
                     </div>
                   </td>
                 </tr>
-              ))}
+              );
+            })}
             </tbody>
           </table>
         </div>
@@ -434,18 +454,36 @@ export const AdminPolicyDashboardPage: React.FC = () => {
             ) : (
               <div className="space-y-3 max-h-80 overflow-y-auto">
                 {versionsList.map((ver) => (
-                  <div key={ver.id} className="border border-border/80 rounded-xl p-3 bg-muted/20 space-y-1 text-xs">
+                  <div key={ver.id} className="border border-border/80 rounded-xl p-3.5 bg-muted/20 space-y-1.5 text-xs">
                     <div className="flex items-center justify-between">
-                      <span className="font-bold text-primary font-mono">{ver.versionNumber}</span>
+                      <Badge variant="outline" className="font-bold font-mono text-[10px]">
+                        Version {ver.version || ver.versionNumber || '1.0'}
+                      </Badge>
                       <span className="text-[10px] text-muted-foreground">
                         {ver.createdAt ? new Date(ver.createdAt).toLocaleString() : ''}
                       </span>
                     </div>
-                    <div className="font-bold text-foreground">{ver.title}</div>
-                    <p className="text-[11px] text-muted-foreground">{ver.changeDescription || 'Standard policy version update.'}</p>
-                    <div className="text-[10px] text-muted-foreground pt-1">
-                      Updated By: <strong>{ver.updatedBy}</strong>
-                    </div>
+                    <div className="font-bold text-foreground">{ver.title || versionHistoryPolicy.title}</div>
+                    {ver.changeDescription && (
+                      <p className="text-[11px] text-muted-foreground italic pl-2 border-l-2 border-primary/40">
+                        "{ver.changeDescription}"
+                      </p>
+                    )}
+                    {ver.fileUrl && (
+                      <div className="flex items-center justify-between pt-1 border-t border-border/40 text-[11px]">
+                        <span className="text-muted-foreground truncate max-w-[200px]">
+                          {ver.fileName || 'Policy Document.pdf'}
+                        </span>
+                        <a
+                          href={ver.fileUrl.startsWith('/') ? `${window.location.protocol}//${window.location.host}${ver.fileUrl}` : ver.fileUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-primary hover:underline font-bold"
+                        >
+                          View PDF Document
+                        </a>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

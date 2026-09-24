@@ -116,6 +116,7 @@ export class ReferralService {
     input: {
       rewardAmount: number;
       rewardType: string;
+      newStatus?: string;
     }
   ): Promise<any> {
     const referral = await this.referralRepo.getById(ctx, referralId);
@@ -123,14 +124,17 @@ export class ReferralService {
       throw new NotFoundError('Referral not found');
     }
 
-    if (referral.referral_status !== 'hired') {
-      throw new ValidationError('Can only reward hired referrals');
-    }
+    // Determine statuses based on what HR chose
+    const targetStatus = input.newStatus || 'hired';
+    const rewardPaid = targetStatus === 'reward_paid';
 
-    // In reality, this would create a ReferralReward record
-    // For now, we'll just update the referral
     const updated = await this.referralRepo.update(ctx, referralId, {
-      reward_status: 'paid',
+      referral_status: targetStatus === 'submitted' ? (referral.referral_status || 'pending') : targetStatus,
+      status: targetStatus,
+      reward_status: rewardPaid ? 'paid' : 'pending',
+      hired_date: (targetStatus === 'hired' || rewardPaid)
+        ? (referral.hired_date || new Date().toISOString().substring(0, 10))
+        : referral.hired_date,
       referral_reward_amount: input.rewardAmount,
       updated_by: ctx.userId,
     } as any);
@@ -146,6 +150,86 @@ export class ReferralService {
     return referral;
   }
 
+  private saveResumeFile(
+    fileOrBase64: any,
+    prefix: string = 'referral'
+  ): { filePath: string | null; fileName: string | null; fileSize: number | null } {
+    if (!fileOrBase64) return { filePath: null, fileName: null, fileSize: null };
+
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const uploadsDir = path.join(process.cwd(), 'uploads', 'resumes');
+      const publicUploadsDir = path.join(process.cwd(), 'public', 'uploads', 'resumes');
+
+      if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+      if (!fs.existsSync(publicUploadsDir)) fs.mkdirSync(publicUploadsDir, { recursive: true });
+
+      const safePrefix = prefix.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase() || 'referral';
+      const timestamp = Date.now();
+      const randomSuffix = Math.floor(100 + Math.random() * 900);
+
+      // Case 1: Multer file object with buffer
+      if (fileOrBase64.buffer && Buffer.isBuffer(fileOrBase64.buffer)) {
+        const origName = fileOrBase64.originalname || 'resume.pdf';
+        const extMatch = origName.match(/\.([a-zA-Z0-9]+)$/);
+        const ext = extMatch ? extMatch[1].toLowerCase() : 'pdf';
+        const diskFilename = `${safePrefix}_${timestamp}_${randomSuffix}.${ext}`;
+        const targetPath = path.join(uploadsDir, diskFilename);
+        const publicTargetPath = path.join(publicUploadsDir, diskFilename);
+
+        fs.writeFileSync(targetPath, fileOrBase64.buffer);
+        try { fs.writeFileSync(publicTargetPath, fileOrBase64.buffer); } catch (e) {}
+
+        return {
+          filePath: `/uploads/resumes/${diskFilename}`,
+          fileName: origName,
+          fileSize: fileOrBase64.size || fileOrBase64.buffer.length,
+        };
+      }
+
+      // Case 2: String - base64 Data URL or direct path
+      if (typeof fileOrBase64 === 'string') {
+        if (fileOrBase64.startsWith('data:')) {
+          const matches = fileOrBase64.match(/^data:([a-zA-Z0-9-]+\/[a-zA-Z0-9-+.]+);base64,(.+)$/);
+          if (matches && matches.length === 3) {
+            const mimeType = matches[1];
+            let ext = 'pdf';
+            if (mimeType.includes('wordprocessingml.document')) ext = 'docx';
+            else if (mimeType.includes('msword')) ext = 'doc';
+            else if (mimeType.includes('jpeg')) ext = 'jpg';
+            else if (mimeType.includes('png')) ext = 'png';
+            else if (mimeType.includes('plain')) ext = 'txt';
+
+            const buffer = Buffer.from(matches[2], 'base64');
+            const diskFilename = `${safePrefix}_${timestamp}_${randomSuffix}.${ext}`;
+            const targetPath = path.join(uploadsDir, diskFilename);
+            const publicTargetPath = path.join(publicUploadsDir, diskFilename);
+
+            fs.writeFileSync(targetPath, buffer);
+            try { fs.writeFileSync(publicTargetPath, buffer); } catch (e) {}
+
+            return {
+              filePath: `/uploads/resumes/${diskFilename}`,
+              fileName: `${safePrefix}_resume.${ext}`,
+              fileSize: buffer.length,
+            };
+          }
+        }
+        // If already a URL / path
+        return {
+          filePath: fileOrBase64,
+          fileName: path.basename(fileOrBase64),
+          fileSize: null,
+        };
+      }
+    } catch (err) {
+      console.warn('[saveResumeFile] Error saving resume file:', err);
+    }
+
+    return { filePath: null, fileName: null, fileSize: null };
+  }
+
   async submitReferral(
     ctx: TenantContext,
     input: {
@@ -156,6 +240,8 @@ export class ReferralService {
       candidatePhone?: string;
       positionTitle?: string;
       referralRewardAmount?: number;
+      resumeFile?: any;
+      resumeUrl?: string;
     }
   ): Promise<any> {
     let candidateId = input.candidateId;
@@ -163,24 +249,36 @@ export class ReferralService {
 
     if (!employeeId && ctx.userId) {
       const user = await this.referralRepo.db('users').where('id', ctx.userId).first();
-      const userEmpId = user?.employee_id || user?.employeeId;
-      if (userEmpId) {
-        employeeId = userEmpId;
-      } else {
+      const userEmail = user?.email || '';
+      // NOTE: employees table has no user_id column — find by email
+      if (userEmail) {
         const emp = await this.referralRepo.db('employees')
           .where('organization_id', ctx.organizationId)
-          .where((b) => b.where('id', ctx.userId).orWhere('email', user?.email || ''))
+          .where('email', userEmail)
+          .whereNull('deleted_at')
           .first();
-        employeeId = emp?.id || ctx.userId;
+        if (emp) {
+          employeeId = emp.id;
+        }
+      }
+      // Fallback: use linked employee_id from users table, or ctx.userId
+      if (!employeeId) {
+        const linkedEmpId = user?.employee_id || user?.employeeId;
+        employeeId = linkedEmpId || ctx.userId;
       }
     }
 
-    if (!candidateId && (input.candidateName || input.candidateEmail)) {
-      const nameParts = (input.candidateName || '').trim().split(' ');
-      const firstName = nameParts[0] || 'Referral';
-      const lastName = nameParts.slice(1).join(' ') || 'Candidate';
-      const email = input.candidateEmail || `referral_${Date.now()}@example.com`;
+    const nameParts = (input.candidateName || '').trim().split(' ');
+    const firstName = nameParts[0] || 'Referral';
+    const lastName = nameParts.slice(1).join(' ') || 'Candidate';
+    const email = input.candidateEmail || `referral_${Date.now()}@example.com`;
 
+    const resumeInfo = this.saveResumeFile(
+      input.resumeFile || input.resumeUrl || (input as any).resume_url || (input as any).resume,
+      `${firstName}_${lastName}`
+    );
+
+    if (!candidateId && (input.candidateName || input.candidateEmail)) {
       let existingCand = await this.candidateRepo.db('candidates')
         .where('organization_id', ctx.organizationId)
         .where('email', email)
@@ -189,6 +287,15 @@ export class ReferralService {
 
       if (existingCand) {
         candidateId = existingCand.id;
+        if (resumeInfo.filePath) {
+          await this.candidateRepo.db('candidates')
+            .where('id', candidateId)
+            .update({
+              resume_url: resumeInfo.filePath,
+              updated_at: new Date().toISOString().replace('T', ' ').substring(0, 19),
+              updated_by: ctx.userId || 1,
+            });
+        }
       } else {
         const [newId] = await this.candidateRepo.db('candidates').insert({
           uuid: uuidv4(),
@@ -200,6 +307,7 @@ export class ReferralService {
           current_company: input.positionTitle || null,
           status: 'applied',
           source: 'employee_referral',
+          resume_url: resumeInfo.filePath || null,
           created_by: ctx.userId || 1,
           updated_by: ctx.userId || 1,
           created_at: new Date().toISOString().replace('T', ' ').substring(0, 19),
@@ -207,6 +315,14 @@ export class ReferralService {
         });
         candidateId = newId;
       }
+    } else if (candidateId && resumeInfo.filePath) {
+      await this.candidateRepo.db('candidates')
+        .where('id', candidateId)
+        .update({
+          resume_url: resumeInfo.filePath,
+          updated_at: new Date().toISOString().replace('T', ' ').substring(0, 19),
+          updated_by: ctx.userId || 1,
+        });
     }
 
     if (!candidateId) {
@@ -215,6 +331,63 @@ export class ReferralService {
 
     if (!employeeId) {
       throw new ValidationError('Referrer employee ID is required');
+    }
+
+    // Insert into candidate_documents if table exists
+    if (resumeInfo.filePath && candidateId) {
+      try {
+        const hasDocTable = await this.referralRepo.db.schema.hasTable('candidate_documents');
+        if (hasDocTable) {
+          const now = new Date().toISOString().replace('T', ' ').substring(0, 19);
+          const hasUuid = await this.referralRepo.db.schema.hasColumn('candidate_documents', 'uuid');
+          const docData: any = {
+            organization_id: ctx.organizationId,
+            candidate_id: candidateId,
+            created_at: now,
+          };
+          if (hasUuid) docData.uuid = uuidv4();
+          if (await this.referralRepo.db.schema.hasColumn('candidate_documents', 'document_type')) docData.document_type = 'resume';
+          if (await this.referralRepo.db.schema.hasColumn('candidate_documents', 'file_name')) docData.file_name = resumeInfo.fileName || 'candidate_resume.pdf';
+          if (await this.referralRepo.db.schema.hasColumn('candidate_documents', 'file_url')) docData.file_url = resumeInfo.filePath;
+          if (await this.referralRepo.db.schema.hasColumn('candidate_documents', 'document_url')) docData.document_url = resumeInfo.filePath;
+          if (await this.referralRepo.db.schema.hasColumn('candidate_documents', 'file_size')) docData.file_size = resumeInfo.fileSize || 0;
+          if (await this.referralRepo.db.schema.hasColumn('candidate_documents', 'uploaded_at')) docData.uploaded_at = now;
+          if (await this.referralRepo.db.schema.hasColumn('candidate_documents', 'updated_at')) docData.updated_at = now;
+
+          await this.referralRepo.db('candidate_documents').insert(docData);
+        }
+      } catch (docErr) {
+        console.warn('[submitReferral] Could not insert into candidate_documents:', docErr);
+      }
+
+      // Also index in resume_bank if table exists
+      try {
+        const hasResumeBank = await this.referralRepo.db.schema.hasTable('resume_bank');
+        if (hasResumeBank) {
+          const trackerId = `REF-${Date.now().toString().slice(-6)}`;
+          const now = new Date().toISOString().replace('T', ' ').substring(0, 19);
+          const hasUuid = await this.referralRepo.db.schema.hasColumn('resume_bank', 'uuid');
+          const rbData: any = {
+            organization_id: ctx.organizationId,
+            candidate_id: candidateId,
+            tracker_id: trackerId,
+            created_at: now,
+            updated_at: now,
+          };
+          if (hasUuid) rbData.uuid = uuidv4();
+          if (await this.referralRepo.db.schema.hasColumn('resume_bank', 'source')) rbData.source = 'employee_referral';
+          if (await this.referralRepo.db.schema.hasColumn('resume_bank', 'candidate_name')) rbData.candidate_name = `${firstName} ${lastName}`.trim();
+          if (await this.referralRepo.db.schema.hasColumn('resume_bank', 'candidate_email')) rbData.candidate_email = email;
+          if (await this.referralRepo.db.schema.hasColumn('resume_bank', 'candidate_phone')) rbData.candidate_phone = input.candidatePhone || null;
+          if (await this.referralRepo.db.schema.hasColumn('resume_bank', 'position_applied')) rbData.position_applied = input.positionTitle || null;
+          if (await this.referralRepo.db.schema.hasColumn('resume_bank', 'resume_file_url')) rbData.resume_file_url = resumeInfo.filePath;
+          if (await this.referralRepo.db.schema.hasColumn('resume_bank', 'status')) rbData.status = 'active';
+
+          await this.referralRepo.db('resume_bank').insert(rbData);
+        }
+      } catch (rbErr) {
+        console.warn('[submitReferral] Could not insert into resume_bank:', rbErr);
+      }
     }
 
     const [refId] = await this.referralRepo.db('referrals').insert({
@@ -250,8 +423,11 @@ export class ReferralService {
     };
   }
 
-  async getEmployeeReferrals(ctx: TenantContext, employeeId: number) {
-    const items = await this.referralRepo.listEnriched(ctx, { referrerEmployeeId: employeeId });
+  async getEmployeeReferrals(ctx: TenantContext, options: number | { referrerEmployeeId?: number; referrerEmployeeIds?: number[]; createdBy?: number }) {
+    const filterOpts = typeof options === 'number'
+      ? { referrerEmployeeId: options }
+      : options;
+    const items = await this.referralRepo.listEnriched(ctx, filterOpts);
     return {
       items,
       data: items,

@@ -13,6 +13,57 @@ export interface Designation {
   mapped_departments?: string[];
   mapped_shifts?: string[];
   mapped_grades?: string[];
+  mappedCompanies?: string[];
+  mappedLocations?: string[];
+  mappedDepartments?: string[];
+  mappedShifts?: string[];
+  mappedGrades?: string[];
+}
+
+export function normalizeDesignation(d: any): Designation {
+  const parseArr = (val: any) => {
+    if (Array.isArray(val)) return val.map(String);
+    if (typeof val === 'string' && val.trim()) {
+      try {
+        const p = JSON.parse(val);
+        return Array.isArray(p) ? p.map(String) : [String(val)];
+      } catch {
+        return [String(val)];
+      }
+    }
+    return [];
+  };
+
+  const companies = parseArr(d.mapped_companies ?? d.mappedCompanies);
+  const locations = parseArr(d.mapped_locations ?? d.mappedLocations);
+  const departments = parseArr(d.mapped_departments ?? d.mappedDepartments);
+  const shifts = parseArr(d.mapped_shifts ?? d.mappedShifts);
+  const grades = parseArr(d.mapped_grades ?? d.mappedGrades);
+
+  return {
+    ...d,
+    mapped_companies: companies,
+    mappedCompanies: companies,
+    mapped_locations: locations,
+    mappedLocations: locations,
+    mapped_departments: departments,
+    mappedDepartments: departments,
+    mapped_shifts: shifts,
+    mappedShifts: shifts,
+    mapped_grades: grades,
+    mappedGrades: grades,
+  };
+}
+
+/** Mapping pickers must never offer an inactive master record. */
+function isActiveMappingOption(item: any): boolean {
+  const value = item?.status ?? item?.is_active ?? item?.isActive ?? item?.active;
+  if (value === undefined || value === null || value === '') return true;
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value === 1;
+
+  return !['inactive', 'no', 'false', '0', 'disabled', 'archived', 'deleted']
+    .includes(String(value).trim().toLowerCase());
 }
 
 export function useDesignations() {
@@ -24,11 +75,13 @@ export function useDesignations() {
     queryFn: async () => {
       const res = await apiClient.get('/settings/designations?limit=1000');
       const data = res.data;
-      if (Array.isArray(data)) return data as Designation[];
-      if (Array.isArray(data?.data)) return data.data as Designation[];
-      if (Array.isArray(data?.data?.items)) return data.data.items as Designation[];
-      if (Array.isArray(data?.items)) return data.items as Designation[];
-      return [];
+      let rawList: any[] = [];
+      if (Array.isArray(data)) rawList = data;
+      else if (Array.isArray(data?.data)) rawList = data.data;
+      else if (Array.isArray(data?.data?.items)) rawList = data.data.items;
+      else if (Array.isArray(data?.items)) rawList = data.items;
+
+      return rawList.map(normalizeDesignation);
     },
   });
 
@@ -77,46 +130,52 @@ export function useDummyMappings() {
     queryFn: async () => {
       try {
         const { data } = await apiClient.get('/settings/companies');
-        const raw = data.data || [];
-        return raw.map((c: any) => ({
+        const raw = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : (data?.data?.items || []));
+        return raw.filter(isActiveMappingOption).map((c: any) => ({
           id: String(c.id ?? c.companyId ?? c.company_id ?? c.uuid ?? c.code ?? c.name),
-          name: c.name || c.company_name || c.companyName || `Company #${c.id || c.companyId}`
+          name: c.name || c.company_name || c.companyName || `Company #${c.id || c.companyId || ''}`,
+          code: c.code || c.company_code || '',
         }));
       } catch {
         return [];
       }
     }
   });
+
   const locationsQuery = useQuery({
     queryKey: ['mapping_locations'],
     queryFn: async () => {
       try {
-        const { data } = await apiClient.get('/settings/org-locations');
-        const raw = data.data || [];
-        return raw.map((l: any) => ({
+        const { data } = await apiClient.get('/settings/locations', { params: { pageSize: 200 } });
+        const raw = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : (data?.data?.items || []));
+        return raw.filter(isActiveMappingOption).map((l: any) => ({
           id: String(l.id ?? l.locationId ?? l.location_id ?? l.uuid ?? l.name),
-          name: l.name || l.location_name || l.locationName || `Location #${l.id}`
+          name: l.locationName || l.location_name || l.name || l.title || `Location #${l.id || ''}`,
+          code: l.officeType || l.office_type || l.city || '',
         }));
       } catch {
         return [];
       }
     }
   });
+
   const departmentsQuery = useQuery({
     queryKey: ['mapping_departments'],
     queryFn: async () => {
       try {
-        const { data } = await apiClient.get('/settings/departments');
-        const raw = data.data || [];
-        return raw.map((d: any) => ({
+        const { data } = await apiClient.get('/settings/departments', { params: { pageSize: 200 } });
+        const raw = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : (data?.data?.items || []));
+        return raw.filter(isActiveMappingOption).map((d: any) => ({
           id: String(d.id ?? d.departmentId ?? d.department_id ?? d.uuid ?? d.name),
-          name: d.name || d.department_name || d.departmentName || `Department #${d.id}`
+          name: d.departmentName || d.department_name || d.name || `Department #${d.id || ''}`,
+          code: d.code || d.departmentCode || d.department_code || '',
         }));
       } catch {
         return [];
       }
     }
   });
+
   const shiftsQuery = useQuery({
     queryKey: ['mapping_shifts'],
     queryFn: async () => {
@@ -124,54 +183,64 @@ export function useDummyMappings() {
       const seenIds = new Set<string>();
 
       const processShiftItem = (s: any) => {
+        if (!s) return;
+        if (typeof s !== 'string' && !isActiveMappingOption(s)) return;
         if (typeof s === 'string') {
           if (!seenIds.has(s)) {
             seenIds.add(s);
-            allShifts.push({ id: s, name: s, isRoster: false });
+            allShifts.push({ id: s, name: s, isRoster: false, code: '' });
           }
           return;
         }
-        const sid = String(s.id ?? s.shiftId ?? s.shift_id ?? (s.name || ''));
+        const sid = String(s.id ?? s.shiftId ?? s.shift_id ?? s.uuid ?? (s.name || s.shift_name || ''));
         if (!sid || seenIds.has(sid)) return;
         seenIds.add(sid);
 
         const shiftTypeStr = (s.shift_type || s.shiftType || s.type || '').toLowerCase();
-        const nameStr = s.shift_name || s.shiftName || s.name || `Shift #${sid}`;
+        const nameStr = s.shift_name || s.shiftName || s.name || s.title || `Shift #${sid}`;
         const isRoster = shiftTypeStr === 'roster' || nameStr.toLowerCase().includes('roster') || !!s.roster_pattern || !!s.rosterPattern;
 
         allShifts.push({
           id: sid,
           name: nameStr,
-          isRoster
+          isRoster,
+          code: s.code || s.shift_code || ''
         });
       };
 
       try {
-        const { data } = await apiClient.get('/settings/shifts');
+        const { data } = await apiClient.get('/settings/shifts', { params: { pageSize: 200 } });
         const raw = data?.data;
-        const list = Array.isArray(raw) ? raw : (raw?.items || []);
+        const list = Array.isArray(raw) ? raw : (raw?.items || (Array.isArray(data) ? data : []));
         list.forEach(processShiftItem);
       } catch (_) {}
 
       try {
-        const { data } = await apiClient.get('/attendance/shifts', { params: { pageSize: 100 } });
+        const { data } = await apiClient.get('/attendance/shifts', { params: { pageSize: 200 } });
         const raw = data?.data;
-        const list = Array.isArray(raw) ? raw : (raw?.items || []);
+        const list = Array.isArray(raw) ? raw : (raw?.items || (Array.isArray(data) ? data : []));
         list.forEach(processShiftItem);
       } catch (_) {}
 
       return allShifts;
-    }
+    },
+    // Shift administration happens on a separate page. Poll while the
+    // designation form is open so new or changed shifts appear without a
+    // browser refresh.
+    refetchInterval: 5_000,
+    refetchOnWindowFocus: true,
   });
+
   const gradesQuery = useQuery({
     queryKey: ['mapping_grades'],
     queryFn: async () => {
       try {
-        const { data } = await apiClient.get('/settings/grades');
-        const raw = data.data || [];
-        return raw.map((g: any) => ({
-          id: String(g.id ?? g.gradeId ?? g.grade_id ?? g.grade_code ?? g.code ?? g.name),
-          name: g.name || g.grade_name || g.grade_code || g.code || `Grade #${g.id}`
+        const { data } = await apiClient.get('/settings/grades', { params: { pageSize: 200 } });
+        const raw = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : (data?.data?.items || []));
+        return raw.filter(isActiveMappingOption).map((g: any) => ({
+          id: String(g.id ?? g.gradeId ?? g.grade_id ?? g.uuid ?? g.code ?? g.name),
+          name: g.name || g.grade_name || g.gradeName || g.code || `Grade #${g.id || ''}`,
+          code: g.code || '',
         }));
       } catch {
         return [];
@@ -179,45 +248,17 @@ export function useDummyMappings() {
     }
   });
 
-  const defaultGeneral = [
-    { id: 'gen-1', name: 'General Shift (09:00 AM - 06:00 PM)', isRoster: false },
-    { id: 'gen-2', name: 'Morning General Shift (08:00 AM - 05:00 PM)', isRoster: false },
-    { id: 'gen-3', name: 'Evening General Shift (02:00 PM - 11:00 PM)', isRoster: false },
-    { id: 'gen-4', name: 'Night / Flexible General Shift (10:00 PM - 07:00 AM)', isRoster: false },
-  ];
-
-  const defaultRoster = [
-    { id: 'ros-1', name: 'Rotational 3-Tier Roster', isRoster: true },
-    { id: 'ros-2', name: 'Night Support Roster', isRoster: true },
-  ];
-
   const fetchedGeneral = (shiftsQuery.data || []).filter((s: any) => !s.isRoster);
   const fetchedRoster = (shiftsQuery.data || []).filter((s: any) => s.isRoster);
 
-  const generalShifts = fetchedGeneral.length > 0 ? fetchedGeneral : defaultGeneral;
-  const rosterShifts = fetchedRoster.length > 0 ? fetchedRoster : defaultRoster;
-
   return {
-    companies: (companiesQuery.data && companiesQuery.data.length > 0) ? companiesQuery.data : [
-      { id: '1', name: 'Main Organization / Corporate' }
-    ],
-    locations: (locationsQuery.data && locationsQuery.data.length > 0) ? locationsQuery.data : [
-      { id: 'loc-1', name: 'Headquarters - Tech Park' },
-      { id: 'loc-2', name: 'Regional Office - Delhi' }
-    ],
-    departments: (departmentsQuery.data && departmentsQuery.data.length > 0) ? departmentsQuery.data : [
-      { id: 'dept-1', name: 'Engineering & IT' },
-      { id: 'dept-2', name: 'Sales & Business Development' },
-      { id: 'dept-3', name: 'HR & Operations' },
-      { id: 'dept-4', name: 'Finance & Accounts' }
-    ],
+    companies: companiesQuery.data || [],
+    locations: locationsQuery.data || [],
+    departments: departmentsQuery.data || [],
     shifts: shiftsQuery.data || [],
-    generalShifts,
-    rosterShifts,
-    grades: (gradesQuery.data && gradesQuery.data.length > 0) ? gradesQuery.data : [
-      { id: 'grd-1', name: 'Grade A - Executive Level' },
-      { id: 'grd-2', name: 'Grade B - Senior Level' },
-      { id: 'grd-3', name: 'Grade C - Junior Level' }
-    ],
+    generalShifts: fetchedGeneral,
+    rosterShifts: fetchedRoster,
+    grades: gradesQuery.data || [],
+    isLoading: companiesQuery.isLoading || locationsQuery.isLoading || departmentsQuery.isLoading || shiftsQuery.isLoading || gradesQuery.isLoading,
   };
 }

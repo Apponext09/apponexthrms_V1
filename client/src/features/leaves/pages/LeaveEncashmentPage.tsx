@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import {
   CreditCard, Plus, RefreshCw, CheckCircle2, Clock, XCircle,
-  AlertCircle, Database, User, DollarSign, Calendar, Landmark
+  AlertCircle, Database, User, IndianRupee, Calendar, Landmark
 } from 'lucide-react';
 
 export function LeaveEncashmentPage() {
@@ -172,7 +172,7 @@ export function LeaveEncashmentPage() {
 
   // Admin/HR Action Triggers
   const handleApprove = async (id: number) => {
-    if (!confirm('Are you sure you want to approve this leave encashment request?')) return;
+    if (!await window.appConfirm('Are you sure you want to approve this leave encashment request?')) return;
     try {
       const res = await apiClient.post(`/leaves/encashments/${id}/approve`);
       if (res.data?.success) {
@@ -185,7 +185,7 @@ export function LeaveEncashmentPage() {
   };
 
   const handleReject = async (id: number) => {
-    const reason = prompt('Please enter a rejection reason:');
+    const reason = await window.appPrompt('Please enter a rejection reason:');
     if (reason === null) return; // cancelled
     try {
       const res = await apiClient.post(`/leaves/encashments/${id}/reject`, { reason });
@@ -199,7 +199,7 @@ export function LeaveEncashmentPage() {
   };
 
   const handleMarkAsPaid = async (id: number) => {
-    if (!confirm('Are you sure you want to mark this request as Paid? This will deduct leave balance and log it.')) return;
+    if (!await window.appConfirm('Are you sure you want to mark this request as Paid? This will deduct leave balance and log it.')) return;
     try {
       const res = await apiClient.post(`/leaves/encashments/${id}/pay`);
       if (res.data?.success) {
@@ -277,14 +277,17 @@ export function LeaveEncashmentPage() {
                           return empGender === leaveGender;
                         })
                         .map(type => {
-                          const balItem = myBalances.find(b => b.leave_type_id === type.id);
-                          const balText = balItem ? ` (Balance: ${balItem.available_balance} days)` : '';
-                        return (
-                          <option key={type.id} value={type.id}>
-                            {type.leave_name} ({type.leave_code}){balText}
-                          </option>
-                        );
-                      })}
+                          const balItem = myBalances.find(b => (b.leave_type_id || (b as any).leaveTypeId || b.id) === type.id);
+                          const avail = balItem ? (balItem.available_balance ?? (balItem as any).availableBalance ?? 0) : 0;
+                          const balText = balItem ? ` (Balance: ${avail} days)` : '';
+                          const name = type.leave_name || (type as any).leaveName || (type as any).name || 'Leave Category';
+                          const code = type.leave_code || (type as any).leaveCode || (type as any).code || '';
+                          return (
+                            <option key={type.id} value={type.id}>
+                              {name} {code ? `(${code})` : ''}{balText}
+                            </option>
+                          );
+                        })}
                     </select>
                   </div>
 
@@ -334,7 +337,7 @@ export function LeaveEncashmentPage() {
                   {/* PREVIEW CONTAINER */}
                   <div className="pt-4 border-t border-slate-100">
                     <h4 className="text-xs font-bold text-gray-850 dark:text-white mb-2.5 flex items-center gap-1.5">
-                      <DollarSign className="w-4 h-4 text-emerald-600" /> Live Calculation Preview
+                      <IndianRupee className="w-4 h-4 text-emerald-600" /> Live Calculation Preview
                     </h4>
 
                     {previewLoading && (

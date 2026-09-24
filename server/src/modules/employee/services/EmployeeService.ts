@@ -4,10 +4,10 @@ import { withTransaction, getKnex } from '../../../db/knex';
 import { EmployeeRepository, type Employee } from '../repositories/EmployeeRepository';
 import { EmployeePersonalInfoRepository } from '../repositories/EmployeePersonalInfoRepository';
 import { EmployeeProfessionalInfoRepository } from '../repositories/EmployeeProfessionalInfoRepository';
-import { EmployeeCompensationRepository } from '../repositories/EmployeeCompensationRepository';
 import { AuditService } from '../../audit/audit.service';
 import { BiometricService } from '../../attendance/services/BiometricService';
 import { NotFoundError, ValidationError } from '../../../common/errors/index';
+import { OrgHierarchyService } from './OrgHierarchyService';
 import type { TenantContext, ListQueryOptions } from '../../../db/types';
 
 async function resolveAuditUserId(db: any, ctx: TenantContext): Promise<number> {
@@ -32,14 +32,12 @@ export class EmployeeService {
   private employeeRepo: EmployeeRepository;
   private personalInfoRepo: EmployeePersonalInfoRepository;
   private professionalInfoRepo: EmployeeProfessionalInfoRepository;
-  private compensationRepo: EmployeeCompensationRepository;
   private auditService: AuditService;
 
   constructor() {
     this.employeeRepo = new EmployeeRepository();
     this.personalInfoRepo = new EmployeePersonalInfoRepository();
     this.professionalInfoRepo = new EmployeeProfessionalInfoRepository();
-    this.compensationRepo = new EmployeeCompensationRepository();
     this.auditService = new AuditService();
   }
 
@@ -112,10 +110,13 @@ export class EmployeeService {
     phone?: string;
     mobile?: string;
     dateOfBirth?: string;
-    gender?: string;
+    gender?: 'male' | 'female' | 'other';
+    maritalStatus?: 'single' | 'married' | 'divorced' | 'widowed';
     dateOfJoining: string;
     employmentType: string;
     status?: string;
+    employeeStatus?: string;
+    employee_status?: string;
     designationId?: number;
     departmentId?: number;
     branchId?: number;
@@ -125,11 +126,28 @@ export class EmployeeService {
     currentGradeId?: number;
     avatarUrl?: string;
     accessRole?: string;
+    roles?: string[];
     jobTitle?: string;
-    password: string;
+    password?: string;
     salarySlabId?: number | string;
     salary_slab_id?: number | string;
   }): Promise<{ employee: Employee; generatedPassword?: string }> {
+    await this.ensureEmployeeColumns();
+
+    // Validate formats
+    if (input.employeeCode && !/^[a-zA-Z0-9]+$/.test(input.employeeCode)) {
+      throw new ValidationError(`Employee code '${input.employeeCode}' must contain only alphanumeric characters without special characters`);
+    }
+    if (input.firstName && !/^[a-zA-Z\s]+$/.test(input.firstName)) {
+      throw new ValidationError('First name must contain only alphabetic characters');
+    }
+    if (input.lastName && !/^[a-zA-Z\s]+$/.test(input.lastName)) {
+      throw new ValidationError('Last name must contain only alphabetic characters');
+    }
+    if (input.mobile && !/^\d{10}$/.test(input.mobile)) {
+      throw new ValidationError('Mobile number must be a valid 10-digit number');
+    }
+
     // Check if employee code is unique
     const isUnique = await this.employeeRepo.isCodeUnique(ctx, input.employeeCode);
     if (!isUnique) {
@@ -180,7 +198,7 @@ export class EmployeeService {
 
     // Helper to get Org Admin's employee ID if no reporting manager is specified
     let finalReportingManagerId = input.reportingManagerId || null;
-    if (!finalReportingManagerId && ['department_head', 'hr_manager', 'cto', 'cfo', 'coo', 'cxo'].includes(input.accessRole || 'employee')) {
+    if (!finalReportingManagerId && ['department_head', 'hr', 'cto', 'cfo', 'coo', 'cxo'].includes(input.accessRole || 'employee')) {
       const adminEmpId = await this.getOrgAdminEmployeeId(db, ctx);
       if (adminEmpId) {
         finalReportingManagerId = adminEmpId;
@@ -228,6 +246,7 @@ export class EmployeeService {
       mobile: input.mobile || null,
       date_of_birth: input.dateOfBirth || null,
       gender: input.gender || null,
+      marital_status: input.maritalStatus || null,
       date_of_joining: input.dateOfJoining,
       employment_type: input.employmentType,
       current_designation_id: currentDesignationId,
@@ -238,7 +257,8 @@ export class EmployeeService {
       reporting_manager_id: finalReportingManagerId,
       cost_center_id: input.costCenterId || null,
       avatar_url: input.avatarUrl || null,
-      status: input.status || 'active',
+      status: (input.status || input.employeeStatus || input.employee_status || '').toLowerCase() === 'inactive' ? 'inactive' : 'active',
+      employee_status: input.employeeStatus || input.employee_status || ( (input.status || '').toLowerCase() === 'inactive' ? 'Inactive' : ( (input.status || '').toLowerCase() === 'active' ? 'Active' : (input.status || 'Active') ) ),
       created_by: ctx.userId,
       updated_by: ctx.userId,
     } as any);
@@ -435,9 +455,9 @@ export class EmployeeService {
       const db = getKnex();
       const hasTable = await db.schema.hasTable('employees');
       if (hasTable) {
-        // Alter columns to LONGTEXT so base64 profile pictures store cleanly without MySQL string length errors
         try {
           await db.raw('ALTER TABLE employees MODIFY COLUMN avatar_url LONGTEXT NULL');
+          await db.raw("ALTER TABLE employees MODIFY COLUMN status ENUM('candidate','onboarding','probation','active','inactive','notice','exit','alumni') DEFAULT 'active'");
         } catch (e) {
           // Ignore if alter fails
         }
@@ -472,6 +492,7 @@ export class EmployeeService {
           { name: 'user_band', type: 'string', length: 50 },
           { name: 'eligible_for_eps', type: 'string', length: 10 },
           { name: 'background_verification', type: 'string', length: 50 },
+          { name: 'employee_status', type: 'string', length: 100 },
         ];
         for (const col of columnsToEnsure) {
           const hasCol = await db.schema.hasColumn('employees', col.name);
@@ -497,102 +518,85 @@ export class EmployeeService {
     userId: number,
     accessRole: string,
     employeeId: number,
-    departmentId?: number | null
+    departmentId?: number | null,
+    rolesArray?: string[]
   ) {
     const targetRole = accessRole || 'employee';
-    const roleCodes = ['employee', 'team_lead', 'hr_manager', 'department_head', 'cto', 'cfo', 'coo', 'cxo', 'intern', 'consultant'];
-    if (!roleCodes.includes(targetRole)) return;
 
-    // Fetch existing system roles for this organization
-    const existingRoles = await db('roles')
-      .where('organization_id', ctx.organizationId)
-      .whereIn('code', roleCodes);
-
-    const roleMap = new Map<string, number>();
-    for (const r of existingRoles) {
-      roleMap.set(r.code, r.id);
-    }
-
-    const roleNames: Record<string, string> = {
-      cto: 'Chief Technology Officer',
-      cfo: 'Chief Financial Officer',
-      coo: 'Chief Operating Officer',
-      cxo: 'Chief Executive Officer / CXO',
-      department_head: 'Department Manager',
-      team_lead: 'Team Lead',
-      hr_manager: 'HR Manager',
-      employee: 'Employee',
-      intern: 'Intern',
-      consultant: 'Consultant',
-    };
-
-    // 1. Ensure target role exists in roles table
-    let targetRoleId = roleMap.get(targetRole);
-    if (!targetRoleId) {
-      const [newRoleId] = await db('roles').insert({
-        uuid: uuidv4(),
-        organization_id: ctx.organizationId,
-        code: targetRole,
-        name: roleNames[targetRole] || targetRole,
-        description: `System role created for ${roleNames[targetRole] || targetRole}`,
-        is_system: true,
-        is_platform_role: false,
-        is_default: false,
-        created_at: new Date(),
-        updated_at: new Date(),
-      });
-      targetRoleId = newRoleId;
-      roleMap.set(targetRole, newRoleId);
-    }
-
-    // 2. Ensure base 'employee' role exists
-    let employeeRoleId = roleMap.get('employee');
-    if (!employeeRoleId) {
-      const [baseRoleId] = await db('roles').insert({
-        uuid: uuidv4(),
-        organization_id: ctx.organizationId,
-        code: 'employee',
-        name: 'EMPLOYEE',
-        description: 'Default employee role',
-        is_system: true,
-        is_platform_role: false,
-        is_default: true,
-        created_at: new Date(),
-        updated_at: new Date(),
-      });
-      employeeRoleId = baseRoleId;
-      roleMap.set('employee', baseRoleId);
-    }
-
-    // 3. Clear existing role mappings for roleCodes
-    const roleIdsToClear = Array.from(roleMap.values());
+    // Clear existing role assignments for this user in user_roles
     await db('user_roles')
-      .where('organization_id', ctx.organizationId)
       .where('user_id', userId)
-      .whereIn('role_id', roleIdsToClear)
+      .where(function(this: any) {
+        this.where('organization_id', ctx.organizationId).orWhereNull('organization_id');
+      })
       .delete();
 
-    // 4. Assign base employee role
-    await db('user_roles').insert({
-      organization_id: ctx.organizationId,
-      user_id: userId,
-      role_id: employeeRoleId,
-      assigned_by: ctx.userId || userId,
-      assigned_at: new Date(),
-    });
+    const rolesToAssign = new Set<string>();
+    if (Array.isArray(rolesArray) && rolesArray.length > 0) {
+      rolesArray.forEach(r => { if (r) rolesToAssign.add(String(r).trim()); });
+    }
+    rolesToAssign.add(targetRole);
 
-    // 5. Assign target accessRole if different from employee
-    if (targetRole !== 'employee' && targetRoleId && targetRoleId !== employeeRoleId) {
-      await db('user_roles').insert({
-        organization_id: ctx.organizationId,
-        user_id: userId,
-        role_id: targetRoleId,
-        assigned_by: ctx.userId || userId,
-        assigned_at: new Date(),
-      });
+    for (const rawRoleName of rolesToAssign) {
+      if (!rawRoleName) continue;
+      const cleanName = rawRoleName.trim();
+      const cleanCode = cleanName.toLowerCase().replace(/\s+/g, '_');
+
+      // Check if role exists in roles table
+      let roleRecord = await db('roles')
+        .where(function(this: any) {
+          this.where('organization_id', ctx.organizationId).orWhereNull('organization_id');
+        })
+        .where(function(this: any) {
+          this.where('code', cleanCode).orWhere('name', cleanName);
+        })
+        .first();
+
+      if (!roleRecord) {
+        try {
+          const [newId] = await db('roles').insert({
+            uuid: uuidv4(),
+            organization_id: ctx.organizationId,
+            code: cleanCode,
+            name: cleanName,
+            description: `Role ${cleanName}`,
+            is_system: false,
+            is_platform_role: false,
+            is_default: false,
+            created_at: new Date(),
+            updated_at: new Date(),
+          });
+          roleRecord = { id: newId, code: cleanCode, name: cleanName };
+        } catch (e) {
+          roleRecord = await db('roles')
+            .where(function(this: any) {
+              this.where('organization_id', ctx.organizationId).orWhereNull('organization_id');
+            })
+            .where('code', cleanCode)
+            .first();
+        }
+      }
+
+      if (roleRecord) {
+        let validAssignedBy = userId;
+        if (ctx.userId) {
+          const userExists = await db('users').where('id', ctx.userId).first().catch(() => null);
+          if (userExists) validAssignedBy = ctx.userId;
+        }
+
+        await db('user_roles').insert({
+          organization_id: ctx.organizationId,
+          user_id: userId,
+          role_id: roleRecord.id,
+          assigned_by: validAssignedBy,
+          assigned_at: new Date(),
+        }).catch((err: any) => {
+          console.warn('[EmployeeService] user_roles insert warning:', err?.message || err);
+        });
+      }
     }
 
-    // 6. Update department_head_id if role is department_head
+    // Update department_head_id if role is department_head
     if (targetRole === 'department_head' && departmentId) {
       await db('departments')
         .where({ id: departmentId, organization_id: ctx.organizationId })
@@ -626,6 +630,8 @@ export class EmployeeService {
     if (input.mobile !== undefined) payload.mobile = input.mobile;
     if (input.dateOfBirth !== undefined) payload.date_of_birth = input.dateOfBirth;
     if (input.gender !== undefined) payload.gender = input.gender;
+    if (input.maritalStatus !== undefined) payload.marital_status = input.maritalStatus;
+    if (input.marital_status !== undefined) payload.marital_status = input.marital_status;
     if (input.bloodGroup !== undefined) payload.blood_group = input.bloodGroup;
     if (input.blood_group !== undefined) payload.blood_group = input.blood_group;
     if (input.nationality !== undefined) payload.nationality = input.nationality;
@@ -642,15 +648,49 @@ export class EmployeeService {
     if (input.job_title !== undefined) payload.job_title = input.job_title;
     if (input.customIdCard !== undefined) payload.custom_id_card = input.customIdCard;
     if (input.custom_id_card !== undefined) payload.custom_id_card = input.custom_id_card;
-    if (input.reportingManagerId !== undefined) payload.reporting_manager_id = input.reportingManagerId;
-    if (input.reporting_manager_id !== undefined) payload.reporting_manager_id = input.reporting_manager_id;
+    if (input.reportingManagerId !== undefined || input.reporting_manager_id !== undefined) {
+      const targetMgrId = input.reportingManagerId !== undefined ? input.reportingManagerId : input.reporting_manager_id;
+      const numTargetId = targetMgrId !== null && targetMgrId !== undefined && String(targetMgrId).trim() !== '' ? Number(targetMgrId) : null;
+      // Repository records are exposed in camelCase, while raw Knex records
+      // use snake_case. Resolve either form before deciding whether the
+      // reporting relationship has changed. Without this, a self-profile save
+      // revalidates an unchanged HR manager against the hierarchy and fails.
+      const existingMgrRaw = (employee as any).reporting_manager_id ?? (employee as any).reportingManagerId;
+      const existingMgrId = existingMgrRaw !== null && existingMgrRaw !== undefined && String(existingMgrRaw).trim() !== ''
+        ? Number(existingMgrRaw)
+        : null;
+
+      if (numTargetId !== existingMgrId) {
+        const orgHierarchyService = new OrgHierarchyService();
+        await orgHierarchyService.validateReportingManagerUpdate(ctx, Number(employeeId), numTargetId);
+      }
+      payload.reporting_manager_id = targetMgrId;
+    }
     if (input.designationId !== undefined) payload.current_designation_id = input.designationId;
     if (input.departmentId !== undefined) payload.current_department_id = input.departmentId;
+    if ((input as any).currentDepartmentId !== undefined) payload.current_department_id = (input as any).currentDepartmentId;
+    if ((input as any).current_department_id !== undefined) payload.current_department_id = (input as any).current_department_id;
+    if ((input as any).department_id !== undefined) payload.current_department_id = (input as any).department_id;
     if (input.branchId !== undefined) payload.current_branch_id = input.branchId;
     if (input.locationId !== undefined) payload.current_location_id = input.locationId;
     if (input.costCenterId !== undefined) payload.cost_center_id = input.costCenterId;
     if (input.employmentType !== undefined) payload.employment_type = input.employmentType;
-    if (input.status !== undefined) payload.status = input.status;
+    const rawStatusInput = input.employeeStatus !== undefined ? input.employeeStatus : (input.employee_status !== undefined ? input.employee_status : input.status);
+    if (rawStatusInput !== undefined) {
+      const sStr = String(rawStatusInput).trim();
+      const sLower = sStr.toLowerCase().replace(/\s+/g, '_');
+      const formattedLabel = sStr.split(/[\s_]+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+
+      payload.employee_status = formattedLabel;
+
+      if (['candidate', 'onboarding', 'probation', 'active', 'inactive', 'notice', 'exit', 'alumni'].includes(sLower)) {
+        payload.status = sLower;
+      } else if (sLower === 'terminated') {
+        payload.status = 'exit';
+      } else {
+        payload.status = 'active';
+      }
+    }
     if (input.dateOfJoining !== undefined) payload.date_of_joining = input.dateOfJoining;
     if (input.dateOfConfirmation !== undefined) payload.date_of_confirmation = input.dateOfConfirmation;
     if (input.probationEndDate !== undefined) payload.probation_end_date = input.probationEndDate;
@@ -722,8 +762,8 @@ export class EmployeeService {
 
     const targetAccessRole = input.accessRole || input.access_role || input.role || '';
 
-    // Default Manager ('department_head', 'cto', etc.) and HR ('hr_manager') to Admin only if no reporting manager was provided
-    if (targetAccessRole && ['department_head', 'hr_manager', 'cto', 'cfo', 'coo', 'cxo'].includes(targetAccessRole) && !input.reportingManagerId && !input.reporting_manager_id) {
+    // Default Manager ('department_head', 'cto', etc.) and HR ('hr') to Admin only if no reporting manager was provided
+    if (targetAccessRole && ['department_head', 'hr', 'cto', 'cfo', 'coo', 'cxo'].includes(targetAccessRole) && !input.reportingManagerId && !input.reporting_manager_id) {
       const db = getKnex();
       const adminEmpId = await this.getOrgAdminEmployeeId(db, ctx);
       if (adminEmpId && adminEmpId !== employeeId) {
@@ -750,6 +790,70 @@ export class EmployeeService {
       }
 
       const db = getKnex();
+      const targetMgr = await db('employees')
+        .where('id', payload.reporting_manager_id)
+        .where('organization_id', ctx.organizationId)
+        .whereNull('deleted_at')
+        .first();
+
+      if (!targetMgr) {
+        throw new ValidationError('Selected reporting manager does not exist.');
+      }
+
+      const isAlreadyAssignedManager = Number(payload.reporting_manager_id) === Number(employee.reporting_manager_id || (employee as any).reportingManagerId);
+
+      const isDeptHead = await db('departments')
+        .where('department_head_id', targetMgr.id)
+        .where('organization_id', ctx.organizationId)
+        .first();
+
+      const isReportingMgrForOthers = await db('employees')
+        .where('reporting_manager_id', targetMgr.id)
+        .where('organization_id', ctx.organizationId)
+        .whereNull('deleted_at')
+        .first();
+
+      let isManagerRole = Boolean(isAlreadyAssignedManager || isDeptHead || isReportingMgrForOthers);
+
+      if (!isManagerRole) {
+        let mgrUser = await db('users')
+          .where('employee_id', targetMgr.id)
+          .where('organization_id', ctx.organizationId)
+          .first();
+
+        if (!mgrUser && targetMgr.email) {
+          mgrUser = await db('users')
+            .whereRaw('LOWER(email) = ?', [targetMgr.email.toLowerCase()])
+            .first();
+        }
+
+        if (mgrUser) {
+          const mgrRoles = await db('user_roles')
+            .join('roles', 'user_roles.role_id', 'roles.id')
+            .where('user_roles.user_id', mgrUser.id)
+            .select('roles.code');
+          const validCodes = new Set(['team_lead', 'department_head', 'hr', 'organization_admin', 'super_admin', 'cto', 'cfo', 'coo', 'cxo', 'manager', 'admin', 'hr_admin', 'hr_manager', 'executive']);
+          isManagerRole = mgrRoles.some((r: any) => validCodes.has(r.code)) || validCodes.has(mgrUser.role);
+        }
+      }
+
+      if (!isManagerRole && targetMgr.job_title) {
+        if (/manager|lead|head|director|vp|chief|executive|supervisor|admin|president|officer/i.test(targetMgr.job_title)) {
+          isManagerRole = true;
+        }
+      }
+
+      if (!isManagerRole && targetMgr.current_designation_id) {
+        const desig = await db('designations').where('id', targetMgr.current_designation_id).first();
+        if (desig && /manager|lead|head|director|vp|chief|executive|supervisor|admin|president|officer/i.test(desig.title || desig.name || '')) {
+          isManagerRole = true;
+        }
+      }
+
+      if (!isManagerRole && !(targetMgr.employee_code || '').startsWith('CEO-') && !(targetMgr.is_ceo)) {
+        throw new ValidationError('Reporting manager must be a Team Lead, Department Manager, HR Manager, or Executive.');
+      }
+
       let currentManagerId: number | null = Number(payload.reporting_manager_id);
       const visited = new Set<number>([employeeId]);
 
@@ -870,18 +974,18 @@ export class EmployeeService {
     try {
       const db = getKnex();
       let existingUser = await db('users')
-        .where({ organization_id: ctx.organizationId, employee_id: employeeId })
+        .where('employee_id', employeeId)
         .first();
 
-      if (!existingUser && employee.email) {
+      const targetEmail = (input.email || updated.email || employee.email || '').trim();
+
+      if (!existingUser && targetEmail) {
         existingUser = await db('users')
-          .where({ organization_id: ctx.organizationId, email: employee.email })
+          .whereRaw('LOWER(email) = ?', [targetEmail.toLowerCase()])
           .first();
       }
 
-      const targetEmail = input.email || updated.email || employee.email;
       let hashedPassword: string | undefined = undefined;
-
       if (input.password) {
         hashedPassword = await hash(input.password, {
           type: 2,
@@ -892,20 +996,31 @@ export class EmployeeService {
       }
 
       let userIdToSync: number | null = null;
+      const rawRole = input.accessRole || input.access_role || input.role;
+      const targetAccessRole = rawRole ? String(rawRole).toLowerCase() : undefined;
 
       if (existingUser) {
         userIdToSync = existingUser.id;
-        const userUpdateData: Record<string, any> = { updated_at: new Date() };
+        const userUpdateData: Record<string, any> = {
+          updated_at: new Date(),
+          employee_id: employeeId,
+        };
         if (targetEmail) userUpdateData.email = targetEmail;
         if (hashedPassword) userUpdateData.password_hash = hashedPassword;
         await db('users').where('id', existingUser.id).update(userUpdateData);
-      } else if (hashedPassword && targetEmail) {
+      } else if (targetEmail) {
+        const defaultHash = hashedPassword || await hash('Password@123', {
+          type: 2,
+          memoryCost: 19456,
+          timeCost: 2,
+          parallelism: 1,
+        });
         const [newUserId] = await db('users').insert({
           uuid: uuidv4(),
           organization_id: ctx.organizationId,
           employee_id: employeeId,
           email: targetEmail,
-          password_hash: hashedPassword,
+          password_hash: defaultHash,
           status: 'active',
           created_at: new Date(),
           updated_at: new Date(),
@@ -913,10 +1028,15 @@ export class EmployeeService {
         userIdToSync = newUserId;
       }
 
-      if (userIdToSync) {
-        const targetAccessRole = input.accessRole || (employee as any).accessRole || 'employee';
+      if (userIdToSync && targetAccessRole) {
         const targetDeptId = input.departmentId ?? updated.current_department_id ?? employee.current_department_id;
-        await this.syncUserAccessRole(db, ctx, userIdToSync, targetAccessRole, employeeId, targetDeptId);
+        let rolesList: string[];
+        if (Array.isArray(input.roles) && input.roles.length > 0) {
+          rolesList = [...new Set([...input.roles, targetAccessRole])];
+        } else {
+          rolesList = [targetAccessRole];
+        }
+        await this.syncUserAccessRole(db, ctx, userIdToSync, targetAccessRole, employeeId, targetDeptId, rolesList);
       }
     } catch (userSyncErr) {
       console.warn('[EmployeeService] User credentials sync warning:', userSyncErr);
@@ -1049,7 +1169,11 @@ export class EmployeeService {
     if (!employee) {
       throw new NotFoundError('Employee not found');
     }
-    return this.personalInfoRepo.getByEmployeeId(ctx, employeeId);
+    const personalInfo = await this.personalInfoRepo.getByEmployeeId(ctx, employeeId);
+    return {
+      ...(personalInfo || {}),
+      maritalStatus: (employee as any).marital_status || null,
+    };
   }
 
   /**
@@ -1059,6 +1183,7 @@ export class EmployeeService {
     fatherName?: string | null;
     motherName?: string | null;
     spouseName?: string | null;
+    maritalStatus?: 'single' | 'married' | 'divorced' | 'widowed' | null;
     childrenCount?: number;
     permanentAddress?: string | null;
     currentAddress?: string | null;
@@ -1073,6 +1198,13 @@ export class EmployeeService {
     }
 
     const existing = await this.personalInfoRepo.getByEmployeeId(ctx, employeeId);
+
+    if (input.maritalStatus !== undefined) {
+      await this.employeeRepo.update(ctx, employeeId, {
+        marital_status: input.maritalStatus,
+        updated_by: ctx.userId,
+      } as any);
+    }
 
     const data: Record<string, unknown> = {
       father_name: input.fatherName,
@@ -1406,12 +1538,14 @@ export class EmployeeService {
           // Resolve Reports To (Manager by email, code, or name) - graceful fallback
           let reportingManagerId: number | null = input.reportingManagerId || null;
           if (input.reportsTo && typeof input.reportsTo === 'string' && input.reportsTo.trim()) {
+            const targetMgrStr = input.reportsTo.trim().toLowerCase();
             const mgr = await trx('employees')
               .where('organization_id', ctx.organizationId)
               .whereNull('deleted_at')
               .andWhere(function() {
-                this.where('employee_code', input.reportsTo.trim())
-                    .orWhere('email', input.reportsTo.trim());
+                this.whereRaw('LOWER(employee_code) = ?', [targetMgrStr])
+                    .orWhereRaw('LOWER(email) = ?', [targetMgrStr])
+                    .orWhereRaw("LOWER(CONCAT(first_name, ' ', last_name)) = ?", [targetMgrStr]);
               })
               .first();
             if (mgr) reportingManagerId = mgr.id;
@@ -1433,7 +1567,7 @@ export class EmployeeService {
             current_designation_id: designationId,
             current_department_id: deptId,
             reporting_manager_id: reportingManagerId,
-            status: input.status || 'active',
+            status: 'active',
             created_by: ctx.userId,
             updated_by: ctx.userId,
             created_at: new Date(),
@@ -1681,4 +1815,3 @@ export class EmployeeService {
     });
   }
 }
-

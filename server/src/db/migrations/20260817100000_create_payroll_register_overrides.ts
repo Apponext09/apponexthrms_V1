@@ -12,7 +12,7 @@ export async function up(knex: Knex): Promise<void> {
 
   await knex.schema.createTable('payroll_register_overrides', (table) => {
     table.bigIncrements('id').unsigned().primary();
-    table.uuid('uuid').notNullable().defaultTo(knex.raw('(UUID())'));
+    table.string('uuid', 36).nullable();
     table.bigInteger('organization_id').unsigned().notNullable();
     table.bigInteger('employee_id').unsigned().notNullable();
     table.string('month', 7).notNullable();

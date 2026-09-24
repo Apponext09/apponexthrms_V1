@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Shield,
   FileText,
@@ -69,15 +69,7 @@ const DEFAULT_FALLBACK_CATEGORIES = [
   'Executive Guidelines',
 ];
 
-const AVAILABLE_ROLES = [
-  { code: 'employee', label: 'Employee' },
-  { code: 'team_lead', label: 'Team Lead' },
-  { code: 'department_head', label: 'Department Manager' },
-  { code: 'hr_manager', label: 'HR / Support Manager' },
-  { code: 'intern', label: 'Intern' },
-  { code: 'consultant', label: 'Consultant' },
-  { code: 'ceo', label: 'CEO / Executive' },
-];
+import { apiClient } from '@/config/api';
 
 export function PolicyManagementPage() {
   const { data: policies = [], isLoading } = usePolicies();
@@ -86,6 +78,19 @@ export function PolicyManagementPage() {
   const departments: Array<{ id: number; name: string }> = Array.isArray(deptsQueryResult)
     ? deptsQueryResult
     : (deptsQueryResult?.items || deptsQueryResult?.data || []);
+
+  const [availableRoles, setAvailableRoles] = useState<Array<{ code: string; label: string }>>([]);
+
+  useEffect(() => {
+    apiClient.get('/rbac/roles')
+      .then((res) => {
+        const list = res.data?.data?.items || res.data?.data || [];
+        if (Array.isArray(list) && list.length > 0) {
+          setAvailableRoles(list.map((r: any) => ({ code: r.code || String(r.id), label: r.name || r.code })));
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const createPolicyMutation = useCreatePolicy();
   const updatePolicyMutation = useUpdatePolicy();
@@ -163,7 +168,7 @@ export function PolicyManagementPage() {
       fileSize: 0,
       fileType: '',
       isMandatory: true,
-      selectedRoles: ['employee', 'team_lead', 'department_head', 'hr_manager', 'intern', 'consultant'],
+      selectedRoles: ['employee', 'team_lead', 'department_head', 'hr', 'intern', 'consultant'],
     });
     setCreateModalOpen(true);
   };
@@ -257,7 +262,7 @@ export function PolicyManagementPage() {
   };
 
   const handleDelete = async (id: number) => {
-    if (confirm('Are you sure you want to delete this policy document?')) {
+    if (await window.appConfirm('Are you sure you want to delete this policy document?')) {
       await deletePolicyMutation.mutateAsync(id);
     }
   };
@@ -278,7 +283,7 @@ export function PolicyManagementPage() {
   };
 
   const handleDeleteCategory = async (id: number, name: string) => {
-    if (confirm(`Are you sure you want to delete category "${name}"?`)) {
+    if (await window.appConfirm(`Are you sure you want to delete category "${name}"?`)) {
       try {
         await deleteCategoryMutation.mutateAsync(id);
         if (formData.category === name) {
@@ -291,12 +296,12 @@ export function PolicyManagementPage() {
   };
 
   const handleSelectAllRoles = () => {
-    if (formData.selectedRoles.length === AVAILABLE_ROLES.length) {
+    if (formData.selectedRoles.length === availableRoles.length) {
       setFormData((prev) => ({ ...prev, selectedRoles: [] }));
     } else {
       setFormData((prev) => ({
         ...prev,
-        selectedRoles: AVAILABLE_ROLES.map((r) => r.code),
+        selectedRoles: availableRoles.map((r) => r.code),
       }));
     }
   };
@@ -1093,14 +1098,14 @@ export function PolicyManagementPage() {
                     onClick={handleSelectAllRoles}
                     className="h-auto p-0 text-xs text-primary font-bold hover:underline cursor-pointer"
                   >
-                    {formData.selectedRoles.length === AVAILABLE_ROLES.length ? 'Deselect All' : 'Select All Roles'}
+                    {formData.selectedRoles.length === availableRoles.length ? 'Deselect All' : 'Select All Roles'}
                   </Button>
                 </div>
               </div>
 
               {/* Roles Checkboxes */}
               <div className="grid grid-cols-2 gap-2 bg-muted/20 p-3 rounded-xl border border-border/70">
-                {AVAILABLE_ROLES.map((role) => {
+                {availableRoles.map((role) => {
                   const isChecked = formData.selectedRoles.includes(role.code);
                   return (
                     <div

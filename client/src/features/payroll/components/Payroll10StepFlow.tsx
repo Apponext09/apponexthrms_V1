@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CheckCircle, RefreshCw, Lock, FileText, ArrowRight, AlertTriangle, Info, Users, DollarSign } from 'lucide-react';
+import { CheckCircle, RefreshCw, Lock, FileText, ArrowRight, AlertTriangle, Info, Users, IndianRupee } from 'lucide-react';
 import { PayslipViewer } from '../pages/PayslipViewer';
 import { showToast } from '@/components/ui/toast';
 import { apiClient } from '@/config/api';
@@ -227,8 +227,8 @@ export const Payroll10StepFlow: React.FC = () => {
                 <div className="grid grid-cols-3 gap-3">
                   {[
                     { label: 'Employees', val: String(totals.employees || '—'), icon: Users },
-                    { label: 'Total Gross', val: fmt(totals.gross), icon: DollarSign },
-                    { label: 'Net Disbursal', val: fmt(totals.net), icon: DollarSign },
+                    { label: 'Total Gross', val: fmt(totals.gross), icon: IndianRupee },
+                    { label: 'Net Disbursal', val: fmt(totals.net), icon: IndianRupee },
                   ].map(({ label, val, icon: Icon }) => (
                     <div key={label} className="border border-border rounded-lg p-3 bg-muted/20">
                       <div className="text-[10px] text-muted-foreground font-semibold uppercase">{label}</div>

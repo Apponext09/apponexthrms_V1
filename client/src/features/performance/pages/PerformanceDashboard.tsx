@@ -24,7 +24,7 @@ export const PerformanceDashboard: React.FC = () => {
     );
   }
 
-  if (error) {
+  if (error && !metrics) {
     return (
       <div className="p-6">
         <Card className="border-red-200 dark:border-red-900">

@@ -12,8 +12,11 @@ import {
   MapPin
 } from 'lucide-react';
 
+import { useExpenseMoney } from '../utils/useExpenseMoney';
+
 export const ExpensePoliciesPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
+  const money = useExpenseMoney();
   const [policies, setPolicies] = useState<ExpensePolicy[]>([]);
   const [categories, setCategories] = useState<ExpenseCategory[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -25,13 +28,14 @@ export const ExpensePoliciesPage: React.FC = () => {
   const [grade, setGrade] = useState('All');
   const [designation, setDesignation] = useState('All');
   const [location, setLocation] = useState('All');
-  const [locationSearch, setLocationSearch] = useState('');
-  const [locationOpen, setLocationOpen] = useState(false);
-  const [orgLocations, setOrgLocations] = useState<Array<{ id: number; name: string }>>([]);
-  const [maxLimitPerClaim, setMaxLimitPerClaim] = useState<number>(25000);
-  const [maxLimitPerMonth, setMaxLimitPerMonth] = useState<number>(75000);
+  const [orgLocations, setOrgLocations] = useState<Array<{ id: number | string; name: string }>>([]);
+  const [orgDesignations, setOrgDesignations] = useState<Array<{ id: number | string; name: string }>>([]);
+  const [orgGrades, setOrgGrades] = useState<Array<{ id: number | string; name: string }>>([]);
+  const [maxLimitPerClaim, setMaxLimitPerClaim] = useState<number>(1000);
+  const [maxLimitPerMonth, setMaxLimitPerMonth] = useState<number>(5000);
   const [requireReceiptAbove, setRequireReceiptAbove] = useState<number>(500);
   const [allowException, setAllowException] = useState(true);
+  const [isUnlimited, setIsUnlimited] = useState(false);
   const [isActive, setIsActive] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
@@ -53,17 +57,32 @@ export const ExpensePoliciesPage: React.FC = () => {
 
   useEffect(() => {
     fetchPoliciesAndCategories();
-    apiClient.get('/settings/locations', { params: { pageSize: 200 } })
+    apiClient.get('/settings/scope-masters')
       .then((res: any) => {
-        const raw = res?.data?.data || res?.data || [];
-        setOrgLocations(
-          (Array.isArray(raw) ? raw : []).map((l: any) => ({
-            id: Number(l.id),
-            name: l.name || l.code || String(l.id),
-          })).filter((l: { id: number; name: string }) => l.id)
-        );
+        const d = res?.data?.data || {};
+        const locs = Array.isArray(d.locations) ? d.locations : [];
+        const desigs = Array.isArray(d.designations) ? d.designations : [];
+        const grds = Array.isArray(d.grades) ? d.grades : [];
+        setOrgLocations(locs);
+        setOrgDesignations(desigs);
+        setOrgGrades(grds);
       })
-      .catch(() => setOrgLocations([]));
+      .catch(() => {
+        Promise.all([
+          apiClient.get('/settings/locations', { params: { pageSize: 200 } }).catch(() => ({ data: [] })),
+          apiClient.get('/settings/designations', { params: { pageSize: 200 } }).catch(() => ({ data: [] })),
+          apiClient.get('/settings/grades', { params: { pageSize: 200 } }).catch(() => ({ data: [] }))
+        ]).then(([locRes, desRes, grdRes]) => {
+          const lRaw = locRes?.data?.data || locRes?.data || [];
+          const dRaw = desRes?.data?.data || desRes?.data || [];
+          const gRaw = grdRes?.data?.data || grdRes?.data || [];
+          setOrgLocations((Array.isArray(lRaw) ? lRaw : [])
+            .filter((x: any) => x.status !== 'inactive' && x.status !== 'Inactive' && x.is_active !== 'No' && x.isActive !== 'No')
+            .map((x: any) => ({ id: x.id, name: x.name || x.location_name || String(x.id) })));
+          setOrgDesignations((Array.isArray(dRaw) ? dRaw : []).map((x: any) => ({ id: x.id, name: x.name || x.designation_name || String(x.id) })));
+          setOrgGrades((Array.isArray(gRaw) ? gRaw : []).map((x: any) => ({ id: x.id, name: x.name || x.grade_name || String(x.id) })));
+        });
+      });
   }, []);
 
   const openModal = (pol?: ExpensePolicy) => {
@@ -74,10 +93,12 @@ export const ExpensePoliciesPage: React.FC = () => {
       setGrade(pol.grade || 'All');
       setDesignation(pol.designation || 'All');
       setLocation(pol.location || 'All');
-      setLocationSearch('');
-      setLocationOpen(false);
-      setMaxLimitPerClaim(pol.maxLimitPerClaim);
-      setMaxLimitPerMonth(pol.maxLimitPerMonth);
+      const maxClaim = Number(pol.maxLimitPerClaim ?? (pol as any).max_limit_per_claim ?? 0);
+      const maxMonth = Number(pol.maxLimitPerMonth ?? (pol as any).max_limit_per_month ?? 0);
+      const unl = maxClaim === 0 && maxMonth === 0;
+      setIsUnlimited(unl);
+      setMaxLimitPerClaim(maxClaim > 0 ? maxClaim : 1000);
+      setMaxLimitPerMonth(maxMonth > 0 ? maxMonth : 5000);
       setRequireReceiptAbove(pol.requireReceiptAbove);
       setAllowException(pol.allowException);
       setIsActive(pol.isActive);
@@ -88,10 +109,9 @@ export const ExpensePoliciesPage: React.FC = () => {
       setGrade('All');
       setDesignation('All');
       setLocation('All');
-      setLocationSearch('');
-      setLocationOpen(false);
-      setMaxLimitPerClaim(25000);
-      setMaxLimitPerMonth(75000);
+      setIsUnlimited(false);
+      setMaxLimitPerClaim(1000);
+      setMaxLimitPerMonth(5000);
       setRequireReceiptAbove(500);
       setAllowException(true);
       setIsActive(true);
@@ -99,9 +119,19 @@ export const ExpensePoliciesPage: React.FC = () => {
     setIsModalOpen(true);
   };
 
+  const handleCategorySelect = (cId: number | undefined) => {
+    setCategoryId(cId);
+    if (cId) {
+      const selectedCat = categories.find((c) => c.id === cId);
+      if (selectedCat && selectedCat.name.toLowerCase().includes('travel')) {
+        setIsUnlimited(true);
+      }
+    }
+  };
+
   const handleSavePolicy = async () => {
     if (!policyName.trim()) {
-      alert('Please enter a policy name.');
+      window.appAlert('Please enter a policy name.');
       return;
     }
     try {
@@ -112,8 +142,8 @@ export const ExpensePoliciesPage: React.FC = () => {
         grade,
         designation,
         location,
-        maxLimitPerClaim,
-        maxLimitPerMonth,
+        maxLimitPerClaim: isUnlimited ? 0 : maxLimitPerClaim,
+        maxLimitPerMonth: isUnlimited ? 0 : maxLimitPerMonth,
         requireReceiptAbove,
         allowException,
         isActive
@@ -128,19 +158,19 @@ export const ExpensePoliciesPage: React.FC = () => {
       setIsModalOpen(false);
       fetchPoliciesAndCategories();
     } catch (err: any) {
-      alert(err.message || 'Failed to save policy');
+      window.appAlert(err.message || 'Failed to save policy');
     } finally {
       setSubmitting(false);
     }
   };
 
   const handleDeletePolicy = async (id: number) => {
-    if (!confirm('Are you sure you want to delete this expense policy?')) return;
+    if (!await window.appConfirm('Are you sure you want to delete this expense policy?')) return;
     try {
       await expenseApi.deletePolicy(id);
       fetchPoliciesAndCategories();
     } catch (err: any) {
-      alert(err.message || 'Delete failed');
+      window.appAlert(err.message || 'Delete failed');
     }
   };
 
@@ -215,13 +245,25 @@ export const ExpensePoliciesPage: React.FC = () => {
                         {pol.location || 'All'}
                       </td>
                       <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white">
-                        ₹{maxClaim.toLocaleString('en-IN')}
+                        {maxClaim > 0 ? (
+                          money(maxClaim)
+                        ) : (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                            No Limit
+                          </span>
+                        )}
                       </td>
                       <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white">
-                        ₹{maxMonth.toLocaleString('en-IN')}
+                        {maxMonth > 0 ? (
+                          money(maxMonth)
+                        ) : (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                            No Limit
+                          </span>
+                        )}
                       </td>
                       <td className="py-3.5 px-4 text-slate-700 dark:text-slate-300 font-semibold">
-                        ₹{reqReceipt.toLocaleString('en-IN')}
+                        {money(reqReceipt)}
                       </td>
                       <td className="py-3.5 px-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
@@ -248,7 +290,7 @@ export const ExpensePoliciesPage: React.FC = () => {
         )}
       </div>
 
-      {/* CREATE MODAL */}
+      {/* CREATE / EDIT MODAL */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl p-6 space-y-4">
@@ -273,8 +315,8 @@ export const ExpensePoliciesPage: React.FC = () => {
                   <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Category</label>
                   <select
                     value={categoryId || ''}
-                    onChange={(e) => setCategoryId(e.target.value ? Number(e.target.value) : undefined)}
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs"
+                    onChange={(e) => handleCategorySelect(e.target.value ? Number(e.target.value) : undefined)}
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-medium"
                   >
                     <option value="">All Categories</option>
                     {categories.map((c) => (
@@ -287,111 +329,119 @@ export const ExpensePoliciesPage: React.FC = () => {
 
                 <div>
                   <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Employee Grade</label>
-                  <input
-                    type="text"
-                    placeholder="All / L1 / L2 / Executive"
+                  <select
                     value={grade}
                     onChange={(e) => setGrade(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs"
-                  />
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-medium"
+                  >
+                    <option value="All">All Grades</option>
+                    {orgGrades.map((g) => (
+                      <option key={g.id || g.name} value={g.name}>
+                        {g.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Designation</label>
-                  <input
-                    type="text"
-                    placeholder="All / Manager / VP"
+                  <select
                     value={designation}
                     onChange={(e) => setDesignation(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs"
-                  />
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-medium"
+                  >
+                    <option value="All">All Designations</option>
+                    {orgDesignations.map((d) => (
+                      <option key={d.id || d.name} value={d.name}>
+                        {d.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
-                <div className="relative">
+                <div>
                   <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Location</label>
-                  <input
-                    type="text"
-                    placeholder="Search location..."
-                    value={locationOpen ? locationSearch : location}
-                    onFocus={() => {
-                      setLocationOpen(true);
-                      setLocationSearch(location === 'All' ? '' : location);
-                    }}
-                    onChange={(e) => {
-                      setLocationSearch(e.target.value);
-                      setLocationOpen(true);
-                    }}
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs"
-                  />
-                  {locationOpen && (
-                    <div className="absolute z-20 mt-1 w-full max-h-44 overflow-y-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg">
-                      <button
-                        type="button"
-                        className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50 dark:hover:bg-slate-800"
-                        onClick={() => {
-                          setLocation('All');
-                          setLocationSearch('');
-                          setLocationOpen(false);
-                        }}
-                      >
-                        All locations
-                      </button>
-                      {orgLocations
-                        .filter((l) => l.name.toLowerCase().includes(locationSearch.toLowerCase()))
-                        .map((l) => (
-                          <button
-                            type="button"
-                            key={l.id}
-                            className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50 dark:hover:bg-slate-800"
-                            onClick={() => {
-                              setLocation(l.name);
-                              setLocationSearch(l.name);
-                              setLocationOpen(false);
-                            }}
-                          >
-                            {l.name}
-                          </button>
-                        ))}
-                      {orgLocations.filter((l) => l.name.toLowerCase().includes(locationSearch.toLowerCase())).length === 0 && (
-                        <div className="px-3 py-2 text-[11px] text-slate-400">No matching location</div>
-                      )}
-                    </div>
-                  )}
+                  <select
+                    value={location}
+                    onChange={(e) => setLocation(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-medium"
+                  >
+                    <option value="All">All Locations</option>
+                    {orgLocations.map((l) => (
+                      <option key={l.id || l.name} value={l.name}>
+                        {l.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-2">
-                <div>
-                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Max / Claim (₹)</label>
+              {/* UNLIMITED / NO SPENDING LIMIT OPTION */}
+              <div className="p-2.5 bg-purple-50/70 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800/60 rounded-xl flex items-center justify-between">
+                <div className="flex items-center gap-2">
                   <input
-                    type="number"
-                    value={maxLimitPerClaim}
-                    onChange={(e) => setMaxLimitPerClaim(Number(e.target.value))}
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold"
+                    type="checkbox"
+                    id="isUnlimited"
+                    checked={isUnlimited}
+                    onChange={(e) => setIsUnlimited(e.target.checked)}
+                    className="h-4 w-4 rounded border-slate-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
                   />
+                  <label htmlFor="isUnlimited" className="font-semibold text-slate-800 dark:text-slate-200 cursor-pointer select-none">
+                    No Spending Limit / Unlimited (Remove Threshold Cap)
+                  </label>
                 </div>
+                {isUnlimited && (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                    Unlimited Active
+                  </span>
+                )}
+              </div>
 
-                <div>
-                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Max / Month (₹)</label>
-                  <input
-                    type="number"
-                    value={maxLimitPerMonth}
-                    onChange={(e) => setMaxLimitPerMonth(Number(e.target.value))}
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold"
-                  />
+              {/* DYNAMIC LIMIT INPUTS vs UNLIMITED BANNER */}
+              {isUnlimited ? (
+                <div className="p-3 bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 rounded-xl flex items-center gap-2.5 text-xs text-emerald-900 dark:text-emerald-200">
+                  <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0" />
+                  <div>
+                    <p className="font-bold">No Spending Limit Applied</p>
+                    <p className="text-[11px] text-emerald-700 dark:text-emerald-300">
+                      Employees claiming under this policy (e.g. Travel) will not be restricted by per-claim or monthly maximum spending limits.
+                    </p>
+                  </div>
                 </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Max / Claim (₹)</label>
+                    <input
+                      type="number"
+                      value={maxLimitPerClaim}
+                      onChange={(e) => setMaxLimitPerClaim(Number(e.target.value))}
+                      className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold"
+                    />
+                  </div>
 
-                <div>
-                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Receipt Above (₹)</label>
-                  <input
-                    type="number"
-                    value={requireReceiptAbove}
-                    onChange={(e) => setRequireReceiptAbove(Number(e.target.value))}
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs"
-                  />
+                  <div>
+                    <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Max / Month (₹)</label>
+                    <input
+                      type="number"
+                      value={maxLimitPerMonth}
+                      onChange={(e) => setMaxLimitPerMonth(Number(e.target.value))}
+                      className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold"
+                    />
+                  </div>
                 </div>
+              )}
+
+              <div>
+                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Receipt Mandatory Above (₹)</label>
+                <input
+                  type="number"
+                  value={requireReceiptAbove}
+                  onChange={(e) => setRequireReceiptAbove(Number(e.target.value))}
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs"
+                />
               </div>
 
               <div className="flex items-center gap-2 pt-1">
@@ -400,9 +450,9 @@ export const ExpensePoliciesPage: React.FC = () => {
                   id="allowException"
                   checked={allowException}
                   onChange={(e) => setAllowException(e.target.checked)}
-                  className="rounded border-slate-300 text-purple-600 focus:ring-purple-500"
+                  className="rounded border-slate-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
                 />
-                <label htmlFor="allowException" className="font-semibold text-slate-700 dark:text-slate-300">
+                <label htmlFor="allowException" className="font-semibold text-slate-700 dark:text-slate-300 cursor-pointer select-none">
                   Allow Employee Exception Justification
                 </label>
               </div>

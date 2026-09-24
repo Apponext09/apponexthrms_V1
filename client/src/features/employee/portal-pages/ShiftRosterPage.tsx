@@ -69,7 +69,12 @@ export default function ShiftRosterPage() {
   const [swapRequests, setSwapRequests] = useState<any[]>([]);
   const [employees, setEmployees] = useState<any[]>([]);
   
-  const [currentMonth, setCurrentMonth] = useState(new Date(2026, 6, 1)); // Default to July 2026 for development
+  // Always start on the user's current calendar month. A fixed development
+  // month made the sidebar-selected roster appear disconnected from Today.
+  const [currentMonth, setCurrentMonth] = useState(() => {
+    const today = new Date();
+    return new Date(today.getFullYear(), today.getMonth(), 1);
+  });
   const [shiftsRangeMap, setShiftsRangeMap] = useState<Record<string, any>>({});
   const [viewMode, setViewMode] = useState<'calendar' | 'list'>('calendar');
 
@@ -435,7 +440,7 @@ export default function ShiftRosterPage() {
     if (!swapDate || !swapWithEmployeeId) {
       const msg = `Validation failed: ${!swapDate ? 'Please choose a Date. ' : ''}${!swapWithEmployeeId ? 'Please choose a Teammate.' : ''}`;
       console.warn(msg);
-      alert(msg);
+      window.appAlert(msg);
       toast.error('Please fill in all required fields');
       return;
     }
@@ -459,7 +464,7 @@ export default function ShiftRosterPage() {
       console.log('API Response received:', res.data);
 
       if (res.data?.success) {
-        alert('Shift swap request submitted successfully!');
+        window.appAlert('Shift swap request submitted successfully!');
         toast.success('Shift swap request submitted successfully!');
         setIsSwapModalOpen(false);
         setSwapDate('');
@@ -469,13 +474,13 @@ export default function ShiftRosterPage() {
       } else {
         const errorMsg = res.data?.error?.message || 'Failed to submit shift swap';
         console.error(errorMsg);
-        alert(`Error: ${errorMsg}`);
+        window.appAlert(`Error: ${errorMsg}`);
         toast.error(errorMsg);
       }
     } catch (err: any) {
       const errMsg = err.response?.data?.error?.message || err.message || 'Something went wrong';
       console.error('Swap API Exception:', err);
-      alert(`API Exception: ${errMsg}`);
+      window.appAlert(`API Exception: ${errMsg}`);
       toast.error(errMsg);
     } finally {
       setSubmittingSwap(false);
@@ -747,7 +752,10 @@ export default function ShiftRosterPage() {
                     variant="outline"
                     size="sm"
                     className="h-7 rounded-lg text-xs font-bold border-border bg-background"
-                    onClick={() => setCurrentMonth(new Date(2026, 6, 1))}
+                    onClick={() => {
+                      const today = new Date();
+                      setCurrentMonth(new Date(today.getFullYear(), today.getMonth(), 1));
+                    }}
                   >
                     Current
                   </Button>

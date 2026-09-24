@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 import React, { useState, useEffect, useRef } from 'react';
+=======
+import { useState, useEffect, useRef, useCallback } from 'react';
+>>>>>>> b13431884f6e3fb77d4463ab4da204cadac8faca
 import {
   Camera,
   Scan,
@@ -307,7 +311,11 @@ export function MyAttendanceFaceTab({
 
   const stopCamera = () => {
     if (stream) {
+<<<<<<< HEAD
       stream.getTracks().forEach((track: any) => track.stop());
+=======
+      stream.getTracks().forEach((track: MediaStreamTrack) => track.stop());
+>>>>>>> b13431884f6e3fb77d4463ab4da204cadac8faca
       setStream(null);
     }
     setIsCameraActive(false);

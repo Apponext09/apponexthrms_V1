@@ -35,6 +35,7 @@ export function EventDescriptionEditor({
   className,
 }: EventDescriptionEditorProps) {
   const [htmlContent, setHtmlContent] = useState(value || '');
+  const [editorReady, setEditorReady] = useState(false);
 
   const editor = useEditor({
     extensions: [
@@ -67,7 +68,11 @@ export function EventDescriptionEditor({
       TableCell,
     ],
     content: value || '<p></p>',
+    onCreate: () => {
+      setEditorReady(true);
+    },
     onUpdate: ({ editor }) => {
+      if (editor.isDestroyed) return;
       const html = editor.getHTML();
       setHtmlContent(html);
       onChange(html);
@@ -76,13 +81,19 @@ export function EventDescriptionEditor({
 
   // Sync value when parent resets form
   useEffect(() => {
-    if (editor && value !== undefined && value !== editor.getHTML()) {
-      editor.commands.setContent(value || '<p></p>');
-      setHtmlContent(value || '');
+    if (!editor || editor.isDestroyed || !editorReady) return;
+    try {
+      const current = editor.getHTML();
+      if (value !== undefined && value !== current) {
+        editor.commands.setContent(value || '<p></p>');
+        setHtmlContent(value || '');
+      }
+    } catch {
+      // editor schema not ready yet, skip
     }
-  }, [value, editor]);
+  }, [value, editor, editorReady]);
 
-  if (!editor) return null;
+  if (!editor || !editorReady) return null;
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -98,9 +109,9 @@ export function EventDescriptionEditor({
     }
   };
 
-  const handleAddLink = () => {
+  const handleAddLink = async () => {
     const previousUrl = editor.getAttributes('link').href;
-    const url = window.prompt('Enter Link URL:', previousUrl || 'https://');
+    const url = await window.appPrompt('Enter Link URL:', previousUrl || 'https://');
     if (url === null) return;
     if (url === '') {
       editor.chain().focus().extendMarkRange('link').unsetLink().run();
@@ -109,10 +120,10 @@ export function EventDescriptionEditor({
     editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
   };
 
-  const handleInsertTable = () => {
-    const rowsStr = window.prompt('Enter number of rows:', '3');
+  const handleInsertTable = async () => {
+    const rowsStr = await window.appPrompt('Enter number of rows:', '3');
     if (rowsStr === null) return;
-    const colsStr = window.prompt('Enter number of columns:', '3');
+    const colsStr = await window.appPrompt('Enter number of columns:', '3');
     if (colsStr === null) return;
 
     const rows = parseInt(rowsStr, 10) || 3;
@@ -136,7 +147,7 @@ export function EventDescriptionEditor({
   };
 
   return (
-    <div className={cn('relative border border-border rounded-2xl overflow-hidden bg-card shadow-2xs', className)}>
+    <div className={cn('relative border border-border rounded-2xl bg-card shadow-2xs', className)} style={{ isolation: 'isolate' }}>
       <style>{`
         .ProseMirror h1 {
           font-size: 2em !important;
@@ -438,7 +449,7 @@ export function EventDescriptionEditor({
       </div>
 
       {/* Editor Body */}
-      <div className="p-3 bg-background min-h-[160px] text-xs leading-relaxed text-foreground">
+      <div className="relative p-3 bg-background min-h-[160px] text-xs leading-relaxed text-foreground">
         <EditorContent editor={editor} className="prose prose-sm max-w-none focus:outline-none min-h-[140px]" />
       </div>
     </div>

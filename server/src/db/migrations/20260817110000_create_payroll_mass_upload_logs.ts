@@ -9,7 +9,7 @@ export async function up(knex: Knex): Promise<void> {
 
   await knex.schema.createTable('payroll_mass_upload_logs', (table) => {
     table.bigIncrements('id').unsigned().primary();
-    table.uuid('uuid').notNullable().defaultTo(knex.raw('(UUID())'));
+    table.string('uuid', 36).nullable();
     table.bigInteger('organization_id').unsigned().notNullable();
     table.string('file_name', 255).notNullable();
     table.string('slab_name', 255).nullable();

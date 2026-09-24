@@ -1,6 +1,18 @@
 import { BaseRepository } from '../../../db/BaseRepository';
 import type { TenantContext, ListQueryOptions } from '../../../db/types';
 
+const LIST_VIEW_SENSITIVE_FIELDS = [
+  'aadhar_number', 'aadharNumber',
+  'pan_number', 'panNumber', 'pan',
+  'passport_number', 'passportNumber',
+  'bank_name', 'bankName',
+  'account_no', 'accountNo',
+  'ifsc_code', 'ifscCode',
+  'uan_no', 'uanNo',
+  'esic_no', 'esicNo',
+  'pf_no', 'pfNo',
+];
+
 export interface Employee {
   id: number;
   uuid: string;
@@ -23,6 +35,8 @@ export interface Employee {
   date_of_birth: string | null;
   dateOfBirth?: string | null;
   gender: 'male' | 'female' | 'other' | null;
+  marital_status?: 'single' | 'married' | 'divorced' | 'widowed' | null;
+  maritalStatus?: 'single' | 'married' | 'divorced' | 'widowed' | null;
   blood_group: string | null;
   bloodGroup?: string | null;
   nationality: string | null;
@@ -178,22 +192,50 @@ export class EmployeeRepository extends BaseRepository<Employee> {
         .select('name')
         .first();
       if (desig) {
-        (employee as any).jobTitle = desig.name;
+        const jobTitleValue = (employee as any).jobTitle ?? (employee as any).job_title ?? null;
+        if (!jobTitleValue) {
+          (employee as any).jobTitle = desig.name;
+        }
         (employee as any).designation = desig.name;
+        (employee as any).designationName = desig.name;
+        (employee as any).designation_name = desig.name;
       }
     }
 
     const user = await this.db('users')
-      .where('organization_id', ctx.organizationId)
       .where('employee_id', employee.id)
+      .where(function(this: any) {
+        this.where('organization_id', ctx.organizationId).orWhereNull('organization_id');
+      })
       .first();
     if (user) {
+      const rolePriority: Record<string, number> = {
+        ceo: 8,
+        organization_admin: 8,
+        super_admin: 8,
+        cto: 6,
+        cfo: 6,
+        coo: 6,
+        cxo: 6,
+        hr_manager: 5,
+        department_head: 4,
+        team_lead: 3,
+        finance: 3,
+        intern: 2,
+        consultant: 2,
+        employee: 1,
+      };
+      let highestRole = (user.role || 'employee').toLowerCase();
+      let highestPriority = rolePriority[highestRole] || 0;
+
       const userRoles = await this.db('user_roles')
         .join('roles', 'user_roles.role_id', 'roles.id')
-        .where('user_roles.organization_id', ctx.organizationId)
+        .where(function(this: any) {
+          this.where('user_roles.organization_id', ctx.organizationId).orWhereNull('user_roles.organization_id');
+        })
         .where('user_roles.user_id', user.id)
-        .whereIn('roles.code', ['employee', 'team_lead', 'hr_manager', 'department_head', 'cto', 'cfo', 'coo', 'cxo', 'intern', 'consultant'])
-        .select('roles.code');
+        .select('roles.code', 'roles.name');
+
       if (userRoles.length > 0) {
         const rolePriority: Record<string, number> = {
           ceo: 8,
@@ -203,15 +245,15 @@ export class EmployeeRepository extends BaseRepository<Employee> {
           cfo: 6,
           coo: 6,
           cxo: 6,
+          hr: 5,
           hr_manager: 5,
           department_head: 4,
           team_lead: 3,
+          finance: 3,
           intern: 2,
           consultant: 2,
           employee: 1,
         };
-        let highestRole = 'employee';
-        let highestPriority = 0;
         for (const ur of userRoles) {
           const priority = rolePriority[ur.code] || 0;
           if (priority > highestPriority) {
@@ -219,8 +261,11 @@ export class EmployeeRepository extends BaseRepository<Employee> {
             highestRole = ur.code;
           }
         }
-        (employee as any).accessRole = highestRole;
       }
+      (employee as any).accessRole = highestRole;
+      const roleList = userRoles.map((ur: any) => ur.name || ur.code);
+      (employee as any).assignedRoles = roleList;
+      (employee as any).roles = roleList;
     }
 
     const managerId = (employee as any).reportingManagerId || (employee as any).reporting_manager_id;
@@ -261,6 +306,11 @@ export class EmployeeRepository extends BaseRepository<Employee> {
       }
     } catch {}
 
+    const statusVal = (employee as any).employee_status || employee.status ;
+    const formattedStatusVal = String(statusVal).split(/[\s_]+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+    (employee as any).employeeStatus = formattedStatusVal;
+    (employee as any).employee_status = formattedStatusVal;
+
     return employee;
   }
 
@@ -274,21 +324,9 @@ export class EmployeeRepository extends BaseRepository<Employee> {
    * path is used by employees viewing/editing their own profile and by HR
    * screens that legitimately need this data.
    */
-  private static readonly LIST_VIEW_SENSITIVE_FIELDS = [
-    'aadhar_number', 'aadharNumber',
-    'pan_number', 'panNumber', 'pan',
-    'passport_number', 'passportNumber',
-    'bank_name', 'bankName',
-    'account_no', 'accountNo',
-    'ifsc_code', 'ifscCode',
-    'uan_no', 'uanNo',
-    'esic_no', 'esicNo',
-    'pf_no', 'pfNo',
-  ];
-
   private stripSensitiveListFields(items: any[]): void {
     for (const item of items) {
-      for (const field of EmployeeRepository.LIST_VIEW_SENSITIVE_FIELDS) {
+      for (const field of LIST_VIEW_SENSITIVE_FIELDS) {
         delete item[field];
       }
     }
@@ -311,6 +349,14 @@ export class EmployeeRepository extends BaseRepository<Employee> {
       }
     }
 
+    // CEO employee records are organization-level records and are created
+    // without a company_id. Include that record in the main Employee Directory
+    // even when the rest of the directory is scoped to a company.
+    const directoryCompanyId = effectiveCtx.companyId;
+    if (directoryCompanyId) {
+      effectiveCtx.companyId = undefined;
+    }
+
     const queryFilters = { ...options.filters };
     let excludeCeoFilter = false;
     if (queryFilters.is_ceo === 0 || (queryFilters as any).isCeo === 0) {
@@ -320,11 +366,22 @@ export class EmployeeRepository extends BaseRepository<Employee> {
     }
 
     const modifiedOptions = { ...options, filters: queryFilters };
-    if (excludeCeoFilter) {
+    if (directoryCompanyId || excludeCeoFilter) {
       (modifiedOptions as any).customWhere = (builder: any) => {
-        builder.where(function(this: any) {
-          this.where('employees.is_ceo', 0).orWhereNull('employees.is_ceo');
-        });
+        if (directoryCompanyId) {
+          builder.where(function(this: any) {
+            this.where('employees.company_id', directoryCompanyId)
+              .orWhere(function(this: any) {
+                this.where('employees.is_ceo', true).whereNull('employees.company_id');
+              });
+          });
+        }
+
+        if (excludeCeoFilter) {
+          builder.where(function(this: any) {
+            this.where('employees.is_ceo', 0).orWhereNull('employees.is_ceo');
+          });
+        }
       };
     }
 
@@ -381,7 +438,10 @@ export class EmployeeRepository extends BaseRepository<Employee> {
         const desigId = item.currentDesignationId || item.current_designation_id;
         if (desigId) {
           const dgName = desigMap.get(Number(desigId)) || null;
-          (item as any).jobTitle = dgName;
+          const jobTitleValue = item.jobTitle ?? item.job_title ?? null;
+          if (!jobTitleValue && dgName) {
+            (item as any).jobTitle = dgName;
+          }
           (item as any).designation = dgName;
           (item as any).designationName = dgName;
           (item as any).designation_name = dgName;
@@ -395,14 +455,15 @@ export class EmployeeRepository extends BaseRepository<Employee> {
       .filter((id: any): id is number => typeof id === 'number' && id > 0);
 
     if (locationIds.length > 0) {
-      const locs = await this.db('attendance_locations')
+      // current_location_id references the organization locations master.
+      const locs = await this.db('locations')
         .where('organization_id', ctx.organizationId)
         .whereIn('id', Array.from(new Set(locationIds)))
-        .select('id', 'location_name');
+        .select('id', 'name', 'location_name');
 
       const locMap = new Map<number, string>();
       for (const l of locs) {
-        locMap.set(Number(l.id), l.location_name);
+        locMap.set(Number(l.id), l.name || l.location_name);
       }
 
       for (const item of result.items) {
@@ -458,21 +519,27 @@ export class EmployeeRepository extends BaseRepository<Employee> {
 
     if (employeeIds.length > 0) {
       const users = await this.db('users')
-        .where('organization_id', ctx.organizationId)
+        .where(function(this: any) {
+          this.where('organization_id', ctx.organizationId).orWhereNull('organization_id');
+        })
         .whereIn('employee_id', employeeIds)
         .select('id', 'employee_id');
 
       if (users.length > 0) {
         for (const u of users) {
-          userMap.set(Number((u as any).employeeId || u.employee_id), Number(u.id));
+          const empId = Number((u as any).employeeId || u.employee_id);
+          const uId = Number(u.id);
+          userMap.set(empId, uId);
         }
 
         const userIds = users.map((u) => u.id);
         const userRoles = await this.db('user_roles')
           .join('roles', 'user_roles.role_id', 'roles.id')
-          .where('user_roles.organization_id', ctx.organizationId)
+          .where(function(this: any) {
+            this.where('user_roles.organization_id', ctx.organizationId).orWhereNull('user_roles.organization_id');
+          })
           .whereIn('user_roles.user_id', userIds)
-          .whereIn('roles.code', ['employee', 'team_lead', 'hr_manager', 'department_head', 'cto', 'cfo', 'coo', 'cxo', 'intern', 'consultant'])
+          .whereIn('roles.code', ['employee', 'team_lead', 'hr', 'hr_manager', 'department_head', 'cto', 'cfo', 'coo', 'cxo', 'intern', 'consultant', 'finance'])
           .select('user_roles.user_id', 'roles.code');
 
         const rolePriority: Record<string, number> = {
@@ -483,9 +550,11 @@ export class EmployeeRepository extends BaseRepository<Employee> {
           cfo: 6,
           coo: 6,
           cxo: 6,
+          hr: 5,
           hr_manager: 5,
           department_head: 4,
           team_lead: 3,
+          finance: 3,
           intern: 2,
           consultant: 2,
           employee: 1,

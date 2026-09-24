@@ -48,6 +48,10 @@ export function initializeKnex(): Knex {
       password: env.DB_PASSWORD,
       database: env.DB_NAME,
       charset: 'utf8mb4',
+      // Return DATE/DATETIME columns as plain strings (e.g. '2026-09-04') instead of
+      // JS Date objects. This avoids mysql2's UTC-midnight conversion for DATE columns
+      // which caused a -5:30 shift for IST, showing Sept 4 as Sept 3.
+      dateStrings: true,
     },
     pool: {
       min: 2,
@@ -78,6 +82,16 @@ export function initializeKnex(): Knex {
 export function convertSnakeToCamel(obj: any): any {
   if (obj === null || obj === undefined) {
     return obj;
+  }
+
+  if (obj instanceof Date) {
+    const year = obj.getFullYear();
+    const month = String(obj.getMonth() + 1).padStart(2, '0');
+    const day = String(obj.getDate()).padStart(2, '0');
+    if (obj.getHours() === 0 && obj.getMinutes() === 0 && obj.getSeconds() === 0) {
+      return `${year}-${month}-${day}`;
+    }
+    return obj.toISOString();
   }
 
   if (Array.isArray(obj)) {

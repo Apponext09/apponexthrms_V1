@@ -11,8 +11,11 @@ import {
   ShieldAlert
 } from 'lucide-react';
 
+import { useExpenseMoney } from '../utils/useExpenseMoney';
+
 export const ExpenseCategoriesPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
+  const money = useExpenseMoney();
   const [categories, setCategories] = useState<ExpenseCategory[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<ExpenseCategory | null>(null);
@@ -22,16 +25,19 @@ export const ExpenseCategoriesPage: React.FC = () => {
   const [code, setCode] = useState('');
   const [description, setDescription] = useState('');
   const [spendingLimit, setSpendingLimit] = useState<number>(0);
+  const [unlimitedSpending, setUnlimitedSpending] = useState(false);
   const [isReceiptMandatory, setIsReceiptMandatory] = useState(true);
   const [minAmountForReceipt, setMinAmountForReceipt] = useState<number>(500);
   const [autoApprovalThreshold, setAutoApprovalThreshold] = useState<number>(0);
   const [isActive, setIsActive] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
-  const fetchCategories = async () => {
+  const [showInactive, setShowInactive] = useState(true);
+
+  const fetchCategories = async (includeInactive = showInactive) => {
     try {
       setLoading(true);
-      const res = await expenseApi.getCategories();
+      const res = await expenseApi.getCategories(includeInactive);
       setCategories(res || []);
     } catch (err) {
       console.error('Failed to load categories:', err);
@@ -41,8 +47,8 @@ export const ExpenseCategoriesPage: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchCategories();
-  }, []);
+    fetchCategories(showInactive);
+  }, [showInactive]);
 
   const openModal = (cat?: ExpenseCategory) => {
     if (cat) {
@@ -50,7 +56,9 @@ export const ExpenseCategoriesPage: React.FC = () => {
       setName(cat.name);
       setCode(cat.code);
       setDescription(cat.description || '');
-      setSpendingLimit(cat.spendingLimit);
+      const isUnlimited = !cat.spendingLimit || Number(cat.spendingLimit) === 0;
+      setUnlimitedSpending(isUnlimited);
+      setSpendingLimit(isUnlimited ? 0 : cat.spendingLimit);
       setIsReceiptMandatory(cat.isReceiptMandatory);
       setMinAmountForReceipt(cat.minAmountForReceipt);
       setAutoApprovalThreshold(Number(cat.autoApprovalThreshold ?? (cat as any).auto_approval_threshold ?? 0));
@@ -60,6 +68,7 @@ export const ExpenseCategoriesPage: React.FC = () => {
       setName('');
       setCode('');
       setDescription('');
+      setUnlimitedSpending(false);
       setSpendingLimit(10000);
       setIsReceiptMandatory(true);
       setMinAmountForReceipt(500);
@@ -69,9 +78,22 @@ export const ExpenseCategoriesPage: React.FC = () => {
     setIsModalOpen(true);
   };
 
+  const handleDeleteCategory = async (cat: ExpenseCategory) => {
+    if (!await window.appConfirm(`Are you sure you want to delete "${cat.name}"? This category will be permanently deleted.`)) {
+      return;
+    }
+    try {
+      const res = await expenseApi.deleteCategory(cat.id);
+      window.appAlert(res?.message || 'Category deleted successfully');
+      fetchCategories(showInactive);
+    } catch (err: any) {
+      window.appAlert(err.message || 'Failed to delete category');
+    }
+  };
+
   const handleSaveCategory = async () => {
     if (!name.trim()) {
-      alert('Please enter a category name.');
+      window.appAlert('Please enter a category name.');
       return;
     }
     try {
@@ -80,7 +102,7 @@ export const ExpenseCategoriesPage: React.FC = () => {
         name,
         code: code || name.toUpperCase().replace(/\s+/g, '_'),
         description,
-        spendingLimit,
+        spendingLimit: unlimitedSpending ? 0 : spendingLimit,
         isReceiptMandatory,
         minAmountForReceipt,
         autoApprovalThreshold,
@@ -94,9 +116,9 @@ export const ExpenseCategoriesPage: React.FC = () => {
       }
 
       setIsModalOpen(false);
-      fetchCategories();
+      fetchCategories(showInactive);
     } catch (err: any) {
-      alert(err.message || 'Failed to save category');
+      window.appAlert(err.message || 'Failed to save category');
     } finally {
       setSubmitting(false);
     }
@@ -105,9 +127,9 @@ export const ExpenseCategoriesPage: React.FC = () => {
   const handleToggleActive = async (cat: ExpenseCategory) => {
     try {
       await expenseApi.updateCategory(cat.id, { isActive: !cat.isActive });
-      fetchCategories();
+      fetchCategories(showInactive);
     } catch (err: any) {
-      alert(err.message || 'Failed to update category status');
+      window.appAlert(err.message || 'Failed to update category status');
     }
   };
 
@@ -123,13 +145,24 @@ export const ExpenseCategoriesPage: React.FC = () => {
             Configure spending limits, receipt mandatory thresholds, and category activation rules
           </p>
         </div>
-        <button
-          onClick={() => openModal()}
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold flex items-center gap-2 shadow-sm transition-all"
-        >
-          <Plus className="w-4 h-4" />
-          Add Expense Category
-        </button>
+        <div className="flex items-center gap-3">
+          <label className="flex items-center gap-2 text-xs font-medium text-slate-600 dark:text-slate-400 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={showInactive}
+              onChange={(e) => setShowInactive(e.target.checked)}
+              className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+            />
+            Show Inactive
+          </label>
+          <button
+            onClick={() => openModal()}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold flex items-center gap-2 shadow-sm transition-all"
+          >
+            <Plus className="w-4 h-4" />
+            Add Expense Category
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -157,10 +190,17 @@ export const ExpenseCategoriesPage: React.FC = () => {
                 <div className="flex items-center gap-1">
                   <button
                     onClick={() => openModal(cat)}
-                    className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"
+                    className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
                     title="Edit Category"
                   >
                     <Edit2 className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => handleDeleteCategory(cat)}
+                    className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors"
+                    title="Delete Category"
+                  >
+                    <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
               </div>
@@ -171,14 +211,14 @@ export const ExpenseCategoriesPage: React.FC = () => {
                 <div className="flex justify-between">
                   <span className="text-slate-500">Spending Limit:</span>
                   <span className="font-bold text-slate-900 dark:text-white">
-                    {cat.spendingLimit > 0 ? `₹${Number(cat.spendingLimit).toLocaleString('en-IN')}` : 'No Limit'}
+                    {cat.spendingLimit > 0 ? money(Number(cat.spendingLimit)) : 'No Limit'}
                   </span>
                 </div>
 
                 <div className="flex justify-between">
                   <span className="text-slate-500">Receipt Required:</span>
                   <span className="font-semibold text-slate-700 dark:text-slate-300">
-                    {cat.isReceiptMandatory ? `Above ₹${cat.minAmountForReceipt}` : 'Optional'}
+                    {cat.isReceiptMandatory ? `Above ${money(cat.minAmountForReceipt)}` : 'Optional'}
                   </span>
                 </div>
               </div>
@@ -232,13 +272,48 @@ export const ExpenseCategoriesPage: React.FC = () => {
 
               <div>
                 <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Spending Limit per Claim (₹)</label>
-                <input
-                  type="number"
-                  placeholder="0 for unlimited"
-                  value={spendingLimit}
-                  onChange={(e) => setSpendingLimit(Number(e.target.value))}
-                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold"
-                />
+
+                {/* Unlimited toggle */}
+                <label className="flex items-center gap-2 mb-2 cursor-pointer select-none">
+                  <div
+                    onClick={() => {
+                      const next = !unlimitedSpending;
+                      setUnlimitedSpending(next);
+                      if (next) setSpendingLimit(0);
+                    }}
+                    className={`relative w-9 h-5 rounded-full transition-colors flex-shrink-0 ${
+                      unlimitedSpending ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-700'
+                    }`}
+                  >
+                    <span
+                      className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${
+                        unlimitedSpending ? 'translate-x-4' : 'translate-x-0'
+                      }`}
+                    />
+                  </div>
+                  <span className={`text-xs font-semibold ${
+                    unlimitedSpending ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'
+                  }`}>
+                    {unlimitedSpending ? 'Unlimited (no cap on claim amount)' : 'Set a spending cap'}
+                  </span>
+                </label>
+
+                {!unlimitedSpending && (
+                  <input
+                    type="number"
+                    placeholder="e.g. 10000"
+                    min={1}
+                    value={spendingLimit || ''}
+                    onChange={(e) => setSpendingLimit(Number(e.target.value))}
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold"
+                  />
+                )}
+
+                {unlimitedSpending && (
+                  <div className="w-full px-3 py-2 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/60 rounded-lg text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+                    ∞ Unlimited — employees can claim any amount under this category
+                  </div>
+                )}
               </div>
 
               <div>
@@ -247,7 +322,7 @@ export const ExpenseCategoriesPage: React.FC = () => {
                   type="number"
                   min={0}
                   placeholder="0 = always need manager approval"
-                  value={autoApprovalThreshold}
+                  value={autoApprovalThreshold || ''}
                   onChange={(e) => setAutoApprovalThreshold(Number(e.target.value))}
                   className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold"
                 />

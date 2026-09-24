@@ -11,7 +11,9 @@ import {
   Printer, 
   RotateCw, 
   Layers, 
-  Shield 
+  Shield,
+  Sun,
+  Moon
 } from 'lucide-react';
 import { toast } from 'sonner';
 import html2canvas from 'html2canvas';
@@ -23,7 +25,9 @@ interface IDCardPageProps {
 
 export const IDCardPage: React.FC<IDCardPageProps> = ({ employeeId }) => {
   const { user } = useAuthStore();
-  const { employee, refetch } = useEmployee(employeeId || (user as any)?.employeeId || (user as any)?.id || 'me');
+  // For a self-service card, let the API resolve the authenticated user's linked
+  // employee record. A user's account ID is not necessarily their employee ID.
+  const { employee, refetch } = useEmployee(employeeId ?? 'me');
   const { data: activeTemplate, refetch: refetchTemplate } = useActiveIdCardTemplate(
     typeof employeeId === 'number' ? employeeId : undefined
   );
@@ -33,6 +37,12 @@ export const IDCardPage: React.FC<IDCardPageProps> = ({ employeeId }) => {
   }, [refetchTemplate]);
 
   const [isFlipped, setIsFlipped] = useState(false);
+  const [cardDarkMode, setCardDarkMode] = useState<boolean>(() => {
+    if (typeof document !== 'undefined') {
+      return document.documentElement.classList.contains('dark');
+    }
+    return false;
+  });
   const [avatar, setAvatar] = useState<string | null>(null);
   const [personalDetails, setPersonalDetails] = useState<any>(null);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -49,7 +59,7 @@ export const IDCardPage: React.FC<IDCardPageProps> = ({ employeeId }) => {
     const rawFirst = employee?.firstName || (employee as any)?.first_name || user?.firstName || (user as any)?.first_name || '';
     const rawLast = employee?.lastName || (employee as any)?.last_name || user?.lastName || (user as any)?.last_name || '';
     const rawCode = employee?.employeeCode || (employee as any)?.employee_code || (user as any)?.employeeCode || (user as any)?.employee_code || (user as any)?.code || (user?.id ? `EMP${String(user.id).padStart(3, '0')}` : '');
-    const rawDesig = employee?.designation || (employee as any)?.designation_name || (employee as any)?.jobTitle || (employee as any)?.job_title || (user as any)?.designation || (user as any)?.designation_name || (user as any)?.role || 'TEAM MEMBER';
+    const rawDesig = employee?.designation || (employee as any)?.designation_name || (employee as any)?.designationName || (employee as any)?.currentDesignationName || (employee as any)?.current_designation_name || (employee as any)?.jobTitle || (employee as any)?.job_title || (user as any)?.designation || (user as any)?.designation_name || (user as any)?.role || 'TEAM MEMBER';
     const rawDept = employee?.department || (employee as any)?.department_name || (user as any)?.department || (user as any)?.department_name || 'CORPORATE';
     const rawEmail = (employee as any)?.workEmail || (employee as any)?.work_email || (employee as any)?.email || user?.email || (user as any)?.work_email || '';
 
@@ -79,7 +89,7 @@ export const IDCardPage: React.FC<IDCardPageProps> = ({ employeeId }) => {
     }
 
     const fetchPersonalInfo = async () => {
-      const idToFetch = typeof employeeId === 'number' ? employeeId : user?.id;
+      const idToFetch = typeof employeeId === 'number' ? employeeId : employee?.id;
       if (!idToFetch) return;
       try {
         const res = await apiClient.get(`/employees/${idToFetch}/personal-info`);
@@ -97,14 +107,14 @@ export const IDCardPage: React.FC<IDCardPageProps> = ({ employeeId }) => {
   // Log ID card generation event to DB API
   useEffect(() => {
     const logIssuance = async () => {
-      const idToFetch = typeof employeeId === 'number' ? employeeId : user?.id;
+      const idToFetch = typeof employeeId === 'number' ? employeeId : employee?.id;
       if (!idToFetch) return;
       try {
         await apiClient.post(`/employees/${idToFetch}/id-card/issue`);
       } catch (err) {}
     };
     logIssuance();
-  }, [employeeId, user]);
+  }, [employee, employeeId]);
 
   const empCode = currentEmployee?.employeeCode || (user as any)?.employeeCode || (user as any)?.employee_code || (user?.id ? `EMP${String(user.id).padStart(3, '0')}` : '');
 
@@ -300,6 +310,16 @@ export const IDCardPage: React.FC<IDCardPageProps> = ({ employeeId }) => {
           <Button
             variant="outline"
             size="sm"
+            onClick={() => setCardDarkMode(!cardDarkMode)}
+            className="gap-1.5 rounded-lg font-bold text-xs h-8 px-3 border-border text-foreground hover:bg-muted shrink-0"
+          >
+            {cardDarkMode ? <Sun className="w-3.5 h-3.5 text-amber-500" /> : <Moon className="w-3.5 h-3.5 text-indigo-500" />}
+            {cardDarkMode ? 'Light Card' : 'Dark Card'}
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
             onClick={() => setIsFlipped(!isFlipped)}
             className="gap-1.5 rounded-lg font-bold text-xs h-8 px-3 border-border text-foreground hover:bg-muted shrink-0"
           >
@@ -354,6 +374,7 @@ export const IDCardPage: React.FC<IDCardPageProps> = ({ employeeId }) => {
           interactive={true}
           onAvatarClick={handleAvatarClick}
           avatarOverride={avatar}
+          isDarkMode={cardDarkMode}
         />
       </div>
 

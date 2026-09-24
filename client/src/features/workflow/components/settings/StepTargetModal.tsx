@@ -12,7 +12,7 @@ const ALLOWED_ACCESS_ROLES = [
   { id: 102, name: 'Employee', code: 'employee' },
   { id: 103, name: 'Team Lead', code: 'team_lead' },
   { id: 104, name: 'Manager', code: 'department_head' },
-  { id: 105, name: 'HR', code: 'hr_admin' },
+  { id: 105, name: 'HR', code: 'hr' },
   { id: 106, name: 'Intern', code: 'intern' },
   { id: 107, name: 'Consultant', code: 'consultant' },
 ];

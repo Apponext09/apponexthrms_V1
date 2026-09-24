@@ -18,7 +18,6 @@
 
 import type { Request, Response } from 'express';
 import { PayrollService, withSnakeAliases, positiveNum } from '../services/PayrollService';
-import { SalaryStructureService } from '../services/SalaryStructureService';
 import { SalaryRevisionService } from '../services/SalaryRevisionService';
 import { PayslipService } from '../services/PayslipService';
 import { LoanService } from '../services/LoanService';
@@ -47,7 +46,6 @@ export { withSnakeAliases, positiveNum };
 export class PayrollController {
   // Services
   private payrollService: PayrollService;
-  private structureService: SalaryStructureService;
   private revisionService: SalaryRevisionService;
   private payslipService: PayslipService;
   private loanService: LoanService;
@@ -73,7 +71,6 @@ export class PayrollController {
 
   constructor() {
     this.payrollService = new PayrollService();
-    this.structureService = new SalaryStructureService();
     this.revisionService = new SalaryRevisionService();
     this.payslipService = new PayslipService();
     this.loanService = new LoanService();
@@ -175,6 +172,7 @@ export class PayrollController {
   getRevision = async (req: Request, res: Response) => {
     const { id } = req.params;
     const revision = await this.revisionService.getRevision(req.ctx, parseInt(id));
+    if (!revision) { res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Salary revision not found' } }); return; }
     res.json({ success: true, data: revision });
   };
   getRevisionComponents = async (req: Request, res: Response) => {
@@ -218,9 +216,9 @@ export class PayrollController {
   createTaxDeclaration = (req: Request, res: Response) => this.loanTaxController.createTaxDeclaration(req, res);
   getTaxDeclarations = (req: Request, res: Response) => this.loanTaxController.getTaxDeclarations(req, res);
   getTaxDeclaration = (req: Request, res: Response) => this.loanTaxController.getTaxDeclaration(req, res);
+  finalizeTaxDeclaration = (req: Request, res: Response) => this.loanTaxController.finalizeTaxDeclaration(req, res);
   addTaxInvestment = (req: Request, res: Response) => this.loanTaxController.addTaxInvestment(req, res);
   getTaxInvestments = (req: Request, res: Response) => this.loanTaxController.getTaxInvestments(req, res);
-  finalizeTaxDeclaration = (req: Request, res: Response) => this.loanTaxController.finalizeTaxDeclaration(req, res);
   calculateTDS = (req: Request, res: Response) => this.loanTaxController.calculateTDS(req, res);
 
   getGratuityRules = (req: Request, res: Response) => this.loanTaxController.getGratuityRules(req, res);

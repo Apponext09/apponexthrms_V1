@@ -28,6 +28,13 @@ export interface NavSection {
   items: NavItem[];
   minRoles?: Role[]; // If set, entire section gated to these roles
   collapsible?: boolean; // If true, section can be collapsed (default: true for subsections)
+  /**
+   * Maps this section to a subscription plan module name.
+   * null = always visible (no subscription gating).
+   * When the org has an active plan, only sections whose subscriptionModule is
+   * included in the plan's modules array will be rendered.
+   */
+  subscriptionModule?: string | null;
 }
 
 const NAVIGATION_SECTIONS: NavSection[] = [
@@ -35,7 +42,9 @@ const NAVIGATION_SECTIONS: NavSection[] = [
   {
     id: 'dashboard',
     label: 'Dashboard',
+    icon: 'LayoutDashboard',
     collapsible: false,
+    subscriptionModule: null, // Always visible
     items: [
       { name: 'Dashboard', href: '/dashboard', icon: 'LayoutDashboard' },
     ],
@@ -44,15 +53,29 @@ const NAVIGATION_SECTIONS: NavSection[] = [
   // ── 2. Core HR ────────────────────────────────────────────────────────────
   {
     id: 'core_hr',
-    label: 'CORE HR',
-    minRoles: ['organization_admin', 'hr_manager', 'department_head'],
+    label: 'Core HR',
+    icon: 'Users',
+    minRoles: ['organization_admin', 'hr', 'hr_manager', 'department_head'],
+    subscriptionModule: 'Core HR & Directory',
     items: [
       { name: 'Employee', href: '/employees', icon: 'Users' },
       {
         name: 'Employee Lifecycle',
         href: '/employee-lifecycle',
         icon: 'RefreshCw',
-        minRoles: ['organization_admin', 'hr_manager'],
+        minRoles: ['organization_admin', 'hr', 'hr_manager'],
+      },
+      {
+        name: 'My Lifecycle',
+        href: '/employee/lifecycle',
+        icon: 'GitBranch',
+        minRoles: ['hr', 'hr_admin', 'hr_manager'],
+      },
+      {
+        name: 'Digital ID Card',
+        href: '/employee/id-card',
+        icon: 'Shield',
+        minRoles: ['hr', 'hr_admin', 'hr_manager'],
       },
       { name: 'Org. Structure', href: '/org-structure', icon: 'GitBranch' },
     ],
@@ -61,7 +84,9 @@ const NAVIGATION_SECTIONS: NavSection[] = [
   // ── 3. Recruitment ────────────────────────────────────────────────────────
   {
     id: 'recruitment',
-    label: 'RECRUITMENT',
+    label: 'Recruitment',
+    icon: 'Briefcase',
+    subscriptionModule: 'Recruitment & ATS',
     items: [
       { name: 'Dashboard', href: '/recruitment/dashboard', icon: 'BarChart3' },
       { name: 'Interview Schedule', href: '/recruitment/interview-schedule', icon: 'Calendar' },
@@ -70,84 +95,121 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         name: 'Job Management',
         href: '/recruitment/jobs',
         icon: 'Briefcase',
-        minRoles: ['organization_admin', 'hr_manager'],
+        minRoles: ['organization_admin', 'hr', 'hr_manager'],
       },
       {
         name: 'Candidate Management',
         href: '/recruitment/candidates',
         icon: 'Users',
-        minRoles: ['organization_admin', 'hr_manager'],
+        minRoles: ['organization_admin', 'hr', 'hr_manager'],
       },
       {
         name: 'Candidate Report',
         href: '/recruitment/candidate-report',
         icon: 'FileText',
-        minRoles: ['organization_admin', 'hr_manager'],
+        minRoles: ['organization_admin', 'hr', 'hr_manager'],
       },
       {
         name: 'Resume Source Screen Bank',
         href: '/recruitment/resume-bank',
         icon: 'Database',
-        minRoles: ['organization_admin', 'hr_manager'],
+        minRoles: ['organization_admin', 'hr', 'hr_manager'],
       },
       {
         name: 'Applicant Tracker',
         href: '/recruitment/applicant-tracker',
         icon: 'LineChart',
-        minRoles: ['organization_admin', 'hr_manager'],
+        minRoles: ['organization_admin', 'hr', 'hr_manager'],
       },
       {
         name: 'Assessment Management',
         href: '/recruitment/assessments',
         icon: 'Code2',
-        minRoles: ['organization_admin', 'hr_manager'],
+        minRoles: ['organization_admin', 'hr', 'hr_manager'],
       },
       {
         name: 'Offer Management',
         href: '/recruitment/offers',
         icon: 'FileCheck',
-        minRoles: ['organization_admin', 'hr_manager'],
+        minRoles: ['organization_admin', 'hr', 'hr_manager'],
       },
       { name: 'Interviewer Rating Details', href: '/recruitment/interviewer-rating', icon: 'ListChecks' },
       { name: 'Employee Referrals', href: '/recruitment/referrals', icon: 'UserPlus' },
-      {
-        name: 'Career Portal Customization',
-        href: '/recruitment/career-customization',
-        icon: 'Palette',
-        minRoles: ['organization_admin', 'hr_manager'],
-      },
     ],
   },
 
   // ── 4. Attendance ─────────────────────────────────────────────────────────
   {
     id: 'attendance',
-    label: 'ATTENDANCE',
+    label: 'Attendance',
+    icon: 'Clock',
+    subscriptionModule: 'Attendance & Time Tracking',
     items: [
       {
         name: 'Dashboard',
         href: '/attendance',
         icon: 'Clock',
-        minRoles: ['organization_admin', 'hr_manager', 'department_head'],
+        minRoles: ['organization_admin', 'hr', 'hr_manager', 'department_head'],
       },
       {
         name: 'Live Tracking',
         href: '/live-tracking',
         icon: 'Navigation',
+<<<<<<< HEAD
         minRoles: ['organization_admin', 'hr_manager', 'department_head'],
+=======
+        minRoles: ['organization_admin', 'hr', 'hr_manager', 'department_head', 'ceo'],
+>>>>>>> b13431884f6e3fb77d4463ab4da204cadac8faca
       },
       {
         name: 'Location Management & Mapping',
         href: '/attendance/locations',
         icon: 'MapPin',
-        minRoles: ['organization_admin', 'hr_manager'],
+        minRoles: ['organization_admin', 'hr', 'hr_manager'],
       },
       { name: 'Break Logs', href: '/attendance/break-logs', icon: 'Coffee' },
+      {
+        // This is the employee self-service punch terminal.  HR users punch in
+        // exactly as any other employee; it is not an HR-only terminal.
+        name: 'Face Punch',
+        // Never send HR users to /attendance/face-punch: that route is the
+        // CEO terminal in the admin shell. This route renders the same
+        // employee/manager/team-lead self-punch screen.
+        href: '/hr/face-attendance',
+        icon: 'ScanFace',
+        minRoles: ['hr', 'hr_admin', 'hr_manager'],
+      },
       {
         name: 'CEO Face Punch',
         href: '/attendance/face-punch',
         icon: 'ScanFace',
-        minRoles: ['organization_admin'],
+        minRoles: ['organization_admin', 'ceo'],
+      },
+      {
+        name: 'My Attendance Logs',
+        // These must use HR routes: /employee/* is intentionally guarded
+        // against HR roles, even though the rendered UI is shared.
+        href: '/hr/my-attendance',
+        icon: 'Clock',
+        minRoles: ['hr', 'hr_admin', 'hr_manager'],
+      },
+      {
+        name: 'Attendance Correction',
+        href: '/hr/my-attendance-correction',
+        icon: 'RefreshCw',
+        minRoles: ['hr', 'hr_admin', 'hr_manager'],
+      },
+      {
+        name: 'My Shifts',
+        href: '/hr/my-shifts',
+        icon: 'CalendarDays',
+        minRoles: ['hr', 'hr_admin', 'hr_manager'],
+      },
+      {
+        name: 'Work Hour Workflow',
+        href: '/attendance/workflow-settings',
+        icon: 'GitBranch',
+        minRoles: ['organization_admin', 'ceo', 'hr_admin', 'hr', 'hr_manager'],
       },
     ],
   },
@@ -155,8 +217,10 @@ const NAVIGATION_SECTIONS: NavSection[] = [
   // ── 5. Shift Management ───────────────────────────────────────────────────
   {
     id: 'shift_management',
-    label: 'SHIFT MANAGEMENT',
-    minRoles: ['organization_admin', 'hr_manager', 'department_head'],
+    label: 'Shift Management',
+    icon: 'CalendarClock',
+    minRoles: ['organization_admin', 'hr', 'hr_manager', 'department_head'],
+    subscriptionModule: 'Attendance & Time Tracking',
     items: [
       { name: 'General Shift', href: '/attendance/shifts', icon: 'Clock' },
       { name: 'Roster Shift', href: '/attendance/roster-shifts', icon: 'CalendarClock' },
@@ -166,31 +230,28 @@ const NAVIGATION_SECTIONS: NavSection[] = [
   // ── 6. Leave Management ───────────────────────────────────────────────────
   {
     id: 'leave',
-    label: 'LEAVE MANAGEMENT',
+    label: 'Leave Management',
+    icon: 'Calendar',
+    subscriptionModule: 'Leave Management & Approvals',
     items: [
+      { name: 'My Leaves', href: '/leaves/my-leaves', icon: 'Calendar' },
       {
         name: 'Leave Approvals',
         href: '/leaves/approvals',
         icon: 'CheckCircle',
-        minRoles: ['organization_admin', 'hr_manager', 'department_head'],
+        minRoles: ['organization_admin', 'hr', 'hr_manager', 'department_head'],
       },
       {
         name: 'Approvals Dashboard',
         href: '/approvals/dashboard',
         icon: 'BarChart3',
-        minRoles: ['organization_admin', 'hr_manager', 'department_head'],
+        minRoles: ['organization_admin', 'hr', 'hr_manager', 'department_head'],
       },
       {
         name: 'Leave Settings',
         href: '/settings/leave-policies',
         icon: 'Settings',
-        minRoles: ['organization_admin', 'hr_manager'],
-      },
-      {
-        name: 'Holiday Manage',
-        href: '/holidays',
-        icon: 'Calendar',
-        minRoles: ['organization_admin', 'hr_manager'],
+        minRoles: ['organization_admin', 'hr', 'hr_manager'],
       },
     ],
   },
@@ -198,42 +259,29 @@ const NAVIGATION_SECTIONS: NavSection[] = [
   // ── 7. Payroll ────────────────────────────────────────────────────────────
   {
     id: 'payroll',
-    label: 'PAYROLL',
+    label: 'Payroll',
+    icon: 'IndianRupee',
+    subscriptionModule: 'Automated Payroll Processing',
     items: [
-      { name: 'Dashboard', href: '/payroll', icon: 'DollarSign' },
-      {
-        name: 'Payroll Master Settings',
-        href: '/payroll/settings',
-        icon: 'Sliders',
-        minRoles: ['organization_admin', 'hr_manager'],
-      },
-      { name: 'Salary Revision', href: '/payroll/salary-revision', icon: 'TrendingUp' },
-      {
-        name: 'Payroll Processing',
-        href: '/payroll/processing',
-        icon: 'Activity',
-        minRoles: ['organization_admin', 'hr_manager'],
-      },
+      { name: 'Dashboard', href: '/payroll', icon: 'IndianRupee' },
+      { name: 'Admin Payroll Portal', href: '/payroll/admin-portal', icon: 'ShieldCheck', minRoles: ['organization_admin', 'hr', 'hr_manager'] },
+      { name: 'Payroll Master Settings', href: '/payroll/settings', icon: 'Sliders', minRoles: ['organization_admin', 'hr', 'hr_manager'] },
+      { name: 'Salary Structures', href: '/payroll/salary-structure', icon: 'Layers', minRoles: ['organization_admin', 'hr', 'hr_manager'] },
+      { name: 'Mass Salary Upload', href: '/payroll/mass-salary-upload', icon: 'UploadCloud', minRoles: ['organization_admin', 'hr', 'hr_manager'] },
+      { name: 'Salary Revision', href: '/payroll/salary-revision', icon: 'TrendingUp', minRoles: ['organization_admin', 'hr', 'hr_manager'] },
+      { name: 'Payroll Processing', href: '/payroll/processing', icon: 'Activity', minRoles: ['organization_admin', 'hr', 'hr_manager'] },
       { name: 'Payslip Management', href: '/payroll/payslips', icon: 'FileText' },
-      {
-        name: 'Mass Salary Structure Upload',
-        href: '/payroll/mass-salary-upload',
-        icon: 'UploadCloud',
-        minRoles: ['organization_admin', 'hr_manager'],
-      },
-      {
-        name: 'Payroll Reports',
-        href: '/payroll/reports',
-        icon: 'BarChart3',
-        minRoles: ['organization_admin', 'hr_manager'],
-      },
+      { name: 'Tax Declarations', href: '/payroll/tax-declaration', icon: 'FileText', minRoles: ['organization_admin', 'hr', 'hr_manager'] },
+      { name: 'Payroll Reports', href: '/payroll/reports', icon: 'BarChart3', minRoles: ['organization_admin', 'hr', 'hr_manager'] },
     ],
   },
 
   // Standalone Settlement Management Module
   {
     id: 'settlement_management',
-    label: 'SETTLEMENT MANAGEMENT',
+    label: 'Settlements',
+    icon: 'UserX',
+    subscriptionModule: 'Automated Payroll Processing',
     items: [
       {
         name: 'Exit Settlements (FnF)',
@@ -251,13 +299,15 @@ const NAVIGATION_SECTIONS: NavSection[] = [
   // ── 8. Loan Management ────────────────────────────────────────────────────
   {
     id: 'loan_management',
-    label: 'LOAN MANAGEMENT',
+    label: 'Loan Management',
+    icon: 'Percent',
+    subscriptionModule: 'Automated Payroll Processing',
     items: [
       {
         name: 'Loan Type Settings',
         href: '/payroll/loan-types',
         icon: 'Sliders',
-        minRoles: ['organization_admin', 'hr_manager'],
+        minRoles: ['organization_admin', 'hr', 'hr_manager'],
       },
       { name: 'Loan Requests & Disbursal', href: '/payroll/loans', icon: 'Percent' },
     ],
@@ -266,33 +316,38 @@ const NAVIGATION_SECTIONS: NavSection[] = [
   // ── 9. Expense Management ─────────────────────────────────────────────────
   {
     id: 'expense_management',
-    label: 'EXPENSE MANAGEMENT',
+    label: 'Expense Management',
+    icon: 'ReceiptIndianRupee',
+    subscriptionModule: 'Expense Management',
     items: [
-      { name: 'Dashboard', href: '/expenses/dashboard', icon: 'TrendingUp', minRoles: ['organization_admin', 'super_admin', 'ceo', 'hr_admin', 'hr', 'hr_manager'] },
-      { name: 'My Expenses', href: '/expenses/my-expenses', icon: 'Receipt' },
-      { name: 'Approvals', href: '/expenses/approvals', icon: 'CheckCircle', minRoles: ['organization_admin', 'super_admin', 'ceo', 'hr_admin', 'hr', 'hr_manager', 'department_head', 'manager', 'team_lead'] },
+      { name: 'Expense Management Dashboard', href: '/expenses/dashboard', icon: 'TrendingUp', minRoles: ['organization_admin', 'super_admin', 'ceo', 'hr_admin', 'hr', 'hr_manager'] },
+      { name: 'My Expenses', href: '/expenses/my-expenses', icon: 'ReceiptIndianRupee' },
+      { name: 'Expense Approvals', href: '/expenses/approvals', icon: 'CheckCircle', minRoles: ['organization_admin', 'super_admin', 'ceo', 'hr_admin', 'hr', 'hr_manager', 'department_head', 'manager', 'team_lead'] },
       { name: 'Finance Verification', href: '/expenses/finance-verification', icon: 'FileCheck', minRoles: ['organization_admin', 'super_admin', 'ceo', 'hr_admin', 'hr', 'hr_manager'] },
-      { name: 'Reimbursements', href: '/expenses/reimbursements', icon: 'CreditCard', minRoles: ['organization_admin', 'super_admin', 'ceo', 'hr_admin', 'hr', 'hr_manager'] },
+      { name: 'Payment Cycle Reports', href: '/expenses/reimbursements', icon: 'CreditCard', minRoles: ['organization_admin', 'super_admin', 'ceo', 'hr_admin', 'hr', 'hr_manager'] },
       { name: 'Travel Requests', href: '/expenses/travel-requests', icon: 'Compass' },
-      { name: 'Travel Advances', href: '/expenses/travel-advances', icon: 'DollarSign' },
+      { name: 'Travel Advances', href: '/expenses/travel-advances', icon: 'IndianRupee' },
       { name: 'Mileage Claims', href: '/expenses/mileage-claims', icon: 'Car' },
       { name: 'Expense Categories', href: '/expenses/categories', icon: 'Tag', minRoles: ['organization_admin', 'hr_manager', 'super_admin', 'hr_admin', 'hr', 'ceo'] },
       { name: 'Expense Policies', href: '/expenses/policies', icon: 'ShieldCheck', minRoles: ['organization_admin', 'hr_manager', 'super_admin', 'hr_admin', 'hr', 'ceo'] },
-      { name: 'Reports & Analytics', href: '/expenses/reports', icon: 'FileSpreadsheet', minRoles: ['organization_admin', 'super_admin', 'ceo', 'hr_admin', 'hr', 'hr_manager', 'department_head', 'manager'] },
-      { name: 'Settings', href: '/expenses/settings', icon: 'Sliders', minRoles: ['organization_admin', 'super_admin', 'ceo'] },
+      { name: 'Reports & Analytics', href: '/expenses/reports', icon: 'FileSpreadsheet', minRoles: ['organization_admin', 'super_admin', 'ceo', 'hr_admin', 'hr', 'hr_manager', 'finance'] },
+      { name: 'Settings', href: '/expenses/settings', icon: 'Sliders', minRoles: ['organization_admin', 'super_admin', 'ceo', 'hr', 'hr_admin', 'hr_manager'] },
     ],
   },
 
   // ── 11. PMS (Performance Management System) ───────────────────────────────
   {
     id: 'pms',
-    label: 'PMS',
+    label: 'Performance',
+    icon: 'Target',
+    minRoles: ['support'],
+    subscriptionModule: 'Performance & OKRs',
     items: [
       {
         name: 'Dashboard',
         href: '/performance',
         icon: 'TrendingUp',
-        minRoles: ['organization_admin', 'hr_manager', 'department_head'],
+        minRoles: ['organization_admin', 'hr', 'hr_manager', 'department_head'],
       },
       { name: 'Goals & OKRs', href: '/performance/goals', icon: 'Target' },
       { name: 'Reviews', href: '/performance/reviews', icon: 'MessageSquare' },
@@ -303,29 +358,55 @@ const NAVIGATION_SECTIONS: NavSection[] = [
   // ── 12. Asset Management ──────────────────────────────────────────────────
   {
     id: 'assets',
-    label: 'ASSET MANAGEMENT',
+    label: 'Assets',
+    icon: 'Package',
+    minRoles: ['support'],
+    subscriptionModule: 'Asset Lifecycle Management',
     items: [
       {
         name: 'Dashboard',
         href: '/assets',
         icon: 'Package',
-        minRoles: ['organization_admin', 'hr_manager'],
+        minRoles: ['organization_admin', 'hr', 'hr_manager'],
       },
       { name: 'My Asset', href: '/assets/my-assets', icon: 'Inbox' },
       {
         name: 'All Asset',
         href: '/assets/list',
         icon: 'List',
-        minRoles: ['organization_admin', 'hr_manager'],
+        minRoles: ['organization_admin', 'hr', 'hr_manager'],
       },
+    ],
+  },
+
+  // ── 13. LMS (Learning Management System) ───────────────────────────────────
+  {
+    id: 'lms',
+    label: 'LMS',
+    icon: 'GraduationCap',
+    subscriptionModule: 'Learning Management System',
+    items: [
+      { name: 'Dashboard', href: '/lms/dashboard', icon: 'LayoutDashboard', minRoles: ['organization_admin', 'super_admin', 'ceo', 'hr_admin', 'hr', 'hr_manager'] },
+      { name: 'Course Management', href: '/lms/courses', icon: 'BookOpen', minRoles: ['organization_admin', 'super_admin', 'ceo', 'hr_admin', 'hr', 'hr_manager'] },
+      { name: 'Categories', href: '/lms/categories', icon: 'Layers', minRoles: ['organization_admin', 'super_admin', 'ceo', 'hr_admin', 'hr', 'hr_manager'] },
+      { name: 'Batches & Live Classes', href: '/lms/batches', icon: 'Calendar', minRoles: ['organization_admin', 'super_admin', 'ceo', 'hr_admin', 'hr', 'hr_manager'] },
+      { name: 'Learner Enrollments', href: '/lms/enrollments', icon: 'Users', minRoles: ['organization_admin', 'super_admin', 'ceo', 'hr_admin', 'hr', 'hr_manager'] },
+      { name: 'Compliance Training', href: '/lms/compliance', icon: 'ShieldCheck', minRoles: ['organization_admin', 'super_admin', 'ceo', 'hr_admin', 'hr', 'hr_manager'] },
+      { name: 'Training Reports', href: '/lms/reports', icon: 'TrendingUp', minRoles: ['organization_admin', 'super_admin', 'ceo', 'hr_admin', 'hr', 'hr_manager', 'department_head', 'manager'] },
+      { name: 'Course Catalog', href: '/lms/catalog', icon: 'BookOpen' },
+      { name: 'My Learning Hub', href: '/lms/my-learning', icon: 'PlayCircle' },
+      { name: 'My Certificates', href: '/lms/certificates', icon: 'Award' },
+      { name: 'Integration Settings', href: '/lms/settings/integrations', icon: 'Sliders', minRoles: ['organization_admin', 'super_admin', 'ceo', 'hr_admin', 'hr', 'hr_manager'] },
     ],
   },
 
   // ── 13. Reports & Analytics ───────────────────────────────────────────────
   {
     id: 'analytics',
-    label: 'REPORTS & ANALYTICS',
-    minRoles: ['organization_admin', 'hr_manager', 'department_head'],
+    label: 'Reports & Analytics',
+    icon: 'BarChart3',
+    minRoles: ['organization_admin', 'hr', 'hr_manager', 'department_head'],
+    subscriptionModule: null, // Always visible (core reporting)
     items: [
       { name: 'Attendance Report', href: '/analytics/attendance', icon: 'BarChart3' },
       { name: 'Timelog Report', href: '/analytics/timelog', icon: 'FileText' },
@@ -333,14 +414,14 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         name: 'CEO Attendance Report',
         href: '/analytics/ceo-attendance',
         icon: 'UserCheck',
-        minRoles: ['organization_admin'],
+        minRoles: ['organization_admin', 'ceo'],
       },
       {
         name: 'Report Engine',
         href: '/analytics/report-engine',
         icon: 'Sparkles',
         badge: 'New',
-        minRoles: ['organization_admin', 'hr_manager'],
+        minRoles: ['organization_admin', 'hr', 'hr_manager'],
       },
     ],
   },
@@ -348,70 +429,99 @@ const NAVIGATION_SECTIONS: NavSection[] = [
   // ── 14. HR Operations ─────────────────────────────────────────────────────
   {
     id: 'hr_operations',
-    label: 'HR OPERATIONS',
-    minRoles: ['organization_admin', 'hr_manager'],
+    label: 'HR Operations',
+    icon: 'ClipboardList',
+    minRoles: ['organization_admin', 'hr', 'hr_manager'],
+    subscriptionModule: 'Core HR & Directory',
     items: [
       { name: 'Requests', href: '/hr-operations/requests', icon: 'Inbox' },
-      { name: 'Workflow Builder', href: '/workflow', icon: 'GitBranch' },
-      { name: 'Configuration', href: '/configuration', icon: 'Sliders' },
-      { name: 'Announcements', href: '/hr-operations/announcements', icon: 'Megaphone' },
       { name: 'Holiday Calendar', href: '/holidays', icon: 'Calendar' },
+    ],
+  },
+
+  // ── 14b. Policy Governance ────────────────────────────────────────────────
+  {
+    id: 'policy_management',
+    label: 'Policy Governance',
+    icon: 'ShieldCheck',
+    minRoles: ['organization_admin', 'hr', 'hr_manager', 'super_admin'],
+    subscriptionModule: 'Core HR & Directory',
+    items: [
+      { name: 'Policy Dashboard', href: '/policies/manage', icon: 'ShieldCheck' },
+      { name: 'Create & Assign Policy', href: '/policies/create', icon: 'FilePlus' },
+      { name: 'Acknowledgement Report', href: '/policies/reports', icon: 'FileText' },
     ],
   },
 
   // ── 15. Masters ───────────────────────────────────────────────────────────
   {
     id: 'masters',
-    label: 'MASTERS',
-    minRoles: ['organization_admin', 'hr_manager', 'super_admin'],
+    label: 'Masters',
+    icon: 'Database',
+    minRoles: ['organization_admin', 'hr', 'hr_manager', 'super_admin'],
     collapsible: true,
+    subscriptionModule: null, // Always visible (core settings)
     items: [
+      { name: 'Master Builder', href: '/masters/builder', icon: 'Boxes', badge: 'Builder' },
       { name: 'Company', href: '/masters?tab=company', icon: 'Building2' },
       { name: 'Location', href: '/masters?tab=location', icon: 'MapPin' },
       { name: 'Department', href: '/masters?tab=department', icon: 'Layers' },
       { name: 'Designation', href: '/masters?tab=designation', icon: 'Briefcase' },
-      { name: 'General Shift', href: '/masters?tab=general-shift', icon: 'Clock' },
-      { name: 'Roster Shift', href: '/masters?tab=roster-shift', icon: 'Clock' },
-      { name: 'OT Rule', href: '/masters?tab=ot-rule', icon: 'Sliders' },
       { name: 'Grade', href: '/masters?tab=grade', icon: 'Award' },
-      { name: 'Holiday', href: '/masters?tab=holiday', icon: 'Calendar' },
       { name: 'Employee Status', href: '/masters?tab=employee-status', icon: 'Users' },
       { name: 'Emp. Type', href: '/masters?tab=emp-type', icon: 'Users' },
-      { name: 'Events', href: '/masters?tab=events', icon: 'CalendarDays' },
-      { name: 'Letter & Offer Master', href: '/masters?tab=offer-templates', icon: 'FileText', badge: 'MNC' },
-      { name: 'Notification Templates', href: '/masters?tab=notification-templates', icon: 'Bell' },
-      { name: 'Notification Merge Codes', href: '/masters?tab=notification-merge-codes', icon: 'Code2' },
-      { name: 'Break', href: '/masters?tab=break', icon: 'Coffee' },
-      { name: 'Roles & Responsibility', href: '/masters?tab=roles-responsibility', icon: 'ShieldCheck' },
-      { name: 'KRA Form', href: '/masters?tab=kra', icon: 'FileText' },
-      { name: 'Resource Plan', href: '/masters?tab=resource-plan', icon: 'Grid' },
+    ],
+  },
+
+  // ── 15b. Operational Masters ──────────────────────────────────────────────
+  {
+    id: 'operational_masters',
+    label: 'Master Operations',
+    icon: 'Layers',
+    minRoles: ['organization_admin', 'hr', 'hr_manager', 'super_admin'],
+    collapsible: true,
+    subscriptionModule: null, // Always visible (core settings)
+    items: [
+      { name: 'OT Rule', href: '/operational-masters?tab=ot-rule', icon: 'Sliders' },
+      { name: 'Break', href: '/operational-masters?tab=break', icon: 'Coffee' },
+      { name: 'Holiday', href: '/operational-masters?tab=holiday', icon: 'Calendar' },
+      { name: 'Events', href: '/operational-masters?tab=events', icon: 'CalendarDays' },
+      { name: 'Notification Templates', href: '/operational-masters?tab=notification-templates', icon: 'Bell' },
+      { name: 'Notification Merge Codes', href: '/operational-masters?tab=notification-merge-codes', icon: 'Code2' },
+      { name: 'Letter & Offer Master', href: '/operational-masters?tab=offer-templates', icon: 'FileText', badge: 'MNC' },
+      { name: 'Roles & Responsibility', href: '/operational-masters?tab=roles-responsibility', icon: 'ShieldCheck' },
+      { name: 'KRA Form', href: '/operational-masters?tab=kra', icon: 'FileText' },
+      { name: 'Resource Plan', href: '/operational-masters?tab=resource-plan', icon: 'Grid' },
     ],
   },
 
   // ── 16. Module Management ─────────────────────────────────────────────────
   {
     id: 'module_management',
-    label: 'MODULE MANAGEMENT',
+    label: 'Modules',
     icon: 'Boxes',
-    minRoles: ['organization_admin', 'hr_manager', 'super_admin'],
+    minRoles: ['organization_admin', 'hr', 'hr_manager', 'super_admin'],
     collapsible: true,
+    subscriptionModule: null, // Always visible (platform management)
     items: [
       { name: 'CEO / Admin', href: '/modules?module=ceo', icon: 'ShieldCheck' },
       { name: 'HR', href: '/modules?module=hr', icon: 'Users' },
       { name: 'Manager', href: '/modules?module=manager', icon: 'UserCheck' },
       { name: 'Team Lead', href: '/modules?module=team-lead', icon: 'UserCog' },
       { name: 'Employee', href: '/modules?module=employee', icon: 'User' },
-      { name: 'Intern', href: '/modules?module=intern', icon: 'GraduationCap', badge: 'Coming Soon' },
+      { name: 'Intern', href: '/modules?module=intern', icon: 'GraduationCap' },
+      { name: 'Consultant', href: '/modules?module=consultant', icon: 'Briefcase' },
     ],
   },
 
   // ── 17. Settings ──────────────────────────────────────────────────────────
   {
     id: 'settings',
-    label: 'SETTINGS',
+    label: 'Settings',
     icon: 'Settings',
-    minRoles: ['organization_admin', 'hr_manager', 'super_admin'],
+    minRoles: ['organization_admin', 'hr', 'hr_manager', 'super_admin'],
     collapsible: true,
+    subscriptionModule: 'Settings & RBAC',
     items: [
       { name: 'General Settings', href: '/settings/general', icon: 'Sliders' },
       { name: 'Attendance Module', href: '/settings/attendance-module', icon: 'Clock' },
@@ -419,23 +529,30 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         name: 'Workflow Settings',
         href: '/settings/workflows',
         icon: 'GitBranch',
-        minRoles: ['organization_admin', 'hr_manager'],
+        minRoles: ['organization_admin', 'hr', 'hr_manager'],
       },
       {
         name: 'ID Card Designer',
         href: '/settings/id-card-designer',
         icon: 'CreditCard',
-        minRoles: ['organization_admin', 'hr_manager', 'super_admin'],
+        minRoles: ['organization_admin', 'hr', 'hr_manager', 'super_admin'],
       },
       {
         name: 'Career Portal Customization',
         href: '/settings/career-customization',
         icon: 'Palette',
-        minRoles: ['organization_admin', 'hr_manager'],
+        minRoles: ['organization_admin', 'hr', 'hr_manager'],
+      },
+      {
+        name: 'LMS Platform Integrations',
+        href: '/settings/lms-integrations',
+        icon: 'GraduationCap',
+        minRoles: ['organization_admin', 'hr', 'hr_manager', 'super_admin', 'ceo', 'hr_admin'],
       },
     ],
   },
 ];
+
 
 
 function matchesRole(userRoles: string[], targetRoles: Role[]): boolean {
@@ -463,11 +580,16 @@ function matchesRole(userRoles: string[], targetRoles: Role[]): boolean {
 
 function getPersona(userRoles: string[]): 'ceo' | 'hr' | 'manager' | 'tl' | 'emp' {
   const norm = userRoles.map((r) => r.toLowerCase().trim());
-  if (norm.includes('organization_admin') || norm.includes('ceo') || norm.includes('admin')) {
+  if (
+    norm.includes('organization_admin') ||
+    norm.includes('ceo') ||
+    norm.includes('admin') ||
+    norm.includes('hr') ||
+    norm.includes('hr_admin') ||
+    norm.includes('hr_manager')
+  ) {
+    // HR and CEO/Admin share the same persona — HR sees all CEO tabs
     return 'ceo';
-  }
-  if (norm.includes('hr') || norm.includes('hr_admin') || norm.includes('hr_manager')) {
-    return 'hr';
   }
   if (norm.includes('department_head') || norm.includes('manager')) {
     return 'manager';
@@ -563,13 +685,69 @@ const ITEM_FEATURE_MAP: Record<string, Partial<Record<'ceo' | 'hr', string>>> = 
 };
 
 /**
- * Get visible sections filtered by role, licensing, and module toggle states
+ * Get visible sections filtered by role, licensing, module toggle states, and subscription plan modules
  */
+
+// ── Helper: Flexible Subscription Module Resolution ────────────────────────
+export function isModuleAllowed(subscriptionModule?: string | null, enabledModules?: string[] | null): boolean {
+  if (!enabledModules || enabledModules.length === 0) {
+    // No plan assigned or full access
+    return true;
+  }
+  if (!subscriptionModule) {
+    // Section is always visible (like dashboard or analytics or settings)
+    return true;
+  }
+
+  const normQuery = subscriptionModule.toLowerCase().trim();
+
+  // 1. Direct or lowercase match
+  if (enabledModules.some((m) => m.toLowerCase().trim() === normQuery)) {
+    return true;
+  }
+
+  // 2. Alias mapping across all modules
+  const ALIAS_MAP: Record<string, string[]> = {
+    'Core HR & Directory': ['core_hr', 'core', 'employee', 'employees', 'directory', 'lifecycle', 'org_structure', 'id_card', 'core hr'],
+    'Attendance & Time Tracking': ['attendance', 'time_tracking', 'attendance_tracking', 'shifts', 'shift_management', 'tracking', 'punches', 'attendance & time tracking'],
+    'Shift Management': ['shifts', 'shift_management', 'general_shift', 'roster_shift', 'shift management'],
+    'Leave Management & Approvals': ['leave', 'leaves', 'leave_management', 'holidays', 'approvals', 'leave management & approvals', 'leave management'],
+    'Automated Payroll Processing': ['payroll', 'loans', 'loan_management', 'salary', 'payslips', 'settlement', 'settlement_management', 'automated payroll processing', 'payroll processing'],
+    'Settlement Management': ['settlement', 'settlement_management', 'fnf', 'exit', 'settlement management'],
+    'Loan Management': ['loans', 'loan_management', 'loan management'],
+    'Expense Management': ['expense', 'expenses', 'expense_management', 'travel', 'claims', 'mileage', 'travel_advances', 'expense management', 'expense & travel management'],
+    'Performance & OKRs': ['performance', 'pms', 'okrs', 'goals', 'appraisals', 'reviews', 'performance & okrs', 'performance & okrs (pms)'],
+    'Recruitment & ATS': ['recruitment', 'ats', 'jobs', 'mrf', 'candidates', 'interview', 'recruitment & ats'],
+    'Learning Management System': ['lms', 'learning', 'courses', 'academy', 'learning_management', 'learning management system', 'learning management (lms)'],
+    'Asset Lifecycle Management': ['assets', 'asset_management', 'asset', 'asset lifecycle management'],
+    'HR Operations': ['hr_operations', 'hr operations', 'workflows', 'announcements', 'requests', 'hr operations & automation'],
+    'Policy Governance': ['policy_governance', 'policies', 'policy', 'policy governance'],
+    'Reports & Analytics': ['reports', 'analytics', 'reports & analytics'],
+    'Settings & RBAC': ['settings', 'rbac', 'roles', 'permissions', 'settings & rbac', 'settings & masters', 'masters'],
+  };
+
+  for (const [standardKey, aliases] of Object.entries(ALIAS_MAP)) {
+    const isStandardEnabled = enabledModules.some((em) => {
+      const normEm = em.toLowerCase().trim();
+      return normEm === standardKey.toLowerCase() || aliases.includes(normEm);
+    });
+
+    if (isStandardEnabled) {
+      if (standardKey.toLowerCase() === normQuery || aliases.includes(normQuery)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
 export function getVisibleSections(
   userRoles: string[],
   licensedFeatures?: LicensedFeaturesResponse,
   attendanceMode?: string,
-  liveTrackingEnabled?: boolean
+  liveTrackingEnabled?: boolean,
+  enabledModules?: string[] | null   // ← Subscription plan modules (null = full access)
 ): NavSection[] {
   const persona = getPersona(userRoles);
   const savedState = getSavedModulesState();
@@ -582,6 +760,15 @@ export function getVisibleSections(
         return null; // Hide entire section
       }
     }
+
+    // ── Subscription Plan Module Gating ─────────────────────────────────────
+    // Only apply when enabledModules is a non-empty array (org has a plan assigned)
+    if (enabledModules && enabledModules.length > 0 && section.subscriptionModule !== null) {
+      if (section.subscriptionModule && !isModuleAllowed(section.subscriptionModule, enabledModules)) {
+        return null; // Section's module is not in this org's subscription plan
+      }
+    }
+    // ── End Subscription Gating ──────────────────────────────────────────────
 
     // Check if entire section is disabled in Module Management
     const sectionModuleId = SECTION_MODULE_MAP[section.id]?.[persona];

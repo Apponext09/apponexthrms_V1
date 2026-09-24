@@ -2,38 +2,32 @@ import { z } from 'zod';
 
 // Job schemas
 export const createJobSchema = z.object({
-  mrfRequestId: z.number().optional(),
+  mrfRequestId: z.union([z.number(), z.string()]).transform(v => v === '' || v === null || v === undefined ? undefined : Number(v)).nullable().optional(),
   jobCode: z.string().min(1).max(50),
   jobTitle: z.string().min(1).max(255),
   jobDescription: z.string().min(1),
-  departmentId: z.number().optional(),
-  designationId: z.number().optional(),
-  locationId: z.number().optional(),
+  departmentId: z.union([z.number(), z.string()]).transform(v => v === '' || v === null || v === undefined ? undefined : Number(v)).nullable().optional(),
+  designationId: z.union([z.number(), z.string()]).transform(v => v === '' || v === null || v === undefined ? undefined : Number(v)).nullable().optional(),
+  locationId: z.union([z.number(), z.string()]).transform(v => v === '' || v === null || v === undefined ? undefined : Number(v)).nullable().optional(),
   jobType: z.string().default('full_time'),
   experienceLevel: z.string().default('mid'),
-  minExperienceYears: z.number().optional(),
-  maxExperienceYears: z.number().optional(),
-  minSalary: z.number().optional(),
-  maxSalary: z.number().optional(),
-  currency: z.string().optional(),
-  employmentType: z.enum(['onsite', 'remote', 'hybrid']).default('onsite'),
-  noOfPositions: z.number().min(1).default(1),
-  expiryDate: z.string().min(1, 'Application deadline is required').refine((value) => {
-    const datePart = String(value).slice(0, 10);
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(datePart)) return false;
-    const today = new Date();
-    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-    return datePart >= todayStr;
-  }, { message: 'Application deadline must be today or a future date' }),
-  jobTemplateId: z.number().optional(),
-  isInternal: z.boolean().optional(),
-  isPublishedExternal: z.boolean().optional(),
+  minExperienceYears: z.union([z.number(), z.string()]).transform(v => v === '' || v === null || v === undefined ? null : Number(v)).nullable().optional(),
+  maxExperienceYears: z.union([z.number(), z.string()]).transform(v => v === '' || v === null || v === undefined ? null : Number(v)).nullable().optional(),
+  minSalary: z.union([z.number(), z.string()]).transform(v => v === '' || v === null || v === undefined ? null : Number(v)).nullable().optional(),
+  maxSalary: z.union([z.number(), z.string()]).transform(v => v === '' || v === null || v === undefined ? null : Number(v)).nullable().optional(),
+  currency: z.string().nullable().optional(),
+  employmentType: z.string().default('onsite'),
+  noOfPositions: z.union([z.number(), z.string()]).transform(v => Number(v) || 1).default(1),
+  expiryDate: z.string().nullable().optional(),
+  jobTemplateId: z.union([z.number(), z.string()]).transform(v => v === '' || v === null || v === undefined ? undefined : Number(v)).nullable().optional(),
+  isInternal: z.boolean().nullable().optional(),
+  isPublishedExternal: z.boolean().nullable().optional(),
   skills: z.any().optional(),
   locations: z.any().optional(),
   aiSettings: z.any().optional(),
-});
+}).passthrough();
 
-export const updateJobSchema = createJobSchema.partial();
+export const updateJobSchema = createJobSchema.partial().passthrough();
 
 const candidateSourceSchema = z.preprocess((value) => {
   if (value === undefined || value === null || value === '') return undefined;
@@ -44,45 +38,47 @@ const candidateSourceSchema = z.preprocess((value) => {
   if (['bulk', 'bulk_import', 'csv', 'import'].includes(raw)) return 'bulk_import';
   if (['resume_bank', 'resume bank'].includes(raw)) return 'resume_bank';
   if (['direct', 'direct_apply', 'direct apply', 'direct application'].includes(raw)) return 'direct_apply';
+  if (['internal_opening', 'internal opening', 'internal', 'internal_employee', 'ijp'].includes(raw)) return 'internal_opening';
+  if (['other', 'others'].includes(raw)) return 'other';
   return raw || undefined;
-}, z.enum(['job_board', 'employee_referral', 'direct_apply', 'recruitment_agency', 'bulk_import', 'resume_bank']).optional());
+}, z.enum(['job_board', 'employee_referral', 'direct_apply', 'recruitment_agency', 'bulk_import', 'resume_bank', 'internal_opening', 'other']).optional());
 
 // Candidate schemas
 export const createCandidateSchema = z.object({
   firstName: z.string().min(1).max(100),
   lastName: z.string().min(1).max(100),
   email: z.string().email(),
-  phone: z.string().optional(),
-  alternativePhone: z.string().optional(),
-  gender: z.string().optional(),
-  maritalStatus: z.string().optional(),
-  qualification: z.string().optional(),
-  skills: z.string().optional(),
-  dateOfBirth: z.string().optional(),
-  currentLocation: z.number().optional(),
-  preferredLocation: z.number().optional(),
-  currentSalary: z.number().optional(),
-  salaryCurrency: z.string().optional(),
-  expectedSalary: z.number().optional(),
-  noticePeriodDays: z.number().optional(),
-  currentCompany: z.string().optional(),
-  yearsOfExperience: z.number().optional(),
-  linkedinUrl: z.string().url().optional().or(z.literal('')),
-  githubUrl: z.string().url().optional().or(z.literal('')),
-  portfolioUrl: z.string().url().optional().or(z.literal('')),
+  phone: z.string().optional().nullable(),
+  alternativePhone: z.string().optional().nullable(),
+  gender: z.string().optional().nullable(),
+  maritalStatus: z.string().optional().nullable(),
+  qualification: z.string().optional().nullable(),
+  skills: z.string().optional().nullable(),
+  dateOfBirth: z.string().optional().nullable(),
+  currentLocation: z.union([z.number(), z.string()]).transform(val => val === '' || val === null ? undefined : Number(val)).optional().nullable(),
+  preferredLocation: z.union([z.number(), z.string()]).transform(val => val === '' || val === null ? undefined : Number(val)).optional().nullable(),
+  currentSalary: z.union([z.number(), z.string()]).transform(val => val === '' || val === null ? undefined : Number(val)).optional().nullable(),
+  salaryCurrency: z.string().optional().nullable(),
+  expectedSalary: z.union([z.number(), z.string()]).transform(val => val === '' || val === null ? undefined : Number(val)).optional().nullable(),
+  noticePeriodDays: z.union([z.number(), z.string()]).transform(val => val === '' || val === null ? undefined : Number(val)).optional().nullable(),
+  currentCompany: z.string().optional().nullable(),
+  yearsOfExperience: z.union([z.number(), z.string()]).transform(val => val === '' || val === null ? undefined : Number(val)).optional().nullable(),
+  linkedinUrl: z.string().url().optional().or(z.literal('')).or(z.null()),
+  githubUrl: z.string().url().optional().or(z.literal('')).or(z.null()),
+  portfolioUrl: z.string().url().optional().or(z.literal('')).or(z.null()),
   source: candidateSourceSchema,
-  resumeUrl: z.string().optional(),
+  resumeUrl: z.string().optional().nullable(),
   status: z.enum(['applied', 'screening', 'assessment', 'interview', 'offer', 'hired', 'rejected', 'dropped']).optional(),
-});
+}).passthrough();
 
 export const updateCandidateSchema = createCandidateSchema.partial();
 
 // Application schemas
 export const createApplicationSchema = z.object({
-  candidateId: z.number(),
-  jobId: z.number(),
+  candidateId: z.union([z.number(), z.string()]).transform(val => Number(val)),
+  jobId: z.union([z.number(), z.string()]).transform(val => Number(val)),
   appliedFromSource: z.string().optional().default('Candidate Management'),
-});
+}).passthrough();
 
 export const moveApplicationStageSchema = z.object({
   stageId: z.number(),

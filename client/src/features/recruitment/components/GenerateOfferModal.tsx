@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { 
-  User, Briefcase, DollarSign, Calendar, ShieldCheck, 
+  User, Briefcase, IndianRupee, Calendar, ShieldCheck, 
   Building2, CheckCircle2, FileText, ArrowRight, ArrowLeft,
   Sparkles, RefreshCw, Send, Check, Eye, Search, ChevronDown, CheckCheck,
   FileCheck, UserPlus, Users, Award, TrendingUp, Mail
@@ -271,11 +271,12 @@ export const GenerateOfferModal: React.FC<GenerateOfferModalProps> = ({
       // 2. Fetch Locations / Branches from DB
       apiClient.get('/settings/locations')
         .then(res => {
-          const locs = res.data?.data?.items || res.data?.data || (Array.isArray(res.data) ? res.data : []);
+          const rawLocs = res.data?.data?.items || res.data?.data || (Array.isArray(res.data) ? res.data : []);
+          const locs = rawLocs.filter((l: any) => l.status !== 'inactive' && l.status !== 'Inactive' && l.is_active !== 'No' && l.isActive !== 'No');
           setLocations(locs);
           if (locs.length > 0 && !locationId) {
             setLocationId(String(locs[0].id));
-            setLocationName(locs[0].name || locs[0].location_name || 'Headquarters');
+            setLocationName(locs[0].name || locs[0].location_name || 'Office');
           }
         })
         .catch(() => {});
@@ -1204,7 +1205,7 @@ export const GenerateOfferModal: React.FC<GenerateOfferModalProps> = ({
               <div className="p-4 bg-slate-50/80 dark:bg-slate-800/40 rounded-2xl border border-slate-200/80 dark:border-slate-800 space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-extrabold text-slate-900 dark:text-white flex items-center gap-1.5">
-                    <DollarSign className="w-4 h-4 text-indigo-600" />
+                    <IndianRupee className="w-4 h-4 text-indigo-600" />
                     <span>Compensation & CTC Structure</span>
                   </span>
                 </div>

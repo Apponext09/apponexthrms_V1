@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+﻿import React, { useState, useRef, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import { Search, ChevronDown, ChevronUp, X } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -127,10 +127,10 @@ export const MultiSelectDropdown: React.FC<MultiSelectDropdownProps> = ({
         ref={buttonRef}
         type="button"
         onClick={handleToggle}
-        className="min-h-8 min-w-[180px] max-w-[420px] px-3 py-1 text-xs font-medium rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/80 text-slate-800 dark:text-slate-200 flex items-center justify-between gap-2 shadow-2xs transition-all cursor-pointer"
+        className="min-h-8 min-w-[180px] max-w-[420px] px-3 py-1 text-xs font-medium rounded-xl border border-border/60 dark:border-slate-700 bg-background dark:bg-slate-900 hover:bg-muted/30 dark:hover:bg-slate-800/80 text-foreground dark:text-slate-200 flex items-center justify-between gap-2 shadow-2xs transition-all cursor-pointer"
       >
         {selectedOptions.length === 0 ? (
-          <span className="text-slate-400 font-normal">{placeholder}</span>
+          <span className="text-muted-foreground/70 font-normal">{placeholder}</span>
         ) : (
           <div className="flex flex-wrap items-center gap-1 my-0.5 max-w-[340px]">
             {selectedOptions.map((opt) => (
@@ -150,9 +150,9 @@ export const MultiSelectDropdown: React.FC<MultiSelectDropdownProps> = ({
           </div>
         )}
         {isOpen ? (
-          <ChevronUp className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+          <ChevronUp className="w-3.5 h-3.5 text-muted-foreground/70 shrink-0" />
         ) : (
-          <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+          <ChevronDown className="w-3.5 h-3.5 text-muted-foreground/70 shrink-0" />
         )}
       </button>
 
@@ -169,24 +169,24 @@ export const MultiSelectDropdown: React.FC<MultiSelectDropdownProps> = ({
               bottom: coords.bottom !== undefined ? `${coords.bottom}px` : undefined,
               zIndex: 99999,
             }}
-            className="p-2.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl animate-in fade-in-50 zoom-in-95 duration-100"
+            className="p-2.5 rounded-2xl bg-background dark:bg-slate-900 border border-border/60 dark:border-slate-800 shadow-2xl animate-in fade-in-50 zoom-in-95 duration-100"
           >
             {/* Search Box */}
             <div className="relative mb-2">
-              <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-slate-400" />
+              <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-muted-foreground/70" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search..."
-                className="w-full h-8 pl-8 pr-3 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-950 text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="w-full h-8 pl-8 pr-3 text-xs rounded-xl border border-border/60 dark:border-slate-800 bg-muted/30/80 dark:bg-slate-950 text-foreground dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 autoFocus
               />
             </div>
 
             {/* Select All */}
-            <div className="flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer border-b border-slate-100 dark:border-slate-800/80 mb-1">
-              <label className="flex items-center gap-2 text-xs font-bold text-slate-900 dark:text-white cursor-pointer w-full">
+            <div className="flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-muted/30 dark:hover:bg-slate-800/50 cursor-pointer border-b border-slate-100 dark:border-slate-800/80 mb-1">
+              <label className="flex items-center gap-2 text-xs font-bold text-foreground dark:text-white cursor-pointer w-full">
                 <Checkbox
                   checked={isAllSelected}
                   onCheckedChange={toggleSelectAll}
@@ -201,7 +201,7 @@ export const MultiSelectDropdown: React.FC<MultiSelectDropdownProps> = ({
             {/* Options List */}
             <div className="max-h-48 overflow-y-auto space-y-0.5 pr-0.5">
               {filteredOptions.length === 0 ? (
-                <div className="py-3 text-center text-[11px] text-slate-400">
+                <div className="py-3 text-center text-[11px] text-muted-foreground/70">
                   No items found
                 </div>
               ) : (
@@ -214,13 +214,13 @@ export const MultiSelectDropdown: React.FC<MultiSelectDropdownProps> = ({
                       className={`flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-xs cursor-pointer transition-colors ${
                         isSelected
                           ? 'bg-blue-600 text-white font-semibold'
-                          : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/60 font-medium'
+                          : 'text-foreground dark:text-slate-300 hover:bg-muted/50 dark:hover:bg-slate-800/60 font-medium'
                       }`}
                     >
                       <Checkbox
                         checked={isSelected}
                         onCheckedChange={() => toggleOption(opt.id)}
-                        className={isSelected ? 'border-white bg-white text-blue-600' : ''}
+                        className={isSelected ? 'border-white bg-background text-blue-600' : ''}
                       />
                       <span className="truncate">{opt.label}</span>
                     </div>

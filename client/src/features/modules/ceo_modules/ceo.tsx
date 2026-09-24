@@ -84,7 +84,6 @@ export const CEO_MODULES: ModuleNode[] = [
       { id: 'ceo_leave_approvals_inbox', name: 'Leave Approvals', defaultEnabled: true },
       { id: 'ceo_approvals_dashboard', name: 'Approvals Dashboard', defaultEnabled: true },
       { id: 'ceo_leave_policies', name: 'Leave Settings', defaultEnabled: true },
-      { id: 'ceo_holiday_calendar', name: 'Holiday Management', defaultEnabled: true },
     ],
   },
   {
@@ -108,7 +107,7 @@ export const CEO_MODULES: ModuleNode[] = [
     id: 'ceo_loan_management',
     name: 'Loan Management',
     description: 'Loan types, requests, and disbursal approvals',
-    iconName: 'Receipt',
+    iconName: 'ReceiptIndianRupee',
     defaultEnabled: true,
     children: [
       { id: 'ceo_loan_types', name: 'Loan Type Settings', defaultEnabled: true },
@@ -119,7 +118,7 @@ export const CEO_MODULES: ModuleNode[] = [
     id: 'ceo_expense_management',
     name: 'Expense Management',
     description: 'Employee expense claims, reimbursements, and approvals',
-    iconName: 'DollarSign',
+    iconName: 'ReceiptIndianRupee',
     defaultEnabled: true,
     children: [
       { id: 'ceo_expense_claims', name: 'Expense Claims', defaultEnabled: true },

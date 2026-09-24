@@ -157,7 +157,7 @@ export const HR_MODULES: ModuleNode[] = [
     id: 'hr_expense_management',
     name: 'Expense Management',
     description: 'Reimbursement claims, receipts, and finance sync',
-    iconName: 'Receipt',
+    iconName: 'ReceiptIndianRupee',
     defaultEnabled: true,
   },
   {

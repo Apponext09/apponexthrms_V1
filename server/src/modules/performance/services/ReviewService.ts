@@ -184,4 +184,60 @@ export class ReviewService {
   async completeCycle(ctx: TenantContext, cycleId: number) {
     return this.cycleRepo.update(ctx, cycleId, { status: 'completed' });
   }
+
+  /**
+   * List review cycles
+   */
+  async listCycles(ctx: TenantContext, options?: ListQueryOptions) {
+    try {
+      const result = await this.cycleRepo.list(ctx, options);
+      return result || { items: [], meta: { page: 1, pageSize: 50, total: 0, totalPages: 0 } };
+    } catch (err) {
+      return { items: [], meta: { page: 1, pageSize: 50, total: 0, totalPages: 0 } };
+    }
+  }
+
+  /**
+   * Get review cycle by ID
+   */
+  async getCycle(ctx: TenantContext, cycleId: number) {
+    const cycle = await this.cycleRepo.getById(ctx, cycleId);
+    if (!cycle) {
+      throw new NotFoundError('Review cycle not found');
+    }
+    return cycle;
+  }
+
+  /**
+   * Update review cycle
+   */
+  async updateCycle(ctx: TenantContext, cycleId: number, data: any) {
+    const cycle = await this.cycleRepo.getById(ctx, cycleId);
+    if (!cycle) {
+      throw new NotFoundError('Review cycle not found');
+    }
+    const updateData: any = {};
+    if (data.name !== undefined) updateData.name = data.name;
+    if (data.status !== undefined) updateData.status = data.status;
+    if (data.startDate !== undefined) updateData.start_date = data.startDate;
+    if (data.endDate !== undefined) updateData.end_date = data.endDate;
+    if (data.reviewDeadline !== undefined) updateData.end_date = data.reviewDeadline;
+
+    return this.cycleRepo.update(ctx, cycleId, updateData);
+  }
+
+  /**
+   * List reviews with optional filters
+   */
+  async listReviews(ctx: TenantContext, filters: { cycleId?: number; employeeId?: number }, options?: ListQueryOptions) {
+    try {
+      const queryFilters: any = {};
+      if (filters.cycleId) queryFilters.cycle_id = filters.cycleId;
+      if (filters.employeeId) queryFilters.employee_id = filters.employeeId;
+      const result = await this.reviewRepo.list(ctx, { ...options, filters: queryFilters });
+      return result || { items: [], meta: { page: 1, pageSize: 50, total: 0, totalPages: 0 } };
+    } catch (err) {
+      return { items: [], meta: { page: 1, pageSize: 50, total: 0, totalPages: 0 } };
+    }
+  }
 }

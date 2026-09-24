@@ -21,10 +21,13 @@ import {
   Palette,
   Sparkles,
   GitBranch,
+  GraduationCap,
+  BookOpen,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiClient } from '@/config/api';
 import { Link, useNavigate } from 'react-router-dom';
+import { HelpHint } from '../components/HelpHint';
 
 export function GeneralSettingsPage() {
   const navigate = useNavigate();
@@ -202,8 +205,18 @@ export function GeneralSettingsPage() {
                 <ShieldCheck className="w-5 h-5" />
               </div>
               <div className="space-y-1">
-                <h3 className="text-sm font-bold text-foreground tracking-tight">
+                <h3 className="text-sm font-bold text-foreground tracking-tight flex items-center">
                   Leave Approval Workflow
+                  <HelpHint
+                    title="Leave Approval Workflow"
+                    description="Controls how many approval stages are required before a leave is finally approved."
+                    effect="Two-Stage: Employee → Team Lead/Manager → HR/Admin. Single-Stage: Employee → Team Lead/Manager (final)."
+                    example="If set to Two-Stage, an employee's leave needs both their Manager's approval AND HR's approval."
+                    titleMr="रजा मंजुरी प्रक्रिया"
+                    descriptionMr="रजा अंतिम मंजूर होण्यापूर्वी किती टप्प्यांची मंजुरी आवश्यक आहे हे नियंत्रित करते."
+                    effectMr="दोन-टप्पे: कर्मचारी → टीम लीड/व्यवस्थापक → HR/Admin. एक-टप्पा: कर्मचारी → टीम लीड/व्यवस्थापक (अंतिम)."
+                    exampleMr="जर दोन-टप्पे निवडले असतील, तर कर्मचाऱ्याच्या रजेसाठी व्यवस्थापक आणि HR या दोघांची मंजुरी आवश्यक आहे."
+                  />
                 </h3>
                 <p className="text-xs text-muted-foreground leading-relaxed">
                   Toggle between two-stage approval (requires Team Lead/Manager AND Admin/HR) or one-stage approval (Team Lead/Manager is final).
@@ -233,8 +246,18 @@ export function GeneralSettingsPage() {
                 <Sliders className="w-5 h-5" />
               </div>
               <div className="space-y-1">
-                <h3 className="text-sm font-bold text-foreground tracking-tight">
+                <h3 className="text-sm font-bold text-foreground tracking-tight flex items-center">
                   Sick Leave Medical Proof Threshold (Days)
+                  <HelpHint
+                    title="Sick Leave Medical Proof Threshold"
+                    description="Sets the minimum consecutive Sick Leave days after which the employee MUST upload a medical certificate."
+                    effect="If set to 3 days, any sick leave of 3 days or more will show a mandatory document upload prompt to the employee."
+                    example="Employee takes 4 days SL → System blocks approval until medical certificate is uploaded."
+                    titleMr="आजारी रजा वैद्यकीय पुरावा थ्रेशोल्ड"
+                    descriptionMr="किमान किती दिवसांच्या आजारी रजेनंतर कर्मचाऱ्याने वैद्यकीय प्रमाणपत्र अपलोड करणे बंधनकारक आहे हे ठरवते."
+                    effectMr="जर 3 दिवस निवडले, तर 3 किंवा अधिक दिवसांच्या आजारी रजेसाठी वैद्यकीय कागदपत्र अनिवार्य होईल."
+                    exampleMr="कर्मचारी 4 दिवसांची SL घेतो → वैद्यकीय प्रमाणपत्र अपलोड केल्याशिवाय मंजुरी मिळणार नाही."
+                  />
                 </h3>
                 <p className="text-xs text-muted-foreground leading-relaxed">
                   Specify the minimum duration of Sick Leave (SL) in days that will mandate employees to upload a supporting medical document.
@@ -392,7 +415,19 @@ export function GeneralSettingsPage() {
                 <MapPin className="w-5 h-5" />
               </div>
               <div>
-                <p className="text-xs font-bold text-foreground">Live Geolocation Tracking</p>
+                <p className="text-xs font-bold text-foreground flex items-center">
+                  Live Geolocation Tracking
+                  <HelpHint
+                    title="Live Geolocation Tracking"
+                    description="When enabled, the system logs GPS coordinates of field employees at regular intervals during their shift."
+                    effect="Employee app will request location permission. Breadcrumb trail is stored and visible on the live tracking map."
+                    example="A sales executive's location is logged every 15 minutes while on field duty."
+                    titleMr="थेट जिओलोकेशन ट्रॅकिंग"
+                    descriptionMr="सक्रिय केल्यावर, शिफ्ट दरम्यान फील्ड कर्मचाऱ्यांचे GPS निर्देशांक नियमित अंतराने नोंदवले जातात."
+                    effectMr="कर्मचाऱ्याच्या अॅपला लोकेशन परवानगी मागितली जाईल. ब्रेडक्रम्ब नकाशावर दिसेल."
+                    exampleMr="विक्री कार्यकारी फील्डवर असताना दर 15 मिनिटांनी त्यांचे स्थान नोंदवले जाते."
+                  />
+                </p>
                 <p className="text-[11px] text-muted-foreground">Log field employee coordinates during shift</p>
               </div>
             </div>
@@ -412,7 +447,19 @@ export function GeneralSettingsPage() {
                 <Clock className="w-5 h-5" />
               </div>
               <div>
-                <p className="text-xs font-bold text-foreground">Mandatory Clock-Out Verification</p>
+                <p className="text-xs font-bold text-foreground flex items-center">
+                  Mandatory Clock-Out Verification
+                  <HelpHint
+                    title="Mandatory Clock-Out"
+                    description="Forces employees to punch out before the end of the day. If missed, attendance is marked as incomplete."
+                    effect="Incomplete attendance cannot be approved without regularization. Payroll deductions may apply."
+                    example="If an employee forgets to clock out, the system marks attendance as 'Incomplete' until regularized."
+                    titleMr="अनिवार्य क्लॉक-आउट"
+                    descriptionMr="कर्मचाऱ्यांना दिवसाच्या शेवटी पंच आउट करणे बंधनकारक करते. चुकल्यास हजेरी अपूर्ण म्हणून नोंदवली जाते."
+                    effectMr="अपूर्ण हजेरी नियमितीकरणाशिवाय मंजूर होणार नाही. पगार कपातही होऊ शकते."
+                    exampleMr="कर्मचारी क्लॉक आउट विसरला तर सिस्टम हजेरी 'अपूर्ण' म्हणून नोंदवते."
+                  />
+                </p>
                 <p className="text-[11px] text-muted-foreground">Require clock-out punch before midnight</p>
               </div>
             </div>
@@ -432,7 +479,19 @@ export function GeneralSettingsPage() {
                 <ShieldCheck className="w-5 h-5" />
               </div>
               <div>
-                <p className="text-xs font-bold text-foreground">Punch Verification Mode</p>
+                <p className="text-xs font-bold text-foreground flex items-center">
+                  Punch Verification Mode
+                  <HelpHint
+                    title="Punch Verification Mode"
+                    description="Defines how the system verifies an employee's identity and location when they punch in/out."
+                    effect="GPS: Employee must be within geofence radius. Face: Biometric verification via camera. Both: GPS + Face required together. IP/WiFi: Must be on the office network."
+                    example="Select 'GPS + Face AI' for highest security — requires both location and face match."
+                    titleMr="पंच व्हेरिफिकेशन मोड"
+                    descriptionMr="कर्मचारी पंच इन/आउट करताना सिस्टम त्यांची ओळख आणि स्थान कसे सत्यापित करते हे ठरवते."
+                    effectMr="GPS: जिओफेन्सच्या आत असणे आवश्यक. चेहरा: कॅमेऱ्याद्वारे बायोमेट्रिक. दोन्ही: GPS + चेहरा एकत्र. IP/WiFi: ऑफिस नेटवर्कवर असणे आवश्यक."
+                    exampleMr="सर्वाधिक सुरक्षिततेसाठी 'GPS + Face AI' निवडा — स्थान आणि चेहरा दोन्ही जुळणे आवश्यक."
+                  />
+                </p>
                 <p className="text-[11px] text-muted-foreground">GPS Location, Facial Biometric or IP</p>
               </div>
             </div>
@@ -459,7 +518,19 @@ export function GeneralSettingsPage() {
                 <Sliders className="w-5 h-5" />
               </div>
               <div>
-                <p className="text-xs font-bold text-foreground">Geofence Radius (Meters)</p>
+                <p className="text-xs font-bold text-foreground flex items-center">
+                  Geofence Radius (Meters)
+                  <HelpHint
+                    title="Geofence Radius"
+                    description="The maximum distance (in meters) from the branch's GPS coordinates within which an employee can punch in."
+                    effect="If employee is outside this radius, their punch attempt will be rejected with a location error."
+                    example="Set to 100m: Employees within 100 meters of office can punch in. Beyond that, punch is blocked."
+                    titleMr="जिओफेन्स रेडियस"
+                    descriptionMr="शाखेच्या GPS निर्देशांकापासून किती मीटर अंतरावर कर्मचारी पंच इन करू शकतो हे ठरवते."
+                    effectMr="या रेडियसच्या बाहेर असलेल्या कर्मचाऱ्याचा पंच नाकारला जाईल."
+                    exampleMr="100 मीटर सेट केले: ऑफिसपासून 100 मीटरच्या आत असलेले कर्मचारी पंच करू शकतात. बाहेर असल्यास पंच ब्लॉक होईल."
+                  />
+                </p>
                 <p className="text-[11px] text-muted-foreground">Allowed distance from branch coordinate</p>
               </div>
             </div>
@@ -475,6 +546,58 @@ export function GeneralSettingsPage() {
             </div>
           </Card>
         </div>
+      </div>
+
+      {/* ─── LMS PLATFORM INTEGRATIONS SUBMODULE ─── */}
+      <div className="space-y-3.5 pt-2">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-xs font-black uppercase tracking-wider text-muted-foreground">
+              LMS Platform Integrations &amp; Connectors
+            </h2>
+            <p className="text-[11px] text-muted-foreground mt-0.5">
+              Connect external learning platforms like Udemy for Business, Coursera, and LinkedIn Learning for automated course sync and completion tracking.
+            </p>
+          </div>
+
+          <Link to="/settings/lms-integrations">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5 text-xs font-bold rounded-xl h-8 text-violet-600 border-violet-500/30 hover:bg-violet-50 dark:hover:bg-violet-950/20"
+            >
+              <GraduationCap className="w-3.5 h-3.5" /> Integration Hub <ArrowRight className="w-3.5 h-3.5" />
+            </Button>
+          </Link>
+        </div>
+
+        <Card className="border border-violet-500/20 rounded-2xl shadow-xs bg-violet-50/20 dark:bg-violet-950/10 hover:border-violet-500/40 transition-colors">
+          <CardContent className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-start sm:items-center gap-3.5 min-w-0">
+              <div className="p-2.5 rounded-xl bg-violet-500/10 text-violet-600 dark:text-violet-400 shrink-0">
+                <GraduationCap className="w-5 h-5" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-sm font-bold text-foreground tracking-tight flex items-center gap-2">
+                  External LMS Platforms
+                  <span className="text-[10px] bg-violet-100 dark:bg-violet-900/60 text-violet-700 dark:text-violet-300 px-2 py-0.5 rounded-full font-bold">Udemy · Coursera · LinkedIn</span>
+                </h3>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Enable platform toggles, configure API credentials (Client ID, Client Secret, API Key), and sync courses directly into your LMS Course Management.
+                </p>
+              </div>
+            </div>
+
+            <Link to="/settings/lms-integrations" className="shrink-0">
+              <Button
+                size="sm"
+                className="gap-2 text-xs font-bold bg-violet-600 hover:bg-violet-700 text-white rounded-xl h-9 px-4 shadow-sm cursor-pointer"
+              >
+                <Sliders className="w-3.5 h-3.5" /> Configure Integrations
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

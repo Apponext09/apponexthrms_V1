@@ -57,6 +57,20 @@ export async function fetchEmployeeSessions(
 }
 
 /**
+ * HTTP fallback location ping — used by the employee tracker when the Socket.IO
+ * connection is down, so a location fix is never silently dropped/lost.
+ */
+export async function pingLocationHttp(payload: {
+  latitude: number;
+  longitude: number;
+  accuracy?: number;
+  speed?: number;
+  heading?: number;
+}): Promise<void> {
+  await apiClient.post('/livetracking/ping', payload);
+}
+
+/**
  * Explicitly save/pin an employee's location to DB.
  */
 export async function saveEmployeeLocation(

@@ -4,10 +4,11 @@ import { motion } from 'framer-motion';
 import {
   Clock, FileText, User, Calendar, Megaphone, Building2,
   BookOpen, ChevronRight, Briefcase, Timer, Bell,
-  CheckCircle2, TrendingUp, Activity, Receipt, Target,
+  CheckCircle2, TrendingUp, Activity, ReceiptIndianRupee, Target,
   CreditCard, ListTodo
 } from 'lucide-react';
 import { useAuthStore } from '@/features/auth/store/authStore';
+import { apiClient } from '@/config/api';
 
 // ── Violet accent palette ─────────────────────────────────────────────────────
 const violet = {
@@ -21,7 +22,7 @@ const violet = {
 // ── Quick action cards ────────────────────────────────────────────────────────
 const QUICK_ACTIONS = [
   { label: 'Log Hours',        icon: Clock,      href: '/consultant/attendance',  color: 'bg-violet-50 dark:bg-violet-950/30 border-violet-200 dark:border-violet-800 hover:border-violet-400' },
-  { label: 'Submit Expense',   icon: Receipt,    href: '/consultant/expenses',    color: 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800 hover:border-emerald-400' },
+  { label: 'Submit Expense',   icon: ReceiptIndianRupee,    href: '/consultant/expenses',    color: 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800 hover:border-emerald-400' },
   { label: 'Apply Leave',      icon: Calendar,   href: '/consultant/leaves',      color: 'bg-sky-50 dark:bg-sky-950/30 border-sky-200 dark:border-sky-800 hover:border-sky-400' },
   { label: 'My Payslips',      icon: CreditCard, href: '/consultant/payslips',    color: 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800 hover:border-amber-400' },
   { label: 'My Documents',     icon: BookOpen,   href: '/consultant/documents',   color: 'bg-indigo-50 dark:bg-indigo-950/30 border-indigo-200 dark:border-indigo-800 hover:border-indigo-400' },
@@ -92,17 +93,20 @@ export function ConsultantDashboardPage() {
   const { user } = useAuthStore();
   const navigate = useNavigate();
   const [greeting, setGreeting] = useState('');
+  const [stats, setStats] = useState<any>(null);
 
   useEffect(() => {
     const h = new Date().getHours();
     setGreeting(h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening');
   }, []);
 
+  useEffect(() => { apiClient.get('/dashboard/me/stats').then((r) => setStats(r.data?.data)).catch(() => setStats({})); }, []);
+
   const firstName = user?.firstName || 'Consultant';
 
   // Placeholder contract dates
-  const contractStart = '2026-04-01';
-  const contractEnd   = '2027-03-31';
+  const contractStart = stats?.startDate || new Date().toISOString().slice(0, 10);
+  const contractEnd = stats?.endDate || contractStart;
 
   const today = new Date().toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
@@ -139,10 +143,10 @@ export function ConsultantDashboardPage() {
 
       {/* ── Stats Row ──────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <StatCard label="Hours Logged"       value={142}  icon={Clock}      sub="This month"           accent="text-violet-600 dark:text-violet-400" />
-        <StatCard label="Expenses"           value="₹8.4K" icon={Receipt}   sub="Pending approval: 2" accent="text-emerald-600 dark:text-emerald-400" />
-        <StatCard label="Active Projects"    value={3}    icon={ListTodo}   sub="On track: 2"          accent="text-sky-600 dark:text-sky-400" />
-        <StatCard label="Payslips"           value={4}    icon={CreditCard} sub="Last: Jul 2026"       accent="text-amber-600 dark:text-amber-400" />
+        <StatCard label="Days Present" value={stats?.attendanceDays ?? '—'} icon={Clock} sub="This month" accent="text-violet-600 dark:text-violet-400" />
+        <StatCard label="Expenses" value={`₹${Number(stats?.expenseAmount || 0).toLocaleString('en-IN')}`} icon={ReceiptIndianRupee} sub={`Pending approval: ${stats?.pendingExpenses ?? '—'}`} accent="text-emerald-600 dark:text-emerald-400" />
+        <StatCard label="Active Tasks" value={stats?.activeTasks ?? '—'} icon={ListTodo} sub="Current assignments" accent="text-sky-600 dark:text-sky-400" />
+        <StatCard label="Payslips" value={stats?.payslipCount ?? '—'} icon={CreditCard} sub="Available records" accent="text-amber-600 dark:text-amber-400" />
       </div>
 
       {/* ── Quick Actions ───────────────────────────────────────────────────── */}

@@ -626,7 +626,7 @@ export const OfferTemplateMasterForm: React.FC<OfferTemplateMasterFormProps> = (
 
   const handleDelete = async () => {
     if (!selectedTemplate?.id) return;
-    if (!window.confirm(`Are you sure you want to delete template "${selectedTemplate.template_name}"?`)) return;
+    if (!await window.appConfirm(`Are you sure you want to delete template "${selectedTemplate.template_name}"?`)) return;
 
     try {
       await apiClient.delete(`/letters/templates/${selectedTemplate.id}`);
@@ -811,7 +811,7 @@ export const OfferTemplateMasterForm: React.FC<OfferTemplateMasterFormProps> = (
   return (
     <div className="w-full space-y-6">
       {/* Header & Stage Tabs */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-xs">
+      <div className="bg-background dark:bg-slate-900 border border-border/60 dark:border-slate-800 rounded-2xl p-6 shadow-xs">
         <div className="flex flex-wrap items-center justify-between gap-4 pb-5 border-b border-slate-100 dark:border-slate-800">
           <div>
             <div className="flex items-center gap-2.5">
@@ -819,10 +819,10 @@ export const OfferTemplateMasterForm: React.FC<OfferTemplateMasterFormProps> = (
                 <FileText className="w-5 h-5" />
               </div>
               <div>
-                <h1 className="text-xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+                <h1 className="text-xl font-extrabold text-foreground dark:text-white tracking-tight">
                   MNC Letter & Document Template Master
                 </h1>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                <p className="text-xs text-muted-foreground dark:text-muted-foreground/70 mt-0.5">
                   Configure corporate formats, company branding letterheads, dynamic merge tags & legal covenants across all 4 lifecycle stages.
                 </p>
               </div>
@@ -870,7 +870,7 @@ export const OfferTemplateMasterForm: React.FC<OfferTemplateMasterFormProps> = (
                   "p-4 rounded-xl border text-left transition-all duration-200 cursor-pointer flex flex-col justify-between",
                   isSelected
                     ? "bg-indigo-50/70 dark:bg-indigo-950/40 border-indigo-300 dark:border-indigo-800 shadow-sm ring-1 ring-indigo-500/20"
-                    : "bg-slate-50/60 dark:bg-slate-800/40 border-slate-200/80 dark:border-slate-800 hover:bg-white dark:hover:bg-slate-800 hover:border-slate-300"
+                    : "bg-muted/30/60 dark:bg-slate-800/40 border-border/60/80 dark:border-slate-800 hover:bg-background dark:hover:bg-slate-800 hover:border-border"
                 )}
               >
                 <div className="flex items-center justify-between w-full mb-2">
@@ -878,7 +878,7 @@ export const OfferTemplateMasterForm: React.FC<OfferTemplateMasterFormProps> = (
                     "w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs",
                     isSelected
                       ? "bg-indigo-600 text-white shadow-xs"
-                      : "bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300"
+                      : "bg-muted dark:bg-slate-700 text-foreground dark:text-slate-300"
                   )}>
                     <Icon className="w-4 h-4" />
                   </div>
@@ -886,16 +886,16 @@ export const OfferTemplateMasterForm: React.FC<OfferTemplateMasterFormProps> = (
                     "text-[11px] font-black px-2 py-0.5 rounded-full",
                     isSelected
                       ? "bg-indigo-600 text-white"
-                      : "bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300"
+                      : "bg-muted dark:bg-slate-700 text-muted-foreground dark:text-slate-300"
                   )}>
                     {count}
                   </span>
                 </div>
                 <div>
-                  <div className={cn("text-xs font-extrabold", isSelected ? "text-indigo-950 dark:text-indigo-200" : "text-slate-900 dark:text-white")}>
+                  <div className={cn("text-xs font-extrabold", isSelected ? "text-indigo-950 dark:text-indigo-200" : "text-foreground dark:text-white")}>
                     {stage.label}
                   </div>
-                  <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 line-clamp-2 leading-relaxed">
+                  <div className="text-[11px] text-muted-foreground dark:text-muted-foreground/70 mt-1 line-clamp-2 leading-relaxed">
                     {stage.desc}
                   </div>
                 </div>
@@ -910,16 +910,16 @@ export const OfferTemplateMasterForm: React.FC<OfferTemplateMasterFormProps> = (
         
         {/* Left Column: Template Selector & Sub-Filters (4 cols) */}
         <div className="lg:col-span-4 space-y-4">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-xs space-y-3">
+          <div className="bg-background dark:bg-slate-900 border border-border/60 dark:border-slate-800 rounded-2xl p-4 shadow-xs space-y-3">
             
             {/* Search Input */}
             <div className="relative">
-              <Search className="w-3.5 h-3.5 absolute left-3 top-3 text-slate-400" />
+              <Search className="w-3.5 h-3.5 absolute left-3 top-3 text-muted-foreground/70" />
               <Input
                 placeholder="Search templates..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 h-9 text-xs rounded-xl border-slate-200 dark:border-slate-800"
+                className="pl-9 h-9 text-xs rounded-xl border-border/60 dark:border-slate-800"
               />
             </div>
 
@@ -932,7 +932,7 @@ export const OfferTemplateMasterForm: React.FC<OfferTemplateMasterFormProps> = (
                   "px-2.5 py-1 rounded-lg text-[11px] font-bold cursor-pointer transition-colors border",
                   selectedTypeFilter === 'all'
                     ? "bg-indigo-600 text-white border-indigo-600"
-                    : "bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100"
+                    : "bg-muted/30 dark:bg-slate-800 text-muted-foreground dark:text-slate-300 border-border/60 dark:border-slate-700 hover:bg-muted/50"
                 )}
               >
                 All ({filteredTemplates.length})
@@ -946,7 +946,7 @@ export const OfferTemplateMasterForm: React.FC<OfferTemplateMasterFormProps> = (
                     "px-2.5 py-1 rounded-lg text-[11px] font-bold cursor-pointer transition-colors border",
                     selectedTypeFilter === t.id
                       ? "bg-indigo-600 text-white border-indigo-600"
-                      : "bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100"
+                      : "bg-muted/30 dark:bg-slate-800 text-muted-foreground dark:text-slate-300 border-border/60 dark:border-slate-700 hover:bg-muted/50"
                   )}
                 >
                   {t.name}
@@ -957,7 +957,7 @@ export const OfferTemplateMasterForm: React.FC<OfferTemplateMasterFormProps> = (
             {/* Template Cards List */}
             <div className="space-y-2 max-h-[620px] overflow-y-auto pr-1 pt-2">
               {filteredTemplates.length === 0 ? (
-                <div className="text-center py-8 text-slate-400 text-xs">
+                <div className="text-center py-8 text-muted-foreground/70 text-xs">
                   No templates found in this category.
                   <div className="mt-2">
                     <Button size="sm" variant="outline" onClick={() => handleAddNew(activeStage)} className="text-xs rounded-xl">
@@ -976,13 +976,13 @@ export const OfferTemplateMasterForm: React.FC<OfferTemplateMasterFormProps> = (
                         "p-3.5 rounded-xl border transition-all duration-150 cursor-pointer relative group",
                         isSelected
                           ? "bg-indigo-50/80 dark:bg-indigo-950/50 border-indigo-300 dark:border-indigo-800 shadow-xs ring-1 ring-indigo-500/20"
-                          : "bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 hover:border-indigo-200 hover:bg-slate-50/60 dark:hover:bg-slate-800/40"
+                          : "bg-background dark:bg-slate-900 border-border/60/80 dark:border-slate-800 hover:border-indigo-200 hover:bg-muted/30/60 dark:hover:bg-slate-800/40"
                       )}
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-1.5">
-                            <span className="font-mono text-[9.5px] font-extrabold px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                            <span className="font-mono text-[9.5px] font-extrabold px-1.5 py-0.5 rounded bg-muted/50 dark:bg-slate-800 text-muted-foreground dark:text-slate-300 border border-border/60 dark:border-slate-700">
                               {item.template_code}
                             </span>
                             {item.is_default && (
@@ -991,10 +991,10 @@ export const OfferTemplateMasterForm: React.FC<OfferTemplateMasterFormProps> = (
                               </span>
                             )}
                           </div>
-                          <h4 className="text-xs font-bold text-slate-900 dark:text-white mt-1 truncate">
+                          <h4 className="text-xs font-bold text-foreground dark:text-white mt-1 truncate">
                             {item.template_name}
                           </h4>
-                          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 truncate">
+                          <p className="text-[11px] text-muted-foreground dark:text-muted-foreground/70 mt-0.5 truncate">
                             {item.subject || 'No subject line specified'}
                           </p>
                         </div>
@@ -1008,13 +1008,13 @@ export const OfferTemplateMasterForm: React.FC<OfferTemplateMasterFormProps> = (
           </div>
 
           {/* Merge Code Toolbar Quick Reference Card */}
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-xs space-y-3">
+          <div className="bg-background dark:bg-slate-900 border border-border/60 dark:border-slate-800 rounded-2xl p-4 shadow-xs space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-extrabold text-slate-900 dark:text-white flex items-center gap-1.5">
+              <span className="text-xs font-extrabold text-foreground dark:text-white flex items-center gap-1.5">
                 <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
                 <span>Dynamic Merge Tags</span>
               </span>
-              <span className="text-[10.5px] text-slate-400">Click to insert in editor</span>
+              <span className="text-[10.5px] text-muted-foreground/70">Click to insert in editor</span>
             </div>
             <div className="flex flex-wrap gap-1.5 max-h-48 overflow-y-auto pr-1">
               {availableMergeCodes.map((code) => (
@@ -1023,7 +1023,7 @@ export const OfferTemplateMasterForm: React.FC<OfferTemplateMasterFormProps> = (
                   type="button"
                   onClick={() => handleInsertMergeCode(code.code)}
                   title={`${code.label} (${code.category})`}
-                  className="px-2 py-1 bg-slate-50 dark:bg-slate-800 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 dark:hover:bg-indigo-950/60 dark:hover:text-indigo-300 text-slate-700 dark:text-slate-300 rounded-lg text-[10.5px] font-mono border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer flex items-center gap-1"
+                  className="px-2 py-1 bg-muted/30 dark:bg-slate-800 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 dark:hover:bg-indigo-950/60 dark:hover:text-indigo-300 text-foreground dark:text-slate-300 rounded-lg text-[10.5px] font-mono border border-border/60 dark:border-slate-700 transition-colors cursor-pointer flex items-center gap-1"
                 >
                   <span>{code.code}</span>
                   <Plus className="w-2.5 h-2.5 opacity-50" />
@@ -1035,7 +1035,7 @@ export const OfferTemplateMasterForm: React.FC<OfferTemplateMasterFormProps> = (
 
         {/* Right Column: Full Template Designer Form (8 cols) */}
         <div className="lg:col-span-8">
-          <form onSubmit={handleSave} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-xs space-y-6">
+          <form onSubmit={handleSave} className="bg-background dark:bg-slate-900 border border-border/60 dark:border-slate-800 rounded-2xl p-6 shadow-xs space-y-6">
             
             {/* Form Header Row */}
             <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-100 dark:border-slate-800">
@@ -1044,11 +1044,11 @@ export const OfferTemplateMasterForm: React.FC<OfferTemplateMasterFormProps> = (
                   <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-800 uppercase tracking-wide">
                     {isNewMode ? 'Creating New Template' : 'Editing Master Template'}
                   </span>
-                  <span className="text-xs text-slate-400 font-mono">
+                  <span className="text-xs text-muted-foreground/70 font-mono">
                     Category: {activeStage.toUpperCase()}
                   </span>
                 </div>
-                <h3 className="text-base font-extrabold text-slate-900 dark:text-white mt-1">
+                <h3 className="text-base font-extrabold text-foreground dark:text-white mt-1">
                   {templateName || 'Untitled Template'}
                 </h3>
               </div>
@@ -1059,7 +1059,7 @@ export const OfferTemplateMasterForm: React.FC<OfferTemplateMasterFormProps> = (
                   variant="outline"
                   size="sm"
                   onClick={handleOpenPreview}
-                  className="h-8 text-xs font-bold rounded-xl flex items-center gap-1.5 border-slate-200 dark:border-slate-700"
+                  className="h-8 text-xs font-bold rounded-xl flex items-center gap-1.5 border-border/60 dark:border-slate-700"
                 >
                   <Eye className="w-3.5 h-3.5 text-indigo-600" />
                   <span>Letterhead Preview</span>
@@ -1092,7 +1092,7 @@ export const OfferTemplateMasterForm: React.FC<OfferTemplateMasterFormProps> = (
             {/* Template Core Info */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-1.5">
-                <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                <Label className="text-xs font-bold text-foreground dark:text-slate-300">
                   Template Name <span className="text-rose-500">*</span>
                 </Label>
                 <Input
@@ -1105,7 +1105,7 @@ export const OfferTemplateMasterForm: React.FC<OfferTemplateMasterFormProps> = (
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                <Label className="text-xs font-bold text-foreground dark:text-slate-300">
                   Template Code <span className="text-rose-500">*</span>
                 </Label>
                 <Input
@@ -1118,13 +1118,13 @@ export const OfferTemplateMasterForm: React.FC<OfferTemplateMasterFormProps> = (
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                <Label className="text-xs font-bold text-foreground dark:text-slate-300">
                   Document Type
                 </Label>
                 <select
                   value={letterType}
                   onChange={(e) => setLetterType(e.target.value)}
-                  className="w-full h-9 px-3 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 font-semibold"
+                  className="w-full h-9 px-3 text-xs rounded-xl border border-border/60 dark:border-slate-800 bg-background dark:bg-slate-900 font-semibold"
                 >
                   {LETTER_STAGE_CONFIG[activeStage].types.map(t => (
                     <option key={t.id} value={t.id}>{t.name}</option>
@@ -1136,9 +1136,9 @@ export const OfferTemplateMasterForm: React.FC<OfferTemplateMasterFormProps> = (
 
             {/* Subject Line */}
             <div className="space-y-1.5">
-              <Label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
+              <Label className="text-xs font-bold text-foreground dark:text-slate-300 flex items-center justify-between">
                 <span>Subject Line</span>
-                <span className="text-[11px] font-normal text-slate-400">Supports merge codes</span>
+                <span className="text-[11px] font-normal text-muted-foreground/70">Supports merge codes</span>
               </Label>
               <Input
                 value={subject}
@@ -1149,29 +1149,29 @@ export const OfferTemplateMasterForm: React.FC<OfferTemplateMasterFormProps> = (
             </div>
 
             {/* Company Branding & Letterhead Customization */}
-            <div className="p-4 bg-slate-50/80 dark:bg-slate-800/40 rounded-xl border border-slate-100 dark:border-slate-800 space-y-3">
+            <div className="p-4 bg-muted/30/80 dark:bg-slate-800/40 rounded-xl border border-slate-100 dark:border-slate-800 space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-extrabold text-slate-900 dark:text-white flex items-center gap-1.5">
+                <span className="text-xs font-extrabold text-foreground dark:text-white flex items-center gap-1.5">
                   <Building2 className="w-3.5 h-3.5 text-indigo-600" />
                   <span>Company Branding & Letterhead Authority</span>
                 </span>
-                <span className="text-[10.5px] text-slate-400">Overrides global defaults if specified</span>
+                <span className="text-[10.5px] text-muted-foreground/70">Overrides global defaults if specified</span>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <Label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">Company Legal Name</Label>
+                  <Label className="text-[11px] font-semibold text-muted-foreground dark:text-muted-foreground/70">Company Legal Name</Label>
                   <Input
                     value={companyNameOverride}
                     onChange={(e) => setCompanyNameOverride(e.target.value)}
                     placeholder="Apponext Technologies Pvt. Ltd."
-                    className="h-8 text-xs rounded-lg bg-white dark:bg-slate-900"
+                    className="h-8 text-xs rounded-lg bg-background dark:bg-slate-900"
                   />
                 </div>
 
                 <div className="space-y-1">
                   <div className="flex items-center justify-between">
-                    <Label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">
+                    <Label className="text-[11px] font-semibold text-muted-foreground dark:text-muted-foreground/70">
                       Company Logo (Letterhead)
                     </Label>
                     <button
@@ -1196,18 +1196,18 @@ export const OfferTemplateMasterForm: React.FC<OfferTemplateMasterFormProps> = (
                       value={logoUrl}
                       onChange={(e) => setLogoUrl(e.target.value)}
                       placeholder="https://.../logo.png"
-                      className="h-8 text-xs rounded-lg bg-white dark:bg-slate-900"
+                      className="h-8 text-xs rounded-lg bg-background dark:bg-slate-900"
                     />
                   ) : (
-                    <div className="flex items-center gap-2 p-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg min-h-[34px]">
+                    <div className="flex items-center gap-2 p-1.5 bg-background dark:bg-slate-900 border border-border/60 dark:border-slate-800 rounded-lg min-h-[34px]">
                       {logoUrl ? (
                         <div className="flex items-center justify-between w-full gap-2">
                           <div className="flex items-center gap-2 min-w-0">
-                            <div className="w-7 h-7 rounded border border-slate-200 bg-slate-50 flex items-center justify-center p-0.5 overflow-hidden shrink-0">
+                            <div className="w-7 h-7 rounded border border-border/60 bg-muted/30 flex items-center justify-center p-0.5 overflow-hidden shrink-0">
                               <img src={logoUrl} alt="Logo" className="max-h-full max-w-full object-contain" />
                             </div>
                             <div className="truncate text-[11px]">
-                              <span className="font-bold text-slate-800 dark:text-white">Logo Attached</span>
+                              <span className="font-bold text-foreground dark:text-white">Logo Attached</span>
                               <span className="text-emerald-600 text-[10px] ml-1.5 font-semibold">Active</span>
                             </div>
                           </div>
@@ -1235,7 +1235,7 @@ export const OfferTemplateMasterForm: React.FC<OfferTemplateMasterFormProps> = (
                       ) : (
                         <div
                           onClick={() => logoInputRef.current?.click()}
-                          className="w-full flex items-center justify-center gap-1.5 py-1 px-2 border border-dashed border-slate-300 dark:border-slate-700 rounded cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors text-slate-600 dark:text-slate-300"
+                          className="w-full flex items-center justify-center gap-1.5 py-1 px-2 border border-dashed border-border dark:border-slate-700 rounded cursor-pointer hover:bg-muted/30 dark:hover:bg-slate-800/60 transition-colors text-muted-foreground dark:text-slate-300"
                         >
                           <Upload className="w-3.5 h-3.5 text-indigo-600" />
                           <span className="text-[11px] font-semibold">
@@ -1248,32 +1248,32 @@ export const OfferTemplateMasterForm: React.FC<OfferTemplateMasterFormProps> = (
                 </div>
 
                 <div className="space-y-1">
-                  <Label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">Signatory Full Name</Label>
+                  <Label className="text-[11px] font-semibold text-muted-foreground dark:text-muted-foreground/70">Signatory Full Name</Label>
                   <Input
                     value={signatoryName}
                     onChange={(e) => setSignatoryName(e.target.value)}
                     placeholder="e.g. Priya Sharma"
-                    className="h-8 text-xs rounded-lg bg-white dark:bg-slate-900"
+                    className="h-8 text-xs rounded-lg bg-background dark:bg-slate-900"
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <Label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">Signatory Title / Designation</Label>
+                  <Label className="text-[11px] font-semibold text-muted-foreground dark:text-muted-foreground/70">Signatory Title / Designation</Label>
                   <Input
                     value={signatoryDesignation}
                     onChange={(e) => setSignatoryDesignation(e.target.value)}
                     placeholder="e.g. Director - Human Resources"
-                    className="h-8 text-xs rounded-lg bg-white dark:bg-slate-900"
+                    className="h-8 text-xs rounded-lg bg-background dark:bg-slate-900"
                   />
                 </div>
 
                 <div className="md:col-span-2 space-y-1">
-                  <Label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">Registered Office Address</Label>
+                  <Label className="text-[11px] font-semibold text-muted-foreground dark:text-muted-foreground/70">Registered Office Address</Label>
                   <Input
                     value={companyAddressOverride}
                     onChange={(e) => setCompanyAddressOverride(e.target.value)}
                     placeholder="Level 6, Tech Park Phase 2, Outer Ring Road, Bengaluru, Karnataka 560103"
-                    className="h-8 text-xs rounded-lg bg-white dark:bg-slate-900"
+                    className="h-8 text-xs rounded-lg bg-background dark:bg-slate-900"
                   />
                 </div>
               </div>
@@ -1282,10 +1282,10 @@ export const OfferTemplateMasterForm: React.FC<OfferTemplateMasterFormProps> = (
             {/* Letter Body Content */}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
-                <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                <Label className="text-xs font-bold text-foreground dark:text-slate-300">
                   Body Content & Letter Clauses <span className="text-rose-500">*</span>
                 </Label>
-                <span className="text-[11px] text-slate-400">
+                <span className="text-[11px] text-muted-foreground/70">
                   Line breaks and formatted paragraphs are preserved
                 </span>
               </div>
@@ -1295,14 +1295,14 @@ export const OfferTemplateMasterForm: React.FC<OfferTemplateMasterFormProps> = (
                 onChange={(e) => setBodyContent(e.target.value)}
                 rows={12}
                 placeholder="Write the full letter body here using dynamic merge codes..."
-                className="w-full p-4 text-xs font-sans rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white leading-relaxed focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+                className="w-full p-4 text-xs font-sans rounded-xl border border-border/60 dark:border-slate-800 bg-background dark:bg-slate-900 text-foreground dark:text-white leading-relaxed focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
                 required
               />
             </div>
 
             {/* Key Terms & Conditions Annexure */}
             <div className="space-y-1.5">
-              <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+              <Label className="text-xs font-bold text-foreground dark:text-slate-300">
                 Key Terms & Compliance Stipulations (Annexure Box)
               </Label>
               <textarea
@@ -1310,13 +1310,13 @@ export const OfferTemplateMasterForm: React.FC<OfferTemplateMasterFormProps> = (
                 onChange={(e) => setTermsAndConditions(e.target.value)}
                 rows={3}
                 placeholder="Special terms, probation conditions, notice period stipulations, or non-compete clauses..."
-                className="w-full p-3 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 leading-relaxed"
+                className="w-full p-3 text-xs rounded-xl border border-border/60 dark:border-slate-800 bg-background dark:bg-slate-900 leading-relaxed"
               />
             </div>
 
             {/* Legal Covenants & Compliance Checkboxes */}
-            <div className="p-4 bg-slate-50/60 dark:bg-slate-800/30 rounded-xl border border-slate-100 dark:border-slate-800 space-y-3">
-              <span className="text-xs font-extrabold text-slate-900 dark:text-white block">
+            <div className="p-4 bg-muted/30/60 dark:bg-slate-800/30 rounded-xl border border-slate-100 dark:border-slate-800 space-y-3">
+              <span className="text-xs font-extrabold text-foreground dark:text-white block">
                 Required Pre-requisites & Legal Covenants
               </span>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -1361,7 +1361,7 @@ export const OfferTemplateMasterForm: React.FC<OfferTemplateMasterFormProps> = (
                 </label>
               </div>
 
-              <div className="pt-2 flex items-center justify-between border-t border-slate-200/60 dark:border-slate-700/60">
+              <div className="pt-2 flex items-center justify-between border-t border-border/60/60 dark:border-slate-700/60">
                 <label className="flex items-center gap-2 text-xs font-bold text-indigo-900 dark:text-indigo-300 cursor-pointer">
                   <input
                     type="checkbox"
@@ -1373,7 +1373,7 @@ export const OfferTemplateMasterForm: React.FC<OfferTemplateMasterFormProps> = (
                 </label>
 
                 <div className="flex items-center gap-2 text-xs">
-                  <span className="font-semibold text-slate-600 dark:text-slate-400">Status:</span>
+                  <span className="font-semibold text-muted-foreground dark:text-muted-foreground/70">Status:</span>
                   <button
                     type="button"
                     onClick={() => setIsActive(isActive === 'Yes' ? 'No' : 'Yes')}
@@ -1381,7 +1381,7 @@ export const OfferTemplateMasterForm: React.FC<OfferTemplateMasterFormProps> = (
                       "px-2.5 py-0.5 rounded-full text-[11px] font-bold cursor-pointer border",
                       isActive === 'Yes'
                         ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                        : "bg-slate-100 text-slate-500 border-slate-200"
+                        : "bg-muted/50 text-muted-foreground border-border/60"
                     )}
                   >
                     {isActive === 'Yes' ? 'Active' : 'Inactive'}
@@ -1424,11 +1424,11 @@ export const OfferTemplateMasterForm: React.FC<OfferTemplateMasterFormProps> = (
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto p-6 rounded-2xl">
           <DialogHeader className="flex flex-row items-center justify-between pb-3 border-b border-slate-100">
             <div>
-              <DialogTitle className="text-base font-extrabold text-slate-900 flex items-center gap-2">
+              <DialogTitle className="text-base font-extrabold text-foreground flex items-center gap-2">
                 <FileText className="w-4 h-4 text-indigo-600" />
                 <span>Live Letterhead Preview with Merged Data</span>
               </DialogTitle>
-              <p className="text-xs text-slate-500 mt-0.5">
+              <p className="text-xs text-muted-foreground mt-0.5">
                 Rendered with simulated candidate / employee profile parameters and company letterhead branding.
               </p>
             </div>
@@ -1438,12 +1438,12 @@ export const OfferTemplateMasterForm: React.FC<OfferTemplateMasterFormProps> = (
             <iframe
               srcDoc={previewHtml}
               title="Letterhead Preview"
-              className="w-full h-[600px] border border-slate-200 rounded-xl shadow-inner bg-white"
+              className="w-full h-[600px] border border-border/60 rounded-xl shadow-inner bg-background"
             />
           </div>
 
           <DialogFooter className="pt-3 border-t border-slate-100 flex items-center justify-between">
-            <span className="text-[11px] text-slate-400">
+            <span className="text-[11px] text-muted-foreground/70">
               Format: High-standard MNC Corporate Letterhead layout
             </span>
             <Button

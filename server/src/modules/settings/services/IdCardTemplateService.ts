@@ -1,5 +1,5 @@
 import { getKnex } from '../../../db/knex';
-import type { TenantContext } from '../../../common/types/tenant.types';
+import type { TenantContext } from '../../../db/types';
 import type {
   IdCardTemplate,
   IdCardTemplateVersion,
@@ -7,8 +7,13 @@ import type {
   UpdateTemplateInput,
   IdCardConfig,
 } from '../types/idCardTemplate.types';
-import { DEFAULT_ID_CARD_CONFIG } from '../../../../../client/src/features/id-card/constants/defaultIdCardConfig';
 import { NotFoundError, ValidationError } from '../../../common/errors';
+
+const DEFAULT_ID_CARD_CONFIG: any = {
+  header: { visible: true, showLogo: true, orgName: 'Company', subtitle: 'Official Credential' },
+  photo: { visible: true, allowEmployeeUpload: true },
+  footer: { visible: true, text: 'Official Access Badge' },
+};
 
 export class IdCardTemplateService {
   /**

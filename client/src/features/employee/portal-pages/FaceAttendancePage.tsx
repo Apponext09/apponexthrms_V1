@@ -179,6 +179,7 @@ export default function FaceAttendancePage() {
       const res = await apiClient.get('/attendance/my-shift');
       const s = res.data?.data;
       if (s) {
+        setHasShift(true);
         setMyShift({
           shiftName: s.shift_name || s.shiftName || '',
           startTime: s.start_time || s.startTime || '',
@@ -188,8 +189,14 @@ export default function FaceAttendancePage() {
           gracePeriodMinutes: Number(s.grace_period_minutes || s.gracePeriodMinutes || 15),
           durationHours: Number(s.duration_hours || s.durationHours || 9),
         });
+      } else {
+        // HR uses this same self-service flow as employees, managers, and TLs:
+        // a normal-day face punch requires an active shift assignment.
+        setHasShift(false);
+        setMyShift((current) => ({ ...current, shiftName: 'No shift assigned', startTime: '', endTime: '' }));
       }
     } catch (err) {
+      setHasShift(false);
       console.warn('Failed to fetch assigned shift:', err);
     }
   };
@@ -931,20 +938,8 @@ export default function FaceAttendancePage() {
     <div className="space-y-4 pb-12 select-none">
       <canvas ref={canvasRef} className="hidden" />
 
-      {/* MODE DISABLED NOTICE */}
-      {(attendanceMode === 'gps' || attendanceMode === 'wifi_ip') && (
-        <div className="p-4 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-300 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs font-semibold shadow-2xs">
-          <div className="flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
-            <span>
-              Face Recognition is currently disabled by Organization Admin. Attendance verification is set to <strong>{attendanceMode === 'gps' ? 'GPS Punch' : 'Wi-Fi IP Network'}</strong> mode.
-            </span>
-          </div>
-          <Button size="sm" variant="outline" className="h-7 text-xs font-bold shrink-0 border-amber-500/40 hover:bg-amber-500/20" onClick={() => navigate('/employee/dashboard')}>
-            Go to Portal Dashboard
-          </Button>
-        </div>
-      )}
+
+
 
       {/* TOP BANNER */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-card border border-border/80 p-4 rounded-xl shadow-2xs">
@@ -1428,7 +1423,7 @@ export default function FaceAttendancePage() {
               <div className="p-3 rounded-2xl bg-muted/30 border border-border/40 text-xs space-y-1">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground font-medium">Shift Type</span>
-                  <span className="font-bold text-foreground">{myShift.shiftName}</span>
+                  <span className="font-bold text-foreground">{myShift.shiftName || 'No shift assigned'}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground font-medium">Timing</span>

@@ -46,6 +46,8 @@ export const useEmployeeStatuses = () => {
         return [];
       }
     },
+    staleTime: 0,
+    refetchOnMount: 'always',
   });
 
   const createMutation = useMutation({

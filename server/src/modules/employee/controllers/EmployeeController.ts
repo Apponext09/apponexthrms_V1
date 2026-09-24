@@ -49,6 +49,7 @@ export class EmployeeController {
       mobile: validated.mobile,
       dateOfBirth: validated.dateOfBirth,
       gender: validated.gender,
+      maritalStatus: validated.maritalStatus,
       dateOfJoining: validated.dateOfJoining,
       employmentType: validated.employmentType,
       status: validated.status,
@@ -75,6 +76,11 @@ export class EmployeeController {
       success: true,
       status: emp.status || 'active',
       data: {
+        // Identity of the new record — callers need this to navigate to the profile
+        // or to chain follow-up calls (salary structure, documents, id-card…).
+        id: (emp as any).id,
+        uuid: (emp as any).uuid,
+        employeeCode: (emp as any).employee_code ?? (emp as any).employeeCode,
         employeeName: fullName,
         employeeEmail: emp.email,
         organizationName: org?.name || '',
@@ -111,13 +117,18 @@ export class EmployeeController {
       .where('id', ctx.userId)
       .first();
 
-    if (user?.employee_id) {
+    // Knex response mapping exposes snake_case database fields as camelCase.
+    // Support both forms so a manager/team lead is linked to their own record,
+    // never an arbitrary employee record.
+    const linkedEmployeeId = user?.employeeId || user?.employee_id;
+    if (linkedEmployeeId) {
       const emp = await db('employees')
-        .where('id', user.employee_id)
+        .where('id', linkedEmployeeId)
+        .where('organization_id', ctx.organizationId)
         .whereNull('deleted_at')
         .first();
       if (emp) {
-        employeeId = user.employee_id;
+        employeeId = Number(linkedEmployeeId);
       }
     }
 
@@ -133,24 +144,48 @@ export class EmployeeController {
     }
 
     if (!employeeId) {
-      const firstEmp = await db('employees')
-        .where('organization_id', ctx.organizationId)
-        .whereNull('deleted_at')
-        .first();
-      if (firstEmp) {
-        employeeId = firstEmp.id;
-      }
-    }
-
-    if (!employeeId) {
       res.status(404).json({ success: false, message: 'Employee profile not linked' });
       return;
     }
 
     const employee = await this.service.getEmployee(ctx, employeeId);
+    const employeeRecord = employee as any;
+    const departmentId = employeeRecord.currentDepartmentId || employeeRecord.current_department_id;
+    const designationId = employeeRecord.currentDesignationId || employeeRecord.current_designation_id;
+    const [department, designation] = await Promise.all([
+      departmentId
+        ? db('departments').where('id', departmentId).where('organization_id', ctx.organizationId).first('name')
+        : null,
+      designationId
+        ? db('designations').where('id', designationId).where('organization_id', ctx.organizationId).first('name')
+        : null,
+    ]);
+    // Employee records do not own authorization roles. Return the authenticated
+    // user's assigned role as part of the self-profile response so a stale
+    // legacy users.role value cannot label a lead or manager as an employee.
+    const assignedRoles = await db('user_roles')
+      .join('roles', 'user_roles.role_id', 'roles.id')
+      .where('user_roles.user_id', ctx.userId)
+      .where(function (this: any) {
+        this.where('user_roles.organization_id', ctx.organizationId).orWhereNull('user_roles.organization_id');
+      })
+      .select('roles.code');
+    const rolePriority: Record<string, number> = {
+      super_admin: 100, organization_admin: 90, ceo: 90, hr_admin: 80, hr: 80,
+      hr_manager: 70, support: 70, finance: 70, finance_manager: 70,
+      department_head: 60, manager: 60, team_lead: 50, consultant: 20,
+      intern: 10, employee: 5,
+    };
+    const roles = Array.from(new Set(assignedRoles.map((row: any) => String(row.code).toLowerCase())));
+    const accessRole = [...roles].sort((a, b) => (rolePriority[b] ?? 0) - (rolePriority[a] ?? 0))[0];
     res.json({
       success: true,
-      data: employee,
+      data: {
+        ...employee,
+        ...(department?.name ? { department: department.name, departmentName: department.name, department_name: department.name } : {}),
+        ...(designation?.name ? { designation: designation.name, designationName: designation.name, designation_name: designation.name } : {}),
+        ...(accessRole ? { accessRole, access_role: accessRole, roles } : {}),
+      },
     });
   });
 
@@ -167,8 +202,9 @@ export class EmployeeController {
       .where('organization_id', ctx.organizationId)
       .first();
 
-    if (user?.employee_id) {
-      employeeId = user.employee_id;
+    const linkedEmployeeId = user?.employeeId || user?.employee_id;
+    if (linkedEmployeeId) {
+      employeeId = Number(linkedEmployeeId);
     } else if (user?.email) {
       const empByEmail = await db('employees')
         .where('email', user.email)
@@ -280,18 +316,25 @@ export class EmployeeController {
   updateEmployee = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
     const { id } = req.params;
+    if (req.body) {
+      if (req.body.accessRole) req.body.accessRole = String(req.body.accessRole).toLowerCase();
+      if (req.body.access_role) req.body.access_role = String(req.body.access_role).toLowerCase();
+      if (req.body.role) req.body.role = String(req.body.role).toLowerCase();
+    }
     console.log('--- UPDATE EMPLOYEE REQUEST BODY ---', req.body);
     const validated = validate(req.body, employeeUpdateSchema);
+    const payloadToUpdate = { ...req.body, ...(validated || {}) };
+    if (req.body && (req.body.accessRole || req.body.access_role || req.body.role)) {
+      payloadToUpdate.accessRole = String(req.body.accessRole || req.body.access_role || req.body.role).toLowerCase();
+    }
 
-    const employee = await this.service.updateEmployee(ctx, parseInt(id, 10), validated as any);
-    const db = getKnex();
-    const org = await db('organizations').where('id', ctx.organizationId).first().catch(() => null);
-    const fullName = `${employee.first_name || (employee as any).firstName || ''} ${employee.last_name || (employee as any).lastName || ''}`.trim();
+    await this.service.updateEmployee(ctx, parseInt(id, 10), payloadToUpdate as any);
+    const fullEmployee = await this.service.getEmployee(ctx, parseInt(id, 10)).catch(() => null);
 
     res.json({
       success: true,
-      status: employee.status || 'active',
-      data: employee,
+      status: fullEmployee?.status || 'active',
+      data: fullEmployee || {},
     });
   });
 
@@ -433,7 +476,7 @@ export class EmployeeController {
           empId = empByEmail.id;
         }
       }
-    } catch (e) {}
+    } catch (e) { }
 
     const result = await this.documentService.getEmployeeDocuments(ctx, empId, {
       page: 1,
@@ -793,6 +836,29 @@ export class EmployeeController {
 
     const result = await this.service.getMyProfileUpdateRequests(empId);
     return res.json({ success: true, data: result });
+  });
+
+  /**
+   * GET /employees/org-hierarchy/rules
+   */
+  getOrgHierarchyRules = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { OrgHierarchyService } = await import('../services/OrgHierarchyService');
+    const service = new OrgHierarchyService();
+    const rules = await service.getHierarchyRules(ctx);
+    res.json({ success: true, data: rules });
+  });
+
+  /**
+   * PUT /employees/org-hierarchy/rules
+   */
+  saveOrgHierarchyRules = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { rules } = req.body;
+    const { OrgHierarchyService } = await import('../services/OrgHierarchyService');
+    const service = new OrgHierarchyService();
+    await service.saveHierarchyRules(ctx, rules || []);
+    res.json({ success: true, message: 'Org hierarchy rules saved successfully' });
   });
 }
 

@@ -42,6 +42,9 @@ export class DepartmentService {
       department_head_id: data.departmentHeadId || null,
       description: data.description || null,
       status: data.status || 'active',
+      // Departments created while a company is selected belong to that company.
+      // Parent-organization context deliberately remains organization-wide.
+      company_id: ctx.companyId || null,
       created_by: ctx.userId,
       updated_by: ctx.userId,
     } as any);

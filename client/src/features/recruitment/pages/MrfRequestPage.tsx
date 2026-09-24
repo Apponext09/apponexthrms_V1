@@ -150,7 +150,7 @@ const ALL_CONFIGURABLE_COLUMNS: ColumnConfig[] = [
   { key: 'comment', label: 'Comment' },
   { key: 'interviewer', label: 'Interviewer' },
   { key: 'payScaleForPosition', label: 'Pay Scale For The Position' },
-  { key: 'positionTitle', label: 'Position Title' },
+  { key: 'positionTitle', label: 'Position Title/ Job Role' },
   { key: 'company', label: 'Company' },
   { key: 'requestedBy', label: 'Requested By' },
   { key: 'requestedOn', label: 'Requested On' },
@@ -257,6 +257,30 @@ export const MrfRequestPage: React.FC = () => {
   const [data, setData] = useState<MRFRequest[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const isMrfExpiredOrClosed = (item: MRFRequest): boolean => {
+    if (!item) return false;
+    const status = (item.status || '').toLowerCase();
+    const stage = (item.stage || '').toLowerCase();
+    if (status === 'closed' || stage === 'completed' || stage === 'rejected') {
+      return true;
+    }
+    const targetDateStr = item.targetClosureDate || item.expiryDate;
+    if (targetDateStr) {
+      try {
+        const targetDate = new Date(targetDateStr);
+        if (!isNaN(targetDate.getTime())) {
+          targetDate.setHours(23, 59, 59, 999);
+          if (targetDate.getTime() < new Date().getTime()) {
+            return true;
+          }
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+    return false;
+  };
+
   const fetchMrfs = async () => {
     try {
       setLoading(true);
@@ -285,6 +309,23 @@ export const MrfRequestPage: React.FC = () => {
             return isDirectMatch || isTitleMatch;
           });
 
+          const targetClosure = item.targetClosureDate || item.target_closure_date || item.expiryDate || item.expiry_date || '';
+          let isExpired = false;
+          if (targetClosure) {
+            try {
+              const targetDate = new Date(targetClosure);
+              if (!isNaN(targetDate.getTime())) {
+                targetDate.setHours(23, 59, 59, 999);
+                if (targetDate.getTime() < new Date().getTime()) {
+                  isExpired = true;
+                }
+              }
+            } catch (e) {}
+          }
+
+          const rawStatus = item.status || 'Open';
+          const computedStatus: 'Open' | 'Closed' = (rawStatus === 'Closed' || isExpired) ? 'Closed' : 'Open';
+
           return {
             id: item.id,
             mrNumber: item.mrNumber || item.mr_number,
@@ -295,7 +336,7 @@ export const MrfRequestPage: React.FC = () => {
             requestedOn: item.createdAt ? item.createdAt.replace('T', ' ').substring(0, 19) : (item.created_at ? item.created_at.replace('T', ' ').substring(0, 19) : ''),
             numberOfPositions: item.numberOfPositions || item.number_of_positions,
             department: item.department || 'HR',
-            status: item.status,
+            status: computedStatus,
             applicants: matchedApps.length > 0 ? matchedApps.length : Number(item.applicants || 0),
             recruitmentType: item.recruitmentType || item.recruitment_type || 'Both',
             companyLocation: item.companyLocation || item.company_location || 'Headquarters',
@@ -311,8 +352,8 @@ export const MrfRequestPage: React.FC = () => {
             skills: item.skills || '',
             comment: item.comment || '',
             jobDescription: item.jobDescription || item.job_description || '',
-            targetClosureDate: item.targetClosureDate || item.target_closure_date || item.expiryDate || item.expiry_date || '',
-            expiryDate: item.expiryDate || item.expiry_date || item.targetClosureDate || item.target_closure_date || ''
+            targetClosureDate: targetClosure,
+            expiryDate: targetClosure
           };
         });
         setData(mapped);
@@ -448,7 +489,7 @@ export const MrfRequestPage: React.FC = () => {
             const desig = (item.designation || item.jobTitle || item.designationName || item.designation_name || item.accessRole || item.role || '').toLowerCase();
             const role = (item.accessRole || item.role || '').toLowerCase();
 
-            const isMgrRole = ['manager', 'department_head', 'hr_manager', 'organization_admin', 'admin', 'team_lead'].includes(role);
+            const isMgrRole = ['manager', 'department_head', 'hr', 'hr_admin', 'hr_manager', 'organization_admin', 'admin', 'team_lead'].includes(role);
             const isMgrDesig = desig.includes('manager') || desig.includes('head') || desig.includes('lead') || desig.includes('director') || desig.includes('vp') || desig.includes('chief') || desig.includes('supervisor');
             const isMgr = isMgrRole || isMgrDesig || Boolean(item.isManager) || Boolean(item.is_manager);
 
@@ -876,65 +917,105 @@ export const MrfRequestPage: React.FC = () => {
     try {
       setLoadingApplicants(true);
       const targetMrf = data.find(m => m.id === mrfId) || viewingMrf;
-      const targetTitle = (targetMrf?.positionTitle || '').toLowerCase().trim();
 
       const [resumeRes, appRes] = await Promise.allSettled([
-        apiClient.get('/recruitment/resume-bank', { params: { mrfRequestId: mrfId } }),
-        apiClient.get('/recruitment/applications')
+        apiClient.get('/recruitment/resume-bank', { params: { mrfRequestId: mrfId, pageSize: 500 } }),
+        // Pass mrfRequestId so server filters applications linked to this MRF via jobs
+        apiClient.get('/recruitment/applications', { params: { mrfRequestId: mrfId, pageSize: 500 } })
       ]);
 
       let combined: any[] = [];
 
+      // ── Resume bank entries ────────────────────────────────────────────────
       if (resumeRes.status === 'fulfilled' && resumeRes.value.data?.success && Array.isArray(resumeRes.value.data.data)) {
-        combined = resumeRes.value.data.data.filter((c: any) => {
-          const cMrfId = Number(c.mrfRequestId || c.mrf_request_id || c.mrfId);
-          const cPos = (c.positionTitle || c.position || '').toLowerCase().trim();
-          return cMrfId === Number(mrfId) || (targetTitle && (cPos.includes(targetTitle) || targetTitle.includes(cPos)));
-        });
+        combined = resumeRes.value.data.data
+          // Backend already filters by mrfRequestId — trust it, no client-side re-filter needed
+          .map((c: any) => {
+            // Build name: resume_bank has its own first_name/last_name/candidate_name columns
+            // AND a candidate_name alias from the SQL JOIN (which now also checks rb.first_name first)
+            const rbFirstLast = [c.first_name, c.last_name].filter(Boolean).join(' ').trim();
+            const resolvedName =
+              rbFirstLast ||
+              c.candidate_name ||
+              c.fullName ||
+              c.full_name ||
+              c.name ||
+              c.tracker_id ||
+              'Unknown';
+
+            return {
+              // Keep all raw fields
+              ...c,
+              // ── Normalized fields for consistent column rendering ──
+              name:           resolvedName,
+              email:          c.candidate_email || c.email || '',
+              contact:        c.candidate_phone || c.phone || c.contact || c.mobile || '',
+              qualification:  c.candidate_qualification || c.qualification || c.highest_qualification || '',
+              university:     c.candidate_university || c.university || c.college || '',
+              experience:     c.candidate_experience || c.years_of_experience || c.totalExperienceYears || c.experience || '',
+              maritalStatus:  c.candidate_marital_status || c.marital_status || c.maritalStatus || '',
+              gender:         c.candidate_gender || c.gender || '',
+              currentCompany: c.candidate_company || c.current_company || c.currentCompany || '',
+              skills:         Array.isArray(c.candidate_skills) ? c.candidate_skills.join(', ')
+                              : Array.isArray(c.skills) ? c.skills.join(', ')
+                              : (c.candidate_skills || c.skills || ''),
+              dob:            c.candidate_dob || c.dob || c.dateOfBirth || '',
+              comments:       c.candidate_comments || c.comments || c.notes || '',
+              relevantExperience: c.relevant_experience || c.relevantExperience || '',
+            };
+          });
       }
 
+      // ── Applications from pipeline ─────────────────────────────────────────
       if (appRes.status === 'fulfilled' && appRes.value.data?.success) {
-        const rawApps = Array.isArray(appRes.value.data.data) 
-          ? appRes.value.data.data 
+        const rawApps = Array.isArray(appRes.value.data.data)
+          ? appRes.value.data.data
           : (Array.isArray(appRes.value.data.data?.items) ? appRes.value.data.data.items : []);
 
         rawApps.forEach((app: any) => {
-          const appMrfId = Number(app.mrf_request_id || app.mrfRequestId || app.mrfId);
-          const appPosition = (app.positionTitle || app.position_title || app.jobTitle || '').toLowerCase().trim();
+          const candidateId = app.candidate_id || app.id;
+          // De-duplicate: if already added via resume bank, merge pipeline stage/status onto it
+          const existingIndex = combined.findIndex(c =>
+            c.id === candidateId ||
+            (c.candidate_id && c.candidate_id === candidateId) ||
+            (c.email && app.candidate_email && c.email === app.candidate_email)
+          );
 
-          const isDirectMatch = appMrfId === Number(mrfId);
-          const isTitleMatch = Boolean(targetTitle) && (appPosition.includes(targetTitle) || targetTitle.includes(appPosition));
-
-          if (isDirectMatch || isTitleMatch) {
-            const candidateId = app.candidate_id || app.id;
-            const existingIndex = combined.findIndex(c => c.id === candidateId || (c.email && app.candidate_email && c.email === app.candidate_email));
-            
-            if (existingIndex !== -1) {
-              combined[existingIndex] = {
-                ...combined[existingIndex],
-                applicationId: app.id,
-                pipelineStageId: app.pipeline_stage_id || app.pipelineStageId || app.stage_id || combined[existingIndex].pipelineStageId || '',
-                positionTitle: app.position_title || app.positionTitle || app.jobTitle || combined[existingIndex].positionTitle || '',
-                status: app.application_status || app.applicationStatus || app.status || combined[existingIndex].status || 'applied'
-              };
-            } else {
-              combined.push({
-                id: candidateId,
-                applicationId: app.id,
-                pipelineStageId: app.pipeline_stage_id || app.pipelineStageId || app.stage_id || '',
-                positionTitle: app.position_title || app.positionTitle || app.jobTitle || targetMrf?.positionTitle || '',
-                name: app.candidate_name || app.candidateName || app.name || 'Candidate',
-                email: app.candidate_email || app.candidateEmail || app.email || 'N/A',
-                contact: app.candidate_phone || app.candidatePhone || app.phone || app.contact || 'N/A',
-                status: app.application_status || app.applicationStatus || app.status || 'applied',
-                skills: app.candidate_skills || app.skills || '-',
-                experience: app.candidate_experience || app.years_of_experience || '-',
-                qualification: app.qualification || app.highest_qualification || '-',
-                maritalStatus: app.marital_status || app.maritalStatus || '-',
-                gender: app.gender || '-',
-                currentCompany: app.candidate_company || app.current_company || '-'
-              });
-            }
+          if (existingIndex !== -1) {
+            // Enrich existing record with pipeline application data
+            combined[existingIndex] = {
+              ...combined[existingIndex],
+              applicationId:  app.id,
+              pipelineStageId: app.pipeline_stage_id || app.pipelineStageId || app.stage_id || combined[existingIndex].pipelineStageId || '',
+              status:         app.application_status || app.applicationStatus || app.status || combined[existingIndex].status || 'applied',
+              positionTitle:  app.position_title || app.positionTitle || app.jobTitle || combined[existingIndex].positionTitle || targetMrf?.positionTitle || '',
+            };
+          } else {
+            // New candidate from pipeline not yet in resume bank
+            const appName = app.candidate_name || app.candidateName ||
+                            (app.first_name ? `${app.first_name} ${app.last_name || ''}`.trim() : '') || 'Candidate';
+            combined.push({
+              ...app,
+              id:             candidateId,
+              applicationId:  app.id,
+              pipelineStageId: app.pipeline_stage_id || app.pipelineStageId || app.stage_id || '',
+              positionTitle:  app.position_title || app.positionTitle || app.jobTitle || targetMrf?.positionTitle || '',
+              status:         app.application_status || app.applicationStatus || app.status || 'applied',
+              // Normalized fields
+              name:           appName,
+              email:          app.candidate_email || app.candidateEmail || app.email || '',
+              contact:        app.candidate_phone || app.candidatePhone || app.phone || app.contact || '',
+              qualification:  app.qualification || app.highest_qualification || '',
+              university:     app.university || app.college || '',
+              experience:     app.candidate_experience || app.years_of_experience || app.experience || '',
+              maritalStatus:  app.marital_status || app.maritalStatus || '',
+              gender:         app.gender || '',
+              currentCompany: app.candidate_company || app.current_company || app.currentCompany || '',
+              skills:         Array.isArray(app.skills) ? app.skills.join(', ') : (app.candidate_skills || app.skills || ''),
+              dob:            app.dob || app.dateOfBirth || '',
+              comments:       app.comments || app.notes || '',
+              relevantExperience: app.relevant_experience || app.relevantExperience || '',
+            });
           }
         });
       }
@@ -1280,21 +1361,14 @@ export const MrfRequestPage: React.FC = () => {
 
   const [loggedInEmployeeName, setLoggedInEmployeeName] = useState('sakshi shukla');
 
-  // Dynamic dropdown field lists
-  const [positions, setPositions] = useState([
-    'HR EXECUTIVE', 'SOFTWARE ENGINEER', 'SALES MANAGER', 'QA ENGINEER', 'PRODUCT MANAGER', 'UI/UX DESIGNER'
-  ]);
-  const [locations, setLocations] = useState([
-    'Headquarters', 'New York', 'Mumbai', 'London', 'Remote'
-  ]);
-  const [departments, setDepartments] = useState([
-    'HR', 'Engineering', 'Sales', 'Marketing', 'Finance', 'Operations', 'IT'
-  ]);
-  const [grades, setGrades] = useState([
-    'Grade A', 'Grade B', 'Grade C', 'Grade D', 'Junior', 'Mid', 'Senior'
-  ]);
-  const [companiesList, setCompaniesList] = useState<string[]>(['Trial Company', 'Apponext Tech', 'Kosqu Technolab']);
-  const [employeesList, setEmployeesList] = useState<string[]>(['sakshi shukla', 'Rahul Sharma', 'Siddharth Mehta']);
+  // Dynamic dropdown field lists from Database
+  const [positions, setPositions] = useState<string[]>([]);
+  const [locations, setLocations] = useState<string[]>([]);
+  const [departments, setDepartments] = useState<string[]>([]);
+  const [grades, setGrades] = useState<string[]>([]);
+  const [employmentTypes, setEmploymentTypes] = useState<string[]>([]);
+  const [companiesList, setCompaniesList] = useState<string[]>([]);
+  const [employeesList, setEmployeesList] = useState<any[]>([]);
 
   // Raw reference maps for ID resolution & company filtering
   const [positionsRaw, setPositionsRaw] = useState<{ id: number; name: string; companyId?: number | null; companyName?: string }[]>([]);
@@ -1302,6 +1376,7 @@ export const MrfRequestPage: React.FC = () => {
   const [locationsRaw, setLocationsRaw] = useState<{ id: number; name: string; companyId?: number | null; companyName?: string }[]>([]);
   const [departmentsRaw, setDepartmentsRaw] = useState<{ id: number; name: string; companyId?: number | null; companyName?: string }[]>([]);
   const [gradesRaw, setGradesRaw] = useState<{ id: number; name: string; companyId?: number | null; companyName?: string }[]>([]);
+  const [employmentTypesRaw, setEmploymentTypesRaw] = useState<{ id: number; name: string; companyId?: number | null; companyName?: string }[]>([]);
   const [employeesRaw, setEmployeesRaw] = useState<{ id: number; name: string; first_name?: string; last_name?: string; departmentId?: number | null; departmentName?: string; department?: string; companyId?: number | null; companyName?: string; designation?: string; accessRole?: string; isManager?: boolean; rawItem?: any }[]>([]);
 
   // Sub-Company Filter Helpers
@@ -1337,6 +1412,12 @@ export const MrfRequestPage: React.FC = () => {
     if (!gradesRaw || gradesRaw.length === 0) return grades;
     const matched = gradesRaw.filter(g => isCompanyMatch(g.companyId, g.companyName, companyName));
     return matched.length > 0 ? Array.from(new Set(matched.map(g => g.name))) : grades;
+  };
+
+  const getFilteredEmploymentTypes = (companyName?: string) => {
+    if (!employmentTypesRaw || employmentTypesRaw.length === 0) return employmentTypes;
+    const matched = employmentTypesRaw.filter(e => isCompanyMatch(e.companyId, e.companyName, companyName));
+    return matched.length > 0 ? Array.from(new Set(matched.map(e => e.name))) : employmentTypes;
   };
 
   // Helper to resolve & filter Managers for a given department and company
@@ -1407,91 +1488,101 @@ export const MrfRequestPage: React.FC = () => {
   };
 
   useEffect(() => {
+    const extractList = (res: any) => {
+      const body = res?.data?.data !== undefined ? res.data.data : res?.data;
+      if (Array.isArray(body)) return body;
+      if (Array.isArray(body?.items)) return body.items;
+      if (Array.isArray(res?.data?.items)) return res.data.items;
+      return [];
+    };
+
     // Fetch designations (positions)
     apiClient.get('/settings/designations')
       .then(res => {
-        if (res.data?.success && Array.isArray(res.data.data)) {
-          const list = res.data.data.map((item: any) => ({
-            id: Number(item.id),
-            name: String(item.name || item.title || ''),
-            companyId: item.companyId || item.company_id ? Number(item.companyId || item.company_id) : null,
-            companyName: item.companyName || item.company_name || item.company || null,
-          })).filter((x: any) => x.id && x.name);
-          if (list.length > 0) {
-            setPositions(list.map((x: any) => x.name));
-            setPositionsRaw(list);
-          }
-        }
+        const raw = extractList(res);
+        const list = raw.map((item: any) => ({
+          id: Number(item.id),
+          name: String(item.name || item.title || ''),
+          companyId: item.companyId || item.company_id ? Number(item.companyId || item.company_id) : null,
+          companyName: item.companyName || item.company_name || item.company || null,
+        })).filter((x: any) => x.id && x.name);
+        setPositions(Array.from(new Set(list.map((x: any) => x.name))));
+        setPositionsRaw(list);
       })
       .catch(err => console.error('Failed to load designations', err));
 
     // Fetch locations
     apiClient.get('/settings/locations')
       .then(res => {
-        if (res.data?.success && Array.isArray(res.data.data)) {
-          const list = res.data.data.map((item: any) => ({
-            id: Number(item.id),
-            name: String(item.name),
-            companyId: item.companyId || item.company_id ? Number(item.companyId || item.company_id) : null,
-            companyName: item.companyName || item.company_name || item.company || null,
-          })).filter((x: any) => x.id && x.name);
-          if (list.length > 0) {
-            setLocations(list.map((x: any) => x.name));
-            setLocationsRaw(list);
-          }
-        }
+        const raw = extractList(res);
+        const list = raw
+          .filter((item: any) => item.status !== 'inactive' && item.status !== 'Inactive' && item.is_active !== 'No' && item.isActive !== 'No')
+          .map((item: any) => ({
+          id: Number(item.id),
+          name: String(item.name || item.location_name || item.locationName),
+          companyId: item.companyId || item.company_id ? Number(item.companyId || item.company_id) : null,
+          companyName: item.companyName || item.company_name || item.company || null,
+        })).filter((x: any) => x.id && x.name);
+        setLocations(Array.from(new Set(list.map((x: any) => x.name))));
+        setLocationsRaw(list);
       })
       .catch(err => console.error('Failed to load locations', err));
 
     // Fetch departments
     apiClient.get('/settings/departments')
       .then(res => {
-        if (res.data?.success && Array.isArray(res.data.data)) {
-          const list = res.data.data.map((item: any) => ({
-            id: Number(item.id),
-            name: String(item.name),
-            companyId: item.companyId || item.company_id ? Number(item.companyId || item.company_id) : null,
-            companyName: item.companyName || item.company_name || item.company || null,
-          })).filter((x: any) => x.id && x.name);
-          if (list.length > 0) {
-            setDepartments(list.map((x: any) => x.name));
-            setDepartmentsRaw(list);
-          }
-        }
+        const raw = extractList(res);
+        const list = raw.map((item: any) => ({
+          id: Number(item.id),
+          name: String(item.name),
+          companyId: item.companyId || item.company_id ? Number(item.companyId || item.company_id) : null,
+          companyName: item.companyName || item.company_name || item.company || null,
+        })).filter((x: any) => x.id && x.name);
+        setDepartments(Array.from(new Set(list.map((x: any) => x.name))));
+        setDepartmentsRaw(list);
       })
       .catch(err => console.error('Failed to load departments', err));
 
     // Fetch grades
     apiClient.get('/settings/grades')
       .then(res => {
-        if (res.data?.success && Array.isArray(res.data.data)) {
-          const list = res.data.data.map((item: any) => ({
-            id: Number(item.id),
-            name: String(item.name),
-            companyId: item.companyId || item.company_id ? Number(item.companyId || item.company_id) : null,
-            companyName: item.companyName || item.company_name || item.company || null,
-          })).filter((x: any) => x.id && x.name);
-          if (list.length > 0) {
-            setGrades(list.map((x: any) => x.name));
-            setGradesRaw(list);
-          }
-        }
+        const raw = extractList(res);
+        const list = raw.map((item: any) => ({
+          id: Number(item.id),
+          name: String(item.name),
+          companyId: item.companyId || item.company_id ? Number(item.companyId || item.company_id) : null,
+          companyName: item.companyName || item.company_name || item.company || null,
+        })).filter((x: any) => x.id && x.name);
+        setGrades(Array.from(new Set(list.map((x: any) => x.name))));
+        setGradesRaw(list);
       })
       .catch(err => console.error('Failed to load grades', err));
+
+    // Fetch employment types
+    apiClient.get('/settings/employment-types', { params: { limit: 1000 } })
+      .then(res => {
+        const raw = extractList(res);
+        const list = raw.map((item: any) => ({
+          id: Number(item.id),
+          name: String(item.name || item.title || item.employee_type || item.employeeType || ''),
+          companyId: item.companyId || item.company_id ? Number(item.companyId || item.company_id) : null,
+          companyName: item.companyName || item.company_name || item.company || null,
+        })).filter((x: any) => x.id && x.name);
+        setEmploymentTypes(Array.from(new Set(list.map((x: any) => x.name))));
+        setEmploymentTypesRaw(list);
+      })
+      .catch(err => console.error('Failed to load employment types', err));
 
     // Fetch companies
     apiClient.get('/settings/companies')
       .then(res => {
-        if (res.data?.success && Array.isArray(res.data.data)) {
-          const list = res.data.data.map((item: any) => ({
-            id: Number(item.companyId || item.company_id || item.id),
-            name: String(item.name)
-          })).filter((x: any) => x.id && x.name);
-          if (list.length > 0) {
-            setCompaniesList(list.map((x: any) => x.name));
-            setCompaniesRaw(list);
-          }
-        }
+        const raw = extractList(res);
+        const list = raw.map((item: any) => ({
+          id: Number(item.companyId || item.company_id || item.id),
+          name: String(item.name)
+        })).filter((x: any) => x.id && x.name);
+        setCompaniesList(Array.from(new Set(list.map((x: any) => x.name))));
+        setCompaniesRaw(list);
       })
       .catch(err => console.error('Failed to load companies', err));
 
@@ -1511,7 +1602,7 @@ export const MrfRequestPage: React.FC = () => {
             const desig = (item.designation || item.jobTitle || item.designationName || item.designation_name || item.accessRole || item.role || '').toLowerCase();
             const role = (item.accessRole || item.role || '').toLowerCase();
 
-            const isMgrRole = ['manager', 'department_head', 'hr_manager', 'organization_admin', 'admin', 'team_lead'].includes(role);
+            const isMgrRole = ['manager', 'department_head', 'hr', 'hr_admin', 'hr_manager', 'organization_admin', 'admin', 'team_lead'].includes(role);
             const isMgrDesig = desig.includes('manager') || desig.includes('head') || desig.includes('lead') || desig.includes('director') || desig.includes('vp') || desig.includes('chief') || desig.includes('supervisor');
             const isMgr = isMgrRole || isMgrDesig || Boolean(item.isManager) || Boolean(item.is_manager);
 
@@ -1671,9 +1762,7 @@ export const MrfRequestPage: React.FC = () => {
     const safeData = Array.isArray(data) ? data : [];
     let result = safeData.filter(item => {
       if (!item) return false;
-      const status = (item.status || '').toLowerCase();
-      const stage = (item.stage || '').toLowerCase();
-      const isClosed = status === 'closed' || stage === 'completed';
+      const isClosed = isMrfExpiredOrClosed(item);
       const matchStatus = activeTab === 'open' ? !isClosed : isClosed;
       
       const matchMrNumber = mrNum.trim() === '' || 
@@ -1771,7 +1860,7 @@ export const MrfRequestPage: React.FC = () => {
   // Delete Request handler
   const handleDelete = async (id: number) => {
     const recordToDelete = safeDataList.find(item => item.id === id);
-    if (confirm(`Are you sure you want to delete ${recordToDelete?.mrNumber}?`)) {
+    if (await window.appConfirm(`Are you sure you want to delete ${recordToDelete?.mrNumber}?`)) {
       try {
         const response = await apiClient.delete(`/recruitment/mrf/${id}`);
         if (response.data?.success) {
@@ -1863,7 +1952,7 @@ export const MrfRequestPage: React.FC = () => {
     }
     downloadCsvFile(
       `MRF_Requests_Export_${activeTab}.csv`,
-      ['MR Number', 'Stage', 'Position Title', 'Company', 'Requested By', 'Requested On', 'Positions', 'Department', 'Status', 'Applicants'],
+      ['MR Number', 'Stage', 'Position Title/ Job Role', 'Company', 'Requested By', 'Requested On', 'Positions', 'Department', 'Status', 'Applicants'],
       filteredData.map((item) => [
         item.mrNumber,
         item.stage,
@@ -1963,8 +2052,8 @@ export const MrfRequestPage: React.FC = () => {
       toast.error('Number of Positions is required and must be greater than 0');
       return;
     }
-    if (formFields.positionTitle === 'Choose') {
-      toast.error('Please select a Position Title');
+    if (formFields.positionTitle === 'Choose' || !formFields.positionTitle?.trim()) {
+      toast.error('Please select a Position Title/ Job Role');
       return;
     }
     if (formFields.company === 'Choose') {
@@ -1979,15 +2068,11 @@ export const MrfRequestPage: React.FC = () => {
       toast.error('Please select a Department');
       return;
     }
-    if (formFields.employmentType === 'Choose') {
+    if (formFields.employmentType === 'Choose' || !formFields.employmentType?.trim()) {
       toast.error('Please select an Employment Type');
       return;
     }
-    if (formFields.listInJobRecruitmentPage === 'Choose') {
-      toast.error('Please select whether to List in Job Recruitment Page');
-      return;
-    }
-    if (!formFields.skills.trim()) {
+    if (!formFields.skills?.trim()) {
       toast.error('Skills field is required');
       return;
     }
@@ -1996,10 +2081,17 @@ export const MrfRequestPage: React.FC = () => {
       return;
     }
 
+    const cleanJobDesc = (formFields.jobDescription || '').replace(/<[^>]*>/g, '').trim();
+    if (!cleanJobDesc && !formFields.jobDescription?.includes('<img')) {
+      toast.error('Job Description is required');
+      return;
+    }
+
     const matchedCompany = companiesRaw.find(c => c.name === formFields.company);
     const matchedLocation = locationsRaw.find(l => l.name === formFields.companyLocation);
     const matchedDept = departmentsRaw.find(d => d.name === formFields.department);
     const matchedGrade = gradesRaw.find(g => g.name === formFields.grade);
+    const matchedEmpType = employmentTypesRaw.find(e => e.name === formFields.employmentType);
     const matchedInterviewer = employeesRaw.find(e => 
       e.name.toLowerCase().trim() === formFields.interviewer.toLowerCase().trim()
     );
@@ -2007,11 +2099,12 @@ export const MrfRequestPage: React.FC = () => {
     const payload: any = {
       positionTitle: formFields.positionTitle,
       numberOfPositions: Number(formFields.numberOfPositions) || 1,
-      recruitmentType: formFields.recruitmentType !== 'Choose' ? formFields.recruitmentType : 'Both',
+      recruitmentType: formFields.recruitmentType && formFields.recruitmentType !== 'Choose' ? formFields.recruitmentType : 'Both',
       companyId: matchedCompany?.id || undefined,
       companyLocationId: matchedLocation?.id || undefined,
       departmentId: matchedDept?.id || undefined,
       gradeId: matchedGrade?.id || undefined,
+      employmentTypeId: matchedEmpType?.id || undefined,
       employmentType: formFields.employmentType !== 'Choose' ? formFields.employmentType : undefined,
       qualificationRequired: formFields.qualificationRequired || undefined,
       experienceDesired: formFields.experienceDesired || undefined,
@@ -2019,7 +2112,7 @@ export const MrfRequestPage: React.FC = () => {
       payScaleType: formFields.payScaleType !== 'Choose' ? formFields.payScaleType : undefined,
       payScaleForPosition: formFields.payScaleForPosition || undefined,
       reasonForRequirement: formFields.reasonForRequirement !== 'Choose' ? formFields.reasonForRequirement : undefined,
-      listInJobPage: (formFields.listInJobRecruitmentPage === 'No' ? 'No' : 'Yes') as 'Yes' | 'No',
+      listInJobPage: 'Yes',
       skills: formFields.skills,
       comment: formFields.comment || undefined,
       jobDescription: formFields.jobDescription,
@@ -2068,7 +2161,7 @@ export const MrfRequestPage: React.FC = () => {
   };
 
   return (
-    <div className="p-6 bg-slate-50/50 min-h-screen text-slate-800 font-sans relative">
+    <div className="recruitment-page relative min-w-0 text-foreground">
       
       {/* Inline styles to make forms and tables highly compact and premium with complete dark mode support */}
       <style>{`
@@ -2094,42 +2187,42 @@ export const MrfRequestPage: React.FC = () => {
         
         /* Dark mode support overrides */
         .dark .bg-slate-50\\/50 {
-          background-color: rgb(15 23 42 / 0.95) !important;
+          background-color: hsl(var(--background) / 0.95) !important;
         }
         .dark .text-slate-800 {
-          color: rgb(241 245 249) !important;
+          color: hsl(var(--foreground)) !important;
         }
         .dark .bg-white {
-          background-color: rgb(30 41 59) !important;
-          color: rgb(241 245 249) !important;
+          background-color: hsl(var(--card)) !important;
+          color: hsl(var(--foreground)) !important;
         }
         .dark .border-slate-100,
         .dark .border-slate-200 {
-          border-color: rgb(51 65 85) !important;
+          border-color: hsl(var(--border)) !important;
         }
         .dark .bg-slate-50 {
-          background-color: rgb(15 23 42 / 0.4) !important;
+          background-color: hsl(var(--muted) / 0.4) !important;
         }
         .dark .bg-slate-100\\/70 {
-          background-color: rgb(15 23 42 / 0.3) !important;
+          background-color: hsl(var(--muted) / 0.3) !important;
         }
         .dark .text-slate-700 {
-          color: rgb(226 232 240) !important;
+          color: hsl(var(--foreground)) !important;
         }
         .dark .text-slate-600 {
-          color: rgb(203 213 225) !important;
+          color: hsl(var(--muted-foreground)) !important;
         }
         .dark .text-slate-500 {
-          color: rgb(148 163 184) !important;
+          color: hsl(var(--muted-foreground)) !important;
         }
         .dark .text-slate-755 {
-          color: rgb(241 245 249) !important;
+          color: hsl(var(--foreground)) !important;
         }
         .dark .divide-slate-100 > :not([hidden]) ~ :not([hidden]) {
-          border-color: rgb(51 65 85) !important;
+          border-color: hsl(var(--border)) !important;
         }
         .dark .hover\\:bg-slate-50\\/50:hover {
-          background-color: rgb(15 23 42 / 0.5) !important;
+          background-color: hsl(var(--muted) / 0.5) !important;
         }
         .dark .bg-emerald-50:hover {
           background-color: rgb(16 185 129 / 0.15) !important;
@@ -2146,24 +2239,24 @@ export const MrfRequestPage: React.FC = () => {
         
         /* Dialog overrides in dark mode */
         .dark .mrf-dialog-compact {
-          background-color: rgb(30 41 59) !important;
-          color: rgb(241 245 249) !important;
-          border-color: rgb(51 65 85) !important;
+          background-color: hsl(var(--card)) !important;
+          color: hsl(var(--foreground)) !important;
+          border-color: hsl(var(--border)) !important;
         }
         .dark .mrf-dialog-compact input,
         .dark .mrf-dialog-compact select,
         .dark .mrf-dialog-compact textarea,
         .dark .mrf-dialog-compact [role="combobox"] {
-          background-color: rgb(15 23 42) !important;
-          border-color: rgb(51 65 85) !important;
-          color: rgb(241 245 249) !important;
+          background-color: hsl(var(--background)) !important;
+          border-color: hsl(var(--border)) !important;
+          color: hsl(var(--foreground)) !important;
         }
         .dark .mrf-dialog-compact select option {
-          background-color: rgb(30 41 59) !important;
-          color: rgb(241 245 249) !important;
+          background-color: hsl(var(--card)) !important;
+          color: hsl(var(--foreground)) !important;
         }
         .dark .border-slate-300 {
-          border-color: rgb(51 65 85) !important;
+          border-color: hsl(var(--border)) !important;
         }
         .dark .bg-red-100 {
           background-color: rgb(239 68 68 / 0.2) !important;
@@ -2184,7 +2277,7 @@ export const MrfRequestPage: React.FC = () => {
       <div className="flex-1">
         
         {/* ── Top Header Banner ────────────────────────────────────────────────── */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card p-6 rounded-2xl border border-border/80 shadow-2xs relative overflow-visible mb-6">
+        <div className="recruitment-page-header mb-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card p-6 rounded-2xl border border-border/80 shadow-2xs relative overflow-visible">
           <div className="flex items-center gap-3.5 relative z-10">
             <div className="w-11 h-11 rounded-2xl bg-primary/10 text-primary flex items-center justify-center font-bold shrink-0 border border-primary/20 shadow-xs">
               <Briefcase className="w-5 h-5" />
@@ -2281,146 +2374,8 @@ export const MrfRequestPage: React.FC = () => {
           </div>
         </div>
 
-      {/* ── Top Schedule Cards Section ────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-6">
-        
-        {/* Card 1: Today's Schedule */}
-        <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
-          <CardHeader className="flex flex-row items-center justify-between p-4 border-b border-border/60">
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
-                <Calendar className="w-4 h-4" />
-              </div>
-              <CardTitle className="text-xs font-extrabold text-foreground">Today's Interviews</CardTitle>
-            </div>
-            <RefreshCw 
-              onClick={() => handleRefreshSchedule('today')}
-              className={`h-3.5 w-3.5 text-muted-foreground hover:text-foreground cursor-pointer transition-transform duration-500 ${
-                isRefreshingToday ? 'animate-spin text-emerald-500' : ''
-              }`} 
-            />
-          </CardHeader>
-          <CardContent className="p-4">
-            {todaySchedule.length === 0 ? (
-              <div className="bg-muted/40 border border-border/60 rounded-xl p-5 text-center text-muted-foreground text-xs font-medium">
-                No interviews scheduled for today
-              </div>
-            ) : (
-              <div className="space-y-2.5 max-h-[220px] overflow-y-auto pr-1">
-                {todaySchedule.map((item) => (
-                  <div key={item.id} className="flex items-start justify-between p-2.5 rounded-xl border border-border/60 bg-muted/30 hover:bg-muted/60 transition-colors">
-                    <div className="space-y-0.5 min-w-0">
-                      <div className="text-xs font-bold text-foreground truncate">{item.candidateName || 'Candidate'}</div>
-                      <div className="text-[10px] text-muted-foreground truncate">{item.positionTitle || 'N/A'} • Round {item.interviewRound}</div>
-                      <div className="text-[10px] text-primary font-bold uppercase tracking-wider">{item.interviewType}</div>
-                    </div>
-                    <div className="text-right space-y-1 shrink-0">
-                      <div className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 font-mono">
-                        {item.scheduledDate ? new Date(item.scheduledDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
-                      </div>
-                      {item.meetingUrl && (
-                        <a 
-                          href={item.meetingUrl} 
-                          target="_blank" 
-                          rel="noreferrer" 
-                          className="inline-block text-[10px] bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 font-bold px-2 py-0.5 rounded-md transition-all"
-                        >
-                          Join
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Card 2: Upcoming Schedule */}
-        <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
-          <CardHeader className="flex flex-row items-center justify-between p-4 border-b border-border/60">
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center">
-                <Clock className="w-4 h-4" />
-              </div>
-              <CardTitle className="text-xs font-extrabold text-foreground">Upcoming Schedule</CardTitle>
-            </div>
-            <RefreshCw 
-              onClick={() => handleRefreshSchedule('upcoming')}
-              className={`h-3.5 w-3.5 text-muted-foreground hover:text-foreground cursor-pointer transition-transform duration-500 ${
-                isRefreshingUpcoming ? 'animate-spin text-amber-500' : ''
-              }`} 
-            />
-          </CardHeader>
-          <CardContent className="p-4">
-            {upcomingSchedule.length === 0 ? (
-              <div className="bg-muted/40 border border-border/60 rounded-xl p-5 text-center text-muted-foreground text-xs font-medium">
-                No upcoming interviews
-              </div>
-            ) : (
-              <div className="space-y-2.5 max-h-[220px] overflow-y-auto pr-1">
-                {upcomingSchedule.map((item) => (
-                  <div key={item.id} className="flex items-start justify-between p-2.5 rounded-xl border border-border/60 bg-muted/30 hover:bg-muted/60 transition-colors">
-                    <div className="space-y-0.5 min-w-0">
-                      <div className="text-xs font-bold text-foreground truncate">{item.candidateName || 'Candidate'}</div>
-                      <div className="text-[10px] text-muted-foreground truncate">{item.positionTitle || 'N/A'} • Round {item.interviewRound}</div>
-                      <div className="text-[10px] text-muted-foreground font-semibold uppercase">{item.interviewType}</div>
-                    </div>
-                    <div className="text-right space-y-0.5 shrink-0">
-                      <div className="text-[11px] font-bold text-amber-600 dark:text-amber-400 font-mono">
-                        {item.scheduledDate ? new Date(item.scheduledDate).toLocaleDateString([], { month: 'short', day: 'numeric' }) : ''}
-                      </div>
-                      <div className="text-[10px] text-muted-foreground font-mono">
-                        {item.scheduledDate ? new Date(item.scheduledDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Card 3: Pending Feedback */}
-        <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
-          <CardHeader className="flex flex-row items-center justify-between p-4 border-b border-border/60">
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-lg bg-rose-500/10 text-rose-600 dark:text-rose-400 flex items-center justify-center">
-                <Star className="w-4 h-4" />
-              </div>
-              <CardTitle className="text-xs font-extrabold text-foreground">Pending Feedback</CardTitle>
-            </div>
-            <RefreshCw 
-              onClick={() => handleRefreshSchedule('pending')}
-              className={`h-3.5 w-3.5 text-muted-foreground hover:text-foreground cursor-pointer transition-transform duration-500 ${
-                isRefreshingPending ? 'animate-spin text-rose-500' : ''
-              }`} 
-            />
-          </CardHeader>
-          <CardContent className="p-4">
-            {pendingFeedback.length === 0 ? (
-              <div className="bg-muted/40 border border-border/60 rounded-xl p-5 text-center text-muted-foreground text-xs font-medium">
-                All interview feedback submitted
-              </div>
-            ) : (
-              <div className="space-y-2.5 max-h-[220px] overflow-y-auto pr-1">
-                {pendingFeedback.map((item) => (
-                  <div key={item.id} className="flex items-start justify-between p-2.5 rounded-xl border border-border/60 bg-muted/30 hover:bg-muted/60 transition-colors">
-                    <div className="space-y-0.5 min-w-0">
-                      <div className="text-xs font-bold text-foreground truncate">{item.candidateName || 'Candidate'}</div>
-                      <div className="text-[10px] text-muted-foreground truncate">{item.positionTitle || 'N/A'} • Round {item.interviewRound}</div>
-                      <div className="text-[10px] text-rose-600 dark:text-rose-400 font-semibold uppercase">{item.interviewType}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
       {/* ── Filter Section ────────────────────────────────────────────────────── */}
-      <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden mb-6">
+      <Card className="bg-card border-border shadow-sm rounded-xl overflow-hidden mb-6">
         <CardContent className="p-5">
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-end">
             <div className="space-y-1.5">
@@ -2435,13 +2390,13 @@ export const MrfRequestPage: React.FC = () => {
             </div>
             
             <div className="space-y-1.5">
-              <Label htmlFor="position" className="text-xs font-bold text-foreground uppercase tracking-wider">Position</Label>
+              <Label htmlFor="position" className="text-xs font-bold text-foreground uppercase tracking-wider">Position Title/ Job Role</Label>
               <Select value={selectedPosition} onValueChange={handlePositionFilterChange}>
                 <SelectTrigger className="h-9 text-xs bg-background border-border rounded-xl">
-                  <SelectValue placeholder="All Positions" />
+                  <SelectValue placeholder="All Positions / Roles" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Positions</SelectItem>
+                  <SelectItem value="all">All Positions / Roles</SelectItem>
                   {uniquePositions.map((pos) => (
                     <SelectItem key={pos} value={pos}>{pos}</SelectItem>
                   ))}
@@ -2476,7 +2431,7 @@ export const MrfRequestPage: React.FC = () => {
 
       {/* ── Segmented Tabs & Results Card ─────────────────────────────────────── */}
       <div className="space-y-0">
-        <div className="flex items-center gap-2 mb-3">
+        <div className="recruitment-segments mb-3 flex items-center gap-2">
           <button
             onClick={() => setActiveTab('open')}
             className={`px-4 py-2 text-xs font-bold rounded-xl transition-all flex items-center gap-2 ${
@@ -2486,11 +2441,7 @@ export const MrfRequestPage: React.FC = () => {
             }`}
           >
             <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-            Open Requests ({data.filter(d => {
-              const status = (d.status || '').toLowerCase();
-              const stage = (d.stage || '').toLowerCase();
-              return status !== 'closed' && stage !== 'completed';
-            }).length})
+            Open Requests ({data.filter(d => !isMrfExpiredOrClosed(d)).length})
           </button>
           <button
             onClick={() => setActiveTab('closed')}
@@ -2501,16 +2452,12 @@ export const MrfRequestPage: React.FC = () => {
             }`}
           >
             <span className="w-2 h-2 rounded-full bg-rose-400"></span>
-            Closed Requests ({data.filter(d => {
-              const status = (d.status || '').toLowerCase();
-              const stage = (d.stage || '').toLowerCase();
-              return status === 'closed' || stage === 'completed';
-            }).length})
+            Closed Requests ({data.filter(d => isMrfExpiredOrClosed(d)).length})
           </button>
         </div>
 
         {/* Result Card Wrapper */}
-        <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+        <Card className="bg-card border-border shadow-sm rounded-xl overflow-hidden">
           
           {/* Result Header */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between p-5 border-b border-border/60 gap-4">
@@ -2673,16 +2620,18 @@ export const MrfRequestPage: React.FC = () => {
                       const isCenter = colKey === 'numberOfPositions' || colKey === 'status';
                       
                       if (colKey === 'status') {
+                        const isClosed = isMrfExpiredOrClosed(item);
+                        const displayStatus = isClosed ? 'Closed' : 'Open';
                         return (
                           <td key={colKey} className="p-3.5 text-center">
                             <span className={cn(
                               "inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold",
-                              item.status === 'Open'
-                                ? 'bg-green-55 text-green-700 border border-green-200'
-                                : 'bg-slate-100 text-slate-600 border border-slate-200'
+                              displayStatus === 'Open'
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800'
+                                : 'bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800'
                             )}>
-                              <span className={cn("w-1.5 h-1.5 rounded-full", item.status === 'Open' ? 'bg-green-500' : 'bg-slate-400')}></span>
-                              {item.status}
+                              <span className={cn("w-1.5 h-1.5 rounded-full", displayStatus === 'Open' ? 'bg-emerald-500' : 'bg-rose-500')}></span>
+                              {displayStatus}
                             </span>
                           </td>
                         );
@@ -2690,7 +2639,7 @@ export const MrfRequestPage: React.FC = () => {
                       
                       if (colKey === 'numberOfPositions') {
                         return (
-                          <td key={colKey} className="p-3.5 text-center font-bold text-slate-800">
+                          <td key={colKey} className="p-3.5 text-center font-bold text-slate-800 dark:text-slate-100">
                             {item.numberOfPositions}
                           </td>
                         );
@@ -2698,15 +2647,15 @@ export const MrfRequestPage: React.FC = () => {
                       
                       if (colKey === 'targetClosureDate') {
                         const targetDateStr = item.targetClosureDate || item.expiryDate;
-                        const isExpired = targetDateStr && new Date(targetDateStr) < new Date() && item.status === 'Open';
+                        const isExpired = isMrfExpiredOrClosed(item) && targetDateStr;
                         return (
                           <td key={colKey} className="p-3.5 text-center">
                             {targetDateStr ? (
                               <div className="flex flex-col items-center">
-                                <span className="font-semibold text-slate-700">{targetDateStr}</span>
+                                <span className={cn("font-semibold", isExpired ? "text-rose-600 dark:text-rose-400" : "text-slate-700 dark:text-slate-200")}>{targetDateStr}</span>
                                 {isExpired && (
-                                  <span className="mt-0.5 px-1.5 py-0.2 text-[9px] font-bold bg-rose-100 text-rose-700 rounded border border-rose-200">
-                                    Expired / Overdue
+                                  <span className="mt-0.5 px-1.5 py-0.5 text-[9px] font-bold bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 rounded border border-rose-200 dark:border-rose-800">
+                                    Expired / Closed
                                   </span>
                                 )}
                               </div>
@@ -2792,7 +2741,7 @@ export const MrfRequestPage: React.FC = () => {
       {/* Add / Edit Recruitment Form Dialog */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
         <DialogContent
-          className="sm:max-w-[900px] max-h-[92vh] overflow-y-auto bg-white rounded-xl shadow-2xl p-6 mrf-dialog-compact"
+          className="sm:max-w-[920px] max-h-[92vh] overflow-y-auto bg-card text-card-foreground dark:bg-slate-900 border border-border dark:border-slate-800 rounded-2xl shadow-2xl p-0 mrf-dialog-compact"
           onPointerDownOutside={(e) => {
             const target = e.target as HTMLElement | null;
             if (target?.closest('[data-select-content]')) {
@@ -2812,407 +2761,354 @@ export const MrfRequestPage: React.FC = () => {
             }
           }}
         >
-          <form onSubmit={handleSave}>
-            <DialogHeader className="pb-4 border-b border-slate-100 flex flex-row items-center justify-between">
-              <div>
-                <DialogTitle className="text-xl font-bold text-slate-800">
-                  {editingMrf ? 'Edit Recruitment Form' : 'Add Recruitment Form'}
-                </DialogTitle>
-                <DialogDescription className="text-xs text-slate-500 mt-1">
-                  Submit or edit Manpower Requisition Form (MRF) configurations.
-                </DialogDescription>
-              </div>
-            </DialogHeader>
-
-            <div className="grid gap-5 py-5 text-sm text-slate-700">
-              
-              {/* Row 1: Position Title | Number of Positions | Recruitment Type */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-1.5">
-                  <Label htmlFor="position" className="text-xs font-bold text-slate-700">
-                    Position Title <span className="text-red-500">*</span>
-                  </Label>
-                  <Select 
-                    value={formFields.positionTitle} 
-                    onValueChange={(val) => setFormFields(prev => ({ ...prev, positionTitle: val }))}
-                  >
-                    <SelectTrigger id="position" className="bg-white border-slate-200 text-slate-755 h-10">
-                      <SelectValue placeholder="Choose" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Choose">Choose</SelectItem>
-                      {getFilteredPositions(formFields.company).map(p => (
-                        <SelectItem key={p} value={p}>{p}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+          <form onSubmit={handleSave} className="flex flex-col">
+            {/* Modal Header */}
+            <div className="px-6 py-5 border-b border-border/80 dark:border-slate-800 flex items-center justify-between bg-muted/30 dark:bg-slate-900/80 sticky top-0 z-10 backdrop-blur-sm">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold">
+                  <Briefcase className="w-5 h-5" />
                 </div>
-
-                <div className="space-y-1.5">
-                  <Label htmlFor="numPositions" className="text-xs font-bold text-slate-700">
-                    Number of Positions <span className="text-red-500">*</span>
-                  </Label>
-                  <Input
-                    id="numPositions"
-                    type="number"
-                    min={1}
-                    value={formFields.numberOfPositions || ''}
-                    onChange={(e) => setFormFields(prev => ({ ...prev, numberOfPositions: e.target.value === '' ? '' as any : parseInt(e.target.value) || 0 }))}
-                    required
-                    className="border-slate-200 h-10 focus-visible:ring-1 focus-visible:ring-blue-500"
-                    placeholder="Enter number of positions"
-                  />
+                <div>
+                  <DialogTitle className="text-lg font-bold text-foreground tracking-tight">
+                    {editingMrf ? 'Edit Manpower Requisition Form (MRF)' : 'Add Manpower Requisition Form (MRF)'}
+                  </DialogTitle>
+                  <DialogDescription className="text-xs text-muted-foreground mt-0.5">
+                    Configure requisition details, target timeline, required competencies, and role description.
+                  </DialogDescription>
                 </div>
-
-                <div className="space-y-1.5">
-                  <Label htmlFor="recruitmentType" className="text-xs font-bold text-slate-700">
-                    Recruitment Type
-                  </Label>
-                  <Select 
-                    value={formFields.recruitmentType} 
-                    onValueChange={(val) => setFormFields(prev => ({ ...prev, recruitmentType: val }))}
-                  >
-                    <SelectTrigger id="recruitmentType" className="bg-white border-slate-200 text-slate-755 h-10">
-                      <SelectValue placeholder="Choose" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Choose">Choose</SelectItem>
-                      <SelectItem value="Both">Both</SelectItem>
-                      <SelectItem value="Internal">Internal</SelectItem>
-                      <SelectItem value="External">External</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              {/* Row 2: Company | Company Location */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label htmlFor="company" className="text-xs font-bold text-slate-700">
-                    Company <span className="text-red-500">*</span>
-                  </Label>
-                  <Select 
-                    value={formFields.company} 
-                    onValueChange={(val) => setFormFields(prev => ({ ...prev, company: val }))}
-                  >
-                    <SelectTrigger id="company" className="bg-white border-slate-200 text-slate-755 h-10">
-                      <SelectValue placeholder="Choose" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Choose">Choose</SelectItem>
-                      {companiesList.map(c => (
-                        <SelectItem key={c} value={c}>{c}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label htmlFor="location" className="text-xs font-bold text-slate-700">
-                    Company Location <span className="text-red-500">*</span>
-                  </Label>
-                  <Select 
-                    value={formFields.companyLocation} 
-                    onValueChange={(val) => setFormFields(prev => ({ ...prev, companyLocation: val }))}
-                  >
-                    <SelectTrigger id="location" className="bg-white border-slate-200 text-slate-755 h-10">
-                      <SelectValue placeholder="Choose" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Choose">Choose</SelectItem>
-                      {getFilteredLocations(formFields.company).map(loc => (
-                        <SelectItem key={loc} value={loc}>{loc}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              {/* Row 3: Department | Grade */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label htmlFor="department" className="text-xs font-bold text-slate-700">
-                    Department <span className="text-red-500">*</span>
-                  </Label>
-                  <Select 
-                    value={formFields.department} 
-                    onValueChange={(val) => setFormFields(prev => ({ ...prev, department: val }))}
-                  >
-                    <SelectTrigger id="department" className="bg-white border-slate-200 text-slate-755 h-10">
-                      <SelectValue placeholder="Choose" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Choose">Choose</SelectItem>
-                      {getFilteredDepartments(formFields.company).map(dept => (
-                        <SelectItem key={dept} value={dept}>{dept}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label htmlFor="grade" className="text-xs font-bold text-slate-700">
-                    Grade <span className="text-red-500">*</span>
-                  </Label>
-                  <Select 
-                    value={formFields.grade} 
-                    onValueChange={(val) => setFormFields(prev => ({ ...prev, grade: val }))}
-                  >
-                    <SelectTrigger id="grade" className="bg-white border-slate-200 text-slate-755 h-10">
-                      <SelectValue placeholder="Choose" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Choose">Choose</SelectItem>
-                      {getFilteredGrades(formFields.company).map(g => (
-                        <SelectItem key={g} value={g}>{g}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              {/* Row 4: Employment Type | Qualification Required */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label htmlFor="employmentType" className="text-xs font-bold text-slate-700">
-                    Employment Type <span className="text-red-500">*</span>
-                  </Label>
-                  <Select 
-                    value={formFields.employmentType} 
-                    onValueChange={(val) => setFormFields(prev => ({ ...prev, employmentType: val }))}
-                  >
-                    <SelectTrigger id="employmentType" className="bg-white border-slate-200 text-slate-755 h-10">
-                      <SelectValue placeholder="Choose" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Choose">Choose</SelectItem>
-                      <SelectItem value="Full Time">Full Time</SelectItem>
-                      <SelectItem value="Part Time">Part Time</SelectItem>
-                      <SelectItem value="Contract">Contract</SelectItem>
-                      <SelectItem value="Internship">Internship</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label htmlFor="qualification" className="text-xs font-bold text-slate-700">
-                    Qualification Required
-                  </Label>
-                  <Input
-                    id="qualification"
-                    placeholder="Qualification Required"
-                    value={formFields.qualificationRequired}
-                    onChange={(e) => setFormFields(prev => ({ ...prev, qualificationRequired: e.target.value }))}
-                    className="border-slate-200 h-10 focus-visible:ring-1 focus-visible:ring-blue-500"
-                  />
-                </div>
-              </div>
-
-              {/* Row 5: Experience Desired | Interviewer */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label htmlFor="experience" className="text-xs font-bold text-slate-700">
-                    Experience desired
-                  </Label>
-                  <Input
-                    id="experience"
-                    placeholder="Experience desired"
-                    value={formFields.experienceDesired}
-                    onChange={(e) => setFormFields(prev => ({ ...prev, experienceDesired: e.target.value }))}
-                    className="border-slate-200 h-10 focus-visible:ring-1 focus-visible:ring-blue-500"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label htmlFor="interviewer" className="text-xs font-bold text-slate-700">
-                    Interviewer
-                  </Label>
-                  <Select 
-                    value={formFields.interviewer} 
-                    onValueChange={(val) => setFormFields(prev => ({ ...prev, interviewer: val }))}
-                  >
-                    <SelectTrigger id="interviewer" className="bg-white border-slate-200 text-slate-755 h-10">
-                      <SelectValue placeholder="Choose" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Choose">Choose</SelectItem>
-                      {getDepartmentManagers(formFields.department).map(emp => (
-                        <SelectItem key={emp.id} value={emp.name}>
-                          {emp.name} {emp.designation ? `(${emp.designation})` : ''}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              {/* Row 6: Pay Scale Type | Pay Scale For The Position */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label htmlFor="payScaleType" className="text-xs font-bold text-slate-700">
-                    Pay Scale Type
-                  </Label>
-                  <Select 
-                    value={formFields.payScaleType} 
-                    onValueChange={(val) => setFormFields(prev => ({ ...prev, payScaleType: val }))}
-                  >
-                    <SelectTrigger id="payScaleType" className="bg-white border-slate-200 text-slate-755 h-10">
-                      <SelectValue placeholder="Choose" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Choose">Choose</SelectItem>
-                      <SelectItem value="Hourly">Hourly</SelectItem>
-                      <SelectItem value="Monthly Salary">Monthly Salary</SelectItem>
-                      <SelectItem value="Annual CTC">Annual CTC</SelectItem>
-                      <SelectItem value="Fixed Contract">Fixed Contract</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label htmlFor="payScale" className="text-xs font-bold text-slate-700">
-                    Pay Scale For The Position
-                  </Label>
-                  <Input
-                    id="payScale"
-                    placeholder="Pay Scale For The Position"
-                    value={formFields.payScaleForPosition}
-                    onChange={(e) => setFormFields(prev => ({ ...prev, payScaleForPosition: e.target.value }))}
-                    className="border-slate-200 h-10 focus-visible:ring-1 focus-visible:ring-blue-500"
-                  />
-                </div>
-              </div>
-
-              {/* Row 7: Reason for Requirement | List in Job Recruitment Page * */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label htmlFor="reasonRequirement" className="text-xs font-bold text-slate-700">
-                    Reason for Requirement
-                  </Label>
-                  <Select 
-                    value={formFields.reasonForRequirement} 
-                    onValueChange={(val) => setFormFields(prev => ({ ...prev, reasonForRequirement: val }))}
-                  >
-                    <SelectTrigger id="reasonRequirement" className="bg-white border-slate-200 text-slate-755 h-10">
-                      <SelectValue placeholder="Choose" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Choose">Choose</SelectItem>
-                      <SelectItem value="New Position">New Position</SelectItem>
-                      <SelectItem value="Replacement Hiring">Replacement Hiring</SelectItem>
-                      <SelectItem value="Project Expansion">Project Expansion</SelectItem>
-                      <SelectItem value="Maternity/Paternity Cover">Maternity/Paternity Cover</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label htmlFor="listJobPage" className="text-xs font-bold text-slate-700">
-                    List in Job Recruitment Page <span className="text-red-500">*</span>
-                  </Label>
-                  <Select 
-                    value={formFields.listInJobRecruitmentPage} 
-                    onValueChange={(val) => setFormFields(prev => ({ ...prev, listInJobRecruitmentPage: val }))}
-                  >
-                    <SelectTrigger id="listJobPage" className="bg-white border-slate-200 text-slate-755 h-10">
-                      <SelectValue placeholder="Choose" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Choose">Choose</SelectItem>
-                      <SelectItem value="Yes">Yes</SelectItem>
-                      <SelectItem value="No">No</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              {/* Row 7.5: Target Closure Date / Expiry Date & Approval Stage */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label htmlFor="targetClosureDate" className="text-xs font-bold text-slate-700">
-                    Target Closure Date / Expiry Date <span className="text-rose-500">*</span>
-                  </Label>
-                  <Input
-                    id="targetClosureDate"
-                    type="date"
-                    required
-                    value={formFields.targetClosureDate}
-                    onChange={(e) => setFormFields(prev => ({ ...prev, targetClosureDate: e.target.value }))}
-                    className="border-slate-200 h-10 focus-visible:ring-1 focus-visible:ring-blue-500 bg-white text-slate-800 [color-scheme:light] [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-80 hover:[&::-webkit-calendar-picker-indicator]:opacity-100"
-                  />
-                </div>
-
-                {isHrPortal && (
-                  <div className="space-y-1.5">
-                    <Label htmlFor="mrfStage" className="text-xs font-bold text-slate-700">
-                      Approval Stage
-                    </Label>
-                    <Select 
-                      value={formFields.stage || 'Approved'} 
-                      onValueChange={(val) => setFormFields(prev => ({ ...prev, stage: val }))}
-                    >
-                      <SelectTrigger id="mrfStage" className="bg-white border-slate-200 text-slate-700 h-10">
-                        <SelectValue placeholder="Stage" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Approved">Approved</SelectItem>
-                        <SelectItem value="Pending Approval">Pending Approval</SelectItem>
-                        <SelectItem value="Rejected">Rejected</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-              </div>
-
-              {/* Row 8: Skills * */}
-              <div className="space-y-1.5">
-                <Label htmlFor="skills" className="text-xs font-bold text-slate-700">
-                  Skills <span className="text-red-500">*</span>
-                </Label>
-                <Input
-                  id="skills"
-                  placeholder="Skills"
-                  value={formFields.skills}
-                  onChange={(e) => setFormFields(prev => ({ ...prev, skills: e.target.value }))}
-                  required
-                  className="border-slate-200 h-10 focus-visible:ring-1 focus-visible:ring-blue-500"
-                />
-              </div>
-
-              {/* Row 9: Comment */}
-              <div className="space-y-1.5">
-                <Label htmlFor="comment" className="text-xs font-bold text-slate-700">
-                  Comment
-                </Label>
-                <textarea
-                  id="comment"
-                  placeholder="Enter comments here"
-                  value={formFields.comment}
-                  onChange={(e) => setFormFields(prev => ({ ...prev, comment: e.target.value }))}
-                  className="w-full min-h-[80px] p-3 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
-                />
-              </div>
-
-              {/* Row 10: Job Description (Using the codebase's TipTap Rich Text Editor) */}
-              <div className="space-y-1.5">
-                <Label className="text-xs font-bold text-slate-700">
-                  Job Description
-                </Label>
-                <TipTapRichTextEditor
-                  content={formFields.jobDescription}
-                  onChange={(html) => setFormFields(prev => ({ ...prev, jobDescription: html }))}
-                />
               </div>
             </div>
 
-            <DialogFooter className="pt-4 border-t border-slate-100 flex justify-end">
+            {/* Modal Body */}
+            <div className="p-6 space-y-6 text-sm">
+              
+              {/* Section 1: Position & Organization */}
+              <div className="rounded-xl border border-border/80 dark:border-slate-800 bg-muted/20 dark:bg-slate-800/30 p-4.5 space-y-4">
+                <div className="flex items-center gap-2 pb-2 border-b border-border/60 dark:border-slate-800/80">
+                  <Layers className="w-4 h-4 text-primary" />
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-foreground">
+                    Position & Organization Hierarchy
+                  </h4>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="position" className="text-xs font-semibold text-foreground">
+                      Position Title/ Job Role <span className="text-destructive">*</span>
+                    </Label>
+                    <Select 
+                      value={formFields.positionTitle} 
+                      onValueChange={(val) => setFormFields(prev => ({ ...prev, positionTitle: val }))}
+                    >
+                      <SelectTrigger id="position" className="h-10 bg-background dark:bg-slate-800 border-border dark:border-slate-700 text-foreground rounded-lg">
+                        <SelectValue placeholder="Select Position / Job Role" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Choose">Choose</SelectItem>
+                        {getFilteredPositions(formFields.company).map(p => (
+                          <SelectItem key={p} value={p}>{p}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="numPositions" className="text-xs font-semibold text-foreground">
+                      Number of Positions <span className="text-destructive">*</span>
+                    </Label>
+                    <Input
+                      id="numPositions"
+                      type="number"
+                      min={1}
+                      value={formFields.numberOfPositions || ''}
+                      onChange={(e) => setFormFields(prev => ({ ...prev, numberOfPositions: e.target.value === '' ? '' as any : parseInt(e.target.value) || 0 }))}
+                      required
+                      className="h-10 bg-background dark:bg-slate-800 border-border dark:border-slate-700 text-foreground rounded-lg"
+                      placeholder="e.g. 2"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="company" className="text-xs font-semibold text-foreground">
+                      Company <span className="text-destructive">*</span>
+                    </Label>
+                    <Select 
+                      value={formFields.company} 
+                      onValueChange={(val) => setFormFields(prev => ({ ...prev, company: val }))}
+                    >
+                      <SelectTrigger id="company" className="h-10 bg-background dark:bg-slate-800 border-border dark:border-slate-700 text-foreground rounded-lg">
+                        <SelectValue placeholder="Select Company" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Choose">Choose</SelectItem>
+                        {companiesList.map(c => (
+                          <SelectItem key={c} value={c}>{c}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="location" className="text-xs font-semibold text-foreground">
+                      Company Location <span className="text-destructive">*</span>
+                    </Label>
+                    <Select 
+                      value={formFields.companyLocation} 
+                      onValueChange={(val) => setFormFields(prev => ({ ...prev, companyLocation: val }))}
+                    >
+                      <SelectTrigger id="location" className="h-10 bg-background dark:bg-slate-800 border-border dark:border-slate-700 text-foreground rounded-lg">
+                        <SelectValue placeholder="Select Location" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Choose">Choose</SelectItem>
+                        {getFilteredLocations(formFields.company).map(loc => (
+                          <SelectItem key={loc} value={loc}>{loc}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="department" className="text-xs font-semibold text-foreground">
+                      Department <span className="text-destructive">*</span>
+                    </Label>
+                    <Select 
+                      value={formFields.department} 
+                      onValueChange={(val) => setFormFields(prev => ({ ...prev, department: val }))}
+                    >
+                      <SelectTrigger id="department" className="h-10 bg-background dark:bg-slate-800 border-border dark:border-slate-700 text-foreground rounded-lg">
+                        <SelectValue placeholder="Select Department" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Choose">Choose</SelectItem>
+                        {getFilteredDepartments(formFields.company).map(dept => (
+                          <SelectItem key={dept} value={dept}>{dept}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="grade" className="text-xs font-semibold text-foreground">
+                      Grade <span className="text-destructive">*</span>
+                    </Label>
+                    <Select 
+                      value={formFields.grade} 
+                      onValueChange={(val) => setFormFields(prev => ({ ...prev, grade: val }))}
+                    >
+                      <SelectTrigger id="grade" className="h-10 bg-background dark:bg-slate-800 border-border dark:border-slate-700 text-foreground rounded-lg">
+                        <SelectValue placeholder="Select Grade" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Choose">Choose</SelectItem>
+                        {getFilteredGrades(formFields.company).map(g => (
+                          <SelectItem key={g} value={g}>{g}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-1.5 md:col-span-2">
+                    <Label htmlFor="employmentType" className="text-xs font-semibold text-foreground">
+                      Employment Type <span className="text-destructive">*</span>
+                    </Label>
+                    <Select 
+                      value={formFields.employmentType} 
+                      onValueChange={(val) => setFormFields(prev => ({ ...prev, employmentType: val }))}
+                    >
+                      <SelectTrigger id="employmentType" className="h-10 bg-background dark:bg-slate-800 border-border dark:border-slate-700 text-foreground rounded-lg">
+                        <SelectValue placeholder="Select Employment Type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Choose">Choose</SelectItem>
+                        {getFilteredEmploymentTypes(formFields.company).map(type => (
+                          <SelectItem key={type} value={type}>{type}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Section 2: Candidate Specifications & Compensation */}
+              <div className="rounded-xl border border-border/80 dark:border-slate-800 bg-muted/20 dark:bg-slate-800/30 p-4.5 space-y-4">
+                <div className="flex items-center gap-2 pb-2 border-b border-border/60 dark:border-slate-800/80">
+                  <GraduationCap className="w-4 h-4 text-primary" />
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-foreground">
+                    Candidate Specifications & Compensation
+                  </h4>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="qualification" className="text-xs font-semibold text-foreground">
+                      Qualification Required
+                    </Label>
+                    <Input
+                      id="qualification"
+                      placeholder="e.g. B.Tech / MBA / Graduate"
+                      value={formFields.qualificationRequired}
+                      onChange={(e) => setFormFields(prev => ({ ...prev, qualificationRequired: e.target.value }))}
+                      className="h-10 bg-background dark:bg-slate-800 border-border dark:border-slate-700 text-foreground rounded-lg"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="experience" className="text-xs font-semibold text-foreground">
+                      Experience Desired
+                    </Label>
+                    <Input
+                      id="experience"
+                      placeholder="e.g. 2-5 Years"
+                      value={formFields.experienceDesired}
+                      onChange={(e) => setFormFields(prev => ({ ...prev, experienceDesired: e.target.value }))}
+                      className="h-10 bg-background dark:bg-slate-800 border-border dark:border-slate-700 text-foreground rounded-lg"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="payScaleType" className="text-xs font-semibold text-foreground">
+                      Pay Scale Type
+                    </Label>
+                    <Select 
+                      value={formFields.payScaleType} 
+                      onValueChange={(val) => setFormFields(prev => ({ ...prev, payScaleType: val }))}
+                    >
+                      <SelectTrigger id="payScaleType" className="h-10 bg-background dark:bg-slate-800 border-border dark:border-slate-700 text-foreground rounded-lg">
+                        <SelectValue placeholder="Select Pay Scale Type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Choose">Choose</SelectItem>
+                        <SelectItem value="Hourly">Hourly</SelectItem>
+                        <SelectItem value="Monthly Salary">Monthly Salary</SelectItem>
+                        <SelectItem value="Annual CTC">Annual CTC</SelectItem>
+                        <SelectItem value="Fixed Contract">Fixed Contract</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="payScale" className="text-xs font-semibold text-foreground">
+                      Pay Scale For The Position
+                    </Label>
+                    <Input
+                      id="payScale"
+                      placeholder="e.g. ₹6,00,000 - ₹9,00,000 PA"
+                      value={formFields.payScaleForPosition}
+                      onChange={(e) => setFormFields(prev => ({ ...prev, payScaleForPosition: e.target.value }))}
+                      className="h-10 bg-background dark:bg-slate-800 border-border dark:border-slate-700 text-foreground rounded-lg"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="reasonRequirement" className="text-xs font-semibold text-foreground">
+                      Reason for Requirement
+                    </Label>
+                    <Select 
+                      value={formFields.reasonForRequirement} 
+                      onValueChange={(val) => setFormFields(prev => ({ ...prev, reasonForRequirement: val }))}
+                    >
+                      <SelectTrigger id="reasonRequirement" className="h-10 bg-background dark:bg-slate-800 border-border dark:border-slate-700 text-foreground rounded-lg">
+                        <SelectValue placeholder="Select Reason" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Choose">Choose</SelectItem>
+                        <SelectItem value="New Position">New Position</SelectItem>
+                        <SelectItem value="Replacement Hiring">Replacement Hiring</SelectItem>
+                        <SelectItem value="Project Expansion">Project Expansion</SelectItem>
+                        <SelectItem value="Maternity/Paternity Cover">Maternity/Paternity Cover</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="targetClosureDate" className="text-xs font-semibold text-foreground">
+                      Target Closure Date / Expiry Date <span className="text-destructive">*</span>
+                    </Label>
+                    <Input
+                      id="targetClosureDate"
+                      type="date"
+                      required
+                      value={formFields.targetClosureDate}
+                      onChange={(e) => setFormFields(prev => ({ ...prev, targetClosureDate: e.target.value }))}
+                      className="h-10 bg-background dark:bg-slate-800 border-border dark:border-slate-700 text-foreground rounded-lg [color-scheme:light] dark:[color-scheme:dark]"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5 md:col-span-2">
+                    <Label htmlFor="skills" className="text-xs font-semibold text-foreground">
+                      Required Skills <span className="text-destructive">*</span>
+                    </Label>
+                    <Input
+                      id="skills"
+                      placeholder="e.g. React, TypeScript, Node.js, REST APIs, Git"
+                      value={formFields.skills}
+                      onChange={(e) => setFormFields(prev => ({ ...prev, skills: e.target.value }))}
+                      required
+                      className="h-10 bg-background dark:bg-slate-800 border-border dark:border-slate-700 text-foreground rounded-lg"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Section 3: Job Description & Notes */}
+              <div className="rounded-xl border border-border/80 dark:border-slate-800 bg-muted/20 dark:bg-slate-800/30 p-4.5 space-y-4">
+                <div className="flex items-center gap-2 pb-2 border-b border-border/60 dark:border-slate-800/80">
+                  <FileText className="w-4 h-4 text-primary" />
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-foreground">
+                    Job Description & Hiring Notes
+                  </h4>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold text-foreground">
+                      Job Description <span className="text-destructive">*</span>
+                    </Label>
+                    <div className="rounded-xl border border-border/80 dark:border-slate-700 overflow-hidden shadow-xs">
+                      <TipTapRichTextEditor
+                        content={formFields.jobDescription}
+                        onChange={(html) => setFormFields(prev => ({ ...prev, jobDescription: html }))}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="comment" className="text-xs font-semibold text-foreground">
+                      Internal Comments / Notes
+                    </Label>
+                    <textarea
+                      id="comment"
+                      placeholder="Add any internal requisition notes, hiring manager preferences, or remarks..."
+                      value={formFields.comment}
+                      onChange={(e) => setFormFields(prev => ({ ...prev, comment: e.target.value }))}
+                      rows={3}
+                      className="w-full p-3 text-sm border border-border dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 bg-background dark:bg-slate-800 text-foreground resize-y"
+                    />
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 py-4 border-t border-border/80 dark:border-slate-800 bg-muted/30 dark:bg-slate-900/80 flex items-center justify-end gap-3 sticky bottom-0 z-10 backdrop-blur-sm">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsModalOpen(false)}
+                className="h-10 px-5 text-xs font-semibold rounded-xl border-border dark:border-slate-700 hover:bg-muted dark:hover:bg-slate-800 text-foreground"
+              >
+                Cancel
+              </Button>
               <Button 
                 type="submit"
-                className="bg-[#10b981] hover:bg-[#059669] text-white font-bold px-8 h-10 rounded-md transition-all shadow-md active:scale-95"
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-7 h-10 rounded-xl transition-all shadow-md active:scale-95 flex items-center gap-2"
               >
-                Save
+                <CheckCircle className="w-4 h-4" />
+                {editingMrf ? 'Update Requisition' : 'Save Requisition'}
               </Button>
-            </DialogFooter>
+            </div>
           </form>
         </DialogContent>
       </Dialog>
@@ -3264,7 +3160,7 @@ export const MrfRequestPage: React.FC = () => {
                 <div className="p-4 space-y-3">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-3 text-xs">
                     <div>
-                      <span className="text-slate-500 font-medium block text-[11px]">Position Title</span>
+                      <span className="text-slate-500 font-medium block text-[11px]">Position Title/ Job Role</span>
                       <span className="font-bold text-slate-800">{viewingMrf.positionTitle}</span>
                     </div>
                     <div>
@@ -3273,18 +3169,18 @@ export const MrfRequestPage: React.FC = () => {
                     </div>
                     <div>
                       <span className="text-slate-500 font-medium block text-[11px]">Recruitment Type</span>
-                      <span className="font-bold text-slate-800">{viewingMrf.recruitmentType || 'Internal'}</span>
+                      <span className="font-bold text-slate-800">{viewingMrf.recruitmentType || '—'}</span>
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3 text-xs pt-2 border-t border-slate-100">
                     <div>
                       <span className="text-slate-500 font-medium block text-[11px]">Company</span>
-                      <span className="font-semibold text-slate-700">{viewingMrf.company || 'Trial Company'}</span>
+                      <span className="font-semibold text-slate-700">{viewingMrf.company || '—'}</span>
                     </div>
                     <div>
                       <span className="text-slate-500 font-medium block text-[11px]">Company Location</span>
-                      <span className="font-semibold text-slate-700">{viewingMrf.companyLocation || 'Airoli'}</span>
+                      <span className="font-semibold text-slate-700">{viewingMrf.companyLocation || '—'}</span>
                     </div>
                   </div>
 
@@ -3295,51 +3191,51 @@ export const MrfRequestPage: React.FC = () => {
                     </div>
                     <div>
                       <span className="text-slate-500 font-medium block text-[11px]">Grade</span>
-                      <span className="font-semibold text-slate-700">{viewingMrf.grade || 'Staff'}</span>
+                      <span className="font-semibold text-slate-700">{viewingMrf.grade || '—'}</span>
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3 text-xs pt-2 border-t border-slate-100">
                     <div>
                       <span className="text-slate-500 font-medium block text-[11px]">Employment Type</span>
-                      <span className="font-semibold text-slate-700">{viewingMrf.employmentType || 'Full Time'}</span>
+                      <span className="font-semibold text-slate-700">{viewingMrf.employmentType || '—'}</span>
                     </div>
                     <div>
                       <span className="text-slate-500 font-medium block text-[11px]">Qualification Required</span>
-                      <span className="font-semibold text-slate-700">{viewingMrf.qualificationRequired || 'test education'}</span>
+                      <span className="font-semibold text-slate-700">{viewingMrf.qualificationRequired || '—'}</span>
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3 text-xs pt-2 border-t border-slate-100">
                     <div>
                       <span className="text-slate-500 font-medium block text-[11px]">Experience desired</span>
-                      <span className="font-semibold text-slate-700">{viewingMrf.experienceDesired || '5'}</span>
+                      <span className="font-semibold text-slate-700">{viewingMrf.experienceDesired || '—'}</span>
                     </div>
                     <div>
                       <span className="text-slate-500 font-medium block text-[11px]">Interviewer</span>
-                      <span className="font-semibold text-slate-700">{viewingMrf.interviewer || 'Ajitsingh Amit Patil'}</span>
+                      <span className="font-semibold text-slate-700">{viewingMrf.interviewer || '—'}</span>
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3 text-xs pt-2 border-t border-slate-100">
                     <div>
                       <span className="text-slate-500 font-medium block text-[11px]">Pay Scale Type</span>
-                      <span className="font-semibold text-slate-700">{viewingMrf.payScaleType || 'MIN'}</span>
+                      <span className="font-semibold text-slate-700">{viewingMrf.payScaleType || '—'}</span>
                     </div>
                     <div>
                       <span className="text-slate-500 font-medium block text-[11px]">Pay Scale For The Position</span>
-                      <span className="font-semibold text-slate-700">{viewingMrf.payScaleForPosition || '9'}</span>
+                      <span className="font-semibold text-slate-700">{viewingMrf.payScaleForPosition || '—'}</span>
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3 text-xs pt-2 border-t border-slate-100">
                     <div>
                       <span className="text-slate-500 font-medium block text-[11px]">Reason for Requirement</span>
-                      <span className="font-semibold text-slate-700">{viewingMrf.reasonForRequirement || 'New Hire'}</span>
+                      <span className="font-semibold text-slate-700">{viewingMrf.reasonForRequirement || '—'}</span>
                     </div>
                     <div>
                       <span className="text-slate-500 font-medium block text-[11px]">List in Job Recruitment Page</span>
-                      <span className="font-semibold text-slate-700">{viewingMrf.listInJobRecruitmentPage || 'N'}</span>
+                      <span className="font-semibold text-slate-700">{viewingMrf.listInJobRecruitmentPage || '—'}</span>
                     </div>
                   </div>
 
@@ -3351,10 +3247,9 @@ export const MrfRequestPage: React.FC = () => {
                           {viewingMrf.targetClosureDate || viewingMrf.expiryDate || 'Not Specified'}
                         </span>
                         {(viewingMrf.targetClosureDate || viewingMrf.expiryDate) && 
-                         new Date(viewingMrf.targetClosureDate || viewingMrf.expiryDate!) < new Date() && 
-                         viewingMrf.status === 'Open' && (
+                         isMrfExpiredOrClosed(viewingMrf) && (
                           <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200">
-                            Expired / Overdue
+                            Expired / Closed
                           </span>
                         )}
                       </div>
@@ -3749,7 +3644,14 @@ export const MrfRequestPage: React.FC = () => {
                               </thead>
                               <tbody className="divide-y divide-slate-100 bg-white">
                                 {filteredApplicants.map(candidate => {
-                                  const name = candidate.candidate_name || candidate.fullName || candidate.name || candidate.full_name || (candidate.first_name ? `${candidate.first_name} ${candidate.last_name || ''}` : 'Candidate');
+                                  const name =
+                                    candidate.name ||
+                                    candidate.candidate_name ||
+                                    candidate.fullName ||
+                                    candidate.full_name ||
+                                    ([candidate.first_name, candidate.last_name].filter(Boolean).join(' ').trim()) ||
+                                    candidate.tracker_id ||
+                                    'Candidate';
                                   const statusCategory = parseCandidateStatus(candidate);
 
                                   return (
@@ -3832,20 +3734,35 @@ export const MrfRequestPage: React.FC = () => {
                                         </Popover>
                                       </td>
                                       {candidateVisibleColumns.map((colKey) => {
-                                        let val = '-';
-                                        if (colKey === 'emailId' || colKey === 'email') val = candidate.candidate_email || candidate.email || '-';
-                                        else if (colKey === 'contactNumber' || colKey === 'phone') val = candidate.candidate_phone || candidate.phone || candidate.contact || '-';
-                                        else if (colKey === 'totalExperience' || colKey === 'experience') val = candidate.candidate_experience || candidate.years_of_experience ? `${candidate.candidate_experience || candidate.years_of_experience} yrs` : (candidate.experience || '-');
-                                        else if (colKey === 'qualification') val = candidate.qualification || candidate.highest_qualification || '-';
-                                        else if (colKey === 'university') val = candidate.university || candidate.college || '-';
-                                        else if (colKey === 'maritalStatus') val = candidate.maritalStatus || candidate.marital_status || '-';
-                                        else if (colKey === 'dateOfBirth' || colKey === 'dob') val = candidate.dateOfBirth || candidate.dob || '-';
-                                        else if (colKey === 'skills') val = candidate.skills || candidate.candidate_skills || '-';
-                                        else if (colKey === 'relevantExperience') val = candidate.relevantExperience || candidate.relevant_experience || '-';
-                                        else if (colKey === 'currentCompany') val = candidate.current_company || candidate.currentCompany || '-';
-                                        else if (colKey === 'gender') val = candidate.gender || '-';
-                                        else if (colKey === 'comments') val = candidate.comments || candidate.notes || '-';
-                                        else if (colKey === 'name') val = name;
+                                        let val: string = '-';
+                                        if (colKey === 'emailId' || colKey === 'email') {
+                                          val = candidate.email || candidate.candidate_email || '-';
+                                        } else if (colKey === 'contactNumber' || colKey === 'phone') {
+                                          val = candidate.contact || candidate.candidate_phone || candidate.phone || '-';
+                                        } else if (colKey === 'totalExperience' || colKey === 'experience') {
+                                          const exp = candidate.experience || candidate.candidate_experience || candidate.years_of_experience || candidate.totalExperienceYears || '';
+                                          val = exp ? `${exp} yrs` : '-';
+                                        } else if (colKey === 'qualification') {
+                                          val = candidate.qualification || candidate.candidate_qualification || candidate.highest_qualification || '-';
+                                        } else if (colKey === 'university') {
+                                          val = candidate.university || candidate.candidate_university || candidate.college || '-';
+                                        } else if (colKey === 'maritalStatus') {
+                                          val = candidate.maritalStatus || candidate.candidate_marital_status || candidate.marital_status || '-';
+                                        } else if (colKey === 'dateOfBirth' || colKey === 'dob') {
+                                          val = candidate.dob || candidate.candidate_dob || candidate.dateOfBirth || '-';
+                                        } else if (colKey === 'skills') {
+                                          val = candidate.skills || candidate.candidate_skills || '-';
+                                        } else if (colKey === 'relevantExperience') {
+                                          val = candidate.relevantExperience || candidate.relevant_experience || '-';
+                                        } else if (colKey === 'currentCompany') {
+                                          val = candidate.currentCompany || candidate.candidate_company || candidate.current_company || '-';
+                                        } else if (colKey === 'gender') {
+                                          val = candidate.gender || candidate.candidate_gender || '-';
+                                        } else if (colKey === 'comments') {
+                                          val = candidate.comments || candidate.notes || '-';
+                                        } else if (colKey === 'name') {
+                                          val = candidate.name || candidate.candidate_name || name;
+                                        }
 
                                         return (
                                           <td key={colKey} className="p-2.5 text-slate-600 whitespace-nowrap">
@@ -4018,59 +3935,117 @@ export const MrfRequestPage: React.FC = () => {
 
               {/* Section 3: Action Information */}
               <div className="bg-white rounded border-t-2 border-t-[#258cc1] border-x border-b border-slate-200 overflow-hidden shadow-2xs">
-                <div className="p-4 space-y-3">
+                <div className="p-4 space-y-4">
+                  {/* Section Header */}
                   <div className="flex items-center justify-between">
-                    <h3 className="font-bold text-slate-800 text-sm">Action Information</h3>
-                  </div>
-
-                  <div>
-                    <button 
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-md bg-[#258cc1]/10 flex items-center justify-center">
+                        <FileText className="w-3.5 h-3.5 text-[#258cc1]" />
+                      </div>
+                      <h3 className="font-bold text-slate-800 text-sm">Action Information</h3>
+                      {mrfActionLogs.length > 0 && (
+                        <span className="text-[10px] font-bold bg-[#258cc1]/10 text-[#258cc1] px-2 py-0.5 rounded-full">
+                          {mrfActionLogs.length} {mrfActionLogs.length === 1 ? 'entry' : 'entries'}
+                        </span>
+                      )}
+                    </div>
+                    <button
                       onClick={() => {
                         setActionStatus('Choose');
                         setActionComment('');
                         setIsAddActionModalOpen(true);
                       }}
-                      className="bg-[#258cc1] hover:bg-[#1d74a3] text-white text-xs font-semibold px-3 py-1.5 rounded-sm shadow-2xs transition-colors cursor-pointer"
+                      className="bg-[#258cc1] hover:bg-[#1d74a3] text-white text-[11px] font-bold px-3 py-1.5 rounded-md shadow-sm transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
                     >
-                      + Add Action
+                      <Plus className="w-3 h-3" /> Add Action
                     </button>
                   </div>
 
-                  {/* Logged Action History Table or Empty State */}
+                  {/* Timeline log entries or empty state */}
                   {loadingActionLogs ? (
-                    <div className="py-4 text-center text-xs text-slate-500">Loading action history...</div>
+                    <div className="py-6 text-center text-xs text-slate-500 flex items-center justify-center gap-2">
+                      <div className="w-4 h-4 border-2 border-[#258cc1] border-t-transparent rounded-full animate-spin" />
+                      Loading action history...
+                    </div>
                   ) : mrfActionLogs.length > 0 ? (
-                    <div className="overflow-x-auto border border-slate-200 rounded my-2">
-                      <table className="w-full text-xs text-left border-collapse">
-                        <thead className="bg-slate-100 text-slate-700 border-b border-slate-200 font-bold">
-                          <tr>
-                            <th className="p-2.5">Action Status</th>
-                            <th className="p-2.5">Comment</th>
-                            <th className="p-2.5">Action By</th>
-                            <th className="p-2.5">Date & Time</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100 bg-white">
-                          {mrfActionLogs.map((log: any) => (
-                            <tr key={log.id} className="hover:bg-slate-50">
-                              <td className="p-2.5">
-                                <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-blue-50 text-blue-700 border border-blue-200">
-                                  {log.action || 'Updated'}
-                                </span>
-                              </td>
-                              <td className="p-2.5 text-slate-700">{log.comment || 'N/A'}</td>
-                              <td className="p-2.5 font-medium text-slate-800">{log.approver_name || 'HR Admin'}</td>
-                              <td className="p-2.5 text-slate-500">
-                                {log.acted_at || log.created_at ? (log.acted_at || log.created_at).replace('T', ' ').substring(0, 19) : 'N/A'}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                    <div className="relative pl-5">
+                      {/* Vertical connecting line */}
+                      <div className="absolute left-[9px] top-3 bottom-3 w-px bg-slate-200" />
+
+                      <div className="space-y-4">
+                        {mrfActionLogs.map((log: any, idx: number) => {
+                          const statusRaw = (log.action || '').toLowerCase();
+                          const isApproved  = statusRaw.includes('approv');
+                          const isRejected  = statusRaw.includes('reject');
+                          const isPending   = statusRaw.includes('pending');
+                          const isCompleted = statusRaw.includes('complet') || statusRaw.includes('hired') || statusRaw.includes('closed');
+
+                          const dotColor   = isApproved  ? 'bg-emerald-500 ring-emerald-100'
+                                           : isRejected  ? 'bg-rose-500 ring-rose-100'
+                                           : isPending   ? 'bg-amber-400 ring-amber-100'
+                                           : isCompleted ? 'bg-indigo-500 ring-indigo-100'
+                                           : 'bg-[#258cc1] ring-blue-100';
+
+                          const badgeColor = isApproved  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                           : isRejected  ? 'bg-rose-50 text-rose-700 border-rose-200'
+                                           : isPending   ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                           : isCompleted ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                                           : 'bg-blue-50 text-blue-700 border-blue-200';
+
+                          const actorName = log.approver_name || log.acted_by || 'HR Admin';
+                          const initials  = actorName.split(' ').map((w: string) => w[0]).slice(0, 2).join('').toUpperCase();
+
+                          const dateStr = log.acted_at || log.created_at;
+                          const formattedDate = dateStr
+                            ? new Date(dateStr).toLocaleString('en-IN', {
+                                day: '2-digit', month: 'short', year: 'numeric',
+                                hour: '2-digit', minute: '2-digit', hour12: true
+                              })
+                            : '—';
+
+                          return (
+                            <div key={log.id || idx} className="relative flex gap-3">
+                              {/* Timeline dot */}
+                              <div className={`w-[18px] h-[18px] rounded-full shrink-0 ring-4 mt-1.5 z-10 ${dotColor}`} />
+
+                              {/* Card */}
+                              <div className="flex-1 bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-1.5 hover:shadow-sm transition-shadow">
+                                <div className="flex items-start justify-between gap-2 flex-wrap">
+                                  {/* Status badge */}
+                                  <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider border ${badgeColor}`}>
+                                    {log.action || 'Updated'}
+                                  </span>
+                                  {/* Date */}
+                                  <span className="text-[10px] text-slate-400 font-medium shrink-0">{formattedDate}</span>
+                                </div>
+
+                                {/* Comment bubble */}
+                                {log.comment && (
+                                  <div className="text-[11px] text-slate-600 bg-white border border-slate-100 rounded px-2.5 py-1.5 leading-relaxed">
+                                    💬 {log.comment}
+                                  </div>
+                                )}
+
+                                {/* Actor row */}
+                                <div className="flex items-center gap-1.5 pt-0.5">
+                                  <div className="w-5 h-5 rounded-full bg-[#258cc1] text-white text-[9px] font-black flex items-center justify-center shrink-0">
+                                    {initials}
+                                  </div>
+                                  <span className="text-[10px] text-slate-500 font-medium">by <span className="text-slate-700 font-bold">{actorName}</span></span>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   ) : (
-                    <div className="py-2 text-xs text-slate-500 italic">
-                      Action information not found ..!!
+                    <div className="py-8 flex flex-col items-center justify-center text-center border border-dashed border-slate-200 rounded-lg bg-slate-50/60">
+                      <div className="w-10 h-10 rounded-full bg-slate-200/80 flex items-center justify-center mb-2">
+                        <FileText className="w-5 h-5 text-slate-400" />
+                      </div>
+                      <p className="text-xs font-semibold text-slate-500">No action history yet</p>
+                      <p className="text-[10px] text-slate-400 mt-0.5">Click "+ Add Action" to log the first action</p>
                     </div>
                   )}
                 </div>

@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { getKnex } from '../../../db/knex';
 import type { TenantContext } from '../../../db/types';
+import { requireOrgId } from '../utils/payroll.utils';
 
 export class PayrollComponentGroupService {
   async getGroups(ctx: TenantContext, category?: string) {
@@ -48,7 +49,7 @@ export class PayrollComponentGroupService {
 
     const payload: any = {
       uuid: uuidv4(),
-      organization_id: ctx?.organizationId ? Number(ctx.organizationId) : 68,
+      organization_id: requireOrgId(ctx),
       name: nameVal,
       category: category,
       round_format: data.roundFormat || data.round_format || 'Round',
@@ -73,7 +74,7 @@ export class PayrollComponentGroupService {
       // Auto-create a matching default primary component inside this group if none exists
       const compPayload = {
         uuid: uuidv4(),
-        organization_id: ctx.organizationId || 1,
+        organization_id: requireOrgId(ctx),  // already validated above
         group_id: groupId,
         name: nameVal,
         component_type: 'Value',

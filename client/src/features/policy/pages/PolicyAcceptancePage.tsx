@@ -59,11 +59,10 @@ export function PolicyAcceptancePage() {
       case 'team_lead':
         return 'TEAM LEAD';
       case 'hr_admin':
-      case 'hr':
-        return 'HR ADMIN';
       case 'hr_manager':
+      case 'hr':
       case 'support':
-        return 'HR MANAGER';
+        return 'HR';
       case 'intern':
         return 'INTERN';
       case 'consultant':
@@ -81,12 +80,12 @@ export function PolicyAcceptancePage() {
     } else if (
       roles.includes('organization_admin') ||
       roles.includes('ceo') ||
+      roles.includes('hr') ||
       roles.includes('hr_admin') ||
-      roles.includes('hr')
+      roles.includes('hr_manager') ||
+      roles.includes('support')
     ) {
       return '/dashboard';
-    } else if (roles.includes('support') || roles.includes('hr_manager')) {
-      return '/hr/dashboard';
     } else if (roles.includes('department_head') || roles.includes('manager')) {
       return '/manager/dashboard';
     } else if (roles.includes('team_lead')) {
@@ -347,9 +346,9 @@ export function PolicyAcceptancePage() {
                 <div className="w-full h-[580px] bg-slate-50 relative overflow-hidden rounded-xl">
                   {/* Clipped iframe to hide any browser native PDF toolbar */}
                   <iframe
-                    src={pdfBlobUrl || currentPolicy.fileUrl}
+                    src={`${pdfBlobUrl || currentPolicy.fileUrl}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`}
                     title={currentPolicy?.title || 'Policy Document'}
-                    className="w-full h-[620px] border-0 -mt-10"
+                    className="w-full h-[calc(100%+44px)] border-0 -mt-[44px]"
                   />
                 </div>
               ) : currentPolicy.fileUrl.startsWith('data:image/') || /\.(jpg|jpeg|png|webp)$/i.test(currentPolicy.fileUrl) ? (

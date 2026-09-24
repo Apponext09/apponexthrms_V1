@@ -5,6 +5,7 @@ import { WorkflowInstanceRepository } from '../repositories/WorkflowInstanceRepo
 import { WorkflowInstanceStepRepository } from '../repositories/WorkflowInstanceStepRepository';
 import { WorkflowStepRepository } from '../repositories/WorkflowStepRepository';
 import { WorkflowHistoryRepository } from '../repositories/WorkflowHistoryRepository';
+import { db } from '../../../db/knex';
 import type { TenantContext } from '../../../db/types';
 import type { StartWorkflowInput } from '@apponexthrms/shared';
 
@@ -23,7 +24,33 @@ export class WorkflowExecutionService {
     this.historyRepo = new WorkflowHistoryRepository();
   }
 
+  /** Resolve non-person workflow rules when the request enters the workflow. */
+  async resolveApproverId(ctx: TenantContext, step: any, metadata?: Record<string, any>) {
+    if (step.approver_type === 'specific_user') return step.approver_id;
+    if (step.approver_type === 'reporting_manager') {
+      const employeeId = Number(metadata?.employeeId);
+      const employee = employeeId && await db('employees').where({ id: employeeId, organization_id: ctx.organizationId }).whereNull('deleted_at').first('reporting_manager_id');
+      const user = employee?.reporting_manager_id && await db('users').where({ organization_id: ctx.organizationId, employee_id: employee.reporting_manager_id }).whereNull('deleted_at').first('id');
+      return user ? Number(user.id) : null;
+    }
+    if (step.approver_type === 'department_head') {
+      const department = step.approver_department_id && await db('departments').where({ id: step.approver_department_id, organization_id: ctx.organizationId }).whereNull('deleted_at').first('department_head_id', 'manager_id');
+      const ownerId = department?.department_head_id || department?.manager_id;
+      const user = ownerId && await db('users').where({ organization_id: ctx.organizationId, employee_id: ownerId }).whereNull('deleted_at').first('id');
+      return user ? Number(user.id) : null;
+    }
+    if (step.approver_type === 'user_role') {
+      const user = step.approver_role_id && await db('users as u').join('user_roles as ur', 'ur.user_id', 'u.id')
+        .where({ 'u.organization_id': ctx.organizationId, 'ur.role_id': step.approver_role_id }).whereNull('u.deleted_at').whereNull('ur.deleted_at').orderBy('u.id').first('u.id');
+      return user ? Number(user.id) : null;
+    }
+    return step.approver_id || null;
+  }
+
   async startWorkflow(ctx: TenantContext, input: StartWorkflowInput) {
+    if (['expense_claim', 'travel_request', 'travel_advance', 'mileage_claim'].includes(input.entityType)) {
+      throw new ValidationError('Submit expense requests through the Expense module so assignment and claim status stay atomic');
+    }
     // Get workflow by code
     const workflow = await this.workflowRepo.getByCode(ctx, input.workflowCode);
     if (!workflow) {
@@ -67,13 +94,15 @@ export class WorkflowExecutionService {
       throw new ValidationError('Workflow has no steps');
     }
 
+    const firstApproverId = await this.resolveApproverId(ctx, firstStep, input.metadata as any);
+    if (!firstApproverId) throw new ValidationError('No active approver could be resolved for the first workflow step');
     await this.instanceStepRepo.create(ctx, {
       uuid: uuidv4(),
       instance_id: instance.id,
       step_id: firstStep.id,
       step_number: 1,
       status: 'pending',
-      approver_id: firstStep.approver_id,
+      approver_id: firstApproverId,
       assigned_at: new Date(),
       created_by: ctx.userId,
       updated_by: ctx.userId,

@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { SectionTabs } from '@/layouts/SectionNavigation';
+import { useState, useEffect, useCallback } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { EmployeeSidebar } from './EmployeeSidebar';
 import { Bell, Sun, Moon, Building2, Menu, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
@@ -14,6 +15,9 @@ import { NotificationBell } from '@/features/notifications/components/Notificati
 import { useThemeStore } from '@/features/settings/store/themeStore';
 import { Toaster } from '@/components/ui/toast';
 import { useEmployeeLocationTracker } from '@/features/Livetracking';
+import { GlobalSearchButton } from '@/features/search/components/GlobalSearch';
+import { useAttendanceStore } from '@/features/attendance';
+import { useAttendance } from '@/features/attendance/hooks/useAttendance';
 
 export function EmployeeLayout() {
   useNotificationSocket();
@@ -33,10 +37,51 @@ export function EmployeeLayout() {
   const employeeId = user?.employeeId || 0;
   const { employee } = useEmployee(employeeId);
 
-  // Silent background GPS tracker — no map UI shown to employee
+  // ── Gate live tracking on the employee's real attendance check-in status ──
+  // Tracking must switch on automatically the moment they check in, and off the
+  // moment they check out — never a manual toggle, and never running before
+  // check-in / after check-out.
+  const storeIsCheckedIn = useAttendanceStore((s) => s.isCheckedIn);
+  const { getTodayRecord } = useAttendance();
+  const [serverCheckedIn, setServerCheckedIn] = useState<boolean | null>(null);
+
+  const syncAttendanceStatus = useCallback(async () => {
+    const record = await getTodayRecord();
+    const inTime = record?.check_in_time || (record as any)?.checkInTime;
+    const outTime = record?.check_out_time || (record as any)?.checkOutTime;
+    setServerCheckedIn(!!inTime && !outTime);
+  }, [getTodayRecord]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const record = await getTodayRecord();
+      if (cancelled) return;
+      const inTime = record?.check_in_time || (record as any)?.checkInTime;
+      const outTime = record?.check_out_time || (record as any)?.checkOutTime;
+      setServerCheckedIn(!!inTime && !outTime);
+    })();
+    // Safety-net re-sync every 5 minutes in case check-in/out happened elsewhere
+    // (e.g. a face-punch kiosk) and this tab's local state hasn't heard about it.
+    const interval = setInterval(syncAttendanceStatus, 5 * 60 * 1000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+    // Re-run whenever THIS device's own check-in/out button flips the store flag,
+    // so tracking reacts within one request instead of waiting for the interval.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storeIsCheckedIn]);
+
+  // Prefer the confirmed server status; fall back to the persisted store flag
+  // only until the first sync resolves, so there's no startup gap mid-shift.
+  const isCurrentlyCheckedIn = serverCheckedIn ?? storeIsCheckedIn;
+
+  // Silent background GPS tracker — no map UI shown to employee. Runs only
+  // while checked in; automatically stops the instant they check out.
   useEmployeeLocationTracker({
     token: localStorage.getItem('accessToken'),
-    enabled: true,
+    enabled: isCurrentlyCheckedIn,
   });
 
 
@@ -52,6 +97,10 @@ export function EmployeeLayout() {
     if (location.pathname.includes('/performance')) return 'Performance Reviews & Feedback';
     if (location.pathname.includes('/assets')) return 'My Assigned Company Assets';
     if (location.pathname.includes('/approvals')) return 'Approval Inbox';
+    if (location.pathname.includes('/travel-advances')) return 'Travel Advance Requests';
+    if (location.pathname.includes('/travel-requests')) return 'Travel Requests';
+    if (location.pathname.includes('/mileage-claims')) return 'Mileage Claims';
+    if (location.pathname.includes('/my-expenses') || location.pathname.includes('/expenses')) return 'My Expenses & Claims';
     return 'Employee Self Service Portal';
   };
 
@@ -82,7 +131,7 @@ export function EmployeeLayout() {
       )}
 
       {/* Main Container Area */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         {/* Top Navigation Header */}
         <header className="relative z-20 flex h-16 flex-shrink-0 items-center justify-between border-b border-border bg-card px-4 sm:px-6">
           <div className="flex min-w-0 items-center gap-3">
@@ -104,16 +153,11 @@ export function EmployeeLayout() {
             >
               {sidebarOpen ? <PanelLeftClose className="size-4" /> : <PanelLeftOpen className="size-4" />}
             </Button>
-            <h1 className="truncate text-balance text-base font-extrabold text-foreground md:text-lg">{getPageTitle()}</h1>
+            <span className="hidden truncate text-base font-extrabold tracking-tight text-foreground md:inline">APPONEXTHRMS</span>
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Organization Name Badge */}
-            <div className="mr-1 hidden h-9 max-w-48 items-center gap-2 rounded-lg border border-border bg-muted/60 px-3 text-xs font-bold text-foreground sm:inline-flex">
-              <Building2 className="size-3.5 flex-shrink-0 text-primary" />
-              <span className="truncate">{user?.organizationName || user?.organizationCode || (user as any)?.organization?.name || 'Organization'}</span>
-            </div>
-
+            <GlobalSearchButton />
             {/* Dark & Light Mode Theme Toggle Button */}
             <Button
               variant="ghost"
@@ -132,25 +176,9 @@ export function EmployeeLayout() {
 
             {/* Notifications Dropdown Popup */}
             <NotificationBell className="size-9 rounded-lg border border-border bg-card" iconClassName="size-4" />
-
-            {/* Profile Avatar Badge */}
-            <button
-              type="button"
-              onClick={() => navigate('/employee/profile')}
-              className="flex items-center gap-2 pl-2 border-l border-border hover:opacity-80 transition-opacity"
-            >
-              <Avatar className="size-8 border border-primary/30">
-                <AvatarImage src={employee?.avatarUrl || user?.avatarUrl} />
-                <AvatarFallback className="bg-primary text-xs font-bold text-primary-foreground">
-                  {getInitials()}
-                </AvatarFallback>
-              </Avatar>
-              <span className="text-xs font-semibold text-foreground hidden md:inline-block truncate max-w-[120px]">
-                {employeeName}
-              </span>
-            </button>
           </div>
         </header>
+        <SectionTabs id="employee" />
 
         {/* Page Content Viewport */}
         <main className="app-shell-scroll flex-1 overflow-auto p-4 md:p-6">

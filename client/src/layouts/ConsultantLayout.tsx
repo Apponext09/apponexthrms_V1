@@ -1,3 +1,4 @@
+import { SectionTabs } from '@/layouts/SectionNavigation';
 import { useState, useEffect } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
@@ -13,6 +14,7 @@ import { NotificationDrawer } from '@/features/notifications/components/Notifica
 import { NotificationBell } from '@/features/notifications/components/NotificationBell';
 import { Toaster } from '@/components/ui/toast';
 import { ConsultantSidebar } from './ConsultantSidebar';
+import { GlobalSearchButton } from '@/features/search/components/GlobalSearch';
 
 // ── Page title helper ─────────────────────────────────────────────────────────
 function getPageTitle(pathname: string): string {
@@ -20,6 +22,8 @@ function getPageTitle(pathname: string): string {
   if (pathname.includes('/leaves'))           return 'My Leaves';
   if (pathname.includes('/payslips'))         return 'My Payslips';
   if (pathname.includes('/expenses'))         return 'Expense Claims';
+  if (pathname.includes('/travel-advances'))  return 'Travel Advances';
+  if (pathname.includes('/mileage-claims'))   return 'Mileage Claims';
   if (pathname.includes('/travel'))           return 'Travel Requests';
   if (pathname.includes('/documents'))        return 'My Documents';
   if (pathname.includes('/holiday-calendar')) return 'Holiday Calendar';
@@ -78,10 +82,10 @@ export function ConsultantLayout() {
       )}
 
       {/* ── Main Content Area ── */}
-      <div className="flex flex-1 flex-col overflow-hidden">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
 
         {/* ── Topbar ── */}
-        <header className="flex h-14 flex-shrink-0 items-center justify-between border-b border-border bg-card px-4 shadow-sm">
+        <header className="flex h-16 flex-shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-3 sm:px-6">
           <div className="flex items-center gap-3">
             {/* Mobile hamburger */}
             <Button
@@ -104,15 +108,12 @@ export function ConsultantLayout() {
               {sidebarOpen ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}
             </Button>
 
-            <div>
-              <h1 className="text-sm font-semibold text-foreground">{pageTitle}</h1>
-              <p className="hidden text-[10px] text-muted-foreground sm:block">
-                {new Date().toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-              </p>
-            </div>
+            <span className="hidden truncate text-base font-extrabold tracking-tight text-foreground md:inline">APPONEXTHRMS</span>
+
           </div>
 
           <div className="flex items-center gap-2">
+            <GlobalSearchButton />
             {/* Theme toggle */}
             <Button
               variant="ghost"
@@ -125,23 +126,12 @@ export function ConsultantLayout() {
 
             {/* Notifications bell */}
             <NotificationBell className="size-8 rounded-lg" iconClassName="size-4" />
-
-            {/* Avatar */}
-            <Avatar
-              className="h-8 w-8 cursor-pointer border-2 border-violet-300 dark:border-violet-700"
-              onClick={() => navigate('/consultant/profile')}
-              title="My Profile"
-            >
-              <AvatarImage src={user?.avatarUrl} />
-              <AvatarFallback className="bg-violet-600 text-xs font-bold text-white">
-                {initials}
-              </AvatarFallback>
-            </Avatar>
           </div>
         </header>
+        <SectionTabs id="consultant" />
 
         {/* ── Page Content ── */}
-        <main className="flex-1 overflow-y-auto">
+        <main className="app-shell-scroll flex-1 overflow-auto p-4 sm:p-6">
           <Outlet />
         </main>
       </div>

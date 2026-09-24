@@ -96,8 +96,14 @@ apiClient.interceptors.response.use(
         // No refresh token available, logout user only if not on a public route
         localStorage.removeItem('accessToken');
         localStorage.removeItem('refreshToken');
+        localStorage.removeItem('auth-storage');
         if (!isPublicRoute) {
-          window.location.href = '/login';
+          try {
+            const { useAuthStore } = await import('@/features/auth/store/authStore');
+            useAuthStore.getState().logout();
+          } catch (e) {
+            window.location.href = '/login';
+          }
         }
         return Promise.reject(error);
       }
@@ -130,9 +136,15 @@ apiClient.interceptors.response.use(
         // If refresh token request fails (e.g. refresh token expired), clean up and redirect to login
         localStorage.removeItem('accessToken');
         localStorage.removeItem('refreshToken');
+        localStorage.removeItem('auth-storage');
         if (!isPublicRoute) {
-          if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
-            window.location.href = '/login';
+          try {
+            const { useAuthStore } = await import('@/features/auth/store/authStore');
+            useAuthStore.getState().logout();
+          } catch (e) {
+            if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
+              window.location.href = '/login';
+            }
           }
         }
         return Promise.reject(refreshError);

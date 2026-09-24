@@ -192,61 +192,7 @@ export function SuperAdminDashboardPage() {
           </CardContent>
         </Card>
 
-        {/* Platform Usage Report */}
-        <Card className="bg-card border-border dark:bg-slate-900 dark:border-slate-800 text-foreground dark:text-white shadow-sm dark:shadow-lg">
-          <CardHeader>
-            <CardTitle className="text-lg text-foreground dark:text-white flex items-center gap-2 font-semibold">
-              <ShieldCheck className="w-5 h-5 text-emerald-500 dark:text-emerald-400" /> Platform Usage Report
-            </CardTitle>
-            <CardDescription className="text-muted-foreground dark:text-slate-400 text-xs">Essential platform security & health indicators</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4 pt-2">
-            {/* Metric 1: Security & Protection */}
-            <div className="p-3 rounded-xl bg-muted/40 dark:bg-slate-800/60 border border-border dark:border-slate-800 space-y-1.5">
-              <div className="flex items-center justify-between text-xs font-semibold">
-                <span className="text-foreground dark:text-slate-300 flex items-center gap-1.5">
-                  <Lock className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400" /> Security & Protection
-                </span>
-                <span className="text-emerald-600 dark:text-emerald-400 font-bold">
-                  {stats.platformUsage?.securityShield || '100% Shielded'}
-                </span>
-              </div>
-              <p className="text-[11px] text-muted-foreground dark:text-slate-400">
-                Multi-tenant data isolation & audit compliance verified with zero violations.
-              </p>
-            </div>
-
-            {/* Metric 2: System Health & Services */}
-            <div className="p-3 rounded-xl bg-muted/40 dark:bg-slate-800/60 border border-border dark:border-slate-800 space-y-1.5">
-              <div className="flex items-center justify-between text-xs font-semibold">
-                <span className="text-foreground dark:text-slate-300 flex items-center gap-1.5">
-                  <Server className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400" /> System Uptime
-                </span>
-                <span className="text-emerald-600 dark:text-emerald-400 font-bold">
-                  {stats.platformUsage?.systemUptime || '99.98% Operational'}
-                </span>
-              </div>
-              <p className="text-[11px] text-muted-foreground dark:text-slate-400">
-                All database clusters & API gateways are performing with low latency.
-              </p>
-            </div>
-
-            {/* Metric 3: Resource Capacity */}
-            <div className="p-3 rounded-xl bg-muted/40 dark:bg-slate-800/60 border border-border dark:border-slate-800 space-y-1.5">
-              <div className="flex items-center justify-between text-xs font-semibold">
-                <span className="text-foreground dark:text-slate-300 flex items-center gap-1.5">
-                  <HardDrive className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400" /> Resource Capacity
-                </span>
-                <span className="text-amber-600 dark:text-amber-400 font-bold">
-                  {stats.platformUsage?.resourceLoad || '34% Active Load'}
-                </span>
-              </div>
-              <p className="text-[11px] text-muted-foreground dark:text-slate-400">
-                Optimal CPU, memory, and database headroom available across all instances.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
+        
       </div>
     </div>
   );

@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { getKnex } from '../../../db/knex';
 import type { TenantContext } from '../../../db/types';
+import { requireOrgId } from '../utils/payroll.utils';
 
 export class PayrollComponentDefinitionService {
   async getComponents(ctx: TenantContext, groupId?: number | string) {
@@ -71,7 +72,7 @@ export class PayrollComponentDefinitionService {
 
     const payload: any = {
       uuid: uuidv4(),
-      organization_id: ctx?.organizationId ? Number(ctx.organizationId) : 68,
+      organization_id: requireOrgId(ctx),
       group_id: groupId,
       name: nameVal,
       non_cashable: (data.nonCashable ?? data.non_cashable) ? 1 : 0,

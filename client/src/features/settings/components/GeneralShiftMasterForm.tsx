@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import {
   Plus, X, Info, Clock, Search, CheckCircle2, XCircle, ChevronDown, ChevronUp,
   Loader2, Sun, Moon, Sparkles, Shield, Palette, Tag, Timer, CalendarDays, Zap, AlertTriangle, Check
@@ -459,7 +459,7 @@ export function GeneralShiftMasterForm({ onCancel, onSave }: GeneralShiftMasterF
                       className="sr-only"
                     />
                     <div className={cn('w-8 h-4 rounded-full transition-colors relative', isFlexible ? 'bg-emerald-500' : 'bg-muted-foreground/30')}>
-                      <div className={cn('w-3.5 h-3.5 rounded-full bg-white transition-transform absolute top-0.25 left-0.25 shadow-xs', isFlexible ? 'translate-x-4' : 'translate-x-0')} />
+                      <div className={cn('w-3.5 h-3.5 rounded-full bg-background transition-transform absolute top-0.25 left-0.25 shadow-xs', isFlexible ? 'translate-x-4' : 'translate-x-0')} />
                     </div>
                     <span className="text-[11px] font-semibold flex items-center gap-1">
                       <Zap className="h-3 w-3 text-amber-500" /> Flexible
@@ -687,7 +687,7 @@ export function GeneralShiftMasterForm({ onCancel, onSave }: GeneralShiftMasterF
                   >
                     <div
                       className={cn(
-                        'w-4 h-4 rounded-full bg-white transition-transform absolute top-0.5 left-0.5 shadow-xs',
+                        'w-4 h-4 rounded-full bg-background transition-transform absolute top-0.5 left-0.5 shadow-xs',
                         isActive ? 'translate-x-5' : 'translate-x-0'
                       )}
                     />

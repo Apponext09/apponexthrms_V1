@@ -1,12 +1,12 @@
 // ============================================================
-// LiveTrackingMap — MapLibre GL JS (WebGL + Red Break Points & Interactive Time Card)
+// LiveTrackingMap — MapLibre GL JS (WebGL + Start/Stop/End Markers & Interactive Time Card)
 // client/src/features/Livetracking/components/LiveTrackingMap.tsx
 //
 // FEATURES:
 //  - MapLibre GL JS GPU map canvas with OpenStreetMap raster tiles
 //  - Custom Teardrop Pin Pointer markers with employee Profile Photo / Avatar inside
-//  - Red Break Point Markers (#ef4444) highlighting employee stop locations
-//  - Click RED break marker → opens interactive time card showing exact break stop time & duration
+//  - GREEN starting point, ORANGE break/stop points, RED ending/latest point
+//  - Click any start/stop/end marker → shows total distance (km), stop time & travel time
 //  - Prominent Route line: Deep Black (#0f172a, 6.5px) in Light Mode, White (#ffffff) in Dark Mode
 // ============================================================
 import React, { useEffect, useRef, useMemo, useCallback, Component, ErrorInfo, useState } from 'react';
@@ -15,6 +15,10 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import type { LiveEmployee } from '../types/livetracking.types';
 import { EmployeeMarkerCard } from './EmployeeMarkerPopup';
 import { useThemeStore } from '@/features/settings/store/themeStore';
+import { computeRouteStats, formatMinutesLabel } from '../utils/routeStats';
+
+// ── Default map focus when nobody is active (Navi Mumbai) ────────────────────
+const NAVI_MUMBAI_CENTER: [number, number] = [73.0297, 19.033];
 
 // ── Coordinate Validator ──────────────────────────────────────────────────────
 function isValidCoord(lat: any, lng: any): boolean {
@@ -106,10 +110,11 @@ function routesToGeoJSON(employees: LiveEmployee[]): GeoJSON.FeatureCollection {
   };
 }
 
-// ── Break markers GeoJSON ─────────────────────────────────────────────────────
+// ── Break markers GeoJSON (ORANGE stop dots) ──────────────────────────────────
 function breaksToGeoJSON(employees: LiveEmployee[]): GeoJSON.FeatureCollection {
   const features: GeoJSON.Feature[] = [];
   for (const emp of employees) {
+    const stats = computeRouteStats(emp.routeTrail, emp.breakPoints);
     for (const bp of emp.breakPoints || []) {
       if (isValidCoord(bp.latitude, bp.longitude)) {
         features.push({
@@ -122,12 +127,117 @@ function breaksToGeoJSON(employees: LiveEmployee[]): GeoJSON.FeatureCollection {
             duration_minutes: bp.durationMinutes,
             start_time: bp.startTime,
             end_time: bp.endTime,
+            distance_km: stats.distanceKm,
+            stop_minutes: stats.stopMinutes,
+            travel_minutes: stats.travelMinutes,
+            offline_minutes: stats.offlineMinutes,
+            trail_start_time: stats.startTime,
+            trail_end_time: stats.endTime,
           },
         });
       }
     }
   }
   return { type: 'FeatureCollection', features };
+}
+
+// ── Start / End breadcrumb point GeoJSON (GREEN start, RED end) ──────────────
+// The "end" point is offset a few metres from the raw coordinate so it doesn't
+// sit exactly under the live avatar pin (which would otherwise swallow clicks).
+const END_MARKER_OFFSET_DEG = 0.00015; // ~15-17m
+
+function routeEndpointsToGeoJSON(
+  employees: LiveEmployee[],
+  kind: 'start' | 'end'
+): GeoJSON.FeatureCollection {
+  const features: GeoJSON.Feature[] = [];
+  for (const emp of employees) {
+    const trail = (emp.routeTrail || []).filter((p) => isValidCoord(p.latitude, p.longitude));
+    if (trail.length === 0) continue;
+    const rawPoint = kind === 'start' ? trail[0] : trail[trail.length - 1];
+    const lat = Number(rawPoint.latitude) + (kind === 'end' ? END_MARKER_OFFSET_DEG : 0);
+    const lng = Number(rawPoint.longitude) + (kind === 'end' ? END_MARKER_OFFSET_DEG : 0);
+    const stats = computeRouteStats(emp.routeTrail, emp.breakPoints);
+    const isLive = emp.connection_status === 'ONLINE' && emp.location_status === 'ON';
+    features.push({
+      type: 'Feature' as const,
+      geometry: { type: 'Point' as const, coordinates: [lng, lat] },
+      properties: {
+        employee_id: emp.employee_id ?? (emp as any).id,
+        employee_name: emp.name,
+        kind,
+        is_live: kind === 'end' ? isLive : undefined,
+        distance_km: stats.distanceKm,
+        stop_minutes: stats.stopMinutes,
+        travel_minutes: stats.travelMinutes,
+        offline_minutes: stats.offlineMinutes,
+        trail_start_time: stats.startTime,
+        trail_end_time: stats.endTime,
+      },
+    });
+  }
+  return { type: 'FeatureCollection', features };
+}
+
+// ── Shared popup HTML for start / stop / end markers ──────────────────────────
+function formatPopupTime(iso?: string | null): string {
+  if (!iso) return 'N/A';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return 'N/A';
+  return d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+}
+
+function buildRouteStatsPopupHTML(kind: 'start' | 'stop' | 'end', props: any): string {
+  const meta =
+    kind === 'start'
+      ? { icon: '🟢', label: 'Starting Point', color: '#22c55e' }
+      : kind === 'end'
+        ? props.is_live
+          ? { icon: '🔴', label: 'Live Position (Current)', color: '#ef4444' }
+          : { icon: '🔴', label: 'Ending Point (Last Seen)', color: '#ef4444' }
+        : { icon: '🟠', label: 'Stop / Break Location', color: '#f97316' };
+
+  const stopBlock =
+    kind === 'stop'
+      ? `<div style="background:rgba(249,115,22,0.15);border:1px solid rgba(249,115,22,0.4);border-radius:10px;padding:9px;margin-bottom:8px;">
+          <div style="color:#fdba74;font-size:11px;font-weight:700;">⏱️ This Stop Duration:</div>
+          <div style="color:#ffffff;font-size:15px;font-weight:900;margin-top:2px;">${props.duration_minutes} Minutes</div>
+          <div style="color:#cbd5e1;font-size:10.5px;margin-top:4px;">🕒 ${formatPopupTime(props.start_time)} → ${props.end_time ? formatPopupTime(props.end_time) : 'ongoing'}</div>
+        </div>`
+      : '';
+
+  return `
+    <div style="background:#0f172a;color:#ffffff;border-radius:14px;padding:14px;font-family:sans-serif;font-size:12px;border:1.5px solid ${meta.color}80;box-shadow:0 8px 24px rgba(0,0,0,0.6);min-width:230px;">
+      <div style="display:flex;align-items:center;gap:6px;color:${meta.color};font-weight:900;font-size:13px;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,0.1);">
+        <span>${meta.icon} ${meta.label}</span>
+      </div>
+      ${props.employee_name ? `<div style="color:#cbd5e1;font-size:11.5px;margin-bottom:8px;"><strong>Staff:</strong> <span style="color:#fff;font-weight:800;">${props.employee_name}</span></div>` : ''}
+      ${stopBlock}
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+        <div style="background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.35);border-radius:10px;padding:8px;">
+          <div style="color:#93c5fd;font-size:10px;font-weight:700;">📏 Total Distance</div>
+          <div style="color:#fff;font-size:14px;font-weight:900;">${props.distance_km} km</div>
+        </div>
+        <div style="background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.35);border-radius:10px;padding:8px;">
+          <div style="color:#86efac;font-size:10px;font-weight:700;">🚗 Travel Time</div>
+          <div style="color:#fff;font-size:14px;font-weight:900;">${formatMinutesLabel(props.travel_minutes)}</div>
+        </div>
+      </div>
+      <div style="background:rgba(249,115,22,0.12);border:1px solid rgba(249,115,22,0.35);border-radius:10px;padding:8px;margin-bottom:8px;">
+        <div style="color:#fdba74;font-size:10px;font-weight:700;">🛑 Total Stop Time</div>
+        <div style="color:#fff;font-size:14px;font-weight:900;">${formatMinutesLabel(props.stop_minutes)}</div>
+      </div>
+      ${
+        props.offline_minutes > 0
+          ? `<div style="color:#94a3b8;font-size:10px;margin-bottom:8px;">📡 GPS was offline for ~${formatMinutesLabel(props.offline_minutes)} (excluded from travel time)</div>`
+          : ''
+      }
+      <div style="display:flex;flex-direction:column;gap:4px;color:#cbd5e1;font-size:11px;">
+        <div>🏁 <strong>Started:</strong> <span style="color:#38bdf8;font-weight:800;">${formatPopupTime(props.trail_start_time)}</span></div>
+        <div>📍 <strong>Last update:</strong> <span style="color:#34d399;font-weight:800;">${formatPopupTime(props.trail_end_time)}</span></div>
+      </div>
+    </div>
+  `;
 }
 
 // ── Nominatim reverse-geocode with local cache ────────────────────────────────
@@ -166,16 +276,21 @@ const MAP_STYLE: maplibregl.StyleSpecification = {
         'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png',
       ],
       tileSize: 256,
+      // OSM only serves tiles up to z19 — capping the SOURCE here makes MapLibre
+      // over-zoom (upscale) the last available tile beyond that instead of
+      // fetching non-existent tiles.
+      maxzoom: 19,
       attribution: '&copy; OpenStreetMap contributors',
     },
   },
   layers: [
     {
+      // NOTE: no `maxzoom` on the LAYER — a layer-level maxzoom stops the layer
+      // from rendering at all past that zoom (blank map), unlike a source maxzoom
+      // which just triggers over-zoom. Keep this layer active at every zoom level.
       id: 'osm-base-layer',
       type: 'raster',
       source: 'osm-tiles',
-      minzoom: 0,
-      maxzoom: 19,
     },
   ],
 };
@@ -221,6 +336,23 @@ const InnerMap: React.FC<Props> = ({
     [employees]
   );
 
+  // Stable key that only changes when the SET of visible employees changes
+  // (not on every lat/lng ping) — used to avoid re-fitting the camera on
+  // every single location update while nobody is individually focused.
+  const validEmployeeIdsKey = useMemo(
+    () =>
+      validEmployees
+        .map((e) => e.employee_id ?? (e as any).id)
+        .filter((id) => id != null)
+        .sort((a, b) => Number(a) - Number(b))
+        .join(','),
+    [validEmployees]
+  );
+  const validEmployeesRef = useRef<LiveEmployee[]>([]);
+  useEffect(() => {
+    validEmployeesRef.current = validEmployees;
+  }, [validEmployees]);
+
   // ── Initialize MapLibre map ──────────────────────────────────────────────
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return;
@@ -228,7 +360,7 @@ const InnerMap: React.FC<Props> = ({
     const firstEmp = employees.find((e) => isValidCoord(e.latitude, e.longitude));
     const center: [number, number] = firstEmp
       ? [Number(firstEmp.longitude), Number(firstEmp.latitude)]
-      : [73.7898, 20.0059];
+      : NAVI_MUMBAI_CENTER;
 
     const map = new maplibregl.Map({
       container: mapContainerRef.current,
@@ -288,14 +420,50 @@ const InnerMap: React.FC<Props> = ({
         },
       });
 
-      // ── Layer: Red Break Stop Circle Markers (#ef4444) ────────────────
+      // ── Layer: Orange Break/Stop Circle Markers (#f97316) ─────────────
       map.addLayer({
         id: 'break-circles',
         type: 'circle',
         source: 'breaks',
         paint: {
           'circle-radius': 12,
-          'circle-color': '#ef4444', // RED color as requested!
+          'circle-color': '#f97316', // ORANGE stop points
+          'circle-stroke-width': 3,
+          'circle-stroke-color': '#ffffff',
+          'circle-opacity': 0.95,
+        },
+      });
+
+      // ── Source + Layer: GREEN starting point ───────────────────────────
+      map.addSource('route-start', {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] },
+      });
+      map.addLayer({
+        id: 'route-start-circle',
+        type: 'circle',
+        source: 'route-start',
+        paint: {
+          'circle-radius': 10,
+          'circle-color': '#22c55e', // GREEN start point
+          'circle-stroke-width': 3,
+          'circle-stroke-color': '#ffffff',
+          'circle-opacity': 0.95,
+        },
+      });
+
+      // ── Source + Layer: RED ending / latest point ───────────────────────
+      map.addSource('route-end', {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] },
+      });
+      map.addLayer({
+        id: 'route-end-circle',
+        type: 'circle',
+        source: 'route-end',
+        paint: {
+          'circle-radius': 10,
+          'circle-color': '#ef4444', // RED end point
           'circle-stroke-width': 3,
           'circle-stroke-color': '#ffffff',
           'circle-opacity': 0.95,
@@ -305,12 +473,18 @@ const InnerMap: React.FC<Props> = ({
       mapLoadedRef.current = true;
 
       try {
-        console.log('[LiveTrackingMap] Loading routes...');
+        // Start/stop/end detail markers are shown only for the focused employee
+        // (or the sole employee in the list) to avoid clutter in "show all" mode.
+        const detailEmployees = employees.length === 1 ? employees : [];
         const routeData = routesToGeoJSON(employees);
-        console.log('[LiveTrackingMap] Setting route data:', routeData.features.length, 'features');
         (map.getSource('routes') as maplibregl.GeoJSONSource)?.setData(routeData as any);
-        (map.getSource('breaks') as maplibregl.GeoJSONSource)?.setData(breaksToGeoJSON(employees) as any);
-        console.log('[LiveTrackingMap] Routes updated on map');
+        (map.getSource('breaks') as maplibregl.GeoJSONSource)?.setData(breaksToGeoJSON(detailEmployees) as any);
+        (map.getSource('route-start') as maplibregl.GeoJSONSource)?.setData(
+          routeEndpointsToGeoJSON(detailEmployees, 'start') as any
+        );
+        (map.getSource('route-end') as maplibregl.GeoJSONSource)?.setData(
+          routeEndpointsToGeoJSON(detailEmployees, 'end') as any
+        );
       } catch (err) {
         console.error('[LiveTrackingMap] Error updating routes:', err);
       }
@@ -320,44 +494,28 @@ const InnerMap: React.FC<Props> = ({
       }
     });
 
-    // ── Click handler: RED break marker popup (shows break stop time & duration) ──
-    map.on('click', 'break-circles', (e: maplibregl.MapMouseEvent) => {
-      const features = map.queryRenderedFeatures(e.point, { layers: ['break-circles'] });
+    // ── Click handlers: start / stop / end markers → shared stats popup ──────
+    const openStatsPopup = (kind: 'start' | 'stop' | 'end', layerId: string) => (e: maplibregl.MapMouseEvent) => {
+      const features = map.queryRenderedFeatures(e.point, { layers: [layerId] });
       if (!features.length) return;
       const props = features[0].properties as any;
       const coords = (features[0].geometry as GeoJSON.Point).coordinates as [number, number];
 
-      const startTimeStr = props.start_time
-        ? new Date(props.start_time).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })
-        : 'N/A';
-      const endTimeStr = props.end_time
-        ? new Date(props.end_time).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })
-        : null;
-
       if (popupRef.current) popupRef.current.remove();
-      popupRef.current = new maplibregl.Popup({ closeButton: true, maxWidth: '280px' })
+      popupRef.current = new maplibregl.Popup({ closeButton: true, maxWidth: '300px' })
         .setLngLat(coords)
-        .setHTML(`
-          <div style="background:#0f172a;color:#ffffff;border-radius:14px;padding:14px;font-family:sans-serif;font-size:12px;border:1.5px solid rgba(239,68,68,0.5);box-shadow:0 8px 24px rgba(0,0,0,0.6);">
-            <div style="display:flex;align-items:center;gap:6px;color:#ef4444;font-weight:900;font-size:13px;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,0.1);">
-              <span>🛑 Break / Stop Location</span>
-            </div>
-            ${props.employee_name ? `<div style="color:#cbd5e1;font-size:11.5px;margin-bottom:6px;"><strong>Staff:</strong> <span style="color:#fff;font-weight:800;">${props.employee_name}</span></div>` : ''}
-            <div style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.4);border-radius:10px;padding:9px;margin-bottom:8px;">
-              <div style="color:#fca5a5;font-size:11px;font-weight:700;">⏱️ Total Break Duration:</div>
-              <div style="color:#ffffff;font-size:15px;font-weight:900;margin-top:2px;">${props.duration_minutes} Minutes</div>
-            </div>
-            <div style="display:flex;flex-direction:column;gap:4px;color:#cbd5e1;font-size:11px;">
-              <div>🕒 <strong>Stopped at:</strong> <span style="color:#38bdf8;font-weight:800;">${startTimeStr}</span></div>
-              ${endTimeStr ? `<div>🚀 <strong>Resumed at:</strong> <span style="color:#34d399;font-weight:800;">${endTimeStr}</span></div>` : ''}
-            </div>
-          </div>
-        `)
+        .setHTML(buildRouteStatsPopupHTML(kind, props))
         .addTo(map);
-    });
+    };
 
-    map.on('mouseenter', 'break-circles', () => { map.getCanvas().style.cursor = 'pointer'; });
-    map.on('mouseleave', 'break-circles', () => { map.getCanvas().style.cursor = ''; });
+    map.on('click', 'break-circles', openStatsPopup('stop', 'break-circles'));
+    map.on('click', 'route-start-circle', openStatsPopup('start', 'route-start-circle'));
+    map.on('click', 'route-end-circle', openStatsPopup('end', 'route-end-circle'));
+
+    ['break-circles', 'route-start-circle', 'route-end-circle'].forEach((layerId) => {
+      map.on('mouseenter', layerId, () => { map.getCanvas().style.cursor = 'pointer'; });
+      map.on('mouseleave', layerId, () => { map.getCanvas().style.cursor = ''; });
+    });
 
     return () => {
       mapLoadedRef.current = false;
@@ -471,15 +629,22 @@ const InnerMap: React.FC<Props> = ({
       }
     });
 
-    // Update GeoJSON route and break layers
+    // Update GeoJSON route, break, and start/end endpoint layers.
+    // Start/stop/end detail markers only render for the focused employee
+    // (employees prop is narrowed to a single entry when one is selected) —
+    // this keeps "show all" mode from drowning in overlapping markers.
     if (mapLoadedRef.current) {
       try {
-        console.log('[LiveTrackingMap] Updating routes for', employees.length, 'employees');
+        const detailEmployees = employees.length === 1 ? employees : [];
         const routeData = routesToGeoJSON(employees);
-        console.log('[LiveTrackingMap] Setting', routeData.features.length, 'route features');
         (map.getSource('routes') as maplibregl.GeoJSONSource)?.setData(routeData as any);
-        (map.getSource('breaks') as maplibregl.GeoJSONSource)?.setData(breaksToGeoJSON(employees) as any);
-        console.log('[LiveTrackingMap] Routes updated');
+        (map.getSource('breaks') as maplibregl.GeoJSONSource)?.setData(breaksToGeoJSON(detailEmployees) as any);
+        (map.getSource('route-start') as maplibregl.GeoJSONSource)?.setData(
+          routeEndpointsToGeoJSON(detailEmployees, 'start') as any
+        );
+        (map.getSource('route-end') as maplibregl.GeoJSONSource)?.setData(
+          routeEndpointsToGeoJSON(detailEmployees, 'end') as any
+        );
       } catch (err) {
         console.error('[LiveTrackingMap] Error updating routes:', err);
       }
@@ -500,18 +665,30 @@ const InnerMap: React.FC<Props> = ({
     }
   }, []);
 
-  // ── Fly to selected employee ─────────────────────────────────────────────
+  // ── Default focus: active/selected employee → their location; else Navi Mumbai ──
   useEffect(() => {
     if (!mapRef.current || !mapLoadedRef.current) return;
+    const map = mapRef.current;
+
     if (selectedEmployee && isValidCoord(selectedEmployee.latitude, selectedEmployee.longitude)) {
-      mapRef.current.flyTo({
+      map.flyTo({
         center: [Number(selectedEmployee.longitude), Number(selectedEmployee.latitude)],
         zoom: 16,
         duration: 1200,
         essential: true,
       });
+    } else if (validEmployeesRef.current.length > 0) {
+      // No single active employee focused, but staff are visible — show them all.
+      // Gated on validEmployeeIdsKey (not the array) so this only re-fires when
+      // someone joins/leaves the list, not on every position ping — otherwise the
+      // camera would jerk back to fit-bounds on every single GPS update.
+      fitMapToEmployees(map, validEmployeesRef.current);
+    } else {
+      // Nobody active/visible — default focus on Navi Mumbai
+      map.flyTo({ center: NAVI_MUMBAI_CENTER, zoom: 12, duration: 1200, essential: true });
     }
-  }, [selectedEmployee]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedEmployee, validEmployeeIdsKey, fitMapToEmployees]);
 
   return (
     <div className="relative w-full h-full min-h-[400px]">

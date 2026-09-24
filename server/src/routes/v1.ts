@@ -31,8 +31,17 @@ import reportRoutes from '../modules/reports/reports.routes';
 import { jobReferenceController } from '../modules/recruitment/controllers/JobReferenceController';
 import { recruitmentController } from '../modules/recruitment/controllers/RecruitmentController';
 import policyRoutes from '../modules/policy/policy.routes';
+import { policyController } from '../modules/policy/controllers/PolicyController';
+import masterBuilderRoutes from '../modules/master-builder/masterBuilder.routes';
+import lmsRoutes from '../modules/lms/lms.routes';
 
 const router = Router();
+
+/**
+ * Public E-Signature Webhook (no JWT auth required, authenticated via provider headers/HMAC)
+ */
+router.post('/integrations/esign/webhook', policyController.handleWebhook);
+
 
 /**
  * Health check endpoint
@@ -66,11 +75,14 @@ router.use('/expenses', expenseRoutes);
 router.use('/reimbursements', expenseRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/settings', settingsRoutes);
+router.use('/letters', lettersRouter);
 router.use('/assets', assetRoutes);
 router.use('/performance', performanceRoutes);
 router.use('/recruitment', recruitmentRoutes);
 router.use('/policies', policyRoutes);
 router.use('/master/holiday-calendars', masterHolidayCalendarRoutes);
+router.use('/master-builder', masterBuilderRoutes);
+router.use('/lms', lmsRoutes);
 
 /**
  * Public Job Reference Routes (no auth required)
@@ -102,6 +114,7 @@ router.post('/public/offers/:uuid/reject', recruitmentController.rejectPublicOff
 router.get('/public/assessments/attempts/:uuid', recruitmentController.getPublicAssessmentAttempt);
 router.post('/public/assessments/attempts/:uuid/submit', recruitmentController.submitPublicAssessmentAttempt);
 router.post('/public/assessments/attempts/:uuid/autosave', recruitmentController.autosavePublicAssessmentAttempt);
+router.post('/public/assessments/attempts/:uuid/verify-proctoring', recruitmentController.verifyPublicAssessmentProctoring);
 router.post('/public/assessments/run-code', recruitmentController.runPublicAssessmentCode);
 
 // ── Report Engine (isolated module) ─────────────────────────────────────────
@@ -117,7 +130,15 @@ router.get('/reports/options', async (req: Request, res: Response) => {
     const [departments, designations, locations] = await Promise.all([
       db('departments').where({ organization_id: orgId }).whereNull('deleted_at').select('id', 'name', 'code'),
       db('designations').where({ organization_id: orgId }).whereNull('deleted_at').select('id', 'name', 'code'),
-      db('locations').where({ organization_id: orgId }).whereNull('deleted_at').select('id', 'name', 'code', 'city'),
+      db('locations')
+        .where({ organization_id: orgId })
+        .whereNull('deleted_at')
+        .where(function () {
+          this.where('status', 'active').orWhere('is_active', 'Yes');
+        })
+        .whereNot('status', 'inactive')
+        .whereNot('is_active', 'No')
+        .select('id', 'name', 'code', 'city'),
     ]);
 
     res.json({
@@ -161,6 +182,7 @@ router.use('/superadmin', superAdminRoutes);
  * ⚠️ TEMPORARY: One-shot seed endpoint for super_admins table.
  * Remove after running!  POST /api/v1/seed-superadmin
  */
+
 router.post('/seed-superadmin', async (req: Request, res: Response) => {
   try {
     const { getKnex } = await import('../db/knex');

@@ -1,3 +1,4 @@
+import { SectionTabs } from '@/layouts/SectionNavigation';
 import { useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
@@ -9,6 +10,7 @@ import { useNotificationSocket } from '@/features/notifications/hooks/useNotific
 export function AppShellLayout() {
   useNotificationSocket();
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
     <div className="app-shell-reference flex h-dvh overflow-hidden bg-background">
@@ -19,7 +21,9 @@ export function AppShellLayout() {
 
       {/* Main content */}
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <Topbar onMenuClick={() => setSidebarOpen(!sidebarOpen)} sidebarOpen={sidebarOpen} />
+        <Topbar onMenuClick={() => window.innerWidth < 768 ? setMobileOpen(true) : setSidebarOpen(!sidebarOpen)} sidebarOpen={sidebarOpen} />
+
+        <SectionTabs id="admin" />
 
         {/* Content area */}
         <main className="app-shell-scroll flex-1 overflow-auto">
@@ -28,6 +32,13 @@ export function AppShellLayout() {
           </div>
         </main>
       </div>
+
+      {mobileOpen && <>
+        <button type="button" className="fixed inset-0 z-40 bg-black/60 md:hidden" onClick={() => setMobileOpen(false)} aria-label="Close navigation" />
+        <div className="fixed inset-y-0 left-0 z-50 md:hidden">
+          <Sidebar open onOpenChange={setMobileOpen} onNavigate={() => setMobileOpen(false)} />
+        </div>
+      </>}
 
       {/* Global Search */}
       <GlobalSearch />

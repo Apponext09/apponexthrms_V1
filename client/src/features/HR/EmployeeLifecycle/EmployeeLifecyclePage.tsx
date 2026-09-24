@@ -1,178 +1,592 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { useAuthStore } from '@/features/auth/store/authStore';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import React, { useState, useEffect } from "react";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { useAuthStore } from "@/features/auth/store/authStore";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Users,
   UserPlus,
   ArrowLeftRight,
   UserMinus,
   Search,
-  Filter,
   SlidersHorizontal,
   X,
   RefreshCw,
   Building2,
   Briefcase,
-  MapPin,
   UserCheck,
-  Calendar,
-  ChevronRight,
-  ShieldCheck,
-  CheckCircle2,
   Clock,
-  AlertCircle,
-  FileText,
-  FileCheck,
+  ChevronRight,
+  CheckCircle2,
   Edit,
-  Send,
-  MoreVertical,
-  Plus
-} from 'lucide-react';
-import { toast } from 'sonner';
-import { apiClient } from '@/config/api';
-import { lifecycleApi, EmployeeLifecycleSummary, EmployeeLifecycleDetails } from './api/lifecycleApi';
-import { ChronologicalLifecycleFlow } from './components/ChronologicalLifecycleFlow';
-import { useCompanyStore } from '@/features/settings/store/companyStore';
-import { fetchWithFallback, API_ENDPOINTS } from '@/lib/apiHelpers';
-
-import { useLocation } from 'react-router-dom';
+  Plus,
+  MapPin,
+  Calendar,
+} from "lucide-react";
+import { toast } from "sonner";
+import { apiClient } from "@/config/api";
+import {
+  lifecycleApi,
+  EmployeeLifecycleSummary,
+  EmployeeLifecycleDetails,
+} from "./api/lifecycleApi";
+import { ChronologicalLifecycleFlow } from "./components/ChronologicalLifecycleFlow";
+import { fetchWithFallback, API_ENDPOINTS } from "@/lib/apiHelpers";
+import { useLocation } from "react-router-dom";
 import {
   useLifecycleCustomizationStore,
   AVAILABLE_LIFECYCLE_KPIS,
-} from '@/features/employee-lifecycle/store/lifecycleCustomizationStore';
+} from "@/features/employee-lifecycle/store/lifecycleCustomizationStore";
 
+// ─── Design tokens — consistent with EmployeeListPage ────────────────────────
+const T = {
+  pageBg: "var(--elc-page-bg)", card: "var(--elc-card-bg)", border: "var(--elc-border)", borderLight: "var(--elc-border-light)",
+  navy: "var(--elc-foreground)", navyMid: "var(--elc-foreground-muted)",
+  blue: "#2563EB",
+  blueHover: "#1D4ED8",
+  blueLight: "var(--elc-accent-bg)", blueMid: "var(--elc-accent-border)", muted: "var(--elc-muted)", mutedLight: "var(--elc-muted-light)", mutedBg: "var(--elc-muted-bg)",
+  success: "#059669",
+  successBg: "var(--elc-success-bg)",
+  warn: "#D97706",
+  warnBg: "var(--elc-warn-bg)",
+  danger: "#DC2626",
+  dangerBg: "var(--elc-danger-bg)",
+  dangerMid: "#FECACA",
+  shadow: "var(--elc-shadow)", shadowMd: "var(--elc-shadow-md)",
+};
+
+// ─── Shared style objects ─────────────────────────────────────────────────────
+const cardStyle: React.CSSProperties = {
+  background: T.card,
+  border: `1px solid ${T.border}`,
+  borderRadius: 12,
+  boxShadow: T.shadow,
+};
+
+const pillBase: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 4,
+  fontSize: 10.5,
+  fontWeight: 600,
+  padding: "2px 8px",
+  borderRadius: 20,
+  border: "1px solid",
+  lineHeight: 1.6,
+  whiteSpace: "nowrap" as const,
+};
+
+// ─── Status badge helper ──────────────────────────────────────────────────────
+function StatusPill({ status }: { status: string }) {
+  const map: Record<
+    string,
+    { label: string; color: string; bg: string; border: string }
+  > = {
+    onboarding: {
+      label: "Onboarding",
+      color: T.blue,
+      bg: T.blueLight,
+      border: T.blueMid,
+    },
+    probation: {
+      label: "Probation",
+      color: T.blue,
+      bg: T.blueLight,
+      border: T.blueMid,
+    },
+    active: {
+      label: "Active",
+      color: T.success,
+      bg: T.successBg,
+      border: "#6EE7B7",
+    },
+    notice: {
+      label: "Notice Period",
+      color: T.warn,
+      bg: T.warnBg,
+      border: "#FCD34D",
+    },
+    exit: {
+      label: "Offboarded",
+      color: T.danger,
+      bg: T.dangerBg,
+      border: T.dangerMid,
+    },
+    alumni: {
+      label: "Alumni",
+      color: T.muted,
+      bg: T.mutedBg,
+      border: T.border,
+    },
+  };
+  const s = map[status] || {
+    label: status,
+    color: T.muted,
+    bg: T.mutedBg,
+    border: T.border,
+  };
+  return (
+    <span
+      style={{
+        ...pillBase,
+        color: s.color,
+        background: s.bg,
+        borderColor: s.border,
+      }}
+    >
+      {s.label}
+    </span>
+  );
+}
+
+// ─── Reusable table cell primitives ──────────────────────────────────────────
+const Td = ({
+  children,
+  right = false,
+}: {
+  children: React.ReactNode;
+  right?: boolean;
+}) => (
+  <td
+    style={{
+      padding: "11px 16px",
+      fontSize: 12,
+      color: T.navyMid,
+      verticalAlign: "middle",
+      textAlign: right ? "right" : "left",
+      whiteSpace: "nowrap" as const,
+    }}
+  >
+    {children}
+  </td>
+);
+
+const Th = ({
+  children,
+  right = false,
+}: {
+  children: React.ReactNode;
+  right?: boolean;
+}) => (
+  <th
+    style={{
+      padding: "10px 16px",
+      fontSize: 10.5,
+      fontWeight: 700,
+      color: T.muted,
+      textAlign: right ? "right" : "left",
+      background: T.mutedBg,
+      borderBottom: `1px solid ${T.border}`,
+      whiteSpace: "nowrap" as const,
+      letterSpacing: "0.01em",
+    }}
+  >
+    {children}
+  </th>
+);
+
+// ─── Employee avatar cell ─────────────────────────────────────────────────────
+function EmpAvatar({
+  name,
+  src,
+  sub,
+}: {
+  name: string;
+  src?: string;
+  sub?: string;
+}) {
+  const initials = name
+    .split(" ")
+    .filter(Boolean)
+    .map((w) => w[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <div
+        style={{
+          width: 34,
+          height: 34,
+          borderRadius: 8,
+          background: T.blueLight,
+          border: `1.5px solid ${T.blueMid}`,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: 11,
+          fontWeight: 800,
+          color: T.blue,
+          flexShrink: 0,
+          overflow: "hidden",
+        }}
+      >
+        {src ? (
+          <img
+            src={src}
+            alt={name}
+            style={{ width: "100%", height: "100%", objectFit: "cover" }}
+          />
+        ) : (
+          initials
+        )}
+      </div>
+      <div>
+        <div
+          style={{
+            fontWeight: 700,
+            color: T.navy,
+            fontSize: 12,
+            lineHeight: 1.3,
+          }}
+        >
+          {name}
+        </div>
+        {sub && (
+          <div style={{ fontSize: 10.5, color: T.muted, lineHeight: 1.4 }}>
+            {sub}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Info grid cell ───────────────────────────────────────────────────────────
+function InfoCell({
+  label,
+  value,
+  accent,
+}: {
+  label: string;
+  value: React.ReactNode;
+  accent?: string;
+}) {
+  return (
+    <div
+      style={{
+        padding: "10px 14px",
+        background: T.mutedBg,
+        borderRadius: 8,
+        border: `1px solid ${T.borderLight}`,
+      }}
+    >
+      <div
+        style={{
+          fontSize: 10,
+          fontWeight: 600,
+          color: T.muted,
+          marginBottom: 3,
+        }}
+      >
+        {label}
+      </div>
+      <div
+        style={{
+          fontSize: 12.5,
+          fontWeight: 700,
+          color: accent || T.navy,
+          lineHeight: 1.3,
+        }}
+      >
+        {value}
+      </div>
+    </div>
+  );
+}
+
+// ─── Button variants ──────────────────────────────────────────────────────────
+const BtnPrimary = ({
+  children,
+  onClick,
+  type = "button",
+  disabled = false,
+  style = {},
+}: any) => (
+  <button
+    type={type}
+    onClick={onClick}
+    disabled={disabled}
+    style={{
+      display: "inline-flex",
+      alignItems: "center",
+      gap: 6,
+      background: disabled ? T.muted : T.blue,
+      color: "#fff",
+      border: "none",
+      borderRadius: 8,
+      padding: "0 14px",
+      height: 34,
+      fontSize: 12,
+      fontWeight: 600,
+      cursor: disabled ? "not-allowed" : "pointer",
+      fontFamily: "inherit",
+      transition: "background 0.15s",
+      ...style,
+    }}
+  >
+    {children}
+  </button>
+);
+
+const BtnOutline = ({ children, onClick, style = {}, danger = false }: any) => (
+  <button
+    onClick={onClick}
+    style={{
+      display: "inline-flex",
+      alignItems: "center",
+      gap: 6,
+      background: T.card,
+      color: danger ? T.danger : T.navyMid,
+      border: `1px solid ${danger ? T.dangerMid : T.border}`,
+      borderRadius: 8,
+      padding: "0 14px",
+      height: 34,
+      fontSize: 12,
+      fontWeight: 600,
+      cursor: "pointer",
+      fontFamily: "inherit",
+      ...style,
+    }}
+  >
+    {children}
+  </button>
+);
+
+// ─── Form field primitives ────────────────────────────────────────────────────
+const FormLabel = ({ children }: { children: React.ReactNode }) => (
+  <div
+    style={{
+      fontSize: 11.5,
+      fontWeight: 600,
+      color: T.navyMid,
+      marginBottom: 5,
+    }}
+  >
+    {children}
+  </div>
+);
+
+const FormSelect = ({ value, onChange, children }: any) => (
+  <select
+    value={value}
+    onChange={onChange}
+    style={{
+      width: "100%",
+      height: 36,
+      padding: "0 10px",
+      fontSize: 12,
+      fontWeight: 500,
+      border: `1px solid ${T.border}`,
+      borderRadius: 8,
+      background: T.mutedBg,
+      color: T.navy,
+      fontFamily: "inherit",
+      cursor: "pointer",
+      outline: "none",
+    }}
+  >
+    {children}
+  </select>
+);
+
+const FormInput = ({
+  value,
+  onChange,
+  type = "text",
+  placeholder = "",
+  required = false,
+  list = "",
+}: any) => (
+  <input
+    type={type}
+    value={value}
+    onChange={onChange}
+    placeholder={placeholder}
+    required={required}
+    list={list || undefined}
+    style={{
+      width: "100%",
+      height: 36,
+      padding: "0 12px",
+      fontSize: 12,
+      fontWeight: 500,
+      border: `1px solid ${T.border}`,
+      borderRadius: 8,
+      background: T.mutedBg,
+      color: T.navy,
+      fontFamily: "inherit",
+      outline: "none",
+      boxSizing: "border-box" as const,
+    }}
+  />
+);
+
+const CheckRow = ({ checked, onChange, children }: any) => (
+  <label
+    style={{
+      display: "flex",
+      alignItems: "center",
+      gap: 8,
+      cursor: "pointer",
+      fontSize: 12,
+      fontWeight: 500,
+      color: T.navyMid,
+    }}
+  >
+    <input
+      type="checkbox"
+      checked={checked}
+      onChange={onChange}
+      style={{ width: 14, height: 14, accentColor: T.blue, cursor: "pointer" }}
+    />
+    {children}
+  </label>
+);
+
+// ─── Main Component ───────────────────────────────────────────────────────────
 export default function EmployeeLifecyclePage() {
   const location = useLocation();
   const { config: customConfig } = useLifecycleCustomizationStore();
-  const { selectedCompanyId } = useCompanyStore();
+
   const [employees, setEmployees] = useState<EmployeeLifecycleSummary[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [stageFilter, setStageFilter] = useState('all');
-  const [companyFilter, setCompanyFilter] = useState<string>(selectedCompanyId ? String(selectedCompanyId) : '');
-  const [deptFilter, setDeptFilter] = useState('all');
-  const [desigFilter, setDesigFilter] = useState('all');
-  const [empTypeFilter, setEmpTypeFilter] = useState('all');
-  const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState(false);
-
-  // Pagination state
+  const [search, setSearch] = useState("");
+  const [stageFilter, setStageFilter] = useState("all");
+  const [companyFilter, setCompanyFilter] = useState<string>("all");
+  const [deptFilter, setDeptFilter] = useState("all");
+  const [desigFilter, setDesigFilter] = useState("all");
+  const [empTypeFilter, setEmpTypeFilter] = useState("all");
+  const [filterOpen, setFilterOpen] = useState(false);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(25);
+  const [pageSize] = useState(25);
   const [totalCount, setTotalCount] = useState(0);
+  const [mainTab, setMainTab] = useState<
+    "directory" | "onboarding" | "transfers" | "offboarding"
+  >("directory");
 
-  const hasInitializedCompanyRef = useRef(false);
+  const [companies, setCompanies] = useState<
+    Array<{ id: number; name: string; isParent?: boolean }>
+  >([]);
+  const [departments, setDepartments] = useState<
+    Array<{ id: number; name: string }>
+  >([]);
+  const [designations, setDesignations] = useState<
+    Array<{ id: number; name: string }>
+  >([]);
+  const [locations, setLocations] = useState<
+    Array<{ id: number; name: string }>
+  >([]);
+  const [managers, setManagers] = useState<
+    Array<{
+      id: number;
+      name: string;
+      designation?: string;
+      department?: string;
+    }>
+  >([]);
 
-  // Top-Level Main View Tab State
-  const [mainViewTab, setMainViewTab] = useState<'directory' | 'onboarding' | 'transfers' | 'offboarding'>('directory');
-
-  // React to URL pathname changes
-  useEffect(() => {
-    const path = location.pathname;
-    if (path.includes('/onboarding')) {
-      setStageFilter('onboarding');
-      setMainViewTab('onboarding');
-    } else if (path.includes('/offboarding')) {
-      setStageFilter('notice');
-      setMainViewTab('offboarding');
-    } else if (path.includes('/transfers')) {
-      setStageFilter('all');
-      setMainViewTab('transfers');
-    } else {
-      setStageFilter('all');
-    }
-  }, [location.pathname]);
-
-  // Metadata Dropdown Options
-  const [companies, setCompanies] = useState<Array<{ id: number; name: string; isParent?: boolean }>>([]);
-  const [departments, setDepartments] = useState<Array<{ id: number; name: string }>>([]);
-  const [designations, setDesignations] = useState<Array<{ id: number; name: string }>>([]);
-  const [locations, setLocations] = useState<Array<{ id: number; name: string }>>([]);
-  const [managers, setManagers] = useState<Array<{ id: number; name: string; designation?: string; department?: string }>>([]);
-  const [allEmployeesList, setAllEmployeesList] = useState<Array<{ id: number; name: string }>>([]);
-
-  // Selected Employee & Detail Modal
   const [selectedEmpId, setSelectedEmpId] = useState<number | null>(null);
-  const [detailsModalOpen, setDetailsModalOpen] = useState(false);
-  const [empDetails, setEmpDetails] = useState<EmployeeLifecycleDetails | null>(null);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [empDetails, setEmpDetails] = useState<EmployeeLifecycleDetails | null>(
+    null,
+  );
   const [detailsLoading, setDetailsLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState('overview');
+  const [detailTab, setDetailTab] = useState("overview");
 
-  // Transfer Modal State
-  const [transferModalOpen, setTransferModalOpen] = useState(false);
-  const [transferTargetEmp, setTransferTargetEmp] = useState<EmployeeLifecycleSummary | null>(null);
+  const [transferOpen, setTransferOpen] = useState(false);
+  const [transferTarget, setTransferTarget] =
+    useState<EmployeeLifecycleSummary | null>(null);
   const [transferForm, setTransferForm] = useState({
-    toDepartmentId: '',
-    toDesignationId: '',
-    toLocationId: '',
-    toReportingManagerId: '',
-    effectiveDate: new Date().toISOString().split('T')[0],
-    transferType: 'department_change',
-    transferReason: '',
-    notes: '',
+    toDepartmentId: "",
+    toDesignationId: "",
+    toLocationId: "",
+    toReportingManagerId: "",
+    effectiveDate: new Date().toISOString().split("T")[0],
+    transferType: "department_change",
+    transferReason: "",
+    notes: "",
   });
-  const [transferSubmitting, setTransferSubmitting] = useState(false);
+  const [transferBusy, setTransferBusy] = useState(false);
 
-  // Edit Onboarding Modal State
-  const [onboardingModalOpen, setOnboardingModalOpen] = useState(false);
-  const [onboardingForm, setOnboardingForm] = useState({
-    interviewerName: '',
-    onboardedByName: '',
-    interviewDate: '',
-    interviewRating: '4.5 / 5',
-    interviewNotes: '',
-    joiningDate: '',
-    probationEndDate: '',
+  const [onbOpen, setOnbOpen] = useState(false);
+  const [onbForm, setOnbForm] = useState({
+    interviewerName: "",
+    onboardedByName: "",
+    interviewDate: "",
+    interviewRating: "4.5 / 5",
+    interviewNotes: "",
+    joiningDate: "",
+    probationEndDate: "",
     orientationCompleted: false,
     documentsVerified: false,
     welcomeKitIssued: false,
-    notes: '',
+    notes: "",
   });
 
-  // Edit Offboarding Modal State
-  const [offboardingModalOpen, setOffboardingModalOpen] = useState(false);
-  const [offboardingForm, setOffboardingForm] = useState({
-    exitType: 'resignation',
-    resignationDate: '',
-    noticePeriodDays: '30',
-    relievingDate: '',
-    lastWorkingDay: '',
-    exitInterviewerName: '',
-    exitReason: '',
-    exitNotes: '',
+  const [offbOpen, setOffbOpen] = useState(false);
+  const [offbForm, setOffbForm] = useState({
+    exitType: "resignation",
+    resignationDate: "",
+    noticePeriodDays: "30",
+    relievingDate: "",
+    lastWorkingDay: "",
+    exitInterviewerName: "",
+    exitReason: "",
+    exitNotes: "",
     assetsReturned: false,
-    fnfStatus: 'pending',
-    updateEmployeeStatus: 'notice' as 'notice' | 'exit' | 'alumni' | 'active',
+    fnfStatus: "pending",
+    updateEmployeeStatus: "notice" as "notice" | "exit" | "alumni" | "active",
   });
 
-  // Fetch Employees List & Dropdown Meta
-  const fetchLifecycleData = async () => {
+  useEffect(() => {
+    const path = location.pathname;
+    if (path.includes("/onboarding")) {
+      setStageFilter("onboarding");
+      setMainTab("onboarding");
+    } else if (path.includes("/offboarding")) {
+      setStageFilter("notice");
+      setMainTab("offboarding");
+    } else if (path.includes("/transfers")) {
+      setStageFilter("all");
+      setMainTab("transfers");
+    } else setStageFilter("all");
+  }, [location.pathname]);
+
+  const fetchData = async () => {
     try {
       setLoading(true);
-      const effectiveCompanyId = companyFilter === 'all'
-        ? 'all'
-        : (companyFilter || (selectedCompanyId ? String(selectedCompanyId) : undefined));
-
-      const response = await lifecycleApi.getSummaries({
+      const res = await lifecycleApi.getSummaries({
         search,
         stage: stageFilter,
-        departmentId: deptFilter !== 'all' ? Number(deptFilter) : undefined,
-        companyId: effectiveCompanyId,
+        departmentId: deptFilter !== "all" ? Number(deptFilter) : undefined,
+        companyId: companyFilter,
         page,
         pageSize,
       });
-
-      setEmployees(response.data || []);
-      setTotalCount(response.total || 0);
+      setEmployees(res.data || []);
+      setTotalCount(res.total || 0);
     } catch (err: any) {
-      const errorMsg = err.response?.data?.message || 'Failed to load employee lifecycle directory';
-      toast.error(errorMsg);
-      console.error('Lifecycle data fetch error:', errorMsg, err);
+      toast.error(
+        err.response?.data?.message || "Failed to load lifecycle directory",
+      );
       setEmployees([]);
       setTotalCount(0);
     } finally {
@@ -180,2066 +594,2888 @@ export default function EmployeeLifecyclePage() {
     }
   };
 
-  const fetchMetadataOptions = async () => {
+  const fetchMeta = async () => {
     try {
-      // Use new helper function for consistent fallback handling
       const [deptList, locList, desigList, compList] = await Promise.all([
         fetchWithFallback(API_ENDPOINTS.departments()),
         fetchWithFallback(API_ENDPOINTS.locations()),
         fetchWithFallback(API_ENDPOINTS.designations()),
         fetchWithFallback(API_ENDPOINTS.companies()),
       ]);
-
-      // Map departments
       setDepartments(
-        (deptList || []).map((d: any) => ({ id: Number(d.id), name: d.name || d.department_name }))
+        (deptList || []).map((d: any) => ({
+          id: Number(d.id),
+          name: d.name || d.department_name,
+        })),
       );
-
-      // Map locations
       setLocations(
-        (locList || []).map((l: any) => ({ id: Number(l.id), name: l.locationName || l.location_name || l.name }))
+        (locList || []).map((l: any) => ({
+          id: Number(l.id),
+          name: l.locationName || l.location_name || l.name,
+        })),
       );
-
-      // Map designations with fallback
-      const mappedDesignations = (desigList || []).map((d: any) => ({
+      const md = (desigList || []).map((d: any) => ({
         id: Number(d.id),
-        name: d.name || d.designation_name || d.designationName
+        name: d.name || d.designation_name || d.designationName,
       }));
-
-      if (mappedDesignations.length > 0) {
-        setDesignations(mappedDesignations);
-      } else {
-        // Fallback defaults
-        setDesignations([
-          { id: 9, name: 'Senior Manager' },
-          { id: 10, name: 'Manager' },
-          { id: 11, name: 'Senior Developer' },
-          { id: 12, name: 'Developer' },
-          { id: 13, name: 'HR Manager' },
-          { id: 14, name: 'Sales Manager' },
-          { id: 15, name: 'Finance Manager' },
-          { id: 16, name: 'Operations Manager' },
-          { id: 17, name: 'Software Development Intern' },
-          { id: 18, name: 'SDE' },
-          { id: 19, name: 'Senior CS' },
-          { id: 20, name: 'STE' },
-        ]);
-      }
-
-      if (compList.length > 0) {
-        const mappedComps = compList.map((c: any) => ({
-          id: Number(c.companyId ?? c.company_id ?? c.id),
-          name: c.name || 'Unnamed Company',
-          isParent: Boolean(c.isParent ?? c.is_parent)
-        }));
-        setCompanies(mappedComps);
-      }
-
-      // Fetch Managers for Interviewer & Reporting dropdowns
+      setDesignations(
+        md.length > 0
+          ? md
+          : [
+              { id: 9, name: "Senior Manager" },
+              { id: 10, name: "Manager" },
+              { id: 11, name: "Senior Developer" },
+              { id: 12, name: "Developer" },
+              { id: 13, name: "HR Manager" },
+              { id: 14, name: "Sales Manager" },
+            ],
+      );
+      if (compList.length > 0)
+        setCompanies(
+          compList.map((c: any) => ({
+            id: Number(c.companyId ?? c.company_id ?? c.id),
+            name: c.name || "Company",
+            isParent: Boolean(c.isParent ?? c.is_parent),
+          })),
+        );
       const mgrList = await lifecycleApi.getManagers().catch(() => []);
-      if (Array.isArray(mgrList) && mgrList.length > 0) {
-        setManagers(mgrList);
-      }
-    } catch (err) {
-      console.warn('Metadata load error:', err);
+      if (Array.isArray(mgrList) && mgrList.length > 0) setManagers(mgrList);
+    } catch (e) {
+      console.warn(e);
     }
   };
 
-  // Sync company filter with currently selected company in topbar switcher (handles null when switching back to Organization)
   useEffect(() => {
-    if (companyFilter !== 'all') {
-      setCompanyFilter(selectedCompanyId ? String(selectedCompanyId) : '');
-    }
-  }, [selectedCompanyId]);
-
-  // Fetch data when filters or pagination changes
+    setPage(1);
+    fetchData();
+  }, [
+    search,
+    stageFilter,
+    deptFilter,
+    desigFilter,
+    empTypeFilter,
+    companyFilter,
+  ]);
   useEffect(() => {
-    setPage(1); // Reset to first page when filters change
-    fetchLifecycleData();
-  }, [search, stageFilter, deptFilter, desigFilter, empTypeFilter, companyFilter]);
-
-  // Fetch when page changes
-  useEffect(() => {
-    fetchLifecycleData();
+    fetchData();
   }, [page]);
-
   useEffect(() => {
-    fetchMetadataOptions();
+    fetchMeta();
   }, []);
 
-  // Fetch Single Employee Detailed Lifecycle
-  const handleOpenDetails = async (empId: number, tab: string = 'overview') => {
+  const openDetails = async (empId: number, tab = "overview") => {
+    setSelectedEmpId(empId);
+    setDetailTab(tab);
+    setDetailsOpen(true);
+    setDetailsLoading(true);
     try {
-      setSelectedEmpId(empId);
-      setActiveTab(tab);
-      setDetailsModalOpen(true);
-      setDetailsLoading(true);
-      const data = await lifecycleApi.getDetails(empId);
-      setEmpDetails(data);
-    } catch (err: any) {
-      toast.error('Failed to fetch lifecycle details');
+      const d = await lifecycleApi.getDetails(empId);
+      setEmpDetails(d);
+    } catch {
+      toast.error("Failed to fetch lifecycle details");
     } finally {
       setDetailsLoading(false);
     }
   };
 
-  // Open Transfer Modal
-  const handleOpenTransferModal = (emp: EmployeeLifecycleSummary) => {
-    setTransferTargetEmp(emp);
+  const openTransfer = (emp: EmployeeLifecycleSummary) => {
+    setTransferTarget(emp);
     setTransferForm({
-      toDepartmentId: emp.departmentId ? String(emp.departmentId) : '',
-      toDesignationId: emp.designationId ? String(emp.designationId) : '',
-      toLocationId: emp.currentLocationId ? String(emp.currentLocationId) : '',
-      toReportingManagerId: emp.reportingManagerId ? String(emp.reportingManagerId) : '',
-      effectiveDate: new Date().toISOString().split('T')[0],
-      transferType: 'department_change',
-      transferReason: '',
-      notes: '',
+      toDepartmentId: emp.departmentId ? String(emp.departmentId) : "",
+      toDesignationId: emp.designationId ? String(emp.designationId) : "",
+      toLocationId: emp.currentLocationId ? String(emp.currentLocationId) : "",
+      toReportingManagerId: emp.reportingManagerId
+        ? String(emp.reportingManagerId)
+        : "",
+      effectiveDate: new Date().toISOString().split("T")[0],
+      transferType: "department_change",
+      transferReason: "",
+      notes: "",
     });
-    setTransferModalOpen(true);
+    setTransferOpen(true);
   };
 
-  // Execute Employee Transfer
-  const handleExecuteTransfer = async (e: React.FormEvent) => {
+  const execTransfer = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!transferTargetEmp) return;
-
+    if (!transferTarget) return;
     try {
-      setTransferSubmitting(true);
+      setTransferBusy(true);
       await lifecycleApi.transferEmployee({
-        employeeId: transferTargetEmp.id,
-        toDepartmentId: transferForm.toDepartmentId ? Number(transferForm.toDepartmentId) : undefined,
-        toDesignationId: transferForm.toDesignationId ? Number(transferForm.toDesignationId) : undefined,
-        toLocationId: transferForm.toLocationId ? Number(transferForm.toLocationId) : undefined,
-        toReportingManagerId: transferForm.toReportingManagerId ? Number(transferForm.toReportingManagerId) : undefined,
+        employeeId: transferTarget.id,
+        toDepartmentId: transferForm.toDepartmentId
+          ? Number(transferForm.toDepartmentId)
+          : undefined,
+        toDesignationId: transferForm.toDesignationId
+          ? Number(transferForm.toDesignationId)
+          : undefined,
+        toLocationId: transferForm.toLocationId
+          ? Number(transferForm.toLocationId)
+          : undefined,
+        toReportingManagerId: transferForm.toReportingManagerId
+          ? Number(transferForm.toReportingManagerId)
+          : undefined,
         effectiveDate: transferForm.effectiveDate,
         transferType: transferForm.transferType,
         transferReason: transferForm.transferReason,
         notes: transferForm.notes,
       });
-
-      toast.success(`Employee ${transferTargetEmp.name} transferred successfully!`);
-      setTransferModalOpen(false);
-      fetchLifecycleData();
-      if (selectedEmpId === transferTargetEmp.id) {
-        handleOpenDetails(transferTargetEmp.id, 'transfers');
-      }
+      toast.success(`${transferTarget.name} transferred successfully`);
+      setTransferOpen(false);
+      fetchData();
+      if (selectedEmpId === transferTarget.id)
+        openDetails(transferTarget.id, "transfers");
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Employee transfer failed');
+      toast.error(err.response?.data?.message || "Transfer failed");
     } finally {
-      setTransferSubmitting(false);
+      setTransferBusy(false);
     }
   };
 
-  // Open Onboarding Edit Modal
-  const handleOpenOnboardingEdit = () => {
+  const openOnbEdit = () => {
     if (!empDetails) return;
     const ob = empDetails.onboarding;
-    setOnboardingForm({
-      interviewerName: ob.interviewerName || '',
-      onboardedByName: ob.onboardedByName || '',
-      interviewDate: ob.interviewDate || '',
-      interviewRating: ob.interviewRating || '4.5 / 5',
-      interviewNotes: ob.interviewNotes || '',
-      joiningDate: ob.joiningDate || empDetails.profile.joiningDate || '',
-      probationEndDate: ob.probationEndDate || '',
+    setOnbForm({
+      interviewerName: ob.interviewerName || "",
+      onboardedByName: ob.onboardedByName || "",
+      interviewDate: ob.interviewDate || "",
+      interviewRating: ob.interviewRating || "4.5 / 5",
+      interviewNotes: ob.interviewNotes || "",
+      joiningDate: ob.joiningDate || empDetails.profile.joiningDate || "",
+      probationEndDate: ob.probationEndDate || "",
       orientationCompleted: ob.orientationCompleted,
       documentsVerified: ob.documentsVerified,
       welcomeKitIssued: ob.welcomeKitIssued,
-      notes: ob.notes || '',
+      notes: ob.notes || "",
     });
-    setOnboardingModalOpen(true);
+    setOnbOpen(true);
   };
 
-  const handleSaveOnboarding = async (e: React.FormEvent) => {
+  const saveOnb = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedEmpId) return;
     try {
-      await lifecycleApi.saveOnboarding(selectedEmpId, onboardingForm);
-      toast.success('Onboarding records updated successfully!');
-      setOnboardingModalOpen(false);
-      handleOpenDetails(selectedEmpId, 'onboarding');
-      fetchLifecycleData();
-    } catch (err: any) {
-      toast.error('Failed to update onboarding details');
+      await lifecycleApi.saveOnboarding(selectedEmpId, onbForm);
+      toast.success("Onboarding records updated");
+      setOnbOpen(false);
+      openDetails(selectedEmpId, "onboarding");
+      fetchData();
+    } catch {
+      toast.error("Failed to update onboarding");
     }
   };
 
-  // Open Offboarding Edit Modal
-  const handleOpenOffboardingEdit = () => {
+  const openOffbEdit = () => {
     if (!empDetails) return;
     const off = empDetails.offboarding;
-    setOffboardingForm({
-      exitType: off?.exitType || 'resignation',
-      resignationDate: off?.resignationDate || '',
+    setOffbForm({
+      exitType: off?.exitType || "resignation",
+      resignationDate: off?.resignationDate || "",
       noticePeriodDays: String(off?.noticePeriodDays || 30),
-      relievingDate: off?.relievingDate || '',
-      lastWorkingDay: off?.lastWorkingDay || '',
-      exitInterviewerName: off?.exitInterviewerName || '',
-      exitReason: off?.exitReason || '',
-      exitNotes: off?.exitNotes || '',
+      relievingDate: off?.relievingDate || "",
+      lastWorkingDay: off?.lastWorkingDay || "",
+      exitInterviewerName: off?.exitInterviewerName || "",
+      exitReason: off?.exitReason || "",
+      exitNotes: off?.exitNotes || "",
       assetsReturned: off?.assetsReturned || false,
-      fnfStatus: off?.fnfStatus || 'pending',
-      updateEmployeeStatus: (empDetails.profile.lifecycleStatus as any) || 'notice',
+      fnfStatus: off?.fnfStatus || "pending",
+      updateEmployeeStatus:
+        (empDetails.profile.lifecycleStatus as any) || "notice",
     });
-    setOffboardingModalOpen(true);
+    setOffbOpen(true);
   };
 
-  const handleSaveOffboarding = async (e: React.FormEvent) => {
+  const saveOffb = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedEmpId) return;
     try {
       await lifecycleApi.saveOffboarding(selectedEmpId, {
-        ...offboardingForm,
-        noticePeriodDays: Number(offboardingForm.noticePeriodDays),
+        ...offbForm,
+        noticePeriodDays: Number(offbForm.noticePeriodDays),
       });
-      toast.success('Offboarding records updated successfully!');
-      setOffboardingModalOpen(false);
-      handleOpenDetails(selectedEmpId, 'offboarding');
-      fetchLifecycleData();
-    } catch (err: any) {
-      toast.error('Failed to update offboarding details');
+      toast.success("Offboarding records updated");
+      setOffbOpen(false);
+      openDetails(selectedEmpId, "offboarding");
+      fetchData();
+    } catch {
+      toast.error("Failed to update offboarding");
     }
   };
 
-  // Compute Metrics Summary dynamically from store configuration
-  const kpiValues: Record<string, number> = {
-    total_workforce: employees.length,
-    in_onboarding: employees.filter(e => e.lifecycleStatus === 'onboarding' || e.lifecycleStatus === 'probation' || (e.onboarding && Object.keys(e.onboarding).length > 0)).length,
-    transferred_events: employees.reduce((acc, e) => acc + (e.transfersCount || 0), 0),
-    notice_exits: employees.filter(e => e.lifecycleStatus === 'notice' || e.lifecycleStatus === 'exit' || e.lifecycleStatus === 'alumni' || (e.offboarding && Object.keys(e.offboarding).length > 0)).length,
-    active_workforce: employees.filter(e => e.lifecycleStatus === 'active').length,
-    in_probation: employees.filter(e => e.lifecycleStatus === 'probation').length,
-    confirmed_staff: employees.filter(e => e.lifecycleStatus === 'active' && !(e.onboarding as any)?.probationEndDate).length,
-    exits_completed: employees.filter(e => e.lifecycleStatus === 'exit' || e.lifecycleStatus === 'alumni').length,
-    dept_movements: employees.filter(e => e.transfersCount > 0).length,
-    location_transfers: employees.filter(e => e.transfersCount > 0 && e.locationName).length,
-    promotion_upgrades: employees.filter(e => e.transfersCount > 0).length,
+  const fmtDate = (d?: string | null) => {
+    if (!d || d === "N/A") return "—";
+    try {
+      const dt = new Date(d);
+      if (isNaN(dt.getTime())) return String(d);
+      return dt.toLocaleDateString("en-GB", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      });
+    } catch {
+      return String(d);
+    }
   };
 
-  const activeKpiList = AVAILABLE_LIFECYCLE_KPIS.filter(k => customConfig.kpis[k.id]);
+  const activeFilters = [
+    companyFilter !== "all",
+    stageFilter !== "all",
+    deptFilter !== "all",
+    desigFilter !== "all",
+    empTypeFilter !== "all",
+  ].filter(Boolean).length;
+  const resetFilters = () => {
+    setCompanyFilter("all");
+    setStageFilter("all");
+    setDeptFilter("all");
+    setDesigFilter("all");
+    setEmpTypeFilter("all");
+  };
 
-  const filteredEmployees = employees.filter((emp: any) => {
-    if (desigFilter !== 'all' && String(emp.designationName || emp.designationId || '') !== desigFilter) return false;
-    if (empTypeFilter !== 'all' && emp.employmentType !== empTypeFilter) return false;
+  const filteredEmps = employees.filter((emp: any) => {
+    if (
+      desigFilter !== "all" &&
+      String(emp.designationName || emp.designationId || "") !== desigFilter
+    )
+      return false;
+    if (empTypeFilter !== "all" && emp.employmentType !== empTypeFilter)
+      return false;
     return true;
   });
 
-  const activeFiltersCount = [
-    companyFilter !== 'all',
-    stageFilter !== 'all',
-    deptFilter !== 'all',
-    desigFilter !== 'all',
-    empTypeFilter !== 'all',
-  ].filter(Boolean).length;
-
-  const resetFilters = () => {
-    setCompanyFilter('all');
-    setStageFilter('all');
-    setDeptFilter('all');
-    setDesigFilter('all');
-    setEmpTypeFilter('all');
-  };
-
-  const formatDate = (dStr?: string | null) => {
-    if (!dStr || dStr === 'N/A') return '—';
-    try {
-      const d = new Date(dStr);
-      if (isNaN(d.getTime())) return String(dStr);
-      return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-    } catch {
-      return String(dStr);
-    }
-  };
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'onboarding':
-      case 'probation':
-        return <Badge className="bg-sky-500/15 text-sky-600 dark:text-sky-400 border-sky-500/30 text-[10px] font-bold">Onboarding</Badge>;
-      case 'active':
-        return <Badge className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 text-[10px] font-bold">Active</Badge>;
-      case 'notice':
-        return <Badge className="bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30 text-[10px] font-bold">In Notice Period</Badge>;
-      case 'exit':
-      case 'alumni':
-        return <Badge className="bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30 text-[10px] font-bold">Offboarded / Exit</Badge>;
-      default:
-        return <Badge variant="secondary" className="text-[10px] font-bold">{status.toUpperCase()}</Badge>;
-    }
-  };
-
-  const onboardingEmployees = employees.filter(emp =>
-    (emp.onboarding && Object.keys(emp.onboarding).length > 0)
-    || emp.lifecycleStatus === 'onboarding'
-    || emp.lifecycleStatus === 'probation'
+  const onbEmps = employees.filter(
+    (e) =>
+      (e.onboarding && Object.keys(e.onboarding).length > 0) ||
+      e.lifecycleStatus === "onboarding" ||
+      e.lifecycleStatus === "probation",
+  );
+  const trfEmps = employees.filter((e) => e.transfersCount > 0);
+  const offbEmps = employees.filter(
+    (e) =>
+      (e.offboarding &&
+        Object.keys(e.offboarding).length > 0 &&
+        (e.offboarding as any).exitType) ||
+      e.lifecycleStatus === "notice" ||
+      e.lifecycleStatus === "exit" ||
+      e.lifecycleStatus === "alumni",
   );
 
-  const transferEmployees = employees.filter(emp => emp.transfersCount > 0);
+  const TABS = [
+    {
+      id: "directory",
+      label: "Directory",
+      mobileLabel: "Dir.",
+      icon: <Users size={14} />,
+      count: filteredEmps.length,
+    },
+    {
+      id: "onboarding",
+      label: "Onboarding",
+      mobileLabel: "Onb.",
+      icon: <UserPlus size={14} />,
+      count: onbEmps.length,
+    },
+    {
+      id: "transfers",
+      label: "Transfers",
+      mobileLabel: "Trf.",
+      icon: <ArrowLeftRight size={14} />,
+      count: trfEmps.length,
+    },
+    {
+      id: "offboarding",
+      label: "Offboarding",
+      mobileLabel: "Off.",
+      icon: <UserMinus size={14} />,
+      count: offbEmps.length,
+    },
+  ] as const;
 
-  const offboardingEmployees = employees.filter(emp =>
-    (emp.offboarding && Object.keys(emp.offboarding).length > 0 && emp.offboarding.exitType)
-    || emp.lifecycleStatus === 'notice'
-    || emp.lifecycleStatus === 'exit'
-    || emp.lifecycleStatus === 'alumni'
-  );
-
-  const cols = customConfig.tableColumns;
-  const filters = customConfig.filters;
-  const onbCols = customConfig.onboardingColumns || {
-    employeeNameAvatar: true,
-    employeeCode: true,
-    interviewer: true,
-    hrOnboarder: true,
-    joiningDate: true,
-    probationEndDate: true,
-    orientationStatus: true,
-    welcomeKitStatus: true,
-    documentsStatus: true,
-    interviewScore: true,
-    lifecycleStage: true,
-    actions: true,
-    actionEditOnboarding: true,
-  };
-
-  const trfCols = customConfig.transferColumns || {
-    employeeNameAvatar: true,
-    employeeCode: true,
-    department: true,
-    designation: true,
-    location: true,
-    reportingManager: true,
-    transfersCount: true,
-    lastTransferDate: true,
-    transferReason: true,
-    actions: true,
-    actionViewLog: true,
-    actionExecuteTransfer: true,
-  };
-
-  const offbCols = customConfig.offboardingColumns || {
-    employeeNameAvatar: true,
-    employeeCode: true,
-    department: true,
-    exitType: true,
-    resignationDate: true,
-    lastWorkingDay: true,
-    noticePeriodDays: true,
-    exitReason: true,
-    exitInterviewer: true,
-    assetsReturned: true,
-    fnfStatus: true,
-    lifecycleStage: true,
-    actions: true,
-    actionEditOffboarding: true,
-  };
-
-  const customFields = customConfig.customFields || {
-    directory: [],
-    onboarding: [],
-    transfers: [],
-    offboarding: [],
-  };
-
+  // ─── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-6 max-w-7xl mx-auto font-sans select-none pb-12">
-      {/* HEADER SECTION */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-border">
-        <div>
-          <h1 className="text-2xl font-black tracking-tight text-foreground flex items-center gap-2.5">
-            <Users className="w-7 h-7 text-indigo-600 dark:text-indigo-400" />
-            Employee Lifecycle Management
-          </h1>
-          <p className="text-xs text-muted-foreground mt-1">
-            Complete employee directory with onboarding records, interviewer details, transfer actions, and offboarding history.
-          </p>
-        </div>
+    <>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+        .elc * { font-family:'Plus Jakarta Sans',system-ui,sans-serif; box-sizing:border-box; }
+        .elc { --elc-page-bg:#EEF4FB; --elc-card-bg:#fff; --elc-border:#C9DCF3; --elc-border-light:#DDEAF8; --elc-foreground:#1E3A5F; --elc-foreground-muted:#2D537A; --elc-muted:#5A7FA8; --elc-muted-light:#8AAECF; --elc-muted-bg:#F0F6FF; --elc-accent-bg:#DBEAFE; --elc-accent-border:#93C5FD; --elc-success-bg:#D1FAE5; --elc-warn-bg:#FEF3C7; --elc-danger-bg:#FEE2E2; --elc-shadow:0 1px 4px rgba(30,58,95,.07); --elc-shadow-md:0 2px 12px rgba(30,58,95,.10); }
+        .dark .elc { --elc-page-bg:hsl(var(--background)); --elc-card-bg:hsl(var(--card)); --elc-border:hsl(var(--border)); --elc-border-light:hsl(var(--border)); --elc-foreground:hsl(var(--foreground)); --elc-foreground-muted:hsl(var(--muted-foreground)); --elc-muted:hsl(var(--muted-foreground)); --elc-muted-light:hsl(var(--muted-foreground)); --elc-muted-bg:hsl(var(--muted)); --elc-accent-bg:hsl(var(--muted)); --elc-accent-border:hsl(var(--border)); --elc-success-bg:rgba(5,150,105,.16); --elc-warn-bg:rgba(217,119,6,.16); --elc-danger-bg:rgba(220,38,38,.16); --elc-shadow:0 1px 4px rgba(0,0,0,.18); --elc-shadow-md:0 2px 12px rgba(0,0,0,.28); }
 
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={fetchLifecycleData} className="gap-2 text-xs font-bold rounded-xl h-9 cursor-pointer">
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} /> Refresh Directory
-          </Button>
-        </div>
-      </div>
+        /* Tab bar */
+        .elc-tabbar { display:flex; background:${T.card}; border:1px solid ${T.border}; border-radius:10px; padding:4px; gap:3px; }
+        .elc-tab {
+          flex:1; display:flex; align-items:center; justify-content:center; gap:6px;
+          padding:7px 10px; border-radius:7px; border:none; background:transparent;
+          color:${T.muted}; font-size:12px; font-weight:600; cursor:pointer;
+          transition:background 0.15s,color 0.15s; white-space:nowrap;
+          font-family:'Plus Jakarta Sans',system-ui,sans-serif;
+        }
+        .elc-tab:hover:not(.elc-tab--active) { background:${T.mutedBg}; color:${T.navyMid}; }
+       .elc-tab--active { background:${T.blue}; color:#fff; font-weight:700; }
+        .elc-tab .elc-count { font-size:10px; background:rgba(255,255,255,0.25); border-radius:10px; padding:1px 5px; }
+        .elc-tab:not(.elc-tab--active) .elc-count { background:${T.blueLight}; color:${T.blue}; }
 
-      {/* METRIC CARDS GRID */}
-      {activeKpiList.length > 0 && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5">
-          {activeKpiList.map((kpi) => {
-            const count = kpiValues[kpi.id] ?? 0;
-            return (
-              <Card key={kpi.id} className="border rounded-2xl shadow-xs bg-card hover:shadow-sm transition-shadow">
-                <CardContent className="p-4 flex items-center justify-between">
-                  <div className="min-w-0 pr-2">
-                    <span className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-wider block truncate">
-                      {kpi.label}
-                    </span>
-                    <span className="text-2xl font-black text-foreground mt-0.5 block">{count}</span>
-                  </div>
-                  <div className="h-10 w-10 rounded-2xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
-                    {kpi.icon === 'Users' && <Users className="w-5 h-5" />}
-                    {kpi.icon === 'UserPlus' && <UserPlus className="w-5 h-5" />}
-                    {kpi.icon === 'ArrowLeftRight' && <ArrowLeftRight className="w-5 h-5" />}
-                    {kpi.icon === 'UserMinus' && <UserMinus className="w-5 h-5" />}
-                    {kpi.icon === 'UserCheck' && <UserCheck className="w-5 h-5" />}
-                    {kpi.icon === 'Clock' && <Clock className="w-5 h-5" />}
-                    {kpi.icon === 'ShieldCheck' && <ShieldCheck className="w-5 h-5" />}
-                    {kpi.icon === 'FileCheck' && <FileCheck className="w-5 h-5" />}
-                    {kpi.icon === 'Building2' && <Building2 className="w-5 h-5" />}
-                    {kpi.icon === 'MapPin' && <MapPin className="w-5 h-5" />}
-                    {kpi.icon === 'Briefcase' && <Briefcase className="w-5 h-5" />}
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-      )}
+        /* Responsive tab label */
+        .elc-tab-label-full { display:inline; }
+        .elc-tab-label-short { display:none; }
+        @media(max-width:600px) {
+          .elc-tab-label-full { display:none; }
+          .elc-tab-label-short { display:inline; }
+          .elc-tab { padding:7px 6px; font-size:11px; gap:4px; }
+        }
 
-      {/* ─── DEDICATED TOP LIFECYCLE TABS NAVIGATION ─── */}
-      <Tabs value={mainViewTab} onValueChange={(val: any) => setMainViewTab(val)} className="w-full space-y-4">
-        <div className="bg-card border border-border/80 rounded-2xl p-1.5 shadow-sm">
-          <TabsList className="grid grid-cols-2 md:grid-cols-4 bg-transparent gap-1.5 h-auto p-0">
-            <TabsTrigger
-              value="directory"
-              className="rounded-xl text-xs font-black py-2.5 data-[state=active]:bg-indigo-600 data-[state=active]:text-white data-[state=active]:shadow-md transition-all gap-2"
-            >
-              <Users className="w-4 h-4" /> Employee Directory
-            </TabsTrigger>
-            <TabsTrigger
-              value="onboarding"
-              className="rounded-xl text-xs font-black py-2.5 data-[state=active]:bg-sky-600 data-[state=active]:text-white data-[state=active]:shadow-md transition-all gap-2"
-            >
-              <UserPlus className="w-4 h-4" /> Onboarding &amp; Interview Audit
-            </TabsTrigger>
-            <TabsTrigger
-              value="transfers"
-              className="rounded-xl text-xs font-black py-2.5 data-[state=active]:bg-emerald-600 data-[state=active]:text-white data-[state=active]:shadow-md transition-all gap-2"
-            >
-              <ArrowLeftRight className="w-4 h-4" /> Transfer Audit History
-            </TabsTrigger>
-            <TabsTrigger
-              value="offboarding"
-              className="rounded-xl text-xs font-black py-2.5 data-[state=active]:bg-rose-600 data-[state=active]:text-white data-[state=active]:shadow-md transition-all gap-2"
-            >
-              <UserMinus className="w-4 h-4" /> Offboarding &amp; Exit Records
-            </TabsTrigger>
-          </TabsList>
-        </div>
+        /* Table */
+        .elc-table-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+        .elc-table { width:100%; border-collapse:collapse; min-width:640px; }
+        .elc-table tbody tr:hover { background:${T.mutedBg}; }
+        .elc-table tbody tr { border-bottom:1px solid ${T.borderLight}; }
 
-        {/* FILTER & SEARCH CONTROL BAR */}
-        <Card className="border rounded-2xl shadow-xs bg-card p-4">
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center gap-3">
-              {filters.searchBar && (
-                <div className="relative flex-1">
-                  <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    placeholder="Search employee by name, code, email, designation..."
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    className="pl-9 pr-8 h-10 rounded-xl text-xs font-semibold bg-background border-border"
-                  />
-                  {search && (
-                    <button
-                      onClick={() => setSearch('')}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                </div>
-              )}
+        /* Inputs */
+        .elc-input {
+          width:100%; height:36px; padding:0 12px 0 36px; font-size:12px; font-weight:500;
+          border:1px solid ${T.border}; border-radius:8px; background:${T.mutedBg}; color:${T.navy};
+          font-family:'Plus Jakarta Sans',system-ui,sans-serif; outline:none;
+          transition:border-color 0.15s,box-shadow 0.15s;
+        }
+        .elc-input:focus { border-color:${T.blue}; box-shadow:0 0 0 3px rgba(37,99,235,0.12); background:${T.card}; }
+        .elc-input::placeholder { color:${T.mutedLight}; }
 
-              <Button
-                variant={activeFiltersCount > 0 ? "default" : "outline"}
-                onClick={() => setIsFilterDrawerOpen(true)}
-                className={`gap-2 h-10 px-4 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                  activeFiltersCount > 0
-                    ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-md'
-                    : 'bg-background hover:bg-muted text-foreground border-border'
-                }`}
-              >
-                <SlidersHorizontal className="w-4 h-4" />
-                <span>Filter</span>
-                {activeFiltersCount > 0 && (
-                  <span className="px-1.5 py-0.5 text-[10px] font-black rounded-full bg-white text-indigo-600">
-                    {activeFiltersCount}
-                  </span>
-                )}
-              </Button>
-            </div>
+        /* Filter pill */
+        .elc-filter-pill {
+          display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:500;
+          color:${T.navyMid}; background:${T.blueLight}; border:1px solid ${T.blueMid};
+          border-radius:20px; padding:3px 9px;
+        }
+        .elc-filter-pill-x { display:inline-flex; cursor:pointer; color:${T.mutedLight}; transition:color 0.12s; }
+        .elc-filter-pill-x:hover { color:${T.danger}; }
 
-            {/* Active Filter Chips */}
-            {activeFiltersCount > 0 && (
-              <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border/60">
-                <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Active Filters:</span>
-                {companyFilter !== 'all' && (
-                  <Badge variant="secondary" className="gap-1.5 py-1 px-2.5 rounded-lg text-xs font-medium bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border-indigo-500/20">
-                    Company: {companies.find(c => String(c.id) === companyFilter)?.name || companyFilter}
-                    <X className="w-3 h-3 cursor-pointer hover:opacity-80" onClick={() => setCompanyFilter('all')} />
-                  </Badge>
-                )}
-                {stageFilter !== 'all' && (
-                  <Badge variant="secondary" className="gap-1.5 py-1 px-2.5 rounded-lg text-xs font-medium bg-sky-500/10 text-sky-700 dark:text-sky-300 border-sky-500/20">
-                    Stage: {stageFilter}
-                    <X className="w-3 h-3 cursor-pointer hover:opacity-80" onClick={() => setStageFilter('all')} />
-                  </Badge>
-                )}
-                {deptFilter !== 'all' && (
-                  <Badge variant="secondary" className="gap-1.5 py-1 px-2.5 rounded-lg text-xs font-medium bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20">
-                    Department: {departments.find(d => String(d.id) === deptFilter)?.name || deptFilter}
-                    <X className="w-3 h-3 cursor-pointer hover:opacity-80" onClick={() => setDeptFilter('all')} />
-                  </Badge>
-                )}
-                {desigFilter !== 'all' && (
-                  <Badge variant="secondary" className="gap-1.5 py-1 px-2.5 rounded-lg text-xs font-medium bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/20">
-                    Designation: {desigFilter}
-                    <X className="w-3 h-3 cursor-pointer hover:opacity-80" onClick={() => setDesigFilter('all')} />
-                  </Badge>
-                )}
-                {empTypeFilter !== 'all' && (
-                  <Badge variant="secondary" className="gap-1.5 py-1 px-2.5 rounded-lg text-xs font-medium bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20">
-                    Type: {empTypeFilter}
-                    <X className="w-3 h-3 cursor-pointer hover:opacity-80" onClick={() => setEmpTypeFilter('all')} />
-                  </Badge>
-                )}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={resetFilters}
-                  className="h-6 px-2 text-[11px] font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-lg cursor-pointer"
-                >
-                  Reset All
-                </Button>
-              </div>
-            )}
-          </div>
-        </Card>
+        /* Drawer */
+        .elc-drawer { position:fixed; inset:0; z-index:999; display:flex; justify-content:flex-end; }
+        .elc-drawer-backdrop { position:fixed; inset:0; background:rgba(30,58,95,0.35); backdrop-filter:blur(2px); }
+        .elc-drawer-panel {
+          position:relative; width:100%; max-width:360px; background:${T.card};
+          border-left:1px solid ${T.border}; height:100%; display:flex; flex-direction:column;
+          z-index:1; box-shadow:-4px 0 24px rgba(30,58,95,0.12);
+        }
+        @media(max-width:400px) { .elc-drawer-panel { max-width:100%; } }
 
-        {/* RIGHT SLIDE-OVER FILTER PANEL DRAWER */}
-        {isFilterDrawerOpen && (
-          <div className="fixed inset-0 z-50 flex justify-end">
-            {/* Backdrop */}
+        /* Modal grid */
+        .elc-info-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px; }
+        .elc-form-grid2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+        @media(max-width:480px) { .elc-form-grid2 { grid-template-columns:1fr; } }
+
+        /* Detail modal tabs */
+        .elc-dtab-bar { display:flex; gap:2px; border-bottom:1px solid ${T.border}; margin-bottom:16px; overflow-x:auto; }
+        .elc-dtab {
+          padding:9px 14px; font-size:12px; font-weight:600; color:${T.muted};
+          border:none; background:transparent; cursor:pointer; border-bottom:2px solid transparent;
+          white-space:nowrap; font-family:'Plus Jakarta Sans',system-ui,sans-serif;
+          transition:color 0.15s; margin-bottom:-1px;
+        }
+        .elc-dtab:hover { color:${T.navyMid}; }
+        .elc-dtab--active { color:${T.blue}; border-bottom-color:${T.blue}; font-weight:700; }
+
+        /* Dialog override */
+        [data-radix-dialog-content] { border-radius:14px !important; }
+        @media(max-width:520px) { [data-radix-dialog-content] { margin:8px !important; max-width:calc(100vw - 16px) !important; } }
+
+        /* Scroll */
+        .elc-scroll { overflow-y:auto; -webkit-overflow-scrolling:touch; }
+        .elc-scroll::-webkit-scrollbar { width:4px; }
+        .elc-scroll::-webkit-scrollbar-track { background:transparent; }
+        .elc-scroll::-webkit-scrollbar-thumb { background:${T.border}; border-radius:4px; }
+      `}</style>
+
+      <div
+        className="elc"
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: 14,
+          paddingBottom: 32,
+          minHeight: "100%",
+          background: T.pageBg,
+        }}
+      >
+        {/* ── Page Header ──────────────────────────────────────────────── */}
+        <div
+          style={{
+            ...cardStyle,
+            padding: "16px 20px",
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+          }}
+        >
+          <div>
             <div
-              className="fixed inset-0 bg-black/50 backdrop-blur-xs transition-opacity duration-300 animate-in fade-in"
-              onClick={() => setIsFilterDrawerOpen(false)}
+              style={{
+                fontSize: 10.5,
+                fontWeight: 700,
+                color: T.blue,
+                marginBottom: 4,
+                letterSpacing: "0.06em",
+                textTransform: "uppercase" as const,
+              }}
+            >
+              HR Management
+            </div>
+            <h1
+              style={{
+                margin: 0,
+                fontSize: 20,
+                fontWeight: 800,
+                color: T.navy,
+                letterSpacing: "-0.02em",
+                lineHeight: 1.2,
+              }}
+            >
+              Employee Lifecycle
+            </h1>
+            <p style={{ margin: "4px 0 0", fontSize: 12, color: T.muted }}>
+              Directory with onboarding, transfer, and offboarding records.
+            </p>
+          </div>
+          <button
+            onClick={fetchData}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              background: T.mutedBg,
+              color: T.navyMid,
+              border: `1px solid ${T.border}`,
+              borderRadius: 8,
+              padding: "0 14px",
+              height: 34,
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: "pointer",
+              fontFamily: "inherit",
+            }}
+          >
+            <RefreshCw
+              size={13}
+              strokeWidth={2}
+              className={loading ? "animate-spin" : ""}
+              style={{ color: T.blue }}
             />
+            Refresh
+          </button>
+        </div>
 
-            {/* Drawer Container */}
-            <div className="relative w-full max-w-md bg-card border-l border-border shadow-2xl h-full flex flex-col z-10 animate-in slide-in-from-right duration-300">
-              {/* Header */}
-              <div className="p-5 border-b border-border flex items-center justify-between bg-muted/20">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
-                    <SlidersHorizontal className="w-5 h-5" />
+        {/* ── Tab Bar ──────────────────────────────────────────────────── */}
+        <div className="elc-tabbar">
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              className={`elc-tab${mainTab === t.id ? " elc-tab--active" : ""}`}
+              onClick={() => setMainTab(t.id)}
+            >
+              {t.icon}
+              <span className="elc-tab-label-full">{t.label}</span>
+              <span className="elc-tab-label-short">{t.mobileLabel}</span>
+              <span className="elc-count">{t.count}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* ── Search & Filter bar ───────────────────────────────────────── */}
+        <div style={{ ...cardStyle, padding: "12px 16px" }}>
+          <div
+            style={{
+              display: "flex",
+              gap: 8,
+              flexWrap: "wrap",
+              alignItems: "center",
+            }}
+          >
+            <div
+              style={{ position: "relative", flex: "1 1 220px", minWidth: 180 }}
+            >
+              <Search
+                size={14}
+                style={{
+                  position: "absolute",
+                  left: 11,
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  color: T.mutedLight,
+                  pointerEvents: "none",
+                }}
+              />
+              <input
+                className="elc-input"
+                placeholder="Search by name, code, email…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+              {search && (
+                <X
+                  size={13}
+                  style={{
+                    position: "absolute",
+                    right: 10,
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    color: T.mutedLight,
+                    cursor: "pointer",
+                  }}
+                  onClick={() => setSearch("")}
+                />
+              )}
+            </div>
+            <button
+              onClick={() => setFilterOpen(true)}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                height: 36,
+                padding: "0 14px",
+                borderRadius: 8,
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: "pointer",
+                fontFamily: "inherit",
+                transition: "all 0.15s",
+                background: activeFilters > 0 ? T.blueLight : T.mutedBg,
+                color: activeFilters > 0 ? T.blue : T.navyMid,
+                border: `1px solid ${activeFilters > 0 ? T.blueMid : T.border}`,
+              }}
+            >
+              <SlidersHorizontal size={13} />
+              Filters
+              {activeFilters > 0 && (
+                <span
+                  style={{
+                    background: T.blue,
+                    color: "#fff",
+                    borderRadius: 10,
+                    fontSize: 10,
+                    fontWeight: 700,
+                    padding: "1px 6px",
+                  }}
+                >
+                  {activeFilters}
+                </span>
+              )}
+            </button>
+          </div>
+
+          {/* Active filter pills */}
+          {activeFilters > 0 && (
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 6,
+                marginTop: 10,
+                paddingTop: 10,
+                borderTop: `1px solid ${T.borderLight}`,
+                alignItems: "center",
+              }}
+            >
+              <span style={{ fontSize: 11, color: T.muted, fontWeight: 500 }}>
+                Active filters:
+              </span>
+              {companyFilter !== "all" && (
+                <span className="elc-filter-pill">
+                  Company:{" "}
+                  {companies.find((c) => String(c.id) === companyFilter)
+                    ?.name || companyFilter}
+                  <span
+                    className="elc-filter-pill-x"
+                    onClick={() => setCompanyFilter("all")}
+                  >
+                    <X size={10} />
+                  </span>
+                </span>
+              )}
+              {stageFilter !== "all" && (
+                <span className="elc-filter-pill">
+                  Stage: {stageFilter}
+                  <span
+                    className="elc-filter-pill-x"
+                    onClick={() => setStageFilter("all")}
+                  >
+                    <X size={10} />
+                  </span>
+                </span>
+              )}
+              {deptFilter !== "all" && (
+                <span className="elc-filter-pill">
+                  Dept:{" "}
+                  {departments.find((d) => String(d.id) === deptFilter)?.name ||
+                    deptFilter}
+                  <span
+                    className="elc-filter-pill-x"
+                    onClick={() => setDeptFilter("all")}
+                  >
+                    <X size={10} />
+                  </span>
+                </span>
+              )}
+              {desigFilter !== "all" && (
+                <span className="elc-filter-pill">
+                  Role: {desigFilter}
+                  <span
+                    className="elc-filter-pill-x"
+                    onClick={() => setDesigFilter("all")}
+                  >
+                    <X size={10} />
+                  </span>
+                </span>
+              )}
+              {empTypeFilter !== "all" && (
+                <span className="elc-filter-pill">
+                  Type: {empTypeFilter}
+                  <span
+                    className="elc-filter-pill-x"
+                    onClick={() => setEmpTypeFilter("all")}
+                  >
+                    <X size={10} />
+                  </span>
+                </span>
+              )}
+              <button
+                onClick={resetFilters}
+                style={{
+                  fontSize: 11,
+                  fontWeight: 600,
+                  color: T.danger,
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  padding: "0 4px",
+                  fontFamily: "inherit",
+                }}
+              >
+                Clear all
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* ── Tables ──────────────────────────────────────────────────── */}
+        {/* DIRECTORY */}
+        {mainTab === "directory" && (
+          <div style={{ ...cardStyle, overflow: "hidden" }}>
+            <div
+              style={{
+                padding: "12px 16px",
+                borderBottom: `1px solid ${T.borderLight}`,
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+              }}
+            >
+              <Users size={14} style={{ color: T.blue }} />
+              <span style={{ fontSize: 13, fontWeight: 700, color: T.navy }}>
+                Employee Directory
+              </span>
+              <span
+                style={{
+                  ...pillBase,
+                  color: T.blue,
+                  background: T.blueLight,
+                  borderColor: T.blueMid,
+                  marginLeft: "auto",
+                }}
+              >
+                {filteredEmps.length} employees
+              </span>
+            </div>
+            <div className="elc-table-wrap">
+              <table className="elc-table">
+                <thead>
+                  <tr>
+                    <Th>Employee</Th>
+                    <Th>Code</Th>
+                    <Th>Role</Th>
+                    <Th>Department</Th>
+                    <Th>Joined</Th>
+                    <Th>Status</Th>
+                    <Th right>Actions</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {loading ? (
+                    <tr>
+                      <td
+                        colSpan={7}
+                        style={{
+                          padding: 40,
+                          textAlign: "center",
+                          color: T.muted,
+                          fontSize: 12,
+                        }}
+                      >
+                        <RefreshCw
+                          size={16}
+                          style={{
+                            color: T.blue,
+                            display: "block",
+                            margin: "0 auto 8px",
+                            animation: "spin 1s linear infinite",
+                          }}
+                        />
+                        Loading directory…
+                      </td>
+                    </tr>
+                  ) : filteredEmps.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={7}
+                        style={{
+                          padding: 40,
+                          textAlign: "center",
+                          color: T.muted,
+                          fontSize: 12,
+                        }}
+                      >
+                        No employees match your filters.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredEmps.map((emp) => (
+                      <tr key={emp.id}>
+                        <Td>
+                          <EmpAvatar name={emp.name} src={emp.avatarUrl} />
+                        </Td>
+                        <Td>
+                          <span
+                            style={{
+                              fontFamily: "monospace",
+                              fontSize: 11,
+                              color: T.muted,
+                            }}
+                          >
+                            {emp.employeeCode || `EMP-${emp.id}`}
+                          </span>
+                        </Td>
+                        <Td>
+                          <span
+                            style={{
+                              color: T.navy,
+                              fontWeight: 600,
+                              fontSize: 12,
+                            }}
+                          >
+                            {emp.designationName || "—"}
+                          </span>
+                        </Td>
+                        <Td>
+                          <span
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 4,
+                              fontSize: 11.5,
+                              color: T.blue,
+                              fontWeight: 600,
+                            }}
+                          >
+                            <Building2 size={11} /> {emp.departmentName || "—"}
+                          </span>
+                        </Td>
+                        <Td>
+                          <span style={{ color: T.muted, fontSize: 11 }}>
+                            {fmtDate(emp.joiningDate)}
+                          </span>
+                        </Td>
+                        <Td>
+                          <StatusPill status={emp.lifecycleStatus} />
+                        </Td>
+                        <Td right>
+                          <div
+                            style={{
+                              display: "flex",
+                              gap: 6,
+                              justifyContent: "flex-end",
+                            }}
+                          >
+                            <BtnOutline
+                              onClick={() => openDetails(emp.id, "overview")}
+                              style={{
+                                height: 30,
+                                fontSize: 11,
+                                padding: "0 10px",
+                              }}
+                            >
+                              View <ChevronRight size={11} />
+                            </BtnOutline>
+                            <BtnPrimary
+                              onClick={() => openTransfer(emp)}
+                              style={{
+                                height: 30,
+                                fontSize: 11,
+                                padding: "0 10px",
+                              }}
+                            >
+                              <ArrowLeftRight size={11} /> Transfer
+                            </BtnPrimary>
+                          </div>
+                        </Td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* ONBOARDING */}
+        {mainTab === "onboarding" && (
+          <div style={{ ...cardStyle, overflow: "hidden" }}>
+            <div
+              style={{
+                padding: "12px 16px",
+                borderBottom: `1px solid ${T.borderLight}`,
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+              }}
+            >
+              <UserPlus size={14} style={{ color: T.blue }} />
+              <span style={{ fontSize: 13, fontWeight: 700, color: T.navy }}>
+                Onboarding & Interview Audit
+              </span>
+              <span
+                style={{
+                  ...pillBase,
+                  color: T.blue,
+                  background: T.blueLight,
+                  borderColor: T.blueMid,
+                  marginLeft: "auto",
+                }}
+              >
+                {onbEmps.length} records
+              </span>
+            </div>
+            <div className="elc-table-wrap">
+              <table className="elc-table">
+                <thead>
+                  <tr>
+                    <Th>Employee</Th>
+                    <Th>Code / Role</Th>
+                    <Th>Interviewer</Th>
+                    <Th>Joining</Th>
+                    <Th>Probation End</Th>
+                    <Th>Orientation</Th>
+                    <Th>Docs</Th>
+                    <Th>Score</Th>
+                    <Th right>Action</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {loading ? (
+                    <tr>
+                      <td
+                        colSpan={9}
+                        style={{
+                          padding: 40,
+                          textAlign: "center",
+                          color: T.muted,
+                          fontSize: 12,
+                        }}
+                      >
+                        Loading onboarding records…
+                      </td>
+                    </tr>
+                  ) : onbEmps.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={9}
+                        style={{
+                          padding: 40,
+                          textAlign: "center",
+                          color: T.muted,
+                          fontSize: 12,
+                        }}
+                      >
+                        No active onboarding records.
+                      </td>
+                    </tr>
+                  ) : (
+                    onbEmps.map((emp) => (
+                      <tr key={emp.id}>
+                        <Td>
+                          <EmpAvatar name={emp.name} src={emp.avatarUrl} />
+                        </Td>
+                        <Td>
+                          <span
+                            style={{
+                              fontFamily: "monospace",
+                              fontSize: 11,
+                              color: T.muted,
+                              display: "block",
+                            }}
+                          >
+                            {emp.employeeCode || `EMP-${emp.id}`}
+                          </span>
+                          <span style={{ fontSize: 11, color: T.navyMid }}>
+                            {emp.designationName || "Employee"}
+                          </span>
+                        </Td>
+                        <Td>
+                          <span
+                            style={{
+                              fontSize: 12,
+                              fontWeight: 600,
+                              color: T.navy,
+                              display: "block",
+                            }}
+                          >
+                            {emp.onboarding?.interviewerName || "—"}
+                          </span>
+                          <span style={{ fontSize: 11, color: T.muted }}>
+                            HR: {emp.onboarding?.onboardedByName || "—"}
+                          </span>
+                        </Td>
+                        <Td>
+                          <span
+                            style={{
+                              fontSize: 11,
+                              fontWeight: 600,
+                              color: T.navy,
+                            }}
+                          >
+                            {fmtDate(emp.joiningDate)}
+                          </span>
+                        </Td>
+                        <Td>
+                          <span style={{ fontSize: 11, color: T.muted }}>
+                            {fmtDate(emp.onboarding?.probationEndDate)}
+                          </span>
+                        </Td>
+                        <Td>
+                          <span
+                            style={{
+                              ...pillBase,
+                              color: emp.onboarding?.orientationCompleted
+                                ? T.success
+                                : T.warn,
+                              background: emp.onboarding?.orientationCompleted
+                                ? T.successBg
+                                : T.warnBg,
+                              borderColor: emp.onboarding?.orientationCompleted
+                                ? "#6EE7B7"
+                                : "#FCD34D",
+                            }}
+                          >
+                            {emp.onboarding?.orientationCompleted
+                              ? "Done"
+                              : "Pending"}
+                          </span>
+                        </Td>
+                        <Td>
+                          <span
+                            style={{
+                              ...pillBase,
+                              color: emp.onboarding?.documentsVerified
+                                ? T.success
+                                : T.warn,
+                              background: emp.onboarding?.documentsVerified
+                                ? T.successBg
+                                : T.warnBg,
+                              borderColor: emp.onboarding?.documentsVerified
+                                ? "#6EE7B7"
+                                : "#FCD34D",
+                            }}
+                          >
+                            {emp.onboarding?.documentsVerified
+                              ? "Verified"
+                              : "Pending"}
+                          </span>
+                        </Td>
+                        <Td>
+                          <span
+                            style={{
+                              fontSize: 12,
+                              fontWeight: 700,
+                              color: T.warn,
+                            }}
+                          >
+                            {emp.onboarding?.interviewRating
+                              ? `★ ${emp.onboarding.interviewRating}`
+                              : "—"}
+                          </span>
+                        </Td>
+                        <Td right>
+                          <BtnOutline
+                            onClick={() => openDetails(emp.id, "onboarding")}
+                            style={{
+                              height: 30,
+                              fontSize: 11,
+                              padding: "0 10px",
+                            }}
+                          >
+                            <Edit size={11} /> Details
+                          </BtnOutline>
+                        </Td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* TRANSFERS */}
+        {mainTab === "transfers" && (
+          <div style={{ ...cardStyle, overflow: "hidden" }}>
+            <div
+              style={{
+                padding: "12px 16px",
+                borderBottom: `1px solid ${T.borderLight}`,
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+              }}
+            >
+              <ArrowLeftRight size={14} style={{ color: T.blue }} />
+              <span style={{ fontSize: 13, fontWeight: 700, color: T.navy }}>
+                Transfer Audit History
+              </span>
+              <span
+                style={{
+                  ...pillBase,
+                  color: T.blue,
+                  background: T.blueLight,
+                  borderColor: T.blueMid,
+                  marginLeft: "auto",
+                }}
+              >
+                {trfEmps.length} records
+              </span>
+            </div>
+            <div className="elc-table-wrap">
+              <table className="elc-table">
+                <thead>
+                  <tr>
+                    <Th>Employee</Th>
+                    <Th>Code</Th>
+                    <Th>Department</Th>
+                    <Th>Role</Th>
+                    <Th>Transfers</Th>
+                    <Th>Last Effective</Th>
+                    <Th>Reason</Th>
+                    <Th right>Actions</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {loading ? (
+                    <tr>
+                      <td
+                        colSpan={8}
+                        style={{
+                          padding: 40,
+                          textAlign: "center",
+                          color: T.muted,
+                          fontSize: 12,
+                        }}
+                      >
+                        Loading transfer records…
+                      </td>
+                    </tr>
+                  ) : trfEmps.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={8}
+                        style={{
+                          padding: 40,
+                          textAlign: "center",
+                          color: T.muted,
+                          fontSize: 12,
+                        }}
+                      >
+                        No transfer history found.
+                      </td>
+                    </tr>
+                  ) : (
+                    trfEmps.map((emp) => (
+                      <tr key={emp.id}>
+                        <Td>
+                          <EmpAvatar name={emp.name} src={emp.avatarUrl} />
+                        </Td>
+                        <Td>
+                          <span
+                            style={{
+                              fontFamily: "monospace",
+                              fontSize: 11,
+                              color: T.muted,
+                            }}
+                          >
+                            {emp.employeeCode || `EMP-${emp.id}`}
+                          </span>
+                        </Td>
+                        <Td>
+                          <span
+                            style={{
+                              fontSize: 12,
+                              fontWeight: 600,
+                              color: T.navy,
+                            }}
+                          >
+                            {emp.departmentName || "—"}
+                          </span>
+                        </Td>
+                        <Td>
+                          <span style={{ fontSize: 11.5, color: T.muted }}>
+                            {emp.designationName || "—"}
+                          </span>
+                        </Td>
+                        <Td>
+                          <span
+                            style={{
+                              ...pillBase,
+                              color: T.success,
+                              background: T.successBg,
+                              borderColor: "#6EE7B7",
+                            }}
+                          >
+                            {emp.transfersCount} transfers
+                          </span>
+                        </Td>
+                        <Td>
+                          <span style={{ fontSize: 11, color: T.muted }}>
+                            {fmtDate(emp.lastTransferDate)}
+                          </span>
+                        </Td>
+                        <Td>
+                          <span
+                            style={{
+                              fontSize: 11,
+                              color: T.muted,
+                              maxWidth: 140,
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              display: "block",
+                            }}
+                          >
+                            {emp.transferReason || "—"}
+                          </span>
+                        </Td>
+                        <Td right>
+                          <div
+                            style={{
+                              display: "flex",
+                              gap: 6,
+                              justifyContent: "flex-end",
+                            }}
+                          >
+                            <BtnOutline
+                              onClick={() => openDetails(emp.id, "transfers")}
+                              style={{
+                                height: 30,
+                                fontSize: 11,
+                                padding: "0 10px",
+                              }}
+                            >
+                              <ArrowLeftRight size={11} /> Log
+                            </BtnOutline>
+                            <BtnPrimary
+                              onClick={() => openTransfer(emp)}
+                              style={{
+                                height: 30,
+                                fontSize: 11,
+                                padding: "0 10px",
+                              }}
+                            >
+                              <Plus size={11} /> Transfer
+                            </BtnPrimary>
+                          </div>
+                        </Td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* OFFBOARDING */}
+        {mainTab === "offboarding" && (
+          <div style={{ ...cardStyle, overflow: "hidden" }}>
+            <div
+              style={{
+                padding: "12px 16px",
+                borderBottom: `1px solid ${T.borderLight}`,
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+              }}
+            >
+              <UserMinus size={14} style={{ color: T.danger }} />
+              <span style={{ fontSize: 13, fontWeight: 700, color: T.navy }}>
+                Offboarding & Exit Records
+              </span>
+              <span
+                style={{
+                  ...pillBase,
+                  color: T.danger,
+                  background: T.dangerBg,
+                  borderColor: T.dangerMid,
+                  marginLeft: "auto",
+                }}
+              >
+                {offbEmps.length} records
+              </span>
+            </div>
+            <div className="elc-table-wrap">
+              <table className="elc-table">
+                <thead>
+                  <tr>
+                    <Th>Employee</Th>
+                    <Th>Code / Dept</Th>
+                    <Th>Exit Type</Th>
+                    <Th>Resigned</Th>
+                    <Th>Last Day</Th>
+                    <Th>Notice</Th>
+                    <Th>Assets</Th>
+                    <Th>F&F Status</Th>
+                    <Th right>Action</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {loading ? (
+                    <tr>
+                      <td
+                        colSpan={9}
+                        style={{
+                          padding: 40,
+                          textAlign: "center",
+                          color: T.muted,
+                          fontSize: 12,
+                        }}
+                      >
+                        Loading exit records…
+                      </td>
+                    </tr>
+                  ) : offbEmps.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={9}
+                        style={{
+                          padding: 40,
+                          textAlign: "center",
+                          color: T.muted,
+                          fontSize: 12,
+                        }}
+                      >
+                        No offboarding records found.
+                      </td>
+                    </tr>
+                  ) : (
+                    offbEmps.map((emp) => (
+                      <tr key={emp.id}>
+                        <Td>
+                          <EmpAvatar name={emp.name} src={emp.avatarUrl} />
+                        </Td>
+                        <Td>
+                          <span
+                            style={{
+                              fontFamily: "monospace",
+                              fontSize: 11,
+                              color: T.muted,
+                              display: "block",
+                            }}
+                          >
+                            {emp.employeeCode || `EMP-${emp.id}`}
+                          </span>
+                          <span style={{ fontSize: 11, color: T.navyMid }}>
+                            {emp.departmentName || "—"}
+                          </span>
+                        </Td>
+                        <Td>
+                          <span
+                            style={{
+                              ...pillBase,
+                              color: T.danger,
+                              background: T.dangerBg,
+                              borderColor: T.dangerMid,
+                              textTransform: "capitalize" as const,
+                            }}
+                          >
+                            {emp.offboarding?.exitType || "Resignation"}
+                          </span>
+                        </Td>
+                        <Td>
+                          <span style={{ fontSize: 11, color: T.muted }}>
+                            {fmtDate(emp.offboarding?.resignationDate)}
+                          </span>
+                        </Td>
+                        <Td>
+                          <span style={{ fontSize: 11, color: T.muted }}>
+                            {fmtDate(
+                              emp.offboarding?.lastWorkingDay ||
+                                emp.offboarding?.relievingDate,
+                            )}
+                          </span>
+                        </Td>
+                        <Td>
+                          <span
+                            style={{
+                              fontSize: 11,
+                              fontWeight: 600,
+                              color: T.navyMid,
+                            }}
+                          >
+                            {emp.offboarding?.noticePeriodDays
+                              ? `${emp.offboarding.noticePeriodDays}d`
+                              : "—"}
+                          </span>
+                        </Td>
+                        <Td>
+                          <span
+                            style={{
+                              ...pillBase,
+                              color: emp.offboarding?.assetsReturned
+                                ? T.success
+                                : T.danger,
+                              background: emp.offboarding?.assetsReturned
+                                ? T.successBg
+                                : T.dangerBg,
+                              borderColor: emp.offboarding?.assetsReturned
+                                ? "#6EE7B7"
+                                : T.dangerMid,
+                            }}
+                          >
+                            {emp.offboarding?.assetsReturned
+                              ? "Returned"
+                              : "Pending"}
+                          </span>
+                        </Td>
+                        <Td>
+                          <span
+                            style={{
+                              ...pillBase,
+                              color:
+                                emp.offboarding?.fnfStatus === "completed" ||
+                                emp.offboarding?.fnfStatus === "cleared"
+                                  ? T.success
+                                  : T.warn,
+                              background:
+                                emp.offboarding?.fnfStatus === "completed" ||
+                                emp.offboarding?.fnfStatus === "cleared"
+                                  ? T.successBg
+                                  : T.warnBg,
+                              borderColor:
+                                emp.offboarding?.fnfStatus === "completed" ||
+                                emp.offboarding?.fnfStatus === "cleared"
+                                  ? "#6EE7B7"
+                                  : "#FCD34D",
+                              textTransform: "capitalize" as const,
+                            }}
+                          >
+                            {emp.offboarding?.fnfStatus || "Pending"}
+                          </span>
+                        </Td>
+                        <Td right>
+                          <BtnOutline
+                            onClick={() => openDetails(emp.id, "offboarding")}
+                            style={{
+                              height: 30,
+                              fontSize: 11,
+                              padding: "0 10px",
+                            }}
+                            danger
+                          >
+                            <Edit size={11} /> Details
+                          </BtnOutline>
+                        </Td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* ── Filter Drawer ───────────────────────────────────────────── */}
+        {filterOpen && (
+          <div className="elc-drawer">
+            <div
+              className="elc-drawer-backdrop"
+              onClick={() => setFilterOpen(false)}
+            />
+            <div className="elc-drawer-panel">
+              <div
+                style={{
+                  padding: "16px 18px",
+                  borderBottom: `1px solid ${T.border}`,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div
+                    style={{
+                      width: 34,
+                      height: 34,
+                      background: T.blueLight,
+                      borderRadius: 8,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <SlidersHorizontal size={15} style={{ color: T.blue }} />
                   </div>
                   <div>
-                    <h3 className="text-base font-extrabold text-foreground">Filter Directory</h3>
-                    <p className="text-xs text-muted-foreground">Refine employee directory view</p>
+                    <div
+                      style={{ fontSize: 14, fontWeight: 800, color: T.navy }}
+                    >
+                      Filter Directory
+                    </div>
+                    <div style={{ fontSize: 11, color: T.muted }}>
+                      Refine the view
+                    </div>
                   </div>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setIsFilterDrawerOpen(false)}
-                  className="rounded-xl h-8 w-8 text-muted-foreground hover:text-foreground cursor-pointer"
+                <button
+                  onClick={() => setFilterOpen(false)}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    color: T.muted,
+                    display: "flex",
+                  }}
                 >
-                  <X className="w-4 h-4" />
-                </Button>
+                  <X size={18} />
+                </button>
               </div>
 
-              {/* Body */}
-              <div className="flex-1 overflow-y-auto no-scrollbar [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden p-5 space-y-5">
-                {/* Company Filter */}
-                {filters.companyFilter && (
-                  <div className="space-y-2">
-                    <label className="text-xs font-extrabold text-foreground flex items-center gap-2">
-                      <Building2 className="w-4 h-4 text-indigo-500" />
-                      Company / Organization
-                    </label>
-                    <select
-                      value={companyFilter}
-                      onChange={(e) => setCompanyFilter(e.target.value)}
-                      className="w-full h-10 px-3 bg-background border border-border rounded-xl text-xs font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer"
-                    >
-                      <option value="all">All Companies (Parent &amp; Sub-Companies)</option>
-                      {companies.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name} {c.isParent ? '(Parent Org)' : '(Sub-Company)'}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
-                {/* Stage Filter */}
-                {filters.stageFilter && (
-                  <div className="space-y-2">
-                    <label className="text-xs font-extrabold text-foreground flex items-center gap-2">
-                      <UserCheck className="w-4 h-4 text-sky-500" />
-                      Lifecycle Stage
-                    </label>
-                    <select
-                      value={stageFilter}
-                      onChange={(e) => setStageFilter(e.target.value)}
-                      className="w-full h-10 px-3 bg-background border border-border rounded-xl text-xs font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer"
-                    >
-                      <option value="all">All Stages</option>
-                      <option value="active">Active Workforce</option>
-                      <option value="onboarding">Onboarding</option>
-                      <option value="probation">Probation</option>
-                      <option value="notice">Notice Period</option>
-                      <option value="exit">Offboarded / Exit</option>
-                    </select>
-                  </div>
-                )}
-
-                {/* Department Filter */}
-                {filters.departmentFilter && (
-                  <div className="space-y-2">
-                    <label className="text-xs font-extrabold text-foreground flex items-center gap-2">
-                      <Users className="w-4 h-4 text-emerald-500" />
-                      Department
-                    </label>
-                    <select
-                      value={deptFilter}
-                      onChange={(e) => setDeptFilter(e.target.value)}
-                      className="w-full h-10 px-3 bg-background border border-border rounded-xl text-xs font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer"
-                    >
-                      <option value="all">All Departments</option>
-                      {departments.map((d) => (
-                        <option key={d.id} value={d.id}>{d.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
-                {/* Designation Filter */}
-                {filters.designationFilter && (
-                  <div className="space-y-2">
-                    <label className="text-xs font-extrabold text-foreground flex items-center gap-2">
-                      <Briefcase className="w-4 h-4 text-purple-500" />
-                      Designation / Role
-                    </label>
-                    <select
-                      value={desigFilter}
-                      onChange={(e) => setDesigFilter(e.target.value)}
-                      className="w-full h-10 px-3 bg-background border border-border rounded-xl text-xs font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer"
-                    >
-                      <option value="all">All Designations</option>
-                      {designations.map((d) => (
-                        <option key={d.id} value={d.name}>{d.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
-                {/* Employment Type Filter */}
-                {filters.employmentTypeFilter && (
-                  <div className="space-y-2">
-                    <label className="text-xs font-extrabold text-foreground flex items-center gap-2">
-                      <Clock className="w-4 h-4 text-amber-500" />
-                      Employment Type
-                    </label>
-                    <select
-                      value={empTypeFilter}
-                      onChange={(e) => setEmpTypeFilter(e.target.value)}
-                      className="w-full h-10 px-3 bg-background border border-border rounded-xl text-xs font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer"
-                    >
-                      <option value="all">All Types</option>
-                      <option value="full_time">Full Time</option>
-                      <option value="part_time">Part Time</option>
-                      <option value="contract">Contract</option>
-                      <option value="internship">Internship</option>
-                    </select>
-                  </div>
-                )}
+              <div
+                className="elc-scroll"
+                style={{
+                  flex: 1,
+                  padding: "16px 18px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 16,
+                }}
+              >
+                <div>
+                  <FormLabel>
+                    <Building2
+                      size={12}
+                      style={{
+                        display: "inline",
+                        marginRight: 5,
+                        color: T.blue,
+                      }}
+                    />
+                    Company
+                  </FormLabel>
+                  <FormSelect
+                    value={companyFilter}
+                    onChange={(e: any) => setCompanyFilter(e.target.value)}
+                  >
+                    <option value="all">All companies</option>
+                    {companies.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                        {c.isParent ? " (Parent)" : ""}
+                      </option>
+                    ))}
+                  </FormSelect>
+                </div>
+                <div>
+                  <FormLabel>
+                    <UserCheck
+                      size={12}
+                      style={{
+                        display: "inline",
+                        marginRight: 5,
+                        color: T.blue,
+                      }}
+                    />
+                    Lifecycle Stage
+                  </FormLabel>
+                  <FormSelect
+                    value={stageFilter}
+                    onChange={(e: any) => setStageFilter(e.target.value)}
+                  >
+                    <option value="all">All stages</option>
+                    <option value="active">Active</option>
+                    <option value="onboarding">Onboarding</option>
+                    <option value="probation">Probation</option>
+                    <option value="notice">Notice Period</option>
+                    <option value="exit">Offboarded / Exit</option>
+                  </FormSelect>
+                </div>
+                <div>
+                  <FormLabel>
+                    <Users
+                      size={12}
+                      style={{
+                        display: "inline",
+                        marginRight: 5,
+                        color: T.blue,
+                      }}
+                    />
+                    Department
+                  </FormLabel>
+                  <FormSelect
+                    value={deptFilter}
+                    onChange={(e: any) => setDeptFilter(e.target.value)}
+                  >
+                    <option value="all">All departments</option>
+                    {departments.map((d) => (
+                      <option key={d.id} value={d.id}>
+                        {d.name}
+                      </option>
+                    ))}
+                  </FormSelect>
+                </div>
+                <div>
+                  <FormLabel>
+                    <Briefcase
+                      size={12}
+                      style={{
+                        display: "inline",
+                        marginRight: 5,
+                        color: T.blue,
+                      }}
+                    />
+                    Designation
+                  </FormLabel>
+                  <FormSelect
+                    value={desigFilter}
+                    onChange={(e: any) => setDesigFilter(e.target.value)}
+                  >
+                    <option value="all">All designations</option>
+                    {designations.map((d) => (
+                      <option key={d.id} value={d.name}>
+                        {d.name}
+                      </option>
+                    ))}
+                  </FormSelect>
+                </div>
+                <div>
+                  <FormLabel>
+                    <Clock
+                      size={12}
+                      style={{
+                        display: "inline",
+                        marginRight: 5,
+                        color: T.blue,
+                      }}
+                    />
+                    Employment Type
+                  </FormLabel>
+                  <FormSelect
+                    value={empTypeFilter}
+                    onChange={(e: any) => setEmpTypeFilter(e.target.value)}
+                  >
+                    <option value="all">All types</option>
+                    <option value="full_time">Full Time</option>
+                    <option value="part_time">Part Time</option>
+                    <option value="contract">Contract</option>
+                    <option value="internship">Internship</option>
+                  </FormSelect>
+                </div>
               </div>
 
-              {/* Footer */}
-              <div className="p-4 border-t border-border bg-muted/20 flex items-center justify-between gap-3">
-                <Button
-                  variant="outline"
-                  size="sm"
+              <div
+                style={{
+                  padding: "12px 18px",
+                  borderTop: `1px solid ${T.border}`,
+                  display: "flex",
+                  gap: 8,
+                }}
+              >
+                <BtnOutline
                   onClick={resetFilters}
-                  className="rounded-xl text-xs font-bold text-muted-foreground hover:text-foreground cursor-pointer"
+                  style={{ flex: 1, justifyContent: "center" }}
                 >
-                  Reset Filters
-                </Button>
-                <Button
-                  variant="default"
-                  size="sm"
-                  onClick={() => setIsFilterDrawerOpen(false)}
-                  className="rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white px-5 cursor-pointer"
+                  Reset
+                </BtnOutline>
+                <BtnPrimary
+                  onClick={() => setFilterOpen(false)}
+                  style={{ flex: 1, justifyContent: "center" }}
                 >
                   Apply Filters
-                </Button>
+                </BtnPrimary>
               </div>
             </div>
           </div>
         )}
 
-        {/* ─── TAB 1: EMPLOYEE DIRECTORY ─── */}
-        <TabsContent value="directory" className="mt-0">
-          <Card className="border rounded-2xl shadow-md overflow-hidden bg-card border-border">
-            <div className="p-4 border-b border-border bg-muted/20 flex items-center justify-between">
-              <h2 className="text-sm font-extrabold text-foreground flex items-center gap-2">
-                <Users className="w-4 h-4 text-indigo-500" /> Organization Employee Directory ({filteredEmployees.length})
-              </h2>
-            </div>
-
-            <div className="overflow-x-auto overflow-y-auto max-h-[650px] custom-scrollbar pb-2">
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="bg-muted/50 border-b border-border text-muted-foreground uppercase tracking-wider font-extrabold">
-                    {cols.employeeNameAvatar && <th className="px-5 py-3.5">Employee</th>}
-                    {cols.employeeCode && <th className="px-5 py-3.5">Code &amp; Email</th>}
-                    {cols.designation && <th className="px-5 py-3.5">Designation</th>}
-                    {cols.department && <th className="px-5 py-3.5">Department</th>}
-                    {cols.company && <th className="px-5 py-3.5">Company</th>}
-                    {cols.location && <th className="px-5 py-3.5">Location</th>}
-                    {cols.lifecycleStage && <th className="px-5 py-3.5">Lifecycle Stage</th>}
-                    {cols.transfersCount && <th className="px-5 py-3.5">Transfers</th>}
-                    {cols.joiningDate && <th className="px-5 py-3.5">Joining Date</th>}
-                    {cols.reportingManager && <th className="px-5 py-3.5">Manager</th>}
-                    {cols.actions && <th className="px-5 py-3.5 text-right">Actions</th>}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {loading ? (
-                    <tr>
-                      <td colSpan={10} className="text-center py-10 text-xs text-muted-foreground">
-                        <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2 text-indigo-500" />
-                        Loading employee directory...
-                      </td>
-                    </tr>
-                  ) : filteredEmployees.length === 0 ? (
-                    <tr>
-                      <td colSpan={10} className="text-center py-10 text-xs text-muted-foreground">
-                        No employees found matching filter criteria.
-                      </td>
-                    </tr>
-                  ) : (
-                    filteredEmployees.map((emp) => {
-                      const initials = emp.name.split(' ').filter(Boolean).map(w => w[0]).join('').toUpperCase() || 'EMP';
-                      return (
-                        <tr key={emp.id} className="hover:bg-muted/30 transition-colors">
-                          {cols.employeeNameAvatar && (
-                            <td className="px-5 py-3.5">
-                              <div className="flex items-center gap-3">
-                                <Avatar className="h-10 w-10 border-2 border-indigo-500/20 shadow-sm shrink-0">
-                                  <AvatarImage src={emp.avatarUrl} alt={emp.name} className="object-cover" />
-                                  <AvatarFallback className="bg-gradient-to-br from-indigo-600 to-indigo-800 text-white font-black text-xs">
-                                    {initials}
-                                  </AvatarFallback>
-                                </Avatar>
-                                <div>
-                                  <span className="font-black text-foreground block text-xs tracking-tight">{emp.name}</span>
-                                  {!cols.employeeCode && (
-                                    <span className="text-[10px] text-muted-foreground font-mono block mt-0.5">{emp.employeeCode} • {emp.email}</span>
-                                  )}
-                                </div>
-                              </div>
-                            </td>
-                          )}
-
-                          {cols.employeeCode && (
-                            <td className="px-5 py-3.5 font-mono text-[11px] text-muted-foreground">
-                              <span className="font-bold text-foreground block">{emp.employeeCode || `EMP-${emp.id}`}</span>
-                              <span className="text-[10px] text-muted-foreground truncate block">{emp.email}</span>
-                            </td>
-                          )}
-
-                          {cols.designation && (
-                            <td className="px-5 py-3.5">
-                              <span className="font-extrabold text-foreground block text-xs">{emp.designationName || 'Employee'}</span>
-                            </td>
-                          )}
-
-                          {cols.department && (
-                            <td className="px-5 py-3.5">
-                              <span className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 flex items-center gap-1">
-                                <Building2 className="w-3.5 h-3.5 shrink-0 text-indigo-500" /> {emp.departmentName && emp.departmentName !== 'General' ? emp.departmentName : 'Unassigned'}
-                              </span>
-                            </td>
-                          )}
-
-                          {cols.company && (
-                            <td className="px-5 py-3.5">
-                              {emp.companyName ? (
-                                <Badge variant="outline" className="text-[10px] font-semibold px-1.5 py-0 h-4 bg-muted/40 text-muted-foreground border-border">
-                                  {emp.companyName}
-                                </Badge>
-                              ) : (
-                                <span className="text-muted-foreground/60 text-[11px]">—</span>
-                              )}
-                            </td>
-                          )}
-
-                          {cols.location && (
-                            <td className="px-5 py-3.5 font-medium text-foreground">
-                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20 text-[11px] font-bold">
-                                <MapPin className="w-3 h-3 shrink-0" /> {emp.locationName || 'Headquarters'}
-                              </span>
-                            </td>
-                          )}
-
-                          {cols.lifecycleStage && <td className="px-5 py-3.5">{getStatusBadge(emp.lifecycleStatus)}</td>}
-
-                          {cols.transfersCount && (
-                            <td className="px-5 py-3.5">
-                              {emp.transfersCount > 0 ? (
-                                <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 font-bold text-[10px]">
-                                  {emp.transfersCount} Transfers
-                                </Badge>
-                              ) : (
-                                <span className="text-muted-foreground/60 text-[11px]">0 Transfers</span>
-                              )}
-                            </td>
-                          )}
-
-                          {cols.joiningDate && (
-                            <td className="px-5 py-3.5 text-muted-foreground text-[11px]">
-                              {emp.joiningDate ? new Date(emp.joiningDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
-                            </td>
-                          )}
-
-                          {cols.reportingManager && (
-                            <td className="px-5 py-3.5 text-muted-foreground text-[11px]">
-                              {emp.reportingManagerName || '—'}
-                            </td>
-                          )}
-
-                          {cols.actions && (
-                            <td className="px-5 py-3.5 text-right">
-                              <div className="flex items-center justify-end gap-1.5">
-                                {cols.actionViewLifecycle && (
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => handleOpenDetails(emp.id, 'overview')}
-                                    className="h-8 px-2.5 text-[11px] font-extrabold gap-1 rounded-xl cursor-pointer"
-                                  >
-                                    View Lifecycle <ChevronRight className="w-3.5 h-3.5" />
-                                  </Button>
-                                )}
-                                {cols.actionTransfer && (
-                                  <Button
-                                    size="sm"
-                                    variant="default"
-                                    onClick={() => handleOpenTransferModal(emp)}
-                                    className="h-8 px-2.5 text-[11px] font-extrabold bg-indigo-600 hover:bg-indigo-700 text-white gap-1 rounded-xl cursor-pointer"
-                                  >
-                                    <ArrowLeftRight className="w-3.5 h-3.5" /> Transfer
-                                  </Button>
-                                )}
-                              </div>
-                            </td>
-                          )}
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </Card>
-        </TabsContent>
-
-        {/* ─── TAB 2: ONBOARDING & INTERVIEW AUDIT VIEW ─── */}
-        <TabsContent value="onboarding" className="mt-0">
-          <Card className="border rounded-2xl shadow-md overflow-hidden bg-card border-border">
-            <div className="p-4 border-b border-border bg-sky-500/5 flex items-center justify-between">
-              <h2 className="text-sm font-extrabold text-foreground flex items-center gap-2">
-                <UserPlus className="w-4 h-4 text-sky-500" /> Employee Onboarding &amp; Interview Audit Records ({onboardingEmployees.length})
-              </h2>
-            </div>
-
-            <div className="overflow-x-auto overflow-y-auto max-h-[650px] custom-scrollbar pb-2">
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="bg-muted/50 border-b border-border text-muted-foreground uppercase tracking-wider font-extrabold">
-                    {onbCols.employeeNameAvatar && <th className="px-5 py-3.5">Employee</th>}
-                    {onbCols.employeeCode && <th className="px-5 py-3.5">Code &amp; Role</th>}
-                    {onbCols.interviewer && <th className="px-5 py-3.5">Interviewer &amp; HR Onboarder</th>}
-                    {onbCols.joiningDate && <th className="px-5 py-3.5">Joining Date</th>}
-                    {onbCols.probationEndDate && <th className="px-5 py-3.5">Probation End Date</th>}
-                    {onbCols.orientationStatus && <th className="px-5 py-3.5">Orientation Status</th>}
-                    {onbCols.welcomeKitStatus && <th className="px-5 py-3.5">Welcome Kit</th>}
-                    {onbCols.documentsStatus && <th className="px-5 py-3.5">Doc Verification</th>}
-                    {onbCols.interviewScore && <th className="px-5 py-3.5">Rating Score</th>}
-                    {customFields.onboarding?.map((f) => (
-                      <th key={f.id} className="px-5 py-3.5 text-sky-600 dark:text-sky-400 font-bold">{f.name}</th>
-                    ))}
-                    {onbCols.lifecycleStage && <th className="px-5 py-3.5">Stage</th>}
-                    {onbCols.actions && <th className="px-5 py-3.5 text-right">Actions</th>}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {loading ? (
-                    <tr>
-                      <td colSpan={12} className="text-center py-10 text-xs text-muted-foreground">
-                        <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2 text-sky-500" />
-                        Loading onboarding records...
-                      </td>
-                    </tr>
-                  ) : onboardingEmployees.length === 0 ? (
-                    <tr>
-                      <td colSpan={12} className="text-center py-10 text-xs text-muted-foreground">
-                        No active onboarding records found.
-                      </td>
-                    </tr>
-                  ) : (
-                    onboardingEmployees.map((emp) => (
-                      <tr key={emp.id} className="hover:bg-muted/30 transition-colors">
-                        {onbCols.employeeNameAvatar && (
-                          <td className="px-5 py-3.5">
-                            <div className="flex items-center gap-3">
-                              <Avatar className="h-9 w-9 border-2 border-sky-500/20 shrink-0">
-                                <AvatarImage src={emp.avatarUrl} />
-                                <AvatarFallback className="bg-sky-600 text-white font-bold text-xs">
-                                  {emp.name.split(' ').map(w => w[0]).join('')}
-                                </AvatarFallback>
-                              </Avatar>
-                              <div>
-                                <span className="font-extrabold text-foreground block">{emp.name}</span>
-                                {!onbCols.employeeCode && (
-                                  <span className="text-[10px] text-muted-foreground">{emp.employeeCode} • {emp.designationName}</span>
-                                )}
-                              </div>
-                            </div>
-                          </td>
-                        )}
-
-                        {onbCols.employeeCode && (
-                          <td className="px-5 py-3.5 font-mono text-[11px] text-muted-foreground">
-                            <span className="font-bold text-foreground block">{emp.employeeCode || `EMP-${emp.id}`}</span>
-                            <span className="text-[10px] text-muted-foreground">{emp.designationName || 'Employee'}</span>
-                          </td>
-                        )}
-
-                        {onbCols.interviewer && (
-                          <td className="px-5 py-3.5 text-xs">
-                            <span className="font-bold text-foreground block">
-                              By: {emp.onboarding?.interviewerName || '—'}
-                            </span>
-                            <span className="text-[11px] text-muted-foreground">
-                              Onboarder: {emp.onboarding?.onboardedByName || '—'}
-                            </span>
-                          </td>
-                        )}
-
-                        {onbCols.joiningDate && (
-                          <td className="px-5 py-3.5 font-bold text-foreground text-xs">
-                            {formatDate(emp.joiningDate)}
-                          </td>
-                        )}
-
-                        {onbCols.probationEndDate && (
-                          <td className="px-5 py-3.5 text-muted-foreground text-xs">
-                            {formatDate(emp.onboarding?.probationEndDate)}
-                          </td>
-                        )}
-
-                        {onbCols.orientationStatus && (
-                          <td className="px-5 py-3.5">
-                            <Badge className={`text-[10px] font-bold ${emp.onboarding?.orientationCompleted ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30' : 'bg-amber-500/10 text-amber-600 border-amber-500/30'}`}>
-                              {emp.onboarding?.orientationCompleted ? 'Completed' : 'Pending'}
-                            </Badge>
-                          </td>
-                        )}
-
-                        {onbCols.welcomeKitStatus && (
-                          <td className="px-5 py-3.5">
-                            <Badge className={`text-[10px] font-bold ${emp.onboarding?.welcomeKitIssued ? 'bg-sky-500/10 text-sky-600 border-sky-500/30' : 'bg-muted text-muted-foreground border-border'}`}>
-                              {emp.onboarding?.welcomeKitIssued ? 'Issued & Logged' : 'Pending'}
-                            </Badge>
-                          </td>
-                        )}
-
-                        {onbCols.documentsStatus && (
-                          <td className="px-5 py-3.5">
-                            <Badge className={`text-[10px] font-bold ${emp.onboarding?.documentsVerified ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30' : 'bg-amber-500/10 text-amber-600 border-amber-500/30'}`}>
-                              {emp.onboarding?.documentsVerified ? 'Verified' : 'Pending'}
-                            </Badge>
-                          </td>
-                        )}
-
-                        {onbCols.interviewScore && (
-                          <td className="px-5 py-3.5 font-black text-amber-600 dark:text-amber-400 text-xs">
-                            {emp.onboarding?.interviewRating ? `★ ${emp.onboarding.interviewRating}` : '—'}
-                          </td>
-                        )}
-
-                        {customFields.onboarding?.map((f) => (
-                          <td key={f.id} className="px-5 py-3.5 text-xs text-muted-foreground font-medium">
-                            —
-                          </td>
-                        ))}
-
-                        {onbCols.lifecycleStage && <td className="px-5 py-3.5">{getStatusBadge(emp.lifecycleStatus)}</td>}
-
-                        {onbCols.actions && (
-                          <td className="px-5 py-3.5 text-right">
-                            {onbCols.actionEditOnboarding && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleOpenDetails(emp.id, 'onboarding')}
-                                className="h-8 px-3 text-xs font-bold gap-1 rounded-xl cursor-pointer"
-                              >
-                                <Edit className="w-3.5 h-3.5 text-sky-500" /> Onboarding Details
-                              </Button>
-                            )}
-                          </td>
-                        )}
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </Card>
-        </TabsContent>
-
-        {/* ─── TAB 3: TRANSFER AUDIT HISTORY VIEW ─── */}
-        <TabsContent value="transfers" className="mt-0">
-          <Card className="border rounded-2xl shadow-md overflow-hidden bg-card border-border">
-            <div className="p-4 border-b border-border bg-emerald-500/5 flex items-center justify-between">
-              <h2 className="text-sm font-extrabold text-foreground flex items-center gap-2">
-                <ArrowLeftRight className="w-4 h-4 text-emerald-500" /> Employee Transfer Audit History ({transferEmployees.length})
-              </h2>
-            </div>
-
-            <div className="overflow-x-auto overflow-y-auto max-h-[650px] custom-scrollbar pb-2">
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="bg-muted/50 border-b border-border text-muted-foreground uppercase tracking-wider font-extrabold">
-                    {trfCols.employeeNameAvatar && <th className="px-5 py-3.5">Employee</th>}
-                    {trfCols.employeeCode && <th className="px-5 py-3.5">Employee Code</th>}
-                    {trfCols.department && <th className="px-5 py-3.5">Current Department</th>}
-                    {trfCols.designation && <th className="px-5 py-3.5">Current Designation</th>}
-                    {trfCols.location && <th className="px-5 py-3.5">Location</th>}
-                    {trfCols.reportingManager && <th className="px-5 py-3.5">Reporting Manager</th>}
-                    {trfCols.transfersCount && <th className="px-5 py-3.5">Transfers Executed</th>}
-                    {trfCols.lastTransferDate && <th className="px-5 py-3.5">Last Effective Date</th>}
-                    {trfCols.transferReason && <th className="px-5 py-3.5">Transfer Reason</th>}
-                    {customFields.transfers?.map((f) => (
-                      <th key={f.id} className="px-5 py-3.5 text-emerald-600 dark:text-emerald-400 font-bold">{f.name}</th>
-                    ))}
-                    {trfCols.actions && <th className="px-5 py-3.5 text-right">Action</th>}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {loading ? (
-                    <tr>
-                      <td colSpan={10} className="text-center py-10 text-xs text-muted-foreground">
-                        <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2 text-emerald-500" />
-                        Loading transfer audit history...
-                      </td>
-                    </tr>
-                  ) : transferEmployees.length === 0 ? (
-                    <tr>
-                      <td colSpan={10} className="text-center py-10 text-xs text-muted-foreground">
-                        No transfer records found.
-                      </td>
-                    </tr>
-                  ) : (
-                    transferEmployees.map((emp) => (
-                      <tr key={emp.id} className="hover:bg-muted/30 transition-colors">
-                        {trfCols.employeeNameAvatar && (
-                          <td className="px-5 py-3.5">
-                            <div className="flex items-center gap-3">
-                              <Avatar className="h-9 w-9 border-2 border-emerald-500/20 shrink-0">
-                                <AvatarImage src={emp.avatarUrl} />
-                                <AvatarFallback className="bg-emerald-600 text-white font-bold text-xs">
-                                  {emp.name.split(' ').map(w => w[0]).join('')}
-                                </AvatarFallback>
-                              </Avatar>
-                              <div>
-                                <span className="font-extrabold text-foreground block">{emp.name}</span>
-                                {!trfCols.employeeCode && (
-                                  <span className="text-[10px] text-muted-foreground">{emp.employeeCode}</span>
-                                )}
-                              </div>
-                            </div>
-                          </td>
-                        )}
-
-                        {trfCols.employeeCode && (
-                          <td className="px-5 py-3.5 font-mono text-[11px] text-muted-foreground">
-                            {emp.employeeCode || `EMP-${emp.id}`}
-                          </td>
-                        )}
-
-                        {trfCols.department && (
-                          <td className="px-5 py-3.5">
-                            <span className="font-bold text-foreground block">{emp.departmentName}</span>
-                          </td>
-                        )}
-
-                        {trfCols.designation && (
-                          <td className="px-5 py-3.5">
-                            <span className="text-[11px] text-muted-foreground font-semibold">{emp.designationName || 'Staff'}</span>
-                          </td>
-                        )}
-
-                        {trfCols.location && <td className="px-5 py-3.5 font-bold text-foreground">{emp.locationName}</td>}
-
-                        {trfCols.reportingManager && (
-                          <td className="px-5 py-3.5 text-muted-foreground text-[11px]">
-                            {emp.reportingManagerName || emp.reportingManager || 'Executive Lead'}
-                          </td>
-                        )}
-
-                        {trfCols.transfersCount && (
-                          <td className="px-5 py-3.5">
-                            <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/30 font-extrabold text-[10px]">
-                              {emp.transfersCount} Transfers
-                            </Badge>
-                          </td>
-                        )}
-
-                        {trfCols.lastTransferDate && (
-                          <td className="px-5 py-3.5 text-muted-foreground text-xs">
-                            {formatDate(emp.lastTransferDate)}
-                          </td>
-                        )}
-
-                        {trfCols.transferReason && (
-                          <td className="px-5 py-3.5 text-muted-foreground text-xs">
-                            {emp.transferReason || '—'}
-                          </td>
-                        )}
-
-                        {customFields.transfers?.map((f) => (
-                          <td key={f.id} className="px-5 py-3.5 text-xs text-muted-foreground font-medium">
-                            —
-                          </td>
-                        ))}
-
-                        {trfCols.actions && (
-                          <td className="px-5 py-3.5 text-right">
-                            <div className="flex items-center justify-end gap-2">
-                              {trfCols.actionViewLog && (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => handleOpenDetails(emp.id, 'transfers')}
-                                  className="h-8 px-3 text-xs font-bold gap-1 rounded-xl cursor-pointer"
-                                >
-                                  <ArrowLeftRight className="w-3.5 h-3.5 text-emerald-500" /> View Transfer Log
-                                </Button>
-                              )}
-                              {trfCols.actionExecuteTransfer && (
-                                <Button
-                                  size="sm"
-                                  onClick={() => handleOpenTransferModal(emp)}
-                                  className="h-8 px-3 text-xs font-extrabold bg-indigo-600 hover:bg-indigo-700 text-white gap-1 rounded-xl cursor-pointer"
-                                >
-                                  <Plus className="w-3.5 h-3.5" /> Transfer
-                                </Button>
-                              )}
-                            </div>
-                          </td>
-                        )}
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </Card>
-        </TabsContent>
-
-        {/* ─── TAB 4: OFFBOARDING & EXIT RECORDS VIEW ─── */}
-        <TabsContent value="offboarding" className="mt-0">
-          <Card className="border rounded-2xl shadow-md overflow-hidden bg-card border-border">
-            <div className="p-4 border-b border-border bg-rose-500/5 flex items-center justify-between">
-              <h2 className="text-sm font-extrabold text-foreground flex items-center gap-2">
-                <UserMinus className="w-4 h-4 text-rose-500" /> Offboarding &amp; Exit Interview Records ({offboardingEmployees.length})
-              </h2>
-            </div>
-
-            <div className="overflow-x-auto overflow-y-auto max-h-[650px] custom-scrollbar pb-2">
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="bg-muted/50 border-b border-border text-muted-foreground uppercase tracking-wider font-extrabold">
-                    {offbCols.employeeNameAvatar && <th className="px-5 py-3.5">Employee</th>}
-                    {offbCols.employeeCode && <th className="px-5 py-3.5">Code &amp; Department</th>}
-                    {offbCols.exitType && <th className="px-5 py-3.5">Exit Type</th>}
-                    {offbCols.resignationDate && <th className="px-5 py-3.5">Resignation &amp; Relieving</th>}
-                    {offbCols.noticePeriodDays && <th className="px-5 py-3.5">Notice Days</th>}
-                    {offbCols.exitReason && <th className="px-5 py-3.5">Exit Reason</th>}
-                    {offbCols.exitInterviewer && <th className="px-5 py-3.5">Interviewer</th>}
-                    {offbCols.assetsReturned && <th className="px-5 py-3.5">Assets Returned</th>}
-                    {offbCols.fnfStatus && <th className="px-5 py-3.5">F&amp;F Settlement</th>}
-                    {customFields.offboarding?.map((f) => (
-                      <th key={f.id} className="px-5 py-3.5 text-rose-600 dark:text-rose-400 font-bold">{f.name}</th>
-                    ))}
-                    {offbCols.lifecycleStage && <th className="px-5 py-3.5">Stage</th>}
-                    {offbCols.actions && <th className="px-5 py-3.5 text-right">Actions</th>}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {loading ? (
-                    <tr>
-                      <td colSpan={12} className="text-center py-10 text-xs text-muted-foreground">
-                        <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2 text-rose-500" />
-                        Loading offboarding records...
-                      </td>
-                    </tr>
-                  ) : offboardingEmployees.length === 0 ? (
-                    <tr>
-                      <td colSpan={12} className="text-center py-10 text-xs text-muted-foreground">
-                        No offboarding or exit records found.
-                      </td>
-                    </tr>
-                  ) : (
-                    offboardingEmployees.map((emp) => (
-                      <tr key={emp.id} className="hover:bg-muted/30 transition-colors">
-                        {offbCols.employeeNameAvatar && (
-                          <td className="px-5 py-3.5">
-                            <div className="flex items-center gap-3">
-                              <Avatar className="h-9 w-9 border-2 border-rose-500/20 shrink-0">
-                                <AvatarImage src={emp.avatarUrl} />
-                                <AvatarFallback className="bg-rose-600 text-white font-bold text-xs">
-                                  {emp.name.split(' ').map(w => w[0]).join('')}
-                                </AvatarFallback>
-                              </Avatar>
-                              <div>
-                                <span className="font-extrabold text-foreground block">{emp.name}</span>
-                                {!offbCols.employeeCode && (
-                                  <span className="text-[10px] text-muted-foreground">{emp.employeeCode} • {emp.departmentName}</span>
-                                )}
-                              </div>
-                            </div>
-                          </td>
-                        )}
-
-                        {offbCols.employeeCode && (
-                          <td className="px-5 py-3.5 font-mono text-[11px] text-muted-foreground">
-                            <span className="font-bold text-foreground block">{emp.employeeCode || `EMP-${emp.id}`}</span>
-                            <span className="text-[10px] text-muted-foreground">{emp.departmentName || 'General'}</span>
-                          </td>
-                        )}
-
-                        {offbCols.exitType && (
-                          <td className="px-5 py-3.5">
-                            <Badge variant="outline" className="text-[10px] font-extrabold uppercase bg-rose-500/10 text-rose-600 border-rose-500/30">
-                              {emp.offboarding?.exitType || 'Resignation'}
-                            </Badge>
-                          </td>
-                        )}
-
-                        {offbCols.resignationDate && (
-                          <td className="px-5 py-3.5 font-medium">
-                            <span className="block text-foreground font-bold">Resigned: {emp.offboarding?.resignationDate || 'N/A'}</span>
-                            <span className="text-[10px] text-muted-foreground">Relieving: {emp.offboarding?.relievingDate || emp.offboarding?.lastWorkingDay || 'N/A'}</span>
-                          </td>
-                        )}
-
-                        {offbCols.noticePeriodDays && (
-                          <td className="px-5 py-3.5 font-bold text-muted-foreground text-xs">
-                            {emp.offboarding?.noticePeriodDays ? `${emp.offboarding.noticePeriodDays} Days` : '—'}
-                          </td>
-                        )}
-
-                        {offbCols.exitReason && (
-                          <td className="px-5 py-3.5 text-muted-foreground text-xs max-w-[180px] truncate">
-                            {emp.offboarding?.exitReason || '—'}
-                          </td>
-                        )}
-
-                        {offbCols.exitInterviewer && (
-                          <td className="px-5 py-3.5 text-muted-foreground text-xs">
-                            {emp.offboarding?.exitInterviewerName || '—'}
-                          </td>
-                        )}
-
-                        {offbCols.assetsReturned && (
-                          <td className="px-5 py-3.5">
-                            <Badge className={`text-[10px] font-bold ${emp.offboarding?.assetsReturned ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30' : 'bg-rose-500/10 text-rose-600 border-rose-500/30'}`}>
-                              {emp.offboarding?.assetsReturned ? 'Returned' : 'Pending'}
-                            </Badge>
-                          </td>
-                        )}
-
-                        {offbCols.fnfStatus && (
-                          <td className="px-5 py-3.5">
-                            <Badge className={`text-[10px] font-bold capitalize ${emp.offboarding?.fnfStatus === 'completed' || emp.offboarding?.fnfStatus === 'cleared' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30' : 'bg-amber-500/10 text-amber-600 border-amber-500/30'}`}>
-                              {emp.offboarding?.fnfStatus || 'Pending'}
-                            </Badge>
-                          </td>
-                        )}
-
-                        {customFields.offboarding?.map((f) => (
-                          <td key={f.id} className="px-5 py-3.5 text-xs text-muted-foreground font-medium">
-                            —
-                          </td>
-                        ))}
-
-                        {offbCols.lifecycleStage && <td className="px-5 py-3.5">{getStatusBadge(emp.lifecycleStatus)}</td>}
-
-                        {offbCols.actions && (
-                          <td className="px-5 py-3.5 text-right">
-                            {offbCols.actionEditOffboarding && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleOpenDetails(emp.id, 'offboarding')}
-                                className="h-8 px-3 text-xs font-bold gap-1 rounded-xl text-rose-600 border-rose-500/30 hover:bg-rose-50 dark:hover:bg-rose-950/20 cursor-pointer"
-                              >
-                                <Edit className="w-3.5 h-3.5" /> Offboarding Details
-                              </Button>
-                            )}
-                          </td>
-                        )}
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </Card>
-        </TabsContent>
-      </Tabs>
-
-      {/* EMPLOYEE LIFECYCLE DETAILS DIALOG / MODAL */}
-      <Dialog open={detailsModalOpen} onOpenChange={setDetailsModalOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto no-scrollbar [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden rounded-3xl p-6">
-          {detailsLoading || !empDetails ? (
-            <div className="py-16 text-center text-muted-foreground text-xs">
-              <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-indigo-500" />
-              Fetching comprehensive lifecycle details...
-            </div>
-          ) : (
-            <div className="space-y-6">
-              {/* Profile Top Summary Banner */}
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 rounded-2xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white shadow-lg">
-                <div className="flex items-center gap-3">
-                  <Avatar className="h-14 w-14 border-2 border-indigo-400">
-                    <AvatarImage src={empDetails.profile.avatarUrl} alt={empDetails.profile.name} />
-                    <AvatarFallback className="bg-indigo-600 text-white font-extrabold text-base">
-                      {empDetails.profile.name.split(' ').map(w => w[0]).join('').toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h2 className="text-lg font-black text-white">{empDetails.profile.name}</h2>
-                      {getStatusBadge(empDetails.profile.lifecycleStatus)}
+        {/* ── Details Modal ──────────────────────────────────────────── */}
+        <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
+          <DialogContent
+            style={{
+              maxWidth: 760,
+              maxHeight: "90vh",
+              borderRadius: 14,
+              padding: 0,
+              overflow: "hidden",
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
+            {detailsLoading || !empDetails ? (
+              <div
+                style={{
+                  padding: 60,
+                  textAlign: "center",
+                  color: T.muted,
+                  fontSize: 12,
+                }}
+              >
+                <RefreshCw
+                  size={20}
+                  style={{
+                    color: T.blue,
+                    display: "block",
+                    margin: "0 auto 10px",
+                    animation: "spin 1s linear infinite",
+                  }}
+                />
+                Fetching lifecycle details…
+              </div>
+            ) : (
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  flex: 1,
+                  overflow: "hidden",
+                }}
+              >
+                {/* Modal header */}
+                <div
+                  style={{
+                    padding: "18px 20px",
+                    borderBottom: `1px solid ${T.border}`,
+                    background: T.mutedBg,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 12,
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <div
+                    style={{ display: "flex", alignItems: "center", gap: 12 }}
+                  >
+                    <div
+                      style={{
+                        width: 44,
+                        height: 44,
+                        borderRadius: 10,
+                        background: T.blueLight,
+                        border: `2px solid ${T.blueMid}`,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: 14,
+                        fontWeight: 800,
+                        color: T.blue,
+                        overflow: "hidden",
+                        flexShrink: 0,
+                      }}
+                    >
+                      {empDetails.profile.avatarUrl ? (
+                        <img
+                          src={empDetails.profile.avatarUrl}
+                          alt={empDetails.profile.name}
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            objectFit: "cover",
+                          }}
+                        />
+                      ) : (
+                        empDetails.profile.name
+                          .split(" ")
+                          .map((w) => w[0])
+                          .join("")
+                          .toUpperCase()
+                          .slice(0, 2)
+                      )}
                     </div>
-                    <p className="text-xs text-indigo-200/90 font-medium mt-0.5">
-                      {empDetails.profile.employeeCode} • {empDetails.profile.designationName} ({empDetails.profile.departmentName})
-                    </p>
-                    <p className="text-[11px] text-indigo-300/70 mt-0.5 flex items-center gap-2">
-                      <span>Joined: {empDetails.profile.joiningDate}</span>
-                      <span>•</span>
-                      <span>Location: {empDetails.profile.locationName}</span>
-                    </p>
+                    <div>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                          flexWrap: "wrap",
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontSize: 16,
+                            fontWeight: 800,
+                            color: T.navy,
+                          }}
+                        >
+                          {empDetails.profile.name}
+                        </span>
+                        <StatusPill
+                          status={empDetails.profile.lifecycleStatus}
+                        />
+                      </div>
+                      <div
+                        style={{ fontSize: 11.5, color: T.muted, marginTop: 2 }}
+                      >
+                        {empDetails.profile.employeeCode} ·{" "}
+                        {empDetails.profile.designationName} ·{" "}
+                        {empDetails.profile.departmentName}
+                      </div>
+                    </div>
+                  </div>
+                  <BtnPrimary
+                    onClick={() => {
+                      setDetailsOpen(false);
+                      openTransfer(empDetails.profile as any);
+                    }}
+                    style={{ flexShrink: 0 }}
+                  >
+                    <ArrowLeftRight size={13} /> Transfer
+                  </BtnPrimary>
+                </div>
+
+                {/* Detail tabs */}
+                <div
+                  style={{
+                    borderBottom: `1px solid ${T.border}`,
+                    padding: "0 20px",
+                    background: T.card,
+                  }}
+                >
+                  <div className="elc-dtab-bar">
+                    {(
+                      [
+                        "overview",
+                        "onboarding",
+                        "transfers",
+                        "offboarding",
+                      ] as const
+                    ).map((t) => (
+                      <button
+                        key={t}
+                        className={`elc-dtab${detailTab === t ? " elc-dtab--active" : ""}`}
+                        onClick={() => setDetailTab(t)}
+                      >
+                        {t === "transfers"
+                          ? `Transfers (${empDetails.transfers.length})`
+                          : t.charAt(0).toUpperCase() + t.slice(1)}
+                      </button>
+                    ))}
                   </div>
                 </div>
 
-                <Button
-                  size="sm"
-                  onClick={() => {
-                    setDetailsModalOpen(false);
-                    handleOpenTransferModal(empDetails.profile);
-                  }}
-                  className="bg-white text-indigo-900 hover:bg-white/90 font-extrabold text-xs px-4 py-2 rounded-xl gap-1.5 shrink-0"
+                {/* Tab content */}
+                <div
+                  className="elc-scroll"
+                  style={{ flex: 1, overflowY: "auto", padding: "18px 20px" }}
                 >
-                  <ArrowLeftRight className="w-4 h-4 text-indigo-600" /> Transfer Employee
-                </Button>
-              </div>
-
-              {/* TABS NAVIGATION */}
-              <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                <TabsList className="grid grid-cols-4 bg-muted/60 p-1 rounded-2xl h-11">
-                  <TabsTrigger value="overview" className="rounded-xl text-xs font-extrabold">Overview & Timeline</TabsTrigger>
-                  <TabsTrigger value="onboarding" className="rounded-xl text-xs font-extrabold">Onboarding & Interview</TabsTrigger>
-                  <TabsTrigger value="transfers" className="rounded-xl text-xs font-extrabold">Transfers ({empDetails.transfers.length})</TabsTrigger>
-                  <TabsTrigger value="offboarding" className="rounded-xl text-xs font-extrabold">Offboarding / Exit</TabsTrigger>
-                </TabsList>
-
-                {/* TAB 1: OVERVIEW & TIMELINE */}
-                <TabsContent value="overview" className="mt-4 space-y-4">
-                  <Card className="border rounded-2xl p-4 bg-card">
-                    <h3 className="text-xs font-extrabold text-foreground uppercase tracking-wider mb-3">Lifecycle Overview Card</h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-                      <div className="p-3 bg-muted/30 rounded-xl border">
-                        <span className="text-[10px] font-bold text-muted-foreground uppercase block">Department</span>
-                        <span className="font-extrabold text-foreground block mt-1">{empDetails.profile.departmentName}</span>
-                      </div>
-                      <div className="p-3 bg-muted/30 rounded-xl border">
-                        <span className="text-[10px] font-bold text-muted-foreground uppercase block">Designation</span>
-                        <span className="font-extrabold text-foreground block mt-1">{empDetails.profile.designationName}</span>
-                      </div>
-                      <div className="p-3 bg-muted/30 rounded-xl border">
-                        <span className="text-[10px] font-bold text-muted-foreground uppercase block">Total Transfers</span>
-                        <span className="font-extrabold text-emerald-600 dark:text-emerald-400 block mt-1">{empDetails.transfers.length} Executed</span>
-                      </div>
-                    </div>
-                  </Card>
-
-                  <ChronologicalLifecycleFlow
-                    milestones={empDetails.chronologicalMilestones || []}
-                    employeeName={empDetails.profile.name}
-                    employeeCode={empDetails.profile.employeeCode}
-                  />
-                </TabsContent>
-
-                {/* TAB 2: ONBOARDING & INTERVIEW RECORDS */}
-                <TabsContent value="onboarding" className="mt-4 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-xs font-extrabold text-foreground uppercase tracking-wider flex items-center gap-2">
-                      <UserPlus className="w-4 h-4 text-sky-500" /> Onboarding & Interview Audit Details
-                    </h3>
-                    <Button size="sm" variant="outline" onClick={handleOpenOnboardingEdit} className="h-8 text-xs font-extrabold gap-1.5 rounded-xl">
-                      <Edit className="w-3.5 h-3.5" /> Edit Onboarding Records
-                    </Button>
-                  </div>
-
-                  <Card className="border rounded-2xl p-4 bg-card space-y-4">
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-xs">
-                      <div className="p-3 bg-muted/30 rounded-xl border">
-                        <span className="text-[10px] font-bold text-muted-foreground uppercase block">Interviewer Name</span>
-                        <span className="font-extrabold text-foreground block mt-1">{empDetails.onboarding.interviewerName || 'HR Team'}</span>
-                      </div>
-                      <div className="p-3 bg-muted/30 rounded-xl border">
-                        <span className="text-[10px] font-bold text-muted-foreground uppercase block">Onboarded By (HR)</span>
-                        <span className="font-extrabold text-foreground block mt-1">{empDetails.onboarding.onboardedByName || 'HR Admin'}</span>
-                      </div>
-                      <div className="p-3 bg-muted/30 rounded-xl border">
-                        <span className="text-[10px] font-bold text-muted-foreground uppercase block">Interview Date</span>
-                        <span className="font-extrabold text-foreground block mt-1">{empDetails.onboarding.interviewDate || empDetails.onboarding.joiningDate || empDetails.profile.joiningDate || 'N/A'}</span>
-                      </div>
-                      <div className="p-3 bg-muted/30 rounded-xl border">
-                        <span className="text-[10px] font-bold text-muted-foreground uppercase block">Interview Rating</span>
-                        <span className="font-extrabold text-emerald-600 dark:text-emerald-400 block mt-1">{empDetails.onboarding.interviewRating || '4.5 / 5'}</span>
-                      </div>
-                      <div className="p-3 bg-muted/30 rounded-xl border">
-                        <span className="text-[10px] font-bold text-muted-foreground uppercase block">Joining Date</span>
-                        <span className="font-extrabold text-foreground block mt-1">{empDetails.onboarding.joiningDate || empDetails.profile.joiningDate || 'N/A'}</span>
-                      </div>
-                      <div className="p-3 bg-muted/30 rounded-xl border">
-                        <span className="text-[10px] font-bold text-muted-foreground uppercase block">Probation End Date</span>
-                        <span className="font-extrabold text-foreground block mt-1">{empDetails.onboarding.probationEndDate || 'Completed / Confirmed'}</span>
-                      </div>
-                    </div>
-
-                    {/* Interview Notes */}
-                    <div className="p-3.5 bg-muted/20 rounded-xl border text-xs">
-                      <span className="text-[10px] font-extrabold text-muted-foreground uppercase block mb-1">Interview & Selection Notes</span>
-                      <p className="text-foreground font-medium">{empDetails.onboarding.interviewNotes}</p>
-                    </div>
-
-                    {/* Additional Onboarding Remarks & Notes */}
-                    {empDetails.onboarding.notes && (
-                      <div className="p-3.5 bg-sky-500/5 dark:bg-sky-950/20 rounded-xl border border-sky-500/20 text-xs">
-                        <span className="text-[10px] font-extrabold text-sky-600 dark:text-sky-400 uppercase block mb-1">Onboarding Remarks & Audit Notes</span>
-                        <p className="text-foreground font-medium">{empDetails.onboarding.notes}</p>
-                      </div>
-                    )}
-
-                    {/* Checklists */}
-                    <div className="grid grid-cols-3 gap-3">
-                      <div className={`p-3 rounded-xl border text-xs font-extrabold flex items-center justify-between ${empDetails.onboarding.orientationCompleted ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30' : 'bg-muted text-muted-foreground'}`}>
-                        <span>Orientation Completed</span>
-                        <CheckCircle2 className="w-4 h-4" />
-                      </div>
-                      <div className={`p-3 rounded-xl border text-xs font-extrabold flex items-center justify-between ${empDetails.onboarding.documentsVerified ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30' : 'bg-muted text-muted-foreground'}`}>
-                        <span>Documents Verified</span>
-                        <CheckCircle2 className="w-4 h-4" />
-                      </div>
-                      <div className={`p-3 rounded-xl border text-xs font-extrabold flex items-center justify-between ${empDetails.onboarding.welcomeKitIssued ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30' : 'bg-muted text-muted-foreground'}`}>
-                        <span>Welcome Kit Issued</span>
-                        <CheckCircle2 className="w-4 h-4" />
-                      </div>
-                    </div>
-                  </Card>
-                </TabsContent>
-
-                {/* TAB 3: TRANSFER HISTORY & ACTION */}
-                <TabsContent value="transfers" className="mt-4 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-xs font-extrabold text-foreground uppercase tracking-wider flex items-center gap-2">
-                      <ArrowLeftRight className="w-4 h-4 text-emerald-500" /> Employee Transfer Audit History ({empDetails.transfers.length})
-                    </h3>
-                    <Button
-                      size="sm"
-                      onClick={() => {
-                        setDetailsModalOpen(false);
-                        handleOpenTransferModal(empDetails.profile);
+                  {detailTab === "overview" && (
+                    <div
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 14,
                       }}
-                      className="bg-indigo-600 hover:bg-indigo-700 text-white h-8 text-xs font-extrabold gap-1.5 rounded-xl"
                     >
-                      <Plus className="w-3.5 h-3.5" /> Transfer Employee
-                    </Button>
-                  </div>
-
-                  {empDetails.transfers.length === 0 ? (
-                    <Card className="border rounded-2xl p-8 text-center bg-card">
-                      <p className="text-xs text-muted-foreground font-medium">No transfer history recorded for this employee yet.</p>
-                    </Card>
-                  ) : (
-                    <div className="space-y-3">
-                      {empDetails.transfers.map((t) => (
-                        <Card key={t.id} className="border rounded-2xl p-4 bg-card hover:border-indigo-500/30 transition-all space-y-3">
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 border-b">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <Badge className="bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 border-indigo-500/30 font-extrabold text-[10px]">
-                                {t.transferType.toUpperCase().replace('_', ' ')}
-                              </Badge>
-                              <span className="text-xs font-extrabold text-foreground">Effective Date: {t.effectiveDate}</span>
-                              <Badge variant="outline" className="text-[10px] font-mono bg-muted/40">
-                                Record ID: #{t.id}
-                              </Badge>
-                            </div>
-                            <div className="flex items-center gap-3 text-[11px] text-muted-foreground font-medium">
-                              <span>Executed By: <strong className="text-foreground">{t.createdBy}</strong></span>
-                              {t.createdAt && t.createdAt !== 'N/A' && (
-                                <span className="font-mono text-[10px]">Logged: {t.createdAt.split('T')[0]}</span>
-                              )}
-                            </div>
-                          </div>
-
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
-                            <div className="p-2.5 bg-muted/30 rounded-xl border">
-                              <span className="text-[10px] text-muted-foreground block font-bold uppercase">Department</span>
-                              <span className="font-extrabold text-foreground block mt-1">{t.fromDepartmentName} → <span className="text-indigo-600 font-extrabold">{t.toDepartmentName}</span></span>
-                            </div>
-                            <div className="p-2.5 bg-muted/30 rounded-xl border">
-                              <span className="text-[10px] text-muted-foreground block font-bold uppercase">Designation</span>
-                              <span className="font-extrabold text-foreground block mt-1">{t.fromDesignationName} → <span className="text-indigo-600 font-extrabold">{t.toDesignationName}</span></span>
-                            </div>
-                            <div className="p-2.5 bg-muted/30 rounded-xl border">
-                              <span className="text-[10px] text-muted-foreground block font-bold uppercase">Reporting Manager</span>
-                              <span className="font-extrabold text-foreground block mt-1">{t.fromManagerName} → <span className="text-emerald-600 font-extrabold">{t.toManagerName}</span></span>
-                            </div>
-                            <div className="p-2.5 bg-muted/30 rounded-xl border">
-                              <span className="text-[10px] text-muted-foreground block font-bold uppercase">Location</span>
-                              <span className="font-extrabold text-foreground block mt-1">{t.fromLocationName} → <span className="text-sky-600 font-extrabold">{t.toLocationName}</span></span>
-                            </div>
-                          </div>
-
-                          {t.transferReason && (
-                            <div className="text-xs bg-muted/20 p-3 rounded-xl border">
-                              <span className="text-[10px] font-extrabold text-muted-foreground uppercase block mb-0.5">Transfer Reason & Business Justification</span>
-                              <p className="text-foreground font-medium">{t.transferReason}</p>
-                            </div>
-                          )}
-
-                          {t.notes && (
-                            <div className="text-xs bg-indigo-500/5 dark:bg-indigo-950/20 p-3 rounded-xl border border-indigo-500/20">
-                              <span className="text-[10px] font-extrabold text-indigo-600 dark:text-indigo-400 uppercase block mb-0.5">HR Audit & System Remarks</span>
-                              <p className="text-foreground font-medium">{t.notes}</p>
-                            </div>
-                          )}
-                        </Card>
-                      ))}
+                      <div className="elc-info-grid">
+                        <InfoCell
+                          label="Department"
+                          value={empDetails.profile.departmentName}
+                        />
+                        <InfoCell
+                          label="Designation"
+                          value={empDetails.profile.designationName}
+                        />
+                        <InfoCell
+                          label="Location"
+                          value={empDetails.profile.locationName || "—"}
+                        />
+                        <InfoCell
+                          label="Total Transfers"
+                          value={`${empDetails.transfers.length} executed`}
+                          accent={T.blue}
+                        />
+                      </div>
+                      <ChronologicalLifecycleFlow
+                        milestones={empDetails.chronologicalMilestones || []}
+                        employeeName={empDetails.profile.name}
+                        employeeCode={empDetails.profile.employeeCode}
+                      />
                     </div>
                   )}
-                </TabsContent>
 
-                {/* TAB 4: OFFBOARDING / EXIT DETAILS */}
-                <TabsContent value="offboarding" className="mt-4 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-xs font-extrabold text-foreground uppercase tracking-wider flex items-center gap-2">
-                      <UserMinus className="w-4 h-4 text-rose-500" /> Offboarding & Exit Interview Records
-                    </h3>
-                    <Button size="sm" variant="outline" onClick={handleOpenOffboardingEdit} className="h-8 text-xs font-extrabold gap-1.5 rounded-xl">
-                      <Edit className="w-3.5 h-3.5" /> Manage Offboarding
-                    </Button>
-                  </div>
-
-                  {!empDetails.offboarding ? (
-                    <Card className="border rounded-2xl p-8 text-center bg-card">
-                      <p className="text-xs text-muted-foreground font-medium">Employee is currently active. No exit/offboarding record initiated.</p>
-                      <Button size="sm" onClick={handleOpenOffboardingEdit} className="mt-3 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl">
-                        Initiate Employee Offboarding
-                      </Button>
-                    </Card>
-                  ) : (
-                    <Card className="border rounded-2xl p-4 bg-card space-y-4">
-                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-xs">
-                        <div className="p-3 bg-muted/30 rounded-xl border">
-                          <span className="text-[10px] font-bold text-muted-foreground uppercase block">Exit Type</span>
-                          <span className="font-extrabold text-rose-600 dark:text-rose-400 block mt-1 uppercase">{empDetails.offboarding.exitType}</span>
-                        </div>
-                        <div className="p-3 bg-muted/30 rounded-xl border">
-                          <span className="text-[10px] font-bold text-muted-foreground uppercase block">Resignation Date</span>
-                          <span className="font-extrabold text-foreground block mt-1">{empDetails.offboarding.resignationDate || 'N/A'}</span>
-                        </div>
-                        <div className="p-3 bg-muted/30 rounded-xl border">
-                          <span className="text-[10px] font-bold text-muted-foreground uppercase block">Notice Period</span>
-                          <span className="font-extrabold text-foreground block mt-1">{empDetails.offboarding.noticePeriodDays} Days</span>
-                        </div>
-                        <div className="p-3 bg-muted/30 rounded-xl border">
-                          <span className="text-[10px] font-bold text-muted-foreground uppercase block">Relieving Date</span>
-                          <span className="font-extrabold text-foreground block mt-1">{empDetails.offboarding.relievingDate || 'N/A'}</span>
-                        </div>
-                        <div className="p-3 bg-muted/30 rounded-xl border">
-                          <span className="text-[10px] font-bold text-muted-foreground uppercase block">Last Working Day</span>
-                          <span className="font-extrabold text-foreground block mt-1">{empDetails.offboarding.lastWorkingDay || empDetails.offboarding.relievingDate || 'N/A'}</span>
-                        </div>
-                        <div className="p-3 bg-muted/30 rounded-xl border">
-                          <span className="text-[10px] font-bold text-muted-foreground uppercase block">Exit Interviewer</span>
-                          <span className="font-extrabold text-foreground block mt-1">{empDetails.offboarding.exitInterviewerName || 'HR Manager'}</span>
-                        </div>
-                        <div className="p-3 bg-muted/30 rounded-xl border">
-                          <span className="text-[10px] font-bold text-muted-foreground uppercase block">F&F Settlement Status</span>
-                          <span className="font-extrabold text-amber-600 dark:text-amber-400 block mt-1 uppercase">{empDetails.offboarding.fnfStatus}</span>
-                        </div>
+                  {detailTab === "onboarding" && (
+                    <div
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 14,
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontSize: 13,
+                            fontWeight: 700,
+                            color: T.navy,
+                          }}
+                        >
+                          Onboarding & Interview Details
+                        </span>
+                        <BtnOutline
+                          onClick={openOnbEdit}
+                          style={{
+                            height: 30,
+                            fontSize: 11,
+                            padding: "0 10px",
+                          }}
+                        >
+                          <Edit size={11} /> Edit
+                        </BtnOutline>
                       </div>
-
-                      {/* Assets Returned Card */}
-                      <div className={`p-3 rounded-xl border text-xs font-extrabold flex items-center justify-between ${empDetails.offboarding.assetsReturned ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30' : 'bg-rose-500/10 text-rose-600 border-rose-500/30'}`}>
-                        <span>Company Hardware & Assets Returned</span>
-                        <CheckCircle2 className="w-4 h-4" />
+                      <div className="elc-info-grid">
+                        <InfoCell
+                          label="Interviewer"
+                          value={empDetails.onboarding.interviewerName || "—"}
+                        />
+                        <InfoCell
+                          label="Onboarded by"
+                          value={empDetails.onboarding.onboardedByName || "—"}
+                        />
+                        <InfoCell
+                          label="Interview date"
+                          value={fmtDate(empDetails.onboarding.interviewDate)}
+                        />
+                        <InfoCell
+                          label="Rating"
+                          value={empDetails.onboarding.interviewRating || "—"}
+                          accent={T.warn}
+                        />
+                        <InfoCell
+                          label="Joining date"
+                          value={fmtDate(
+                            empDetails.onboarding.joiningDate ||
+                              empDetails.profile.joiningDate,
+                          )}
+                        />
+                        <InfoCell
+                          label="Probation end"
+                          value={
+                            fmtDate(empDetails.onboarding.probationEndDate) ||
+                            "Completed"
+                          }
+                        />
                       </div>
-
-                      {/* Exit Reason & Feedback */}
-                      {empDetails.offboarding.exitReason && (
-                        <div className="p-3.5 bg-muted/20 rounded-xl border text-xs">
-                          <span className="text-[10px] font-extrabold text-muted-foreground uppercase block mb-1">Exit Reason & Feedback</span>
-                          <p className="text-foreground font-medium">{empDetails.offboarding.exitReason}</p>
+                      {empDetails.onboarding.interviewNotes && (
+                        <div
+                          style={{
+                            background: T.mutedBg,
+                            borderRadius: 8,
+                            border: `1px solid ${T.borderLight}`,
+                            padding: "12px 14px",
+                          }}
+                        >
+                          <div
+                            style={{
+                              fontSize: 10.5,
+                              fontWeight: 600,
+                              color: T.muted,
+                              marginBottom: 4,
+                            }}
+                          >
+                            Interview notes
+                          </div>
+                          <p
+                            style={{
+                              margin: 0,
+                              fontSize: 12,
+                              color: T.navyMid,
+                              lineHeight: 1.6,
+                            }}
+                          >
+                            {empDetails.onboarding.interviewNotes}
+                          </p>
                         </div>
                       )}
-
-                      {/* HR Exit Remarks & Notes */}
-                      {empDetails.offboarding.exitNotes && (
-                        <div className="p-3.5 bg-rose-500/5 dark:bg-rose-950/20 rounded-xl border border-rose-500/20 text-xs">
-                          <span className="text-[10px] font-extrabold text-rose-600 dark:text-rose-400 uppercase block mb-1">HR Audit & Exit Remarks</span>
-                          <p className="text-foreground font-medium">{empDetails.offboarding.exitNotes}</p>
-                        </div>
-                      )}
-                    </Card>
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns:
+                            "repeat(auto-fit,minmax(160px,1fr))",
+                          gap: 8,
+                        }}
+                      >
+                        {[
+                          {
+                            label: "Orientation completed",
+                            done: empDetails.onboarding.orientationCompleted,
+                          },
+                          {
+                            label: "Documents verified",
+                            done: empDetails.onboarding.documentsVerified,
+                          },
+                          {
+                            label: "Welcome kit issued",
+                            done: empDetails.onboarding.welcomeKitIssued,
+                          },
+                        ].map((c) => (
+                          <div
+                            key={c.label}
+                            style={{
+                              padding: "10px 12px",
+                              borderRadius: 8,
+                              border: `1px solid ${c.done ? "#6EE7B7" : T.borderLight}`,
+                              background: c.done ? T.successBg : T.mutedBg,
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              fontSize: 12,
+                              fontWeight: 600,
+                              color: c.done ? T.success : T.muted,
+                            }}
+                          >
+                            {c.label}
+                            <CheckCircle2
+                              size={14}
+                              style={{ opacity: c.done ? 1 : 0.3 }}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   )}
-                </TabsContent>
-              </Tabs>
+
+                  {detailTab === "transfers" && (
+                    <div
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 12,
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontSize: 13,
+                            fontWeight: 700,
+                            color: T.navy,
+                          }}
+                        >
+                          Transfer History ({empDetails.transfers.length})
+                        </span>
+                        <BtnPrimary
+                          onClick={() => {
+                            setDetailsOpen(false);
+                            openTransfer(empDetails.profile as any);
+                          }}
+                          style={{
+                            height: 30,
+                            fontSize: 11,
+                            padding: "0 10px",
+                          }}
+                        >
+                          <Plus size={11} /> New Transfer
+                        </BtnPrimary>
+                      </div>
+                      {empDetails.transfers.length === 0 ? (
+                        <div
+                          style={{
+                            padding: 32,
+                            textAlign: "center",
+                            color: T.muted,
+                            fontSize: 12,
+                            background: T.mutedBg,
+                            borderRadius: 10,
+                          }}
+                        >
+                          No transfers recorded yet.
+                        </div>
+                      ) : (
+                        empDetails.transfers.map((t) => (
+                          <div
+                            key={t.id}
+                            style={{ ...cardStyle, padding: "14px 16px" }}
+                          >
+                            <div
+                              style={{
+                                display: "flex",
+                                flexWrap: "wrap",
+                                alignItems: "center",
+                                gap: 8,
+                                marginBottom: 10,
+                                paddingBottom: 10,
+                                borderBottom: `1px solid ${T.borderLight}`,
+                              }}
+                            >
+                              <span
+                                style={{
+                                  ...pillBase,
+                                  color: T.blue,
+                                  background: T.blueLight,
+                                  borderColor: T.blueMid,
+                                  textTransform: "capitalize" as const,
+                                }}
+                              >
+                                {t.transferType.replace("_", " ")}
+                              </span>
+                              <span
+                                style={{
+                                  fontSize: 12,
+                                  fontWeight: 600,
+                                  color: T.navy,
+                                }}
+                              >
+                                Effective: {fmtDate(t.effectiveDate)}
+                              </span>
+                              <span
+                                style={{
+                                  fontSize: 11,
+                                  color: T.muted,
+                                  marginLeft: "auto",
+                                }}
+                              >
+                                By: {t.createdBy}
+                              </span>
+                            </div>
+                            <div
+                              className="elc-info-grid"
+                              style={{
+                                gridTemplateColumns:
+                                  "repeat(auto-fit,minmax(130px,1fr))",
+                              }}
+                            >
+                              <InfoCell
+                                label="Department"
+                                value={
+                                  <>
+                                    <span style={{ color: T.muted }}>
+                                      {t.fromDepartmentName}
+                                    </span>
+                                    <span style={{ color: T.blue }}>
+                                      {" "}
+                                      → {t.toDepartmentName}
+                                    </span>
+                                  </>
+                                }
+                              />
+                              <InfoCell
+                                label="Designation"
+                                value={
+                                  <>
+                                    <span style={{ color: T.muted }}>
+                                      {t.fromDesignationName}
+                                    </span>
+                                    <span style={{ color: T.blue }}>
+                                      {" "}
+                                      → {t.toDesignationName}
+                                    </span>
+                                  </>
+                                }
+                              />
+                              <InfoCell
+                                label="Manager"
+                                value={
+                                  <>
+                                    <span style={{ color: T.muted }}>
+                                      {t.fromManagerName}
+                                    </span>
+                                    <span style={{ color: T.blue }}>
+                                      {" "}
+                                      → {t.toManagerName}
+                                    </span>
+                                  </>
+                                }
+                              />
+                              <InfoCell
+                                label="Location"
+                                value={
+                                  <>
+                                    <span style={{ color: T.muted }}>
+                                      {t.fromLocationName}
+                                    </span>
+                                    <span style={{ color: T.blue }}>
+                                      {" "}
+                                      → {t.toLocationName}
+                                    </span>
+                                  </>
+                                }
+                              />
+                            </div>
+                            {t.transferReason && (
+                              <div
+                                style={{
+                                  marginTop: 10,
+                                  fontSize: 11.5,
+                                  color: T.muted,
+                                  background: T.mutedBg,
+                                  borderRadius: 6,
+                                  padding: "8px 12px",
+                                  borderLeft: `3px solid ${T.blue}`,
+                                }}
+                              >
+                                {t.transferReason}
+                              </div>
+                            )}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
+
+                  {detailTab === "offboarding" && (
+                    <div
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 14,
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontSize: 13,
+                            fontWeight: 700,
+                            color: T.navy,
+                          }}
+                        >
+                          Offboarding & Exit
+                        </span>
+                        <BtnOutline
+                          onClick={openOffbEdit}
+                          danger
+                          style={{
+                            height: 30,
+                            fontSize: 11,
+                            padding: "0 10px",
+                          }}
+                        >
+                          <Edit size={11} /> Manage
+                        </BtnOutline>
+                      </div>
+                      {!empDetails.offboarding ? (
+                        <div
+                          style={{
+                            padding: 32,
+                            textAlign: "center",
+                            color: T.muted,
+                            fontSize: 12,
+                            background: T.mutedBg,
+                            borderRadius: 10,
+                          }}
+                        >
+                          Employee is active — no exit record initiated.
+                          <div style={{ marginTop: 12 }}>
+                            <BtnPrimary
+                              onClick={openOffbEdit}
+                              style={{ background: T.danger }}
+                            >
+                              Initiate Offboarding
+                            </BtnPrimary>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="elc-info-grid">
+                            <InfoCell
+                              label="Exit type"
+                              value={empDetails.offboarding.exitType}
+                              accent={T.danger}
+                            />
+                            <InfoCell
+                              label="Resignation date"
+                              value={fmtDate(
+                                empDetails.offboarding.resignationDate,
+                              )}
+                            />
+                            <InfoCell
+                              label="Notice period"
+                              value={`${empDetails.offboarding.noticePeriodDays} days`}
+                            />
+                            <InfoCell
+                              label="Relieving date"
+                              value={fmtDate(
+                                empDetails.offboarding.relievingDate,
+                              )}
+                            />
+                            <InfoCell
+                              label="Last working day"
+                              value={fmtDate(
+                                empDetails.offboarding.lastWorkingDay,
+                              )}
+                            />
+                            <InfoCell
+                              label="Exit interviewer"
+                              value={
+                                empDetails.offboarding.exitInterviewerName ||
+                                "—"
+                              }
+                            />
+                            <InfoCell
+                              label="F&F status"
+                              value={empDetails.offboarding.fnfStatus}
+                              accent={T.warn}
+                            />
+                          </div>
+                          <div
+                            style={{
+                              padding: "10px 12px",
+                              borderRadius: 8,
+                              border: `1px solid ${empDetails.offboarding.assetsReturned ? "#6EE7B7" : T.dangerMid}`,
+                              background: empDetails.offboarding.assetsReturned
+                                ? T.successBg
+                                : T.dangerBg,
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              fontSize: 12,
+                              fontWeight: 600,
+                              color: empDetails.offboarding.assetsReturned
+                                ? T.success
+                                : T.danger,
+                            }}
+                          >
+                            Assets & hardware returned
+                            <CheckCircle2
+                              size={14}
+                              style={{
+                                opacity: empDetails.offboarding.assetsReturned
+                                  ? 1
+                                  : 0.3,
+                              }}
+                            />
+                          </div>
+                          {empDetails.offboarding.exitReason && (
+                            <div
+                              style={{
+                                background: T.mutedBg,
+                                borderRadius: 8,
+                                border: `1px solid ${T.borderLight}`,
+                                padding: "12px 14px",
+                                borderLeft: `3px solid ${T.danger}`,
+                              }}
+                            >
+                              <div
+                                style={{
+                                  fontSize: 10.5,
+                                  fontWeight: 600,
+                                  color: T.muted,
+                                  marginBottom: 4,
+                                }}
+                              >
+                                Exit reason
+                              </div>
+                              <p
+                                style={{
+                                  margin: 0,
+                                  fontSize: 12,
+                                  color: T.navyMid,
+                                }}
+                              >
+                                {empDetails.offboarding.exitReason}
+                              </p>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        {/* ── Transfer Modal ─────────────────────────────────────────── */}
+        <Dialog open={transferOpen} onOpenChange={setTransferOpen}>
+          <DialogContent
+            style={{ maxWidth: 480, borderRadius: 14, padding: "22px 24px" }}
+          >
+            <div style={{ marginBottom: 16 }}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  marginBottom: 4,
+                }}
+              >
+                <ArrowLeftRight size={16} style={{ color: T.blue }} />
+                <span style={{ fontSize: 15, fontWeight: 800, color: T.navy }}>
+                  Transfer Employee
+                </span>
+              </div>
+              <p style={{ margin: 0, fontSize: 11.5, color: T.muted }}>
+                {transferTarget?.name} — department, role, location or manager
+                reassignment
+              </p>
             </div>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* TRANSFER EMPLOYEE MODAL */}
-      <Dialog open={transferModalOpen} onOpenChange={setTransferModalOpen}>
-        <DialogContent className="max-w-lg rounded-3xl p-6">
-          <DialogHeader>
-            <DialogTitle className="text-lg font-black flex items-center gap-2">
-              <ArrowLeftRight className="w-5 h-5 text-indigo-600" /> Transfer Employee: {transferTargetEmp?.name}
-            </DialogTitle>
-            <DialogDescription className="text-xs">
-              Reassign employee's department, designation, branch location, or reporting manager with full audit tracking.
-            </DialogDescription>
-          </DialogHeader>
-
-          <form onSubmit={handleExecuteTransfer} className="space-y-4 mt-2">
-            <div className="grid grid-cols-2 gap-3 text-xs">
-              {/* Transfer Type */}
-              <div className="space-y-1">
-                <label className="font-bold text-foreground block">Transfer Type</label>
-                <select
-                  value={transferForm.transferType}
-                  onChange={(e) => setTransferForm({ ...transferForm, transferType: e.target.value })}
-                  className="w-full h-9 px-3 bg-background border border-border rounded-xl font-semibold cursor-pointer"
+            <form
+              onSubmit={execTransfer}
+              style={{ display: "flex", flexDirection: "column", gap: 12 }}
+            >
+              <div className="elc-form-grid2">
+                <div>
+                  <FormLabel>Transfer type</FormLabel>
+                  <FormSelect
+                    value={transferForm.transferType}
+                    onChange={(e: any) =>
+                      setTransferForm({
+                        ...transferForm,
+                        transferType: e.target.value,
+                      })
+                    }
+                  >
+                    <option value="department_change">Department change</option>
+                    <option value="location_transfer">Location transfer</option>
+                    <option value="promotion">Promotion</option>
+                    <option value="manager_change">Manager reassignment</option>
+                  </FormSelect>
+                </div>
+                <div>
+                  <FormLabel>Effective date</FormLabel>
+                  <FormInput
+                    type="date"
+                    value={transferForm.effectiveDate}
+                    onChange={(e: any) =>
+                      setTransferForm({
+                        ...transferForm,
+                        effectiveDate: e.target.value,
+                      })
+                    }
+                    required
+                  />
+                </div>
+              </div>
+              <div>
+                <FormLabel>New department</FormLabel>
+                <FormSelect
+                  value={transferForm.toDepartmentId}
+                  onChange={(e: any) =>
+                    setTransferForm({
+                      ...transferForm,
+                      toDepartmentId: e.target.value,
+                    })
+                  }
                 >
-                  <option value="department_change">Department Change</option>
-                  <option value="location_transfer">Location Branch Transfer</option>
-                  <option value="promotion">Promotion / Role Change</option>
-                  <option value="manager_change">Reporting Manager Reassignment</option>
-                </select>
-              </div>
-
-              {/* Effective Date */}
-              <div className="space-y-1">
-                <label className="font-bold text-foreground block">Effective Date</label>
-                <Input
-                  type="date"
-                  value={transferForm.effectiveDate}
-                  onChange={(e) => setTransferForm({ ...transferForm, effectiveDate: e.target.value })}
-                  required
-                  className="h-9 rounded-xl text-xs font-semibold bg-background"
-                />
-              </div>
-            </div>
-
-            {/* Target Department */}
-            <div className="space-y-1 text-xs">
-              <label className="font-bold text-foreground block">New Target Department</label>
-              <select
-                value={transferForm.toDepartmentId}
-                onChange={(e) => setTransferForm({ ...transferForm, toDepartmentId: e.target.value })}
-                className="w-full h-9 px-3 bg-background border border-border rounded-xl font-semibold cursor-pointer"
-              >
-                <option value="">-- Keep Current Department --</option>
-                {departments.map((d) => (
-                  <option key={d.id} value={d.id}>{d.name}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Target Designation */}
-            <div className="space-y-1 text-xs">
-              <label className="font-bold text-foreground block">New Target Designation</label>
-              <select
-                value={transferForm.toDesignationId}
-                onChange={(e) => setTransferForm({ ...transferForm, toDesignationId: e.target.value })}
-                className="w-full h-9 px-3 bg-background border border-border rounded-xl font-semibold cursor-pointer"
-              >
-                <option value="">-- Keep Current Designation --</option>
-                {designations.map((d) => (
-                  <option key={d.id} value={d.id}>{d.name}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Target Location */}
-            <div className="space-y-1 text-xs">
-              <label className="font-bold text-foreground block">New Branch / Work Location</label>
-              <select
-                value={transferForm.toLocationId}
-                onChange={(e) => setTransferForm({ ...transferForm, toLocationId: e.target.value })}
-                className="w-full h-9 px-3 bg-background border border-border rounded-xl font-semibold cursor-pointer"
-              >
-                <option value="">-- Keep Current Location --</option>
-                {locations.map((l) => (
-                  <option key={l.id} value={l.id}>{l.name}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Target Reporting Manager */}
-            <div className="space-y-1 text-xs">
-              <label className="font-bold text-foreground block">New Target Reporting Manager</label>
-              <select
-                value={transferForm.toReportingManagerId}
-                onChange={(e) => setTransferForm({ ...transferForm, toReportingManagerId: e.target.value })}
-                className="w-full h-9 px-3 bg-background border border-border rounded-xl font-semibold cursor-pointer"
-              >
-                <option value="">-- Keep Current Reporting Manager --</option>
-                {employees
-                  .filter((m) => m.id !== transferTargetEmp?.id)
-                  .map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name} {m.departmentName ? `(${m.departmentName})` : ''}
+                  <option value="">Keep current</option>
+                  {departments.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name}
                     </option>
                   ))}
-              </select>
-            </div>
-
-            {/* Reason for Transfer */}
-            <div className="space-y-1 text-xs">
-              <label className="font-bold text-foreground block">Transfer Reason & Justification</label>
-              <Input
-                placeholder="e.g. Promoted to Core Tech Team / Branch Relocation"
-                value={transferForm.transferReason}
-                onChange={(e) => setTransferForm({ ...transferForm, transferReason: e.target.value })}
-                required
-                className="h-9 rounded-xl text-xs font-semibold bg-background"
-              />
-            </div>
-
-            <DialogFooter className="pt-2">
-              <Button type="button" variant="outline" onClick={() => setTransferModalOpen(false)} className="rounded-xl text-xs font-bold">
-                Cancel
-              </Button>
-              <Button type="submit" disabled={transferSubmitting} className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold gap-1.5">
-                {transferSubmitting ? 'Executing Transfer...' : 'Confirm & Execute Transfer'}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      {/* EDIT ONBOARDING MODAL */}
-      <Dialog open={onboardingModalOpen} onOpenChange={setOnboardingModalOpen}>
-        <DialogContent className="max-w-md rounded-3xl p-6">
-          <DialogHeader>
-            <DialogTitle className="text-base font-black flex items-center gap-2">
-              <UserPlus className="w-5 h-5 text-sky-500" /> Edit Onboarding & Interview Records
-            </DialogTitle>
-          </DialogHeader>
-
-          <form onSubmit={handleSaveOnboarding} className="space-y-3 mt-2 text-xs">
-            <div className="space-y-1">
-              <label className="font-bold text-foreground block">Interviewer Name (Manager / Lead)</label>
-              <Input
-                value={onboardingForm.interviewerName}
-                onChange={(e) => setOnboardingForm({ ...onboardingForm, interviewerName: e.target.value })}
-                placeholder="e.g. Harsh Gawali / Select manager below"
-                className="h-9 rounded-xl bg-background text-xs"
-                list="interviewer-managers-list"
-              />
-              <datalist id="interviewer-managers-list">
-                {managers.map((m) => (
-                  <option key={m.id} value={m.name}>
-                    {m.designation ? `(${m.designation})` : ''} {m.department ? `- ${m.department}` : ''}
-                  </option>
-                ))}
-              </datalist>
-            </div>
-            <div className="space-y-1">
-              <label className="font-bold text-foreground block">Onboarded By (HR Lead)</label>
-              <Input
-                value={onboardingForm.onboardedByName}
-                onChange={(e) => setOnboardingForm({ ...onboardingForm, onboardedByName: e.target.value })}
-                className="h-9 rounded-xl bg-background text-xs"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <label className="font-bold text-foreground block">Interview Date</label>
-                <Input
-                  type="date"
-                  value={onboardingForm.interviewDate}
-                  onChange={(e) => setOnboardingForm({ ...onboardingForm, interviewDate: e.target.value })}
-                  className="h-9 rounded-xl bg-background text-xs"
-                />
+                </FormSelect>
               </div>
-              <div className="space-y-1">
-                <label className="font-bold text-foreground block">Interview Rating</label>
-                <Input
-                  value={onboardingForm.interviewRating}
-                  onChange={(e) => setOnboardingForm({ ...onboardingForm, interviewRating: e.target.value })}
-                  className="h-9 rounded-xl bg-background text-xs"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <label className="font-bold text-foreground block">Joining Date</label>
-                <Input
-                  type="date"
-                  value={onboardingForm.joiningDate}
-                  onChange={(e) => setOnboardingForm({ ...onboardingForm, joiningDate: e.target.value })}
-                  className="h-9 rounded-xl bg-background text-xs"
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="font-bold text-foreground block">Probation End Date</label>
-                <Input
-                  type="date"
-                  value={onboardingForm.probationEndDate}
-                  onChange={(e) => setOnboardingForm({ ...onboardingForm, probationEndDate: e.target.value })}
-                  className="h-9 rounded-xl bg-background text-xs"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-1">
-              <label className="font-bold text-foreground block">Interview & Selection Notes</label>
-              <Input
-                value={onboardingForm.interviewNotes}
-                onChange={(e) => setOnboardingForm({ ...onboardingForm, interviewNotes: e.target.value })}
-                className="h-9 rounded-xl bg-background text-xs"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="font-bold text-foreground block">Onboarding Remarks & Audit Notes</label>
-              <Input
-                value={onboardingForm.notes}
-                onChange={(e) => setOnboardingForm({ ...onboardingForm, notes: e.target.value })}
-                placeholder="e.g. Background check completed, laptop handed over"
-                className="h-9 rounded-xl bg-background text-xs"
-              />
-            </div>
-
-            <div className="space-y-2 pt-2 border-t">
-              <label className="flex items-center gap-2 font-bold cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={onboardingForm.orientationCompleted}
-                  onChange={(e) => setOnboardingForm({ ...onboardingForm, orientationCompleted: e.target.checked })}
-                  className="rounded"
-                />
-                Orientation Session Completed
-              </label>
-              <label className="flex items-center gap-2 font-bold cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={onboardingForm.documentsVerified}
-                  onChange={(e) => setOnboardingForm({ ...onboardingForm, documentsVerified: e.target.checked })}
-                  className="rounded"
-                />
-                KYC & Documents Verified
-              </label>
-              <label className="flex items-center gap-2 font-bold cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={onboardingForm.welcomeKitIssued}
-                  onChange={(e) => setOnboardingForm({ ...onboardingForm, welcomeKitIssued: e.target.checked })}
-                  className="rounded"
-                />
-                Welcome Kit & Laptop Issued
-              </label>
-            </div>
-
-            <DialogFooter className="pt-3">
-              <Button type="button" variant="outline" onClick={() => setOnboardingModalOpen(false)} className="rounded-xl text-xs font-bold">
-                Cancel
-              </Button>
-              <Button type="submit" className="bg-sky-600 hover:bg-sky-700 text-white rounded-xl text-xs font-bold">
-                Save Onboarding Records
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      {/* EDIT OFFBOARDING MODAL */}
-      <Dialog open={offboardingModalOpen} onOpenChange={setOnboardingModalOpen}>
-        <DialogContent className="max-w-md rounded-3xl p-6">
-          <DialogHeader>
-            <DialogTitle className="text-base font-black flex items-center gap-2 text-rose-600">
-              <UserMinus className="w-5 h-5 text-rose-500" /> Manage Employee Exit & Offboarding
-            </DialogTitle>
-          </DialogHeader>
-
-          <form onSubmit={handleSaveOffboarding} className="space-y-3 mt-2 text-xs">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <label className="font-bold text-foreground block">Exit Type</label>
-                <select
-                  value={offboardingForm.exitType}
-                  onChange={(e) => setOffboardingForm({ ...offboardingForm, exitType: e.target.value })}
-                  className="w-full h-9 px-3 bg-background border border-border rounded-xl font-semibold cursor-pointer"
+              <div>
+                <FormLabel>New designation</FormLabel>
+                <FormSelect
+                  value={transferForm.toDesignationId}
+                  onChange={(e: any) =>
+                    setTransferForm({
+                      ...transferForm,
+                      toDesignationId: e.target.value,
+                    })
+                  }
                 >
-                  <option value="resignation">Resignation</option>
-                  <option value="termination">Termination</option>
-                  <option value="contract_end">Contract End</option>
-                  <option value="retirement">Retirement</option>
-                </select>
+                  <option value="">Keep current</option>
+                  {designations.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name}
+                    </option>
+                  ))}
+                </FormSelect>
               </div>
-
-              <div className="space-y-1">
-                <label className="font-bold text-foreground block">Lifecycle Status</label>
-                <select
-                  value={offboardingForm.updateEmployeeStatus}
-                  onChange={(e) => setOffboardingForm({ ...offboardingForm, updateEmployeeStatus: e.target.value as any })}
-                  className="w-full h-9 px-3 bg-background border border-border rounded-xl font-semibold cursor-pointer"
+              <div>
+                <FormLabel>New location</FormLabel>
+                <FormSelect
+                  value={transferForm.toLocationId}
+                  onChange={(e: any) =>
+                    setTransferForm({
+                      ...transferForm,
+                      toLocationId: e.target.value,
+                    })
+                  }
                 >
-                  <option value="notice">In Notice Period</option>
-                  <option value="exit">Offboarded / Exit</option>
-                  <option value="alumni">Alumni</option>
-                  <option value="active">Active (Cancel Exit)</option>
-                </select>
+                  <option value="">Keep current</option>
+                  {locations.map((l) => (
+                    <option key={l.id} value={l.id}>
+                      {l.name}
+                    </option>
+                  ))}
+                </FormSelect>
               </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <label className="font-bold text-foreground block">Resignation Date</label>
-                <Input
-                  type="date"
-                  value={offboardingForm.resignationDate}
-                  onChange={(e) => setOffboardingForm({ ...offboardingForm, resignationDate: e.target.value })}
-                  className="h-9 rounded-xl bg-background text-xs"
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="font-bold text-foreground block">Notice Period (Days)</label>
-                <Input
-                  type="number"
-                  value={offboardingForm.noticePeriodDays}
-                  onChange={(e) => setOffboardingForm({ ...offboardingForm, noticePeriodDays: e.target.value })}
-                  className="h-9 rounded-xl bg-background text-xs"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <label className="font-bold text-foreground block">Relieving Date</label>
-                <Input
-                  type="date"
-                  value={offboardingForm.relievingDate}
-                  onChange={(e) => setOffboardingForm({ ...offboardingForm, relievingDate: e.target.value })}
-                  className="h-9 rounded-xl bg-background text-xs"
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="font-bold text-foreground block">Last Working Day</label>
-                <Input
-                  type="date"
-                  value={offboardingForm.lastWorkingDay}
-                  onChange={(e) => setOffboardingForm({ ...offboardingForm, lastWorkingDay: e.target.value })}
-                  className="h-9 rounded-xl bg-background text-xs"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <label className="font-bold text-foreground block">Exit Interviewer Name</label>
-                <Input
-                  value={offboardingForm.exitInterviewerName}
-                  onChange={(e) => setOffboardingForm({ ...offboardingForm, exitInterviewerName: e.target.value })}
-                  placeholder="e.g. HR Lead / Manager"
-                  className="h-9 rounded-xl bg-background text-xs"
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="font-bold text-foreground block">F&F Settlement Status</label>
-                <select
-                  value={offboardingForm.fnfStatus}
-                  onChange={(e) => setOffboardingForm({ ...offboardingForm, fnfStatus: e.target.value })}
-                  className="w-full h-9 px-3 bg-background border border-border rounded-xl font-semibold cursor-pointer"
+              <div>
+                <FormLabel>New reporting manager</FormLabel>
+                <FormSelect
+                  value={transferForm.toReportingManagerId}
+                  onChange={(e: any) =>
+                    setTransferForm({
+                      ...transferForm,
+                      toReportingManagerId: e.target.value,
+                    })
+                  }
                 >
-                  <option value="pending">Pending</option>
-                  <option value="processing">Processing</option>
-                  <option value="completed">Completed</option>
-                  <option value="hold">On Hold</option>
-                </select>
+                  <option value="">Keep current</option>
+                  {employees
+                    .filter((m) => m.id !== transferTarget?.id)
+                    .map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name}
+                        {m.departmentName ? ` (${m.departmentName})` : ""}
+                      </option>
+                    ))}
+                </FormSelect>
+              </div>
+              <div>
+                <FormLabel>Reason *</FormLabel>
+                <FormInput
+                  value={transferForm.transferReason}
+                  onChange={(e: any) =>
+                    setTransferForm({
+                      ...transferForm,
+                      transferReason: e.target.value,
+                    })
+                  }
+                  placeholder="e.g. Promoted to core team"
+                  required
+                />
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  gap: 8,
+                  justifyContent: "flex-end",
+                  paddingTop: 4,
+                }}
+              >
+                <BtnOutline onClick={() => setTransferOpen(false)}>
+                  Cancel
+                </BtnOutline>
+                <BtnPrimary type="submit" disabled={transferBusy}>
+                  {transferBusy ? "Transferring…" : "Confirm Transfer"}
+                </BtnPrimary>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
+
+        {/* ── Onboarding Edit Modal ──────────────────────────────────── */}
+        <Dialog open={onbOpen} onOpenChange={setOnbOpen}>
+          <DialogContent
+            style={{
+              maxWidth: 440,
+              borderRadius: 14,
+              padding: "22px 24px",
+              maxHeight: "90vh",
+              overflowY: "auto",
+            }}
+          >
+            <div style={{ marginBottom: 16 }}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  marginBottom: 4,
+                }}
+              >
+                <UserPlus size={16} style={{ color: T.blue }} />
+                <span style={{ fontSize: 15, fontWeight: 800, color: T.navy }}>
+                  Edit Onboarding Records
+                </span>
               </div>
             </div>
-
-            <div className="space-y-1">
-              <label className="font-bold text-foreground block">Exit Reason & Feedback</label>
-              <Input
-                placeholder="Reason for resignation / exit feedback"
-                value={offboardingForm.exitReason}
-                onChange={(e) => setOffboardingForm({ ...offboardingForm, exitReason: e.target.value })}
-                className="h-9 rounded-xl bg-background text-xs"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="font-bold text-foreground block">HR Exit & Audit Remarks</label>
-              <Input
-                placeholder="Exit interview summary, clearance notes"
-                value={offboardingForm.exitNotes}
-                onChange={(e) => setOffboardingForm({ ...offboardingForm, exitNotes: e.target.value })}
-                className="h-9 rounded-xl bg-background text-xs"
-              />
-            </div>
-
-            <div className="pt-2 border-t">
-              <label className="flex items-center gap-2 font-bold cursor-pointer text-xs">
-                <input
-                  type="checkbox"
-                  checked={offboardingForm.assetsReturned}
-                  onChange={(e) => setOffboardingForm({ ...offboardingForm, assetsReturned: e.target.checked })}
-                  className="rounded"
+            <form
+              onSubmit={saveOnb}
+              style={{ display: "flex", flexDirection: "column", gap: 12 }}
+            >
+              <div>
+                <FormLabel>Interviewer name</FormLabel>
+                <FormInput
+                  value={onbForm.interviewerName}
+                  onChange={(e: any) =>
+                    setOnbForm({ ...onbForm, interviewerName: e.target.value })
+                  }
+                  list="mgr-list"
+                  placeholder="e.g. Manager name"
                 />
-                Company Laptop & Hardware Returned
-              </label>
-            </div>
+                <datalist id="mgr-list">
+                  {managers.map((m) => (
+                    <option key={m.id} value={m.name} />
+                  ))}
+                </datalist>
+              </div>
+              <div>
+                <FormLabel>Onboarded by (HR)</FormLabel>
+                <FormInput
+                  value={onbForm.onboardedByName}
+                  onChange={(e: any) =>
+                    setOnbForm({ ...onbForm, onboardedByName: e.target.value })
+                  }
+                />
+              </div>
+              <div className="elc-form-grid2">
+                <div>
+                  <FormLabel>Interview date</FormLabel>
+                  <FormInput
+                    type="date"
+                    value={onbForm.interviewDate}
+                    onChange={(e: any) =>
+                      setOnbForm({ ...onbForm, interviewDate: e.target.value })
+                    }
+                  />
+                </div>
+                <div>
+                  <FormLabel>Rating</FormLabel>
+                  <FormInput
+                    value={onbForm.interviewRating}
+                    onChange={(e: any) =>
+                      setOnbForm({
+                        ...onbForm,
+                        interviewRating: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+              </div>
+              <div className="elc-form-grid2">
+                <div>
+                  <FormLabel>Joining date</FormLabel>
+                  <FormInput
+                    type="date"
+                    value={onbForm.joiningDate}
+                    onChange={(e: any) =>
+                      setOnbForm({ ...onbForm, joiningDate: e.target.value })
+                    }
+                  />
+                </div>
+                <div>
+                  <FormLabel>Probation end</FormLabel>
+                  <FormInput
+                    type="date"
+                    value={onbForm.probationEndDate}
+                    onChange={(e: any) =>
+                      setOnbForm({
+                        ...onbForm,
+                        probationEndDate: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+              </div>
+              <div>
+                <FormLabel>Interview notes</FormLabel>
+                <FormInput
+                  value={onbForm.interviewNotes}
+                  onChange={(e: any) =>
+                    setOnbForm({ ...onbForm, interviewNotes: e.target.value })
+                  }
+                />
+              </div>
+              <div>
+                <FormLabel>Onboarding remarks</FormLabel>
+                <FormInput
+                  value={onbForm.notes}
+                  onChange={(e: any) =>
+                    setOnbForm({ ...onbForm, notes: e.target.value })
+                  }
+                  placeholder="Laptop issued, BG check done…"
+                />
+              </div>
+              <div
+                style={{
+                  borderTop: `1px solid ${T.borderLight}`,
+                  paddingTop: 12,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 8,
+                }}
+              >
+                <CheckRow
+                  checked={onbForm.orientationCompleted}
+                  onChange={(e: any) =>
+                    setOnbForm({
+                      ...onbForm,
+                      orientationCompleted: e.target.checked,
+                    })
+                  }
+                >
+                  Orientation completed
+                </CheckRow>
+                <CheckRow
+                  checked={onbForm.documentsVerified}
+                  onChange={(e: any) =>
+                    setOnbForm({
+                      ...onbForm,
+                      documentsVerified: e.target.checked,
+                    })
+                  }
+                >
+                  Documents verified
+                </CheckRow>
+                <CheckRow
+                  checked={onbForm.welcomeKitIssued}
+                  onChange={(e: any) =>
+                    setOnbForm({
+                      ...onbForm,
+                      welcomeKitIssued: e.target.checked,
+                    })
+                  }
+                >
+                  Welcome kit issued
+                </CheckRow>
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  gap: 8,
+                  justifyContent: "flex-end",
+                  paddingTop: 4,
+                }}
+              >
+                <BtnOutline onClick={() => setOnbOpen(false)}>
+                  Cancel
+                </BtnOutline>
+                <BtnPrimary type="submit">Save Onboarding</BtnPrimary>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
 
-            <DialogFooter className="pt-3">
-              <Button type="button" variant="outline" onClick={() => setOffboardingModalOpen(false)} className="rounded-xl text-xs font-bold">
-                Cancel
-              </Button>
-              <Button type="submit" className="bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold">
-                Save Exit & Offboarding
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-    </div>
+        {/* ── Offboarding Edit Modal ─────────────────────────────────── */}
+        <Dialog open={offbOpen} onOpenChange={setOffbOpen}>
+          <DialogContent
+            style={{
+              maxWidth: 440,
+              borderRadius: 14,
+              padding: "22px 24px",
+              maxHeight: "90vh",
+              overflowY: "auto",
+            }}
+          >
+            <div style={{ marginBottom: 16 }}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  marginBottom: 4,
+                }}
+              >
+                <UserMinus size={16} style={{ color: T.danger }} />
+                <span style={{ fontSize: 15, fontWeight: 800, color: T.navy }}>
+                  Manage Exit & Offboarding
+                </span>
+              </div>
+            </div>
+            <form
+              onSubmit={saveOffb}
+              style={{ display: "flex", flexDirection: "column", gap: 12 }}
+            >
+              <div className="elc-form-grid2">
+                <div>
+                  <FormLabel>Exit type</FormLabel>
+                  <FormSelect
+                    value={offbForm.exitType}
+                    onChange={(e: any) =>
+                      setOffbForm({ ...offbForm, exitType: e.target.value })
+                    }
+                  >
+                    <option value="resignation">Resignation</option>
+                    <option value="termination">Termination</option>
+                    <option value="contract_end">Contract end</option>
+                    <option value="retirement">Retirement</option>
+                  </FormSelect>
+                </div>
+                <div>
+                  <FormLabel>Lifecycle status</FormLabel>
+                  <FormSelect
+                    value={offbForm.updateEmployeeStatus}
+                    onChange={(e: any) =>
+                      setOffbForm({
+                        ...offbForm,
+                        updateEmployeeStatus: e.target.value,
+                      })
+                    }
+                  >
+                    <option value="notice">In notice period</option>
+                    <option value="exit">Offboarded / Exit</option>
+                    <option value="alumni">Alumni</option>
+                    <option value="active">Active (cancel exit)</option>
+                  </FormSelect>
+                </div>
+              </div>
+              <div className="elc-form-grid2">
+                <div>
+                  <FormLabel>Resignation date</FormLabel>
+                  <FormInput
+                    type="date"
+                    value={offbForm.resignationDate}
+                    onChange={(e: any) =>
+                      setOffbForm({
+                        ...offbForm,
+                        resignationDate: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+                <div>
+                  <FormLabel>Notice period (days)</FormLabel>
+                  <FormInput
+                    type="number"
+                    value={offbForm.noticePeriodDays}
+                    onChange={(e: any) =>
+                      setOffbForm({
+                        ...offbForm,
+                        noticePeriodDays: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+              </div>
+              <div className="elc-form-grid2">
+                <div>
+                  <FormLabel>Relieving date</FormLabel>
+                  <FormInput
+                    type="date"
+                    value={offbForm.relievingDate}
+                    onChange={(e: any) =>
+                      setOffbForm({
+                        ...offbForm,
+                        relievingDate: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+                <div>
+                  <FormLabel>Last working day</FormLabel>
+                  <FormInput
+                    type="date"
+                    value={offbForm.lastWorkingDay}
+                    onChange={(e: any) =>
+                      setOffbForm({
+                        ...offbForm,
+                        lastWorkingDay: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+              </div>
+              <div className="elc-form-grid2">
+                <div>
+                  <FormLabel>Exit interviewer</FormLabel>
+                  <FormInput
+                    value={offbForm.exitInterviewerName}
+                    onChange={(e: any) =>
+                      setOffbForm({
+                        ...offbForm,
+                        exitInterviewerName: e.target.value,
+                      })
+                    }
+                    placeholder="HR Manager"
+                  />
+                </div>
+                <div>
+                  <FormLabel>F&F status</FormLabel>
+                  <FormSelect
+                    value={offbForm.fnfStatus}
+                    onChange={(e: any) =>
+                      setOffbForm({ ...offbForm, fnfStatus: e.target.value })
+                    }
+                  >
+                    <option value="pending">Pending</option>
+                    <option value="processing">Processing</option>
+                    <option value="completed">Completed</option>
+                    <option value="hold">On hold</option>
+                  </FormSelect>
+                </div>
+              </div>
+              <div>
+                <FormLabel>Exit reason</FormLabel>
+                <FormInput
+                  value={offbForm.exitReason}
+                  onChange={(e: any) =>
+                    setOffbForm({ ...offbForm, exitReason: e.target.value })
+                  }
+                  placeholder="Reason for exit"
+                />
+              </div>
+              <div>
+                <FormLabel>HR audit remarks</FormLabel>
+                <FormInput
+                  value={offbForm.exitNotes}
+                  onChange={(e: any) =>
+                    setOffbForm({ ...offbForm, exitNotes: e.target.value })
+                  }
+                  placeholder="Clearance notes, summary…"
+                />
+              </div>
+              <div
+                style={{
+                  borderTop: `1px solid ${T.borderLight}`,
+                  paddingTop: 12,
+                }}
+              >
+                <CheckRow
+                  checked={offbForm.assetsReturned}
+                  onChange={(e: any) =>
+                    setOffbForm({
+                      ...offbForm,
+                      assetsReturned: e.target.checked,
+                    })
+                  }
+                >
+                  Company hardware returned
+                </CheckRow>
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  gap: 8,
+                  justifyContent: "flex-end",
+                  paddingTop: 4,
+                }}
+              >
+                <BtnOutline onClick={() => setOffbOpen(false)}>
+                  Cancel
+                </BtnOutline>
+                <BtnPrimary type="submit" style={{ background: T.danger }}>
+                  Save Exit Record
+                </BtnPrimary>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
+      </div>
+    </>
   );
 }

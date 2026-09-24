@@ -1,0 +1,292 @@
+{
+  "advance_recoveries": [
+    "server/src/db/migrations/20260718000017_create_advance_recoveries.ts",
+    "server/src/modules/payroll/repositories/AdvanceRecoveryRepository.ts",
+    "server/src/modules/payroll/services/PayrollService.ts"
+  ],
+  "employee_compensation": [
+    "server/src/db/migrations/20260714000004_create_employee_compensation.ts",
+    "server/src/modules/dashboard/dashboard.service.ts"
+  ],
+  "employee_loans": [
+    "server/src/db/migrations/20260718000014_create_employee_loans.ts",
+    "server/src/db/migrations/20260816120000_extend_loan_schema.ts",
+    "server/src/modules/loans/repositories/EmployeeLoanRepository.ts",
+    "server/src/modules/loans/services/LoanService.ts",
+    "server/src/modules/payroll/controllers/PayrollRegisterController.ts",
+    "server/src/modules/payroll/repositories/EmployeeLoanRepository.ts",
+    "server/src/modules/payroll/services/LoanService.ts",
+    "server/src/modules/payroll/services/PayrollService.ts",
+    "server/src/modules/reports/fieldRegistry.ts",
+    "server/src/modules/reports/ReportQueryEngine.ts",
+    "server/src/scripts/setup_profile_schema_and_seed.ts"
+  ],
+  "employee_salary_structures": [
+    "server/src/check_duplicates.ts",
+    "server/src/db/migrations/20260718000004_create_employee_salary_structures.ts",
+    "server/src/db/migrations/20260807000200_create_enterprise_payroll_tables.ts",
+    "server/src/db/migrations/20260807_create_enterprise_payroll_tables.ts",
+    "server/src/modules/payroll/controllers/SalaryRevisionController.ts",
+    "server/src/modules/payroll/controllers/SalaryStructureController.ts",
+    "server/src/modules/payroll/repositories/EmployeeSalaryStructureRepository.ts"
+  ],
+  "final_settlement": [
+    "server/src/db/migrations/20260718000008_create_payroll_runs.ts",
+    "server/src/modules/payroll/repositories/PayrollRunRepository.ts"
+  ],
+  "full_final_settlements": [
+    "server/src/db/migrations/20260718000020_create_full_final_settlements.ts",
+    "server/src/db/migrations/20260817130000_extend_settlement_status_enum.ts",
+    "server/src/modules/payroll/repositories/FullFinalSettlementRepository.ts",
+    "server/src/modules/payroll/services/SettlementService.ts"
+  ],
+  "leave_lop_records": [
+    "server/src/db/migrations/20260727000001_add_negative_leave_policies.ts",
+    "server/src/db/migrations/20260730_create_leave_ledger_approvals_lop_tables.ts",
+    "server/src/modules/leaves/services/LeaveApprovalService.ts"
+  ],
+  "loan_repayment_schedules": [],
+  "loan_repayments": [
+    "server/src/db/migrations/20260718000015_create_loan_repayments.ts",
+    "server/src/modules/loans/repositories/LoanRepaymentRepository.ts",
+    "server/src/modules/loans/services/LoanService.ts",
+    "server/src/modules/payroll/repositories/LoanRepaymentRepository.ts"
+  ],
+  "overtime_requests": [
+    "server/src/db/migrations/20260716000012_create_overtime_requests.ts",
+    "server/src/db/migrations/20260902000002_create_ot_rules.ts",
+    "server/src/modules/attendance/repositories/OvertimeRequestRepository.ts",
+    "server/src/modules/attendance/services/AttendanceService.ts",
+    "server/src/modules/attendance/services/BiometricService.ts"
+  ],
+  "pay_component_definitions": [
+    "server/src/db/migrations/20260807000200_create_enterprise_payroll_tables.ts",
+    "server/src/modules/payroll/controllers/PayrollCycleSlabController.ts",
+    "server/src/modules/payroll/services/PayComponentService.ts"
+  ],
+  "payroll_adjustments": [
+    "server/src/db/migrations/20260718000012_create_payroll_adjustments.ts",
+    "server/src/modules/payroll/repositories/PayrollAdjustmentsRepository.ts",
+    "server/src/modules/payroll/services/PayrollService.ts"
+  ],
+  "payroll_component_audit_logs": [
+    "server/src/modules/payroll/controllers/PayrollCycleSlabController.ts"
+  ],
+  "payroll_component_conditions": [
+    "server/src/db/migrations/20260807000200_create_enterprise_payroll_tables.ts",
+    "server/src/db/migrations/20260807_create_enterprise_payroll_tables.ts"
+  ],
+  "payroll_component_group_audit_logs": [
+    "server/src/modules/payroll/controllers/PayrollCycleSlabController.ts"
+  ],
+  "payroll_component_groups": [
+    "server/src/check_duplicates.ts",
+    "server/src/db/migrations/20260805000300_create_payroll_component_system.ts",
+    "server/src/db/migrations/20260807000200_create_enterprise_payroll_tables.ts",
+    "server/src/db/migrations/20260807_create_enterprise_payroll_tables.ts",
+    "server/src/modules/payroll/controllers/PayrollCycleSlabController.ts",
+    "server/src/modules/payroll/controllers/PayrollRegisterController.ts",
+    "server/src/modules/payroll/services/PayrollComponentGroupService.ts",
+    "server/src/modules/payroll/services/PayslipService.ts",
+    "server/src/test_db_check.ts"
+  ],
+  "payroll_components": [
+    "server/src/check_duplicates.ts",
+    "server/src/db/migrations/20260805000300_create_payroll_component_system.ts",
+    "server/src/db/migrations/20260807000200_create_enterprise_payroll_tables.ts",
+    "server/src/db/migrations/20260807_create_enterprise_payroll_tables.ts",
+    "server/src/db/migrations/20260817090000_fix_payroll_earnings_deductions_fk.ts",
+    "server/src/db/migrations/20260817120000_fix_payroll_components_schema.ts",
+    "server/src/db/migrations/20260904130000_patch_payroll_components_and_earnings.ts",
+    "server/src/db/scripts/run-payroll-migration.ts",
+    "server/src/modules/payroll/controllers/PayrollCycleSlabController.ts",
+    "server/src/modules/payroll/controllers/PayrollRegisterController.ts",
+    "server/src/modules/payroll/services/PayrollComponentDefinitionService.ts",
+    "server/src/modules/payroll/services/PayrollComponentGroupService.ts",
+    "server/src/modules/payroll/services/SalaryRevisionService.ts",
+    "server/src/test_db_check.ts"
+  ],
+  "payroll_cycles": [
+    "server/src/check_duplicates.ts",
+    "server/src/db/migrations/20260718000007_create_payroll_cycles.ts",
+    "server/src/db/migrations/20260807000200_create_enterprise_payroll_tables.ts",
+    "server/src/db/migrations/20260807_create_enterprise_payroll_tables.ts",
+    "server/src/db/migrations/20260810_add_payroll_cycle_fields.ts",
+    "server/src/db/migrations/20260819000000_add_company_id_to_cycles_and_slabs.ts",
+    "server/src/modules/payroll/controllers/PayrollCycleSlabController.ts",
+    "server/src/modules/payroll/controllers/PayrollRegisterController.ts",
+    "server/src/modules/payroll/controllers/PayrollRunController.ts",
+    "server/src/modules/payroll/controllers/SalaryStructureController.ts",
+    "server/src/modules/payroll/repositories/PayrollCycleRepository.ts",
+    "server/src/modules/payroll/services/PayrollCycleService.ts",
+    "server/src/modules/payroll/services/PayrollService.ts",
+    "server/src/modules/payroll/services/SalaryCalculationService.ts",
+    "server/src/modules/settings/controllers/CompanyController.ts",
+    "server/src/modules/superadmin/superadmin.service.ts",
+    "server/src/test_db_check.ts"
+  ],
+  "payroll_deductions": [
+    "server/src/db/migrations/20260718000011_create_payroll_deductions.ts",
+    "server/src/db/migrations/20260817090000_fix_payroll_earnings_deductions_fk.ts",
+    "server/src/modules/payroll/repositories/PayrollDeductionsRepository.ts",
+    "server/src/modules/payroll/services/PayrollService.ts"
+  ],
+  "payroll_earnings": [
+    "server/src/db/migrations/20260718000010_create_payroll_earnings.ts",
+    "server/src/db/migrations/20260817090000_fix_payroll_earnings_deductions_fk.ts",
+    "server/src/db/migrations/20260904130000_patch_payroll_components_and_earnings.ts",
+    "server/src/modules/payroll/repositories/PayrollEarningsRepository.ts",
+    "server/src/modules/payroll/services/PayrollService.ts"
+  ],
+  "payroll_gratuity_rules": [
+    "server/src/modules/payroll/services/SettlementService.ts"
+  ],
+  "payroll_ledger_entries": [
+    "server/src/db/migrations/20260807000200_create_enterprise_payroll_tables.ts",
+    "server/src/modules/payroll/services/PayrollLedgerService.ts"
+  ],
+  "payroll_loan_types": [
+    "server/src/db/migrations/20260807000100_create_payroll_loan_types.ts",
+    "server/src/db/migrations/20260816120000_extend_loan_schema.ts",
+    "server/src/db/migrations/20260816121500_extend_payroll_loan_types.ts",
+    "server/src/modules/loans/services/LoanService.ts",
+    "server/src/modules/payroll/controllers/LoanTaxSettlementController.ts",
+    "server/src/modules/payroll/services/LoanService.ts"
+  ],
+  "payroll_mass_upload_logs": [
+    "server/src/db/migrations/20260817110000_create_payroll_mass_upload_logs.ts",
+    "server/src/modules/payroll/controllers/PayrollRunController.ts"
+  ],
+  "payroll_policies": [
+    "server/src/db/migrations/20260713000012_create_payroll_policies.ts",
+    "server/src/modules/payroll/controllers/PayrollSettingsController.ts",
+    "server/src/modules/settings/repositories/PayrollPolicyRepository.ts"
+  ],
+  "payroll_register_overrides": [
+    "server/src/db/migrations/20260817100000_create_payroll_register_overrides.ts",
+    "server/src/modules/payroll/controllers/PayrollRegisterController.ts",
+    "server/src/modules/payroll/services/PayrollService.ts"
+  ],
+  "payroll_run_employees": [
+    "server/src/db/migrations/20260718000009_create_payroll_run_employees.ts",
+    "server/src/modules/payroll/controllers/PayrollRunController.ts",
+    "server/src/modules/payroll/payroll.routes.ts",
+    "server/src/modules/payroll/repositories/PayrollRunEmployeeRepository.ts",
+    "server/src/modules/payroll/services/PayrollService.ts"
+  ],
+  "payroll_runs": [
+    "server/src/db/migrations/20260718000008_create_payroll_runs.ts",
+    "server/src/db/migrations/20260806_Company_switch_migration.ts",
+    "server/src/db/migrations/20260822000002_backfill_payroll_runs_company_id.ts",
+    "server/src/db/migrations/20260904160000_add_calculated_to_payroll_runs_status_enum.ts",
+    "server/src/modules/leaves/services/LeaveService.ts",
+    "server/src/modules/payroll/controllers/PayrollRunController.ts",
+    "server/src/modules/payroll/repositories/PayrollRunRepository.ts",
+    "server/src/modules/payroll/services/PayrollService.ts",
+    "server/src/modules/payroll/services/PayslipService.ts"
+  ],
+  "payroll_settings": [
+    "server/src/db/migrations/20260801000600_add_advanced_leave_type_settings.ts",
+    "server/src/db/migrations/20260801_add_leave_settings_json_columns.ts",
+    "server/src/db/migrations/20260816_create_payroll_settings.ts",
+    "server/src/modules/payroll/repositories/PayrollSettingsRepository.ts",
+    "server/src/modules/payroll/services/PayslipService.ts"
+  ],
+  "payroll_slab_components": [
+    "server/src/db/migrations/20260807000200_create_enterprise_payroll_tables.ts",
+    "server/src/db/migrations/20260807_create_enterprise_payroll_tables.ts",
+    "server/src/db/migrations/20260904130000_patch_payroll_components_and_earnings.ts"
+  ],
+  "payroll_slabs": [
+    "server/src/check_duplicates.ts",
+    "server/src/db/migrations/20260805000400_link_salary_structures_to_master_payroll.ts",
+    "server/src/db/migrations/20260805000500_add_calculation_rules_to_payroll_slabs.ts",
+    "server/src/db/migrations/20260807000200_create_enterprise_payroll_tables.ts",
+    "server/src/db/migrations/20260807_create_enterprise_payroll_tables.ts",
+    "server/src/db/migrations/20260819000000_add_company_id_to_cycles_and_slabs.ts",
+    "server/src/db/scripts/run-payroll-migration.ts",
+    "server/src/modules/payroll/controllers/PayrollCycleSlabController.ts",
+    "server/src/modules/payroll/controllers/PayrollRegisterController.ts",
+    "server/src/modules/payroll/controllers/SalaryRevisionController.ts",
+    "server/src/modules/payroll/controllers/SalaryStructureController.ts",
+    "server/src/modules/payroll/services/PayrollService.ts",
+    "server/src/modules/payroll/services/SalaryCalculationService.ts",
+    "server/src/modules/payroll/services/SalaryRevisionService.ts",
+    "server/src/test_db_check.ts"
+  ],
+  "payslip_items": [],
+  "payslips": [
+    "server/src/db/migrations/20260718000013_create_payslips.ts",
+    "server/src/db/migrations/20260719_create_marketplace_tables.ts",
+    "server/src/db/migrations/20260806_Company_switch_migration.ts",
+    "server/src/db/migrations/20260822000002_backfill_payroll_runs_company_id.ts",
+    "server/src/db/scripts/run-payroll-migration.ts",
+    "server/src/modules/dashboard/dashboard.service.ts",
+    "server/src/modules/payroll/repositories/PayslipRepository.ts",
+    "server/src/modules/payroll/services/PayrollService.ts",
+    "server/src/modules/payroll/services/PayslipService.ts",
+    "server/src/modules/reports/fieldRegistry.ts",
+    "server/src/modules/reports/ReportQueryEngine.ts"
+  ],
+  "salary_advances": [
+    "server/src/db/migrations/20260718000016_create_salary_advances.ts",
+    "server/src/modules/payroll/repositories/AdvanceRecoveryRepository.ts",
+    "server/src/modules/payroll/repositories/SalaryAdvanceRepository.ts",
+    "server/src/modules/payroll/services/PayrollService.ts"
+  ],
+  "salary_components": [
+    "server/src/db/migrations/20260718000001_create_salary_components.ts",
+    "server/src/db/migrations/20260817090000_fix_payroll_earnings_deductions_fk.ts",
+    "server/src/modules/payroll/controllers/SalaryStructureController.ts",
+    "server/src/modules/payroll/repositories/SalaryComponentRepository.ts",
+    "server/src/modules/settings/settings.routes.ts"
+  ],
+  "salary_revision_components": [
+    "server/src/db/migrations/20260718000006_create_salary_revision_components.ts",
+    "server/src/modules/payroll/repositories/SalaryRevisionComponentRepository.ts"
+  ],
+  "salary_revisions": [
+    "server/src/db/migrations/20260718000005_create_salary_revisions.ts",
+    "server/src/modules/payroll/controllers/SalaryRevisionController.ts",
+    "server/src/modules/payroll/repositories/SalaryRevisionRepository.ts",
+    "server/src/modules/payroll/services/SalaryRevisionService.ts"
+  ],
+  "salary_structure_components": [
+    "server/src/db/migrations/20260718000003_create_salary_structure_components.ts",
+    "server/src/modules/payroll/controllers/SalaryStructureController.ts",
+    "server/src/modules/payroll/repositories/SalaryStructureComponentRepository.ts"
+  ],
+  "salary_structures": [
+    "server/src/db/migrations/20260718000002_create_salary_structures.ts",
+    "server/src/db/migrations/20260805000400_link_salary_structures_to_master_payroll.ts",
+    "server/src/db/migrations/20260822000001_refactor_salary_structures_dynamic_components.ts",
+    "server/src/db/scripts/run-payroll-migration.ts",
+    "server/src/modules/leaves/services/LeaveService.ts",
+    "server/src/modules/letters/services/LetterService.ts",
+    "server/src/modules/payroll/controllers/PayrollCycleSlabController.ts",
+    "server/src/modules/payroll/controllers/PayrollRegisterController.ts",
+    "server/src/modules/payroll/controllers/SalaryRevisionController.ts",
+    "server/src/modules/payroll/controllers/SalaryStructureController.ts",
+    "server/src/modules/payroll/repositories/SalaryStructureRepository.ts",
+    "server/src/modules/payroll/services/PayrollCycleService.ts",
+    "server/src/modules/payroll/services/PayrollService.ts",
+    "server/src/modules/payroll/services/PayslipService.ts",
+    "server/src/modules/payroll/services/SalaryRevisionService.ts",
+    "server/src/modules/payroll/services/SettlementService.ts",
+    "server/src/test_db_check.ts"
+  ],
+  "tax_declarations": [
+    "server/src/db/migrations/20260718000018_create_tax_declarations.ts",
+    "server/src/modules/payroll/repositories/TaxDeclarationRepository.ts"
+  ],
+  "tax_investments": [
+    "server/src/db/migrations/20260718000019_create_tax_investments.ts",
+    "server/src/modules/payroll/repositories/TaxInvestmentRepository.ts"
+  ],
+  "travel_advances": [
+    "server/src/db/migrations/20260828000001_create_expense_management_module.ts",
+    "server/src/db/migrations/20260830190000_expense_allow_submit_without_employee.ts",
+    "server/src/modules/expenses/services/ExpenseDbService.ts",
+    "server/src/modules/expenses/services/ExpenseService.ts"
+  ]
+}

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useLocation } from 'react-router-dom';
 import {
   CalendarClock,
   Plus,
@@ -35,7 +36,9 @@ import { WeeklyRosterGrid } from '../components/WeeklyRosterGrid';
 import type { ShiftTemplate } from '../types';
 import { useCompanyStore } from '@/features/settings/store/companyStore';
 
-export function ShiftManagementPage({ pageType = 'general' }: { pageType?: 'general' | 'roster' }) {
+export function ShiftManagementPage({ pageType: propPageType }: { pageType?: 'general' | 'roster' }) {
+  const location = useLocation();
+  const pageType = propPageType ?? (location.pathname.toLowerCase().includes('roster') ? 'roster' : 'general');
   const { selectedCompanyId } = useCompanyStore();
   const {
     shifts,
@@ -124,7 +127,7 @@ export function ShiftManagementPage({ pageType = 'general' }: { pageType?: 'gene
 
   const handleDeleteShift = async (shift: any) => {
     const name = shift.shiftName || shift.shift_name || 'this shift';
-    if (confirm(`Are you sure you want to delete shift "${name}"?`)) {
+    if (await window.appConfirm(`Are you sure you want to delete shift "${name}"?`)) {
       try {
         await deleteShift(shift.id);
         showToast.success('Shift Deleted', `Shift "${name}" deleted successfully`);
@@ -312,22 +315,22 @@ export function ShiftManagementPage({ pageType = 'general' }: { pageType?: 'gene
 
       {/* Tabs & View Controls */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full space-y-4">
-        <TabsList className="bg-muted/30 p-1 rounded-xl border border-border/60 h-auto">
-          <TabsTrigger value="shifts" className="rounded-lg px-3.5 py-1.5 text-xs font-bold data-[state=active]:bg-card data-[state=active]:shadow-2xs gap-1.5">
+        <TabsList className="h-auto max-w-full justify-start gap-1 overflow-x-auto rounded-xl border border-blue-100 bg-blue-50/60 p-1 dark:border-border dark:bg-muted/30">
+          <TabsTrigger value="shifts" className="h-9 shrink-0 gap-1.5 rounded-lg px-3.5 text-xs font-semibold data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-sm">
             <LayoutGrid className="w-3.5 h-3.5" /> Shift Templates
           </TabsTrigger>
           {!isRosterPage && (
-            <TabsTrigger value="assignments" className="rounded-lg px-3.5 py-1.5 text-xs font-bold data-[state=active]:bg-card data-[state=active]:shadow-2xs gap-1.5">
+            <TabsTrigger value="assignments" className="h-9 shrink-0 gap-1.5 rounded-lg px-3.5 text-xs font-semibold data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-sm">
               <Users className="w-3.5 h-3.5" /> Assignments
             </TabsTrigger>
           )}
           {!isRosterPage && (
-            <TabsTrigger value="swaps" className="rounded-lg px-3.5 py-1.5 text-xs font-bold data-[state=active]:bg-card data-[state=active]:shadow-2xs gap-1.5">
+            <TabsTrigger value="swaps" className="h-9 shrink-0 gap-1.5 rounded-lg px-3.5 text-xs font-semibold data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-sm">
               <ArrowRightLeft className="w-3.5 h-3.5" /> Swap Requests
             </TabsTrigger>
           )}
           {isRosterPage && (
-            <TabsTrigger value="roster" className="rounded-lg px-3.5 py-1.5 text-xs font-bold data-[state=active]:bg-card data-[state=active]:shadow-2xs gap-1.5">
+            <TabsTrigger value="roster" className="h-9 shrink-0 gap-1.5 rounded-lg px-3.5 text-xs font-semibold data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-sm">
               <CalendarDays className="w-3.5 h-3.5" /> Weekly Roster
             </TabsTrigger>
           )}

@@ -66,6 +66,16 @@ export function EmployeeEditPage() {
 
   const handleSaveAll = async (e: React.FormEvent) => {
     e.preventDefault();
+    const mobile = (basicForm.mobile || '').trim();
+    const phone = (basicForm.phone || '').trim();
+    if (mobile && !/^\d{10}$/.test(mobile)) {
+      showToast.error('Mobile number must be exactly 10 digits');
+      return;
+    }
+    if (phone && !/^\d{10}$/.test(phone)) {
+      showToast.error('Phone number must be exactly 10 digits');
+      return;
+    }
     setIsSaving(true);
 
     try {
@@ -78,8 +88,8 @@ export function EmployeeEditPage() {
         lastName: basicForm.lastName,
         middleName: basicForm.middleName || null,
         email: basicForm.email,
-        mobile: basicForm.mobile || null,
-        phone: basicForm.phone || null,
+        mobile: mobile || null,
+        phone: phone || null,
         dateOfBirth: formattedDob === '' ? null : formattedDob,
         gender: basicForm.gender || null,
         nationality: basicForm.nationality || null,
@@ -102,6 +112,7 @@ export function EmployeeEditPage() {
       const personalPayload = {
         fatherName: personalForm.fatherName || null,
         motherName: personalForm.motherName || null,
+        maritalStatus: personalForm.maritalStatus || null,
         spouseName: personalForm.spouseName || null,
         childrenCount: personalForm.childrenCount !== undefined ? Number(personalForm.childrenCount) || 0 : 0,
         currentAddress: personalForm.currentAddress || null,
@@ -338,6 +349,7 @@ export function EmployeeEditPage() {
                     <option value="hr_manager">HR</option>
                     <option value="intern">Intern</option>
                     <option value="consultant">Consultant</option>
+                    <option value="finance">Finance</option>
                   </select>
                 </div>
                 <div>
@@ -365,7 +377,9 @@ export function EmployeeEditPage() {
                     onChange={(e) => setBasicForm({ ...basicForm, currentLocationId: e.target.value ? Number(e.target.value) : '', locationId: e.target.value ? Number(e.target.value) : '' })}
                   >
                     <option value="">-- Select Office Location --</option>
-                    {(locationsData?.items || locationsData?.data || [])?.map((loc: any) => (
+                    {(locationsData?.items || locationsData?.data || [])
+                      ?.filter((loc: any) => loc.status !== 'inactive' && loc.status !== 'Inactive' && loc.is_active !== 'No' && loc.isActive !== 'No')
+                      ?.map((loc: any) => (
                       <option key={loc.id} value={loc.id}>
                         {loc.name || loc.location_name || loc.code}
                       </option>
@@ -419,6 +433,21 @@ export function EmployeeEditPage() {
                     onChange={(e) => setPersonalForm({ ...personalForm, motherName: e.target.value })}
                     className="mt-1"
                   />
+                </div>
+                <div>
+                  <Label htmlFor="maritalStatus">Marital Status</Label>
+                  <select
+                    id="maritalStatus"
+                    value={personalForm.maritalStatus || ''}
+                    onChange={(e) => setPersonalForm({ ...personalForm, maritalStatus: e.target.value || null })}
+                    className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  >
+                    <option value="">-- Select Marital Status --</option>
+                    <option value="single">Single</option>
+                    <option value="married">Married</option>
+                    <option value="divorced">Divorced</option>
+                    <option value="widowed">Widowed</option>
+                  </select>
                 </div>
                 <div>
                   <Label htmlFor="spouseName">Spouse's Name</Label>

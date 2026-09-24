@@ -3,19 +3,26 @@ import { apiClient } from '@/config/api';
 import { useCompanyStore } from '@/features/settings/store/companyStore';
 import type { LocationCreate, LocationUpdate } from '@/types';
 
-export function useLocations(page = 1, pageSize = 20, search = '', type = '', status = '') {
+export function useLocations(page = 1, pageSize = 500, search = '', type = '', status = 'active') {
   const { selectedCompanyId } = useCompanyStore();
 
   return useQuery({
     queryKey: ['locations', selectedCompanyId, { page, pageSize, search, type, status }],
     queryFn: async () => {
       const response = await apiClient.get('/settings/locations', {
-        params: { page, pageSize, search, type: type || undefined, status: status || undefined },
+        params: { page, pageSize, search, type: type || undefined, status: status || 'active' },
       });
+      const raw = response.data?.data || response.data?.items || [];
+      const filtered = (status === 'all' || status === 'All')
+        ? raw
+        : (status === 'inactive' || status === 'Inactive')
+        ? raw.filter((l: any) => l.status === 'inactive' || l.status === 'Inactive' || l.is_active === 'No' || l.isActive === 'No')
+        : raw.filter((l: any) => l.status !== 'inactive' && l.status !== 'Inactive' && l.is_active !== 'No' && l.isActive !== 'No');
+
       return {
-        items: response.data.data || [],
-        meta: response.data.meta,
-        data: response.data.data || [],
+        items: filtered,
+        meta: response.data?.meta,
+        data: filtered,
       };
     },
   });

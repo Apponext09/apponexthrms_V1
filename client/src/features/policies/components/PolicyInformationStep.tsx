@@ -13,6 +13,9 @@ interface PolicyInfoData {
   reviewDate: string;
   expiryDate: string;
   status: 'draft' | 'published' | string;
+  signatureMode?: string;
+  applicableTo?: string;
+  selectedGenders?: string[];
 }
 
 interface PolicyInformationStepProps {
@@ -35,15 +38,15 @@ export const PolicyInformationStep: React.FC<PolicyInformationStepProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.title.trim()) {
-      alert('Policy Name is required.');
+      window.appAlert('Policy Name is required.');
       return;
     }
     if (!formData.documentRef.trim()) {
-      alert('Policy Reference ID is required.');
+      window.appAlert('Policy Reference ID is required.');
       return;
     }
     if (!formData.effectiveDate) {
-      alert('Effective Date is required.');
+      window.appAlert('Effective Date is required.');
       return;
     }
     onNext();
@@ -162,6 +165,88 @@ export const PolicyInformationStep: React.FC<PolicyInformationStepProps> = ({
               <option value="draft">Draft (Save for Later)</option>
               <option value="published">Publish Immediately</option>
             </select>
+          </div>
+
+          <div className="space-y-1">
+            <label className="block text-foreground font-bold">Signature / Sign-Off Mode</label>
+            <select
+              value={(formData as any).signatureMode || 'ACKNOWLEDGEMENT'}
+              onChange={(e) => onChange({ signatureMode: e.target.value as any })}
+              className="w-full h-10 rounded-md border border-input bg-background px-3 text-xs font-medium focus:ring-1 focus:ring-primary font-bold"
+            >
+              <option value="ACKNOWLEDGEMENT">Checkbox Acknowledgement Only</option>
+              <option value="E_SIGNATURE">E-Signature Required (DocuSign/Adobe/Leegality)</option>
+              <option value="BOTH">Both Checkbox Acknowledgement + E-Signature</option>
+              <option value="NONE">None (Informational Policy)</option>
+            </select>
+          </div>
+
+
+          {/* Applicable To Scope & Gender Selector */}
+          <div className="md:col-span-2 space-y-3 pt-3 border-t border-border">
+            <label className="block text-foreground font-bold">
+              Applicable To <span className="text-rose-500">*</span>
+            </label>
+            <div className="flex items-center gap-6 text-xs font-medium">
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="radio"
+                  name="applicableTo"
+                  value="all"
+                  checked={(formData.applicableTo || 'all') === 'all'}
+                  onChange={() => onChange({ applicableTo: 'all', selectedGenders: ['all'] })}
+                  className="h-4 w-4 text-primary focus:ring-primary"
+                />
+                <span className="font-bold text-foreground">All Employees</span>
+              </label>
+
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="radio"
+                  name="applicableTo"
+                  value="gender_wise"
+                  checked={formData.applicableTo === 'gender_wise'}
+                  onChange={() => onChange({
+                    applicableTo: 'gender_wise',
+                    selectedGenders: formData.selectedGenders?.filter(g => g !== 'all').length ? formData.selectedGenders : ['female']
+                  })}
+                  className="h-4 w-4 text-primary focus:ring-primary"
+                />
+                <span className="font-bold text-foreground">Gender-wise</span>
+              </label>
+            </div>
+
+            {formData.applicableTo === 'gender_wise' && (
+              <div className="p-4 rounded-xl border border-border bg-muted/20 space-y-2 mt-2">
+                <label className="block text-xs font-bold text-foreground">Select Applicable Gender(s):</label>
+                <div className="flex items-center gap-5 text-xs font-medium pt-1">
+                  {[
+                    { id: 'female', label: 'Female' },
+                    { id: 'male', label: 'Male' },
+                    { id: 'other', label: 'Other / Not Specified' },
+                  ].map((g) => {
+                    const checked = (formData.selectedGenders || []).includes(g.id);
+                    return (
+                      <label key={g.id} className="flex items-center gap-2 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(e) => {
+                            const current = (formData.selectedGenders || []).filter(x => x !== 'all');
+                            const next = e.target.checked
+                              ? [...current, g.id]
+                              : current.filter(x => x !== g.id);
+                            onChange({ selectedGenders: next.length ? next : ['female'] });
+                          }}
+                          className="rounded border-input text-primary focus:ring-primary h-4 w-4"
+                        />
+                        <span className="text-foreground font-semibold">{g.label}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

@@ -79,7 +79,13 @@ export const HRAttendanceLocationPage: React.FC = () => {
   const [locationSearch, setLocationSearch] = useState('');
   const [sortBy, setSortBy] = useState<'name' | 'code' | 'radius'>('name');
 
-  const [activeTab, setActiveTab] = useState<'mapping' | 'geofences'>('mapping');
+  const [activeTab, setActiveTab] = useState<'mapping' | 'geofences'>(
+    location.pathname === '/attendance/locations' ? 'geofences' : 'mapping',
+  );
+
+  useEffect(() => {
+    if (!isHrPath) setActiveTab(location.pathname === '/attendance/locations' ? 'geofences' : 'mapping');
+  }, [isHrPath, location.pathname]);
 
   // Load Real Data from Backend
   const loadData = async (showRefreshToast = false) => {
@@ -228,23 +234,23 @@ export const HRAttendanceLocationPage: React.FC = () => {
   };
 
   return (
-    <div className="space-y-4 pb-12 select-none">
+    <div className="-m-4 space-y-5 bg-[#F2F7FD] p-4 pb-12 font-['Plus_Jakarta_Sans',ui-sans-serif,system-ui,sans-serif] sm:-m-6 sm:p-6 dark:bg-background">
       {/* Page Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-card border border-border/80 p-4 rounded-xl shadow-2xs">
+      <div className="flex flex-col items-start justify-between gap-4 rounded-2xl border border-blue-100 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:p-5 dark:border-border dark:bg-card">
         <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-lg bg-primary/10 text-primary shrink-0">
+          <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white">
             <MapPin className="w-5 h-5" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-lg font-black text-foreground tracking-tight">
+              <h1 className="text-balance text-xl font-bold text-[#0B2545] dark:text-foreground">
                 Location Management & Mapping
               </h1>
               <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 font-bold text-[10px] px-2 py-0.5">
                 {isHrPath ? 'HR Portal' : 'Admin Portal'}
               </Badge>
             </div>
-            <p className="text-xs text-muted-foreground mt-0.5">
+            <p className="mt-1 text-pretty text-sm text-[#4A6285] dark:text-muted-foreground">
               Manage office geofence locations and assign branch access & punch permissions to employees across the organization.
             </p>
           </div>
@@ -298,179 +304,64 @@ export const HRAttendanceLocationPage: React.FC = () => {
       </div>
 
       {/* Navigation Tabs Bar */}
-      <div className="flex items-center gap-2 border-b border-border/80 pb-2">
+      <div role="group" aria-label="Location management views" className="flex w-fit max-w-full flex-wrap items-center gap-1 rounded-xl border border-blue-100 bg-blue-50/60 p-1 dark:border-border dark:bg-muted/30">
         <Button
-          variant={activeTab === 'mapping' ? 'default' : 'outline'}
+          aria-pressed={activeTab === 'mapping'}
+          variant={activeTab === 'mapping' ? 'default' : 'ghost'}
           size="sm"
-          onClick={() => setActiveTab('mapping')}
-          className={`h-8 text-xs font-bold gap-1.5 ${
+          onClick={() => { setActiveTab('mapping'); if (!isHrPath) navigate('/attendance/employee-locations'); }}
+          className={`h-9 rounded-lg text-xs font-semibold gap-1.5 ${
             activeTab === 'mapping'
-              ? 'bg-primary text-primary-foreground shadow-2xs'
-              : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
+              ? 'bg-blue-600 text-white shadow-sm hover:bg-blue-700'
+              : 'text-muted-foreground hover:bg-white hover:text-foreground dark:hover:bg-muted'
           }`}
         >
           <UserCheck className="w-3.5 h-3.5" />
-          1. Employee Access Mapping ({filteredEmployees.length})
+          Employee Access ({filteredEmployees.length})
         </Button>
 
         <Button
-          variant={activeTab === 'geofences' ? 'default' : 'outline'}
+          aria-pressed={activeTab === 'geofences'}
+          variant={activeTab === 'geofences' ? 'default' : 'ghost'}
           size="sm"
-          onClick={() => setActiveTab('geofences')}
-          className={`h-8 text-xs font-bold gap-1.5 ${
+          onClick={() => { setActiveTab('geofences'); if (!isHrPath) navigate('/attendance/locations'); }}
+          className={`h-9 rounded-lg text-xs font-semibold gap-1.5 ${
             activeTab === 'geofences'
-              ? 'bg-primary text-primary-foreground shadow-2xs'
-              : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
+              ? 'bg-blue-600 text-white shadow-sm hover:bg-blue-700'
+              : 'text-muted-foreground hover:bg-white hover:text-foreground dark:hover:bg-muted'
           }`}
         >
           <MapPin className="w-3.5 h-3.5" />
-          2. Office & Geofence Locations ({stats.activeLocationsCount})
+          Office & Geofences ({stats.activeLocationsCount})
         </Button>
       </div>
 
-      {/* Quick KPI Stat Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="border border-border/80 bg-card shadow-2xs p-4 flex items-center justify-between">
-          <div>
-            <p className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">Total Employees</p>
-            <h3 className="text-2xl font-black text-foreground mt-1">{stats.total}</h3>
-            <p className="text-[10px] text-muted-foreground mt-0.5">Matching Filter Selection</p>
-          </div>
-          <div className="p-2.5 rounded-lg bg-primary/10 text-primary shrink-0">
-            <Users className="w-5 h-5" />
-          </div>
-        </Card>
 
-        <Card className="border border-border/80 bg-card shadow-2xs p-4 flex items-center justify-between">
-          <div>
-            <p className="text-[10px] font-bold uppercase text-primary tracking-wider">Multi-Branch Access</p>
-            <h3 className="text-2xl font-black text-primary mt-1">{stats.multiBranch}</h3>
-            <p className="text-[10px] text-muted-foreground mt-0.5">Assigned &gt; 1 Location</p>
-          </div>
-          <div className="p-2.5 rounded-lg bg-primary/10 text-primary shrink-0">
-            <Building2 className="w-5 h-5" />
-          </div>
-        </Card>
-
-        <Card className="border border-border/80 bg-card shadow-2xs p-4 flex items-center justify-between">
-          <div>
-            <p className="text-[10px] font-bold uppercase text-emerald-600 tracking-wider">Remote / Field Enabled</p>
-            <h3 className="text-2xl font-black text-emerald-600 mt-1">{stats.remoteEnabled}</h3>
-            <p className="text-[10px] text-muted-foreground mt-0.5">WFH &amp; Field Punch Allowed</p>
-          </div>
-          <div className="p-2.5 rounded-lg bg-emerald-50 text-emerald-600 border border-emerald-200 shrink-0">
-            <Navigation className="w-5 h-5" />
-          </div>
-        </Card>
-
-        <Card className="border border-border/80 bg-card shadow-2xs p-4 flex items-center justify-between">
-          <div>
-            <p className="text-[10px] font-bold uppercase text-indigo-600 tracking-wider">Active Geofences</p>
-            <h3 className="text-2xl font-black text-indigo-600 mt-1">{stats.activeLocationsCount}</h3>
-            <p className="text-[10px] text-muted-foreground mt-0.5">Configured Office Boundaries</p>
-          </div>
-          <div className="p-2.5 rounded-lg bg-indigo-50 text-indigo-600 border border-indigo-200 shrink-0">
-            <Globe className="w-5 h-5" />
-          </div>
-        </Card>
-      </div>
 
       {/* Tab 1: Employee Access Mapping */}
       {activeTab === 'mapping' && (
-        <div className="space-y-4 animate-in fade-in-50 duration-200">
-          {/* Filters & Action Bar */}
-          <Card className="border border-border/80 shadow-2xs bg-card p-3 space-y-3">
-            <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
-              {/* Search Box */}
-              <div className="relative flex-1 min-w-[240px]">
-                <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
-                <Input
-                  type="text"
-                  placeholder="Search employee name, code, designation, email..."
-                  value={filters.search}
-                  onChange={(e) => setFilters((prev) => ({ ...prev, search: e.target.value }))}
-                  className="pl-8 h-8 text-xs font-medium bg-background border-border/80"
-                />
-                {filters.search && (
-                  <button
-                    onClick={() => setFilters((prev) => ({ ...prev, search: '' }))}
-                    className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                )}
-              </div>
-
-              {/* Filter Controls */}
-              <div className="flex flex-wrap items-center gap-2">
-                {/* Company Select Filter */}
-                <select
-                  value={companyFilter}
-                  onChange={(e) => setCompanyFilter(e.target.value)}
-                  className="h-8 text-xs font-semibold px-2.5 rounded-md border border-border/80 bg-background text-foreground focus:outline-none max-w-[160px] truncate"
+        <div className="space-y-4">
+          {/* Search Bar */}
+          <Card className="border border-border/80 shadow-2xs bg-card p-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+              <Input
+                type="text"
+                placeholder="Search employee name, code, designation, email..."
+                value={filters.search}
+                onChange={(e) => setFilters((prev) => ({ ...prev, search: e.target.value }))}
+                className="pl-8 h-8 text-xs font-medium bg-background border-border/80"
+              />
+              {filters.search && (
+                <button
+                  type="button"
+                  aria-label="Clear employee search"
+                  onClick={() => setFilters((prev) => ({ ...prev, search: '' }))}
+                  className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground"
                 >
-                  <option value="all">All Companies ({companies.length})</option>
-                  {companies.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-
-                {/* Department Select */}
-                <select
-                  value={filters.department}
-                  onChange={(e) => setFilters((prev) => ({ ...prev, department: e.target.value }))}
-                  className="h-8 text-xs font-semibold px-2.5 rounded-md border border-border/80 bg-background text-foreground focus:outline-none"
-                >
-                  <option value="all">All Departments ({departments.length})</option>
-                  {departments.map((dept) => (
-                    <option key={dept} value={dept}>
-                      {dept}
-                    </option>
-                  ))}
-                </select>
-
-                {/* Location Select */}
-                <select
-                  value={filters.locationId}
-                  onChange={(e) => setFilters((prev) => ({ ...prev, locationId: e.target.value }))}
-                  className="h-8 text-xs font-semibold px-2.5 rounded-md border border-border/80 bg-background text-foreground focus:outline-none max-w-[160px] truncate"
-                >
-                  <option value="all">All Locations ({adminLocations.length})</option>
-                  {adminLocations.map((loc) => (
-                    <option key={loc.id} value={loc.id}>
-                      {loc.name}
-                    </option>
-                  ))}
-                </select>
-
-                {/* Access Type Select */}
-                <select
-                  value={filters.accessType}
-                  onChange={(e) => setFilters((prev) => ({ ...prev, accessType: e.target.value as any }))}
-                  className="h-8 text-xs font-semibold px-2.5 rounded-md border border-border/80 bg-background text-foreground focus:outline-none"
-                >
-                  <option value="all">All Access Types</option>
-                  <option value="multi">Multi-Branch Access</option>
-                  <option value="single">Single Base Branch</option>
-                  <option value="remote">Remote / Field Allowed</option>
-                </select>
-
-                {(filters.search || filters.department !== 'all' || filters.locationId !== 'all' || filters.accessType !== 'all' || companyFilter !== 'all') && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      setFilters({ search: '', department: 'all', locationId: 'all', accessType: 'all' });
-                      setCompanyFilter('all');
-                    }}
-                    className="h-8 text-xs font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50"
-                  >
-                    Reset Filters
-                  </Button>
-                )}
-              </div>
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
           </Card>
 
@@ -498,14 +389,13 @@ export const HRAttendanceLocationPage: React.FC = () => {
                       <th className="px-4 py-3 min-w-[200px]">Employee</th>
                       <th className="px-4 py-3 min-w-[140px]">Primary Location</th>
                       <th className="px-4 py-3 min-w-[220px]">Permitted Attendance Locations</th>
-                      <th className="px-4 py-3 text-center min-w-[120px]">Punch Allowances</th>
                       <th className="px-4 py-3 text-right w-24">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border/60">
                     {filteredEmployees.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="text-center py-12 text-muted-foreground text-xs">
+                        <td colSpan={5} className="text-center py-12 text-muted-foreground text-xs">
                           <div className="flex flex-col items-center gap-2">
                             <MapPin className="w-8 h-8 text-muted-foreground/40" />
                             <p className="font-bold text-foreground">No matching employees found</p>
@@ -605,27 +495,6 @@ export const HRAttendanceLocationPage: React.FC = () => {
                               </div>
                             </td>
 
-                            {/* Remote / Field Allowances */}
-                            <td className="px-4 py-3 text-center">
-                              <div className="flex items-center justify-center gap-1">
-                                {emp.allowRemotePunch ? (
-                                  <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[9px] font-bold flex items-center gap-1">
-                                    <Globe className="w-2.5 h-2.5" />
-                                    WFH
-                                  </Badge>
-                                ) : (
-                                  <span className="text-[10px] text-muted-foreground">-</span>
-                                )}
-
-                                {emp.allowFieldPunch && (
-                                  <Badge className="bg-blue-50 text-blue-700 border border-blue-200 text-[9px] font-bold flex items-center gap-1">
-                                    <Navigation className="w-2.5 h-2.5" />
-                                    Field
-                                  </Badge>
-                                )}
-                              </div>
-                            </td>
-
                             {/* Action */}
                             <td className="px-4 py-3 text-right">
                               <Button
@@ -655,7 +524,7 @@ export const HRAttendanceLocationPage: React.FC = () => {
 
       {/* Tab 2: Office & Geofence Locations Management */}
       {activeTab === 'geofences' && (
-        <div className="space-y-4 animate-in fade-in-50 duration-200">
+        <div className="space-y-4">
           <Card className="border border-border/80 shadow-2xs bg-card p-3">
             <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
               <div className="relative flex-1 w-full">
@@ -810,7 +679,7 @@ export const HRAttendanceLocationPage: React.FC = () => {
                             size="sm"
                             variant="outline"
                             onClick={async () => {
-                              if (window.confirm(`Are you sure you want to delete geofence location "${loc.name}"?`)) {
+                              if (await window.appConfirm(`Are you sure you want to delete geofence location "${loc.name}"?`)) {
                                 try {
                                   await deleteGeofence(Number(loc.id));
                                   loadData();

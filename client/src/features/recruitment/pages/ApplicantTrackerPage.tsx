@@ -313,7 +313,7 @@ export const ApplicantTrackerPage: React.FC = () => {
           const items = rawItems.map((item: any) => {
             const desig = (item.designation || item.jobTitle || item.designationName || item.designation_name || item.accessRole || item.role || '').toLowerCase();
             const role = (item.accessRole || item.role || '').toLowerCase();
-            const isMgrRole = ['manager', 'department_head', 'hr_manager', 'organization_admin', 'admin', 'team_lead'].includes(role);
+            const isMgrRole = ['manager', 'department_head', 'hr', 'hr_admin', 'hr_manager', 'organization_admin', 'admin', 'team_lead'].includes(role);
             const isMgrDesig = desig.includes('manager') || desig.includes('head') || desig.includes('lead') || desig.includes('director') || desig.includes('vp') || desig.includes('chief') || desig.includes('supervisor');
             const isMgr = isMgrRole || isMgrDesig || Boolean(item.isManager) || Boolean(item.is_manager);
             return {
@@ -652,13 +652,12 @@ export const ApplicantTrackerPage: React.FC = () => {
           };
         });
 
-        // Only display active recruitment pipeline candidates in Applicant Tracker (exclude unshortlisted & hired on-role employees)
+        // Only display active recruitment pipeline candidates in Applicant Tracker (exclude unshortlisted, draft, and completed hired/onboarded applications)
         const shortlistedPipeline = mapped.filter((app: any) => {
           const st = String(app.status || '').toLowerCase();
-          const candSt = String(app.candidateStatus || app.candidate_status || '').toLowerCase();
-          const isHiredEmployee = st === 'hired' || st === 'onboarded' || candSt === 'hired' || candSt === 'onboarded' || Boolean(app.employeeId || app.employeeCode);
+          const isFinishedHired = st === 'hired' || st === 'onboarded';
 
-          return st !== 'unshortlisted' && st !== 'bank_only' && st !== 'draft' && !isHiredEmployee;
+          return st !== 'unshortlisted' && st !== 'bank_only' && st !== 'draft' && !isFinishedHired;
         });
 
         // Deduplicate rows by application ID and candidate email + position title
@@ -833,11 +832,11 @@ export const ApplicantTrackerPage: React.FC = () => {
   const paginatedData = filteredData.slice(startIndex, endIndex);
 
   return (
-    <div className="flex-1 space-y-6 max-w-full overflow-hidden p-6 min-h-[calc(100vh-4rem)]">
+    <div className="recruitment-page flex-1 min-w-0 space-y-4">
       {/* ── Top Header Banner ────────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card p-6 rounded-2xl border border-border/80 shadow-2xs relative overflow-hidden">
+      <div className="recruitment-page-header flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card p-6 rounded-2xl border border-border/80 shadow-2xs relative overflow-hidden">
         <div className="flex items-center gap-3.5 relative z-10">
-          <div className="w-11 h-11 rounded-2xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold shrink-0 border border-blue-500/20 shadow-xs">
+          <div className="w-11 h-11 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold shrink-0 border border-primary/20 shadow-xs">
             <Layers className="w-5 h-5" />
           </div>
           <div className="space-y-0.5">
@@ -868,7 +867,7 @@ export const ApplicantTrackerPage: React.FC = () => {
       </div>
 
       {/* ── Filters Section ──────────────────────────────────────────────────── */}
-      <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+      <Card className="bg-card border-border shadow-sm rounded-xl overflow-hidden">
         <CardHeader className="py-4 px-6 border-b border-border/60 flex flex-row items-center justify-between">
           <CardTitle className="text-sm font-extrabold text-foreground flex items-center gap-2">
             <Search className="w-4 h-4 text-primary" />
@@ -978,7 +977,7 @@ export const ApplicantTrackerPage: React.FC = () => {
       </Card>
 
       {/* ── Results Section ──────────────────────────────────────────────────── */}
-      <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+      <Card className="bg-card border-border shadow-sm rounded-xl overflow-hidden">
         <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between p-5 border-b border-border/60 gap-4">
           <div>
             <CardTitle className="text-sm font-extrabold text-foreground flex items-center gap-2">
@@ -1019,12 +1018,13 @@ export const ApplicantTrackerPage: React.FC = () => {
                   <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-4 text-muted-foreground min-w-[120px]">Contact</TableHead>
                   <TableHead className="text-center text-[11px] font-bold uppercase tracking-wider py-3.5 px-4 text-muted-foreground min-w-[170px]">Pipeline Stage</TableHead>
                   <TableHead className="text-center text-[11px] font-bold uppercase tracking-wider py-3.5 px-4 text-muted-foreground min-w-[110px]">Actions</TableHead>
+                  <TableHead className="text-center text-[11px] font-bold uppercase tracking-wider py-3.5 px-4 text-muted-foreground min-w-[100px]">Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody className="divide-y divide-border/60">
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="h-32 text-center text-xs text-muted-foreground bg-background">
+                    <TableCell colSpan={10} className="h-32 text-center text-xs text-muted-foreground bg-background">
                       <div className="flex flex-col items-center justify-center gap-2">
                         <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
                         <span>Loading applicant pipeline records...</span>
@@ -2274,10 +2274,7 @@ export const ApplicantTrackerPage: React.FC = () => {
       <ResumeViewerModal
         open={isResumeViewerOpen}
         onOpenChange={setIsResumeViewerOpen}
-        resumeUrl={selectedCandidateForResumeViewer?.resumeUrl}
-        candidateName={selectedCandidateForResumeViewer?.name}
-        candidateEmail={selectedCandidateForResumeViewer?.email}
-        qualification={selectedCandidateForResumeViewer?.qualification}
+        candidate={selectedCandidateForResumeViewer}
       />
     </div>
   );

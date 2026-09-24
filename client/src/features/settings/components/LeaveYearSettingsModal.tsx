@@ -81,17 +81,29 @@ const FilterMultiSelectPopover: React.FC<FilterMultiSelectPopoverProps> = ({
     opt.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const isAllSelected = options.length > 0 && selectedValues.length === options.length;
+  const isAllSelected =
+    options.length > 0 &&
+    options.every(
+      (opt) =>
+        opt.id !== undefined &&
+        opt.id !== null &&
+        opt.id !== '' &&
+        selectedValues.some((v) => String(v) === String(opt.id))
+    );
 
   const toggleSelectAll = () => {
     if (isAllSelected) {
       onChange([]);
     } else {
-      onChange(options.map((opt) => opt.id));
+      const validIds = options
+        .map((opt) => opt.id)
+        .filter((id) => id !== undefined && id !== null && id !== '');
+      onChange(validIds);
     }
   };
 
   const toggleOption = (id: string | number) => {
+    if (id === undefined || id === null || id === '') return;
     const isPresent = selectedValues.some((v) => String(v) === String(id));
     if (isPresent) {
       onChange(selectedValues.filter((v) => String(v) !== String(id)));
@@ -110,11 +122,11 @@ const FilterMultiSelectPopover: React.FC<FilterMultiSelectPopoverProps> = ({
       {/* Trigger Box */}
       <div
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full min-h-[38px] p-1.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-between gap-2 cursor-pointer hover:border-slate-300 dark:hover:border-slate-700 transition-colors"
+        className="w-full min-h-[38px] p-1.5 rounded-xl border border-border/60 dark:border-slate-800 bg-background dark:bg-slate-900 flex items-center justify-between gap-2 cursor-pointer hover:border-border dark:hover:border-slate-700 transition-colors"
       >
         <div className="flex flex-wrap items-center gap-1.5 overflow-hidden">
           {selectedValues.length === 0 ? (
-            <span className="text-xs font-medium text-slate-600 dark:text-slate-400 px-2 py-0.5">
+            <span className="text-xs font-medium text-muted-foreground dark:text-muted-foreground/70 px-2 py-0.5">
               All
             </span>
           ) : (
@@ -136,28 +148,28 @@ const FilterMultiSelectPopover: React.FC<FilterMultiSelectPopoverProps> = ({
             })
           )}
         </div>
-        <ChevronDown className={`w-3.5 h-3.5 text-slate-400 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+        <ChevronDown className={`w-3.5 h-3.5 text-muted-foreground/70 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </div>
 
       {/* Popover Content */}
       {isOpen && (
-        <div className="absolute left-0 top-11 z-50 w-72 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-3 space-y-2 animate-in fade-in-50 zoom-in-95">
+        <div className="absolute left-0 top-11 z-50 w-72 bg-background dark:bg-slate-900 border border-border/60 dark:border-slate-800 rounded-2xl shadow-2xl p-3 space-y-2 animate-in fade-in-50 zoom-in-95">
           {/* Search Box */}
           <div className="relative">
-            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
+            <Search className="w-3.5 h-3.5 text-muted-foreground/70 absolute left-3 top-2.5" />
             <input
               type="text"
               placeholder="Search..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full h-8 pl-8 pr-3 text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="w-full h-8 pl-8 pr-3 text-xs bg-muted/30 dark:bg-slate-950 border border-border/60 dark:border-slate-800 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
           </div>
 
           {/* Select All Row */}
           <div
             onClick={toggleSelectAll}
-            className="flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/60 cursor-pointer select-none border-b border-slate-100 dark:border-slate-800"
+            className="flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-muted/30 dark:hover:bg-slate-800/60 cursor-pointer select-none border-b border-slate-100 dark:border-slate-800"
           >
             <div className="flex items-center gap-2">
               <input
@@ -176,12 +188,16 @@ const FilterMultiSelectPopover: React.FC<FilterMultiSelectPopoverProps> = ({
           {/* Options List */}
           <div className="max-h-48 overflow-y-auto space-y-0.5 pr-1">
             {filteredOptions.map((opt) => {
-              const isChecked = selectedValues.some((v) => String(v) === String(opt.id));
+              const isChecked =
+                opt.id !== undefined &&
+                opt.id !== null &&
+                opt.id !== '' &&
+                selectedValues.some((v) => String(v) === String(opt.id));
               return (
                 <div
                   key={opt.id}
                   onClick={() => toggleOption(opt.id)}
-                  className="flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/60 cursor-pointer select-none text-xs font-semibold text-slate-700 dark:text-slate-300 transition-colors"
+                  className="flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-muted/30 dark:hover:bg-slate-800/60 cursor-pointer select-none text-xs font-semibold text-foreground dark:text-slate-300 transition-colors"
                 >
                   <div className="flex items-center gap-2.5 truncate">
                     <input
@@ -192,14 +208,14 @@ const FilterMultiSelectPopover: React.FC<FilterMultiSelectPopoverProps> = ({
                     />
                     <span className="truncate">{opt.name}</span>
                   </div>
-                  <span className="text-[10px] font-mono text-slate-400 shrink-0 ml-2">
+                  <span className="text-[10px] font-mono text-muted-foreground/70 shrink-0 ml-2">
                     {opt.count ?? 0}
                   </span>
                 </div>
               );
             })}
             {filteredOptions.length === 0 && (
-              <div className="py-3 text-center text-xs text-slate-400 font-medium">No matches found</div>
+              <div className="py-3 text-center text-xs text-muted-foreground/70 font-medium">No matches found</div>
             )}
           </div>
         </div>
@@ -339,22 +355,22 @@ export const LeaveYearSettingsModal: React.FC<LeaveYearSettingsModalProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-2xl w-full p-0 overflow-hidden bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl [&>button:last-child]:hidden">
+      <DialogContent className="max-w-2xl w-full p-0 overflow-hidden bg-background dark:bg-slate-950 border border-border/60 dark:border-slate-800 rounded-3xl shadow-2xl [&>button:last-child]:hidden">
         {/* Header */}
-        <div className="bg-slate-50/80 dark:bg-slate-900 px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+        <div className="bg-muted/30/80 dark:bg-slate-900 px-6 py-4 border-b border-border/60 dark:border-slate-800 flex items-center justify-between">
           <div>
-            <DialogTitle className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+            <DialogTitle className="text-base font-extrabold text-foreground dark:text-white flex items-center gap-2">
               <Calendar className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
               <span>{settingToEdit?.id ? 'Edit leave year setting' : 'Add leave year setting'}</span>
             </DialogTitle>
-            <DialogDescription className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+            <DialogDescription className="text-xs text-muted-foreground dark:text-muted-foreground/70 mt-0.5">
               The day and month the leave year starts on. Leave the filter empty and this applies to everyone.
             </DialogDescription>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-slate-200/60 dark:bg-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-white flex items-center justify-center transition-all cursor-pointer"
+            className="w-8 h-8 rounded-full bg-muted/60 dark:bg-slate-800 text-muted-foreground hover:text-foreground dark:hover:text-white flex items-center justify-center transition-all cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
@@ -365,13 +381,13 @@ export const LeaveYearSettingsModal: React.FC<LeaveYearSettingsModalProps> = ({
           {/* Start Day & Month Grid */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <Label className="text-xs font-bold text-slate-800 dark:text-slate-200">
+              <Label className="text-xs font-bold text-foreground dark:text-slate-200">
                 Leave Year Start Day *
               </Label>
               <select
                 value={startDay}
                 onChange={(e) => setStartDay(Number(e.target.value))}
-                className="w-full h-10 mt-1.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 px-3 text-xs font-bold text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                className="w-full h-10 mt-1.5 rounded-xl border border-border/60 dark:border-slate-800 bg-muted/30 dark:bg-slate-900 px-3 text-xs font-bold text-foreground dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
               >
                 {daysArray.map((d) => (
                   <option key={d} value={d}>
@@ -382,13 +398,13 @@ export const LeaveYearSettingsModal: React.FC<LeaveYearSettingsModalProps> = ({
             </div>
 
             <div>
-              <Label className="text-xs font-bold text-slate-800 dark:text-slate-200">
+              <Label className="text-xs font-bold text-foreground dark:text-slate-200">
                 Month *
               </Label>
               <select
                 value={startMonth}
                 onChange={(e) => setStartMonth(e.target.value)}
-                className="w-full h-10 mt-1.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 px-3 text-xs font-bold text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                className="w-full h-10 mt-1.5 rounded-xl border border-border/60 dark:border-slate-800 bg-muted/30 dark:bg-slate-900 px-3 text-xs font-bold text-foreground dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
               >
                 {MONTHS.map((m) => (
                   <option key={m} value={m}>
@@ -400,7 +416,7 @@ export const LeaveYearSettingsModal: React.FC<LeaveYearSettingsModalProps> = ({
           </div>
 
           {/* Explanatory note */}
-          <p className="text-[11px] text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900/60 p-3 rounded-xl border border-slate-100 dark:border-slate-800/80 leading-relaxed">
+          <p className="text-[11px] text-muted-foreground dark:text-muted-foreground/70 bg-muted/30 dark:bg-slate-900/60 p-3 rounded-xl border border-slate-100 dark:border-slate-800/80 leading-relaxed">
             The leave year begins on this day and month, every year. The day list follows the month — February offers 29, which falls back to the 28th in years that have no 29th.
           </p>
 
@@ -411,16 +427,16 @@ export const LeaveYearSettingsModal: React.FC<LeaveYearSettingsModalProps> = ({
               onCheckedChange={setIsActive}
               className="data-[state=checked]:bg-indigo-600 cursor-pointer"
             />
-            <span className="text-xs font-extrabold text-slate-800 dark:text-slate-200">
+            <span className="text-xs font-extrabold text-foreground dark:text-slate-200">
               Active
             </span>
           </div>
 
           {/* Applies to Section */}
-          <div className="border border-slate-200/90 dark:border-slate-800/80 rounded-2xl p-5 space-y-4 bg-slate-50/30 dark:bg-slate-900/10">
+          <div className="border border-border/60/90 dark:border-slate-800/80 rounded-2xl p-5 space-y-4 bg-muted/30/30 dark:bg-slate-900/10">
             <div>
-              <h4 className="text-sm font-extrabold text-slate-900 dark:text-white">Applies to</h4>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              <h4 className="text-sm font-extrabold text-foreground dark:text-white">Applies to</h4>
+              <p className="text-xs text-muted-foreground dark:text-muted-foreground/70 mt-0.5">
                 Leave this empty and the setting applies to every employee. Two settings cannot use the same filter.
               </p>
             </div>
@@ -434,25 +450,25 @@ export const LeaveYearSettingsModal: React.FC<LeaveYearSettingsModalProps> = ({
                     <button
                       type="button"
                       onClick={() => handleRemoveFilter(f)}
-                      className="absolute -top-2.5 -right-2.5 z-10 w-6 h-6 rounded-full bg-white border border-rose-200 text-rose-400 hover:text-rose-600 hover:bg-rose-50 flex items-center justify-center shadow-xs cursor-pointer transition-all"
+                      className="absolute -top-2.5 -right-2.5 z-10 w-6 h-6 rounded-full bg-background border border-rose-200 text-rose-400 hover:text-rose-600 hover:bg-rose-50 flex items-center justify-center shadow-xs cursor-pointer transition-all"
                       title="Remove filter"
                     >
                       <X className="w-3.5 h-3.5" />
                     </button>
 
                     {/* Card Header */}
-                    <div className="bg-slate-50/90 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-t-xl px-3.5 py-2 flex items-center justify-between">
-                      <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800 dark:text-slate-200">
+                    <div className="bg-muted/30/90 dark:bg-slate-900 border border-border/60 dark:border-slate-800 rounded-t-xl px-3.5 py-2 flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 text-xs font-bold text-foreground dark:text-slate-200">
                         <span className="text-blue-600 dark:text-blue-400 font-mono font-bold">[-]</span>
                         <span>{f}</span>
                       </div>
-                      <span className="text-xs font-semibold text-slate-400">
+                      <span className="text-xs font-semibold text-muted-foreground/70">
                         {getItemCount(f)}
                       </span>
                     </div>
 
                     {/* Card Body */}
-                    <div className="bg-white dark:bg-slate-950 border-x border-b border-slate-200 dark:border-slate-800 rounded-b-xl p-2.5 min-h-[52px] flex items-center">
+                    <div className="bg-background dark:bg-slate-950 border-x border-b border-border/60 dark:border-slate-800 rounded-b-xl p-2.5 min-h-[52px] flex items-center">
                       {f === 'Company' && (
                         <FilterMultiSelectPopover
                           options={companiesList.map((c: any) => ({
@@ -567,7 +583,7 @@ export const LeaveYearSettingsModal: React.FC<LeaveYearSettingsModalProps> = ({
               </Button>
 
               {isAddFilterOpen && (
-                <div className="absolute left-0 bottom-11 z-30 w-56 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl py-1.5 overflow-hidden animate-in fade-in-50 zoom-in-95">
+                <div className="absolute left-0 bottom-11 z-30 w-56 bg-background dark:bg-slate-900 border border-border/60 dark:border-slate-800 rounded-2xl shadow-xl py-1.5 overflow-hidden animate-in fade-in-50 zoom-in-95">
                   {ALL_FILTER_OPTIONS.filter((f) => !activeFilters.includes(f)).map((filterName) => (
                     <button
                       key={filterName}
@@ -576,13 +592,13 @@ export const LeaveYearSettingsModal: React.FC<LeaveYearSettingsModalProps> = ({
                         handleAddFilter(filterName);
                         setIsAddFilterOpen(false);
                       }}
-                      className="w-full text-left px-4 py-2 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors flex items-center justify-between cursor-pointer"
+                      className="w-full text-left px-4 py-2 text-xs font-semibold text-foreground dark:text-slate-300 hover:bg-muted/50 dark:hover:bg-slate-800 transition-colors flex items-center justify-between cursor-pointer"
                     >
                       <span>{filterName}</span>
                     </button>
                   ))}
                   {ALL_FILTER_OPTIONS.filter((f) => !activeFilters.includes(f)).length === 0 && (
-                    <div className="px-4 py-2 text-xs text-slate-400 font-medium">All filters added</div>
+                    <div className="px-4 py-2 text-xs text-muted-foreground/70 font-medium">All filters added</div>
                   )}
                 </div>
               )}

@@ -134,7 +134,7 @@ export const MonthlyAttendanceLog: React.FC<MonthlyAttendanceLogProps> = ({ onSt
         }
 
         const locId = apiRec.check_in_location_id ?? apiRec.checkInLocationId;
-        const location = locId === 2 ? 'Kosqu Technolab, Navi Mumbai' : 'Arham IT Solution, Ahilyanagar';
+        const location = apiRec.checkInLocationName || apiRec.check_in_location_name || apiRec.checkOutLocationName || (locId ? `Location ${locId}` : 'Corporate HQ');
         const method = apiRec.check_in_method ?? apiRec.checkInMethod;
         let methodStr = 'Web Location';
         if (method === 'biometric_face') {

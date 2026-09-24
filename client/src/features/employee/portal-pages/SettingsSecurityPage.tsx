@@ -10,7 +10,7 @@ import { useAuthStore } from '@/features/auth/store/authStore';
 
 export default function SettingsSecurityPage() {
   const { user } = useAuthStore();
-  const isHrOrAdmin = user?.roles?.some(r => ['hr_manager', 'organization_admin', 'super_admin'].includes(r)) || false;
+  const isHrOrAdmin = user?.roles?.some(r => ['hr', 'hr_admin', 'hr_manager', 'organization_admin', 'super_admin'].includes(r)) || false;
 
   const [form, setForm] = useState({
     currentPassword: '',

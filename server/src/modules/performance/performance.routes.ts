@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { authenticate } from '../../common/middleware/authenticate';
 import { resolveTenant } from '../../common/middleware/resolveTenant';
 import { requirePermission } from '../../common/middleware/requirePermission';
+import { denyRoles } from '../../common/middleware/denyRoles';
 import { asyncHandler } from '../../common/utils/asyncHandler';
 import { goalController } from './controllers/GoalController';
 import { okrController } from './controllers/OKRController';
@@ -18,6 +19,7 @@ const router = Router();
 
 // Apply authentication and tenant resolution for all performance routes
 router.use(authenticate, resolveTenant);
+router.use(denyRoles(['organization_admin', 'ceo', 'hr', 'hr_admin', 'hr_manager']));
 
 // Root endpoint - get performance summary
 router.get('/', asyncHandler(async (req, res) => {
@@ -45,8 +47,12 @@ router.patch('/okrs/:id/complete', requirePermission('performance.okr_write'), a
 router.delete('/okrs/:id', requirePermission('performance.okr_write'), asyncHandler((req, res, next) => okrController.deleteOKR(req, res, next)));
 
 // Review Cycle & Review Routes
+router.get('/review-cycles', requirePermission('performance.review_cycle_read'), asyncHandler((req, res, next) => reviewController.listCycles(req, res, next)));
+router.get('/review-cycles/:id', requirePermission('performance.review_cycle_read'), asyncHandler((req, res, next) => reviewController.getCycle(req, res, next)));
 router.post('/review-cycles', requirePermission('performance.review_cycle_write'), asyncHandler((req, res, next) => reviewController.createCycle(req, res, next)));
+router.patch('/review-cycles/:id', requirePermission('performance.review_cycle_write'), asyncHandler((req, res, next) => reviewController.updateCycle(req, res, next)));
 router.post('/review-templates', requirePermission('performance.review_cycle_write'), asyncHandler((req, res, next) => reviewController.createTemplate(req, res, next)));
+router.get('/reviews', requirePermission('performance.review_read'), asyncHandler((req, res, next) => reviewController.listReviews(req, res, next)));
 router.post('/reviews', requirePermission('performance.review_write'), asyncHandler((req, res, next) => reviewController.createReview(req, res, next)));
 router.get('/reviews/:id', requirePermission('performance.review_read'), asyncHandler((req, res, next) => reviewController.getReview(req, res, next)));
 router.patch('/reviews/:id/submit', requirePermission('performance.review_submit'), asyncHandler((req, res, next) => reviewController.submitReview(req, res, next)));
@@ -115,6 +121,7 @@ router.get('/leaderboard', requirePermission('performance.recognition_read'), as
 
 // Analytics Routes
 router.get('/analytics/dashboard', requirePermission('performance.analytics_read'), asyncHandler((req, res, next) => analyticsController.getDashboardMetrics(req, res, next)));
+router.get('/analytics/metrics', requirePermission('performance.analytics_read'), asyncHandler((req, res, next) => analyticsController.getMetrics(req, res, next)));
 router.get('/analytics/goals', requirePermission('performance.analytics_read'), asyncHandler((req, res, next) => analyticsController.getGoalProgressReport(req, res, next)));
 router.get('/analytics/talent-matrix', requirePermission('performance.talent_matrix_read'), asyncHandler((req, res, next) => analyticsController.getTalentMatrix(req, res, next)));
 router.get('/analytics/cycles/:cycleId', requirePermission('performance.analytics_read'), asyncHandler((req, res, next) => analyticsController.getReviewCycleReport(req, res, next)));

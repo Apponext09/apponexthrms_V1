@@ -60,9 +60,24 @@ async function resolveEmployeeId(
   return null;
 }
 
+/** Reject out-of-range / null-island / non-finite coordinates (spoofed or garbage GPS data) */
+function isValidLatLng(lat: unknown, lng: unknown): lat is number {
+  return (
+    typeof lat === 'number' &&
+    typeof lng === 'number' &&
+    Number.isFinite(lat) &&
+    Number.isFinite(lng) &&
+    lat >= -90 &&
+    lat <= 90 &&
+    lng >= -180 &&
+    lng <= 180 &&
+    !(lat === 0 && lng === 0)
+  );
+}
+
 /** Determine if user is HR, Admin, or CEO by inspecting JWT claims and DB user_roles */
 async function checkIsHROrAdmin(organizationId: number, userId: number, userClaims: any): Promise<boolean> {
-  const adminPatterns = ['admin', 'hr', 'organization_admin', 'hr_manager', 'hr_admin', 'super_admin', 'ceo', 'owner', 'director', 'executive'];
+  const adminPatterns = ['admin', 'hr', 'organization_admin', 'super_admin', 'ceo', 'owner', 'director', 'executive'];
 
   // Check claims / JWT if present
   const claimsRoles: string[] = Array.isArray(userClaims?.roles) ? userClaims.roles : [];
@@ -113,7 +128,8 @@ export class LivetrackingController {
    * GET /api/v1/livetracking/live
    * Returns current live location snapshot for all accessible employees.
    * - HR / Admin / Super Admin → full org
-   * - Manager / Team Lead → reporting team (multi-tier)
+   * - Manager / Team Lead (has direct reports) → reporting team (multi-tier)
+   * - Regular employee → self only
    */
   getLiveLocations = async (req: Request, res: Response): Promise<void> => {
     try {
@@ -121,16 +137,38 @@ export class LivetrackingController {
       const user = (req as any).user;
 
       const isHROrAdmin = await checkIsHROrAdmin(ctx.organizationId, ctx.userId, user);
-      console.log('[LiveTracking] getLiveLocations - userId:', ctx.userId, 'isHROrAdmin:', isHROrAdmin);
 
-      // Return organization-wide live locations for full visibility in live tracking dashboard
-      const employees = await repo.getLiveLocationsForOrg(ctx);
-      console.log('[LiveTracking] Fetched', employees.length, 'total employee location snapshots');
+      let employees;
+      if (isHROrAdmin) {
+        employees = await repo.getLiveLocationsForOrg(ctx);
+      } else {
+        const employeeId = await resolveEmployeeId(ctx.organizationId, ctx.userId);
+        if (!employeeId) {
+          res.json({ success: true, data: [] });
+          return;
+        }
+
+        const empRow = await getKnex()('employees')
+          .where('id', employeeId)
+          .select('current_department_id')
+          .first()
+          .catch(() => null);
+
+        const hasReports = await getKnex()('employees')
+          .where('organization_id', ctx.organizationId)
+          .where('reporting_manager_id', employeeId)
+          .whereNull('deleted_at')
+          .first()
+          .catch(() => null);
+
+        employees = hasReports
+          ? await repo.getLiveLocationsForTeam(ctx, employeeId, empRow?.current_department_id ?? null)
+          : await repo.getLiveLocationForEmployee(ctx, employeeId);
+      }
 
       res.json({ success: true, data: employees });
     } catch (error: any) {
       console.error('[LivetrackingController] getLiveLocations error:', error?.message || error);
-      console.error('[LivetrackingController] SQL error details:', error?.sqlMessage, '| SQL:', error?.sql);
       res.status(500).json({ success: false, error: 'Failed to fetch live locations' });
     }
   };
@@ -138,16 +176,46 @@ export class LivetrackingController {
   /**
    * GET /api/v1/livetracking/history/:employeeId?date=YYYY-MM-DD
    * Returns historical location breadcrumbs for route playback.
+   * - HR/Admin → any employee
+   * - Manager → their own reports only
+   * - Regular employee → self only
    */
   getRouteHistory = async (req: Request, res: Response): Promise<void> => {
     try {
       const ctx = (req as any).ctx as TenantContext;
+      const user = (req as any).user;
       const employeeId = parseInt(req.params.employeeId, 10);
       const date = (req.query.date as string) || new Date().toISOString().slice(0, 10);
 
       if (isNaN(employeeId)) {
         res.status(400).json({ success: false, error: 'Invalid employeeId' });
         return;
+      }
+
+      const isHROrAdmin = await checkIsHROrAdmin(ctx.organizationId, ctx.userId, user);
+
+      if (!isHROrAdmin) {
+        const requesterEmployeeId = await resolveEmployeeId(ctx.organizationId, ctx.userId);
+
+        if (!requesterEmployeeId) {
+          res.status(403).json({ success: false, error: 'Access denied' });
+          return;
+        }
+
+        if (requesterEmployeeId !== employeeId) {
+          const managesTarget = await getKnex()('employees')
+            .where('organization_id', ctx.organizationId)
+            .where('id', employeeId)
+            .where('reporting_manager_id', requesterEmployeeId)
+            .whereNull('deleted_at')
+            .first()
+            .catch(() => null);
+
+          if (!managesTarget) {
+            res.status(403).json({ success: false, error: 'Access denied' });
+            return;
+          }
+        }
       }
 
       const history = await repo.getLocationHistory(ctx, employeeId, date);
@@ -185,9 +253,17 @@ export class LivetrackingController {
         return;
       }
 
+      const parsedLat = parseFloat(latitude);
+      const parsedLng = parseFloat(longitude);
+
+      if (!isValidLatLng(parsedLat, parsedLng)) {
+        res.status(400).json({ success: false, error: 'latitude/longitude out of valid range' });
+        return;
+      }
+
       const payload = {
-        latitude: parseFloat(latitude),
-        longitude: parseFloat(longitude),
+        latitude: parsedLat,
+        longitude: parsedLng,
         accuracy: accuracy !== undefined ? parseFloat(accuracy) : undefined,
         speed: speed !== undefined ? parseFloat(speed) : undefined,
         heading: heading !== undefined ? parseFloat(heading) : undefined,
@@ -284,21 +360,27 @@ export class LivetrackingController {
   /**
    * POST /api/v1/livetracking/save-location
    * Explicitly save/pin an employee's location & auto-update location_walk history.
+   * A caller may only pin their OWN location unless they are HR/Admin — otherwise
+   * any employee could overwrite another employee's location by passing employee_id.
    */
   saveLocation = async (req: Request, res: Response): Promise<void> => {
     try {
       const ctx = (req as any).ctx as TenantContext;
+      const user = (req as any).user;
       const { employee_id, latitude, longitude, address } = req.body;
 
-      const targetEmpId = employee_id ? Number(employee_id) : await resolveEmployeeId(ctx.organizationId, ctx.userId);
+      const isHROrAdmin = await checkIsHROrAdmin(ctx.organizationId, ctx.userId, user);
+      const selfEmployeeId = await resolveEmployeeId(ctx.organizationId, ctx.userId);
+
+      const targetEmpId = employee_id && isHROrAdmin ? Number(employee_id) : selfEmployeeId;
 
       if (!targetEmpId || isNaN(targetEmpId)) {
         res.status(400).json({ success: false, error: 'Invalid or missing employee_id' });
         return;
       }
 
-      if (typeof latitude !== 'number' || typeof longitude !== 'number') {
-        res.status(400).json({ success: false, error: 'Latitude and Longitude are required' });
+      if (!isValidLatLng(latitude, longitude)) {
+        res.status(400).json({ success: false, error: 'Latitude and Longitude are required and must be valid' });
         return;
       }
 

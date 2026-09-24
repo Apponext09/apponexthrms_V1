@@ -1,0 +1,1136 @@
+{
+  "client/src/features/payroll/components/AssignPaySlabTab.tsx": [
+    {
+      "method": "GET",
+      "url": "/employees"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll/slabs"
+    },
+    {
+      "method": "GET",
+      "url": "/settings/companies"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll/component-definitions"
+    },
+    {
+      "method": "PATCH",
+      "url": "/employees/${emp.id}"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll/salary-structure?employee_id=${firstEmp.id}"
+    },
+    {
+      "method": "POST",
+      "url": "/payroll/salary-structure"
+    },
+    {
+      "method": "PATCH",
+      "url": "/employees/${emp.id}"
+    }
+  ],
+  "client/src/features/payroll/components/EmployeeLoanRequest.tsx": [
+    {
+      "method": "GET",
+      "url": "/payroll/loans"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll/payslips"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll/structures"
+    },
+    {
+      "method": "GET",
+      "url": "/employees"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll/loan-types"
+    },
+    {
+      "method": "POST",
+      "url": "/payroll/loans"
+    }
+  ],
+  "client/src/features/payroll/components/GratuityConfiguration.tsx": [
+    {
+      "method": "GET",
+      "url": "/settings/departments"
+    },
+    {
+      "method": "GET",
+      "url": "/settings/locations"
+    },
+    {
+      "method": "GET",
+      "url": "/settings/grades"
+    },
+    {
+      "method": "GET",
+      "url": "/settings/pay-grades"
+    },
+    {
+      "method": "GET",
+      "url": "/settings/companies"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll/gratuity-rules"
+    },
+    {
+      "method": "POST",
+      "url": "/payroll/gratuity-rules"
+    },
+    {
+      "method": "DELETE",
+      "url": "/payroll/gratuity-rules/${id}"
+    }
+  ],
+  "client/src/features/payroll/components/MasterPayrollComponents.tsx": [
+    {
+      "method": "GET",
+      "url": "/payroll/component-groups/${group.id}/audit-logs"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll/component-definitions/${comp.id}/audit-logs"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll/component-groups"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll/component-definitions"
+    },
+    {
+      "method": "GET",
+      "url": "/settings/grades"
+    },
+    {
+      "method": "GET",
+      "url": "/settings/pay-grades"
+    },
+    {
+      "method": "GET",
+      "url": "/settings/departments"
+    },
+    {
+      "method": "GET",
+      "url": "/settings/locations"
+    },
+    {
+      "method": "GET",
+      "url": "/settings/branches"
+    },
+    {
+      "method": "GET",
+      "url": "/employees"
+    },
+    {
+      "method": "PUT",
+      "url": "/payroll/component-groups/${editingGroupId}"
+    },
+    {
+      "method": "POST",
+      "url": "/payroll/component-groups"
+    },
+    {
+      "method": "PUT",
+      "url": "/payroll/component-definitions/${selectedComponentId}"
+    },
+    {
+      "method": "POST",
+      "url": "/payroll/component-definitions"
+    },
+    {
+      "method": "DELETE",
+      "url": "/payroll/components/${id}"
+    },
+    {
+      "method": "DELETE",
+      "url": "/payroll/component-groups/${id}"
+    }
+  ],
+  "client/src/features/payroll/components/MasterPayrollCycle.tsx": [
+    {
+      "method": "GET",
+      "url": "/settings/companies"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll/cycles"
+    },
+    {
+      "method": "PUT",
+      "url": "/payroll/cycles/${selectedCycleId}"
+    },
+    {
+      "method": "POST",
+      "url": "/payroll/cycles"
+    },
+    {
+      "method": "DELETE",
+      "url": "/payroll/cycles/${id}"
+    }
+  ],
+  "client/src/features/payroll/components/Payroll10StepFlow.tsx": [
+    {
+      "method": "GET",
+      "url": "/payroll/cycles"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll/process-register"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll"
+    },
+    {
+      "method": "POST",
+      "url": "/payroll/generate"
+    },
+    {
+      "method": "POST",
+      "url": "/payroll/${id}/process"
+    },
+    {
+      "method": "POST",
+      "url": "/payroll/${runId}/approve"
+    },
+    {
+      "method": "POST",
+      "url": "/payroll/${runId}/lock"
+    },
+    {
+      "method": "POST",
+      "url": "/payroll/${runId}/publish"
+    }
+  ],
+  "client/src/features/payroll/components/PayrollCycleManager.tsx": [
+    {
+      "method": "GET",
+      "url": "/payroll/cycles"
+    },
+    {
+      "method": "PUT",
+      "url": "/payroll/cycles/${selectedCycleId}"
+    },
+    {
+      "method": "POST",
+      "url": "/payroll/cycles"
+    },
+    {
+      "method": "DELETE",
+      "url": "/payroll/cycles/${id}"
+    }
+  ],
+  "client/src/features/payroll/components/PayrollReportSettingsTab.tsx": [
+    {
+      "method": "GET",
+      "url": "/payroll/components"
+    },
+    {
+      "method": "POST",
+      "url": "/payroll/settings/report-columns"
+    }
+  ],
+  "client/src/features/payroll/hooks/useLoan.ts": [
+    {
+      "method": "POST",
+      "url": "/payroll/loans"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll/loans"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll/loans/active"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll/loans/${loanId}/schedule"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll/loans/${loanId}/next-emi"
+    }
+  ],
+  "client/src/features/payroll/hooks/usePayroll.ts": [
+    {
+      "method": "GET",
+      "url": "/payroll/cycles"
+    },
+    {
+      "method": "GET",
+      "url": "/settings/locations"
+    },
+    {
+      "method": "GET",
+      "url": "/settings/departments"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll/salary-structure"
+    },
+    {
+      "method": "GET",
+      "url": "/employees"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll/approvals"
+    },
+    {
+      "method": "POST",
+      "url": "/payroll"
+    },
+    {
+      "method": "POST",
+      "url": "/payroll/${payrollRunId}/process"
+    },
+    {
+      "method": "POST",
+      "url": "/payroll/${payrollRunId}/lock"
+    },
+    {
+      "method": "POST",
+      "url": "/payroll/${payrollRunId}/unlock"
+    },
+    {
+      "method": "POST",
+      "url": "/payroll/${payrollRunId}/approve"
+    },
+    {
+      "method": "POST",
+      "url": "/payroll/${payrollRunId}/publish"
+    }
+  ],
+  "client/src/features/payroll/hooks/usePayrollDashboard.ts": [
+    {
+      "method": "GET",
+      "url": "/payroll"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll/approvals"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll/stats"
+    }
+  ],
+  "client/src/features/payroll/hooks/usePayslip.ts": [
+    {
+      "method": "GET",
+      "url": "/payroll/payslips"
+    },
+    {
+      "method": "POST",
+      "url": "/payroll/payslips/${payslipId}/send"
+    },
+    {
+      "method": "POST",
+      "url": "/payroll/payslips/${payslipId}/lock"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll/payslips/${payslipId}/details"
+    }
+  ],
+  "client/src/features/payroll/hooks/useSalaryRevision.ts": [
+    {
+      "method": "POST",
+      "url": "/payroll/revisions"
+    },
+    {
+      "method": "POST",
+      "url": "/payroll/revisions/${revisionId}/submit"
+    },
+    {
+      "method": "POST",
+      "url": "/payroll/revisions/${revisionId}/approve"
+    },
+    {
+      "method": "POST",
+      "url": "/payroll/revisions/${revisionId}/reject"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll/revisions/${revisionId}"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll/revisions"
+    }
+  ],
+  "client/src/features/payroll/hooks/useSalaryStructure.ts": [
+    {
+      "method": "GET",
+      "url": "/payroll/salary-structure"
+    },
+    {
+      "method": "POST",
+      "url": "/payroll/salary-structure"
+    }
+  ],
+  "client/src/features/payroll/hooks/useSettlement.ts": [
+    {
+      "method": "POST",
+      "url": "/payroll/settlements"
+    },
+    {
+      "method": "POST",
+      "url": "/payroll/settlements/${settlementId}/calculate"
+    },
+    {
+      "method": "POST",
+      "url": "/payroll/settlements/${settlementId}/submit"
+    },
+    {
+      "method": "POST",
+      "url": "/payroll/settlements/${settlementId}/approve"
+    },
+    {
+      "method": "POST",
+      "url": "/payroll/settlements/${settlementId}/admin-approve"
+    },
+    {
+      "method": "POST",
+      "url": "/payroll/settlements/${settlementId}/admin-reject"
+    },
+    {
+      "method": "POST",
+      "url": "/payroll/settlements/${settlementId}/process"
+    },
+    {
+      "method": "POST",
+      "url": "/payroll/settlements/exit-request"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll/settlements/${settlementId}"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll/settlements"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll/settlements/exit-requests"
+    }
+  ],
+  "client/src/features/payroll/hooks/useTaxDeclaration.ts": [
+    {
+      "method": "POST",
+      "url": "/payroll/tax-declarations"
+    },
+    {
+      "method": "POST",
+      "url": "/payroll/tax-declarations/:id/investments"
+    },
+    {
+      "method": "POST",
+      "url": "/payroll/tax-declarations/${declarationId}/finalize"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll/tax-declarations"
+    },
+    {
+      "method": "POST",
+      "url": "/payroll/tax/calculate-tds"
+    }
+  ],
+  "client/src/features/payroll/pages/AdminExpenseClaims.tsx": [
+    {
+      "method": "GET",
+      "url": "/payroll/reimbursements"
+    },
+    {
+      "method": "PUT",
+      "url": "/payroll/reimbursements/${id}/approve"
+    },
+    {
+      "method": "PUT",
+      "url": "/payroll/reimbursements/${id}/reject"
+    }
+  ],
+  "client/src/features/payroll/pages/AdminPayrollPortal.tsx": [
+    {
+      "method": "GET",
+      "url": "/payroll/policies"
+    },
+    {
+      "method": "POST",
+      "url": "/payroll/policies"
+    }
+  ],
+  "client/src/features/payroll/pages/AdminTravelRequests.tsx": [
+    {
+      "method": "GET",
+      "url": "/payroll/reimbursements"
+    },
+    {
+      "method": "PUT",
+      "url": "/payroll/reimbursements/${id}/approve"
+    },
+    {
+      "method": "PUT",
+      "url": "/payroll/reimbursements/${id}/reject"
+    }
+  ],
+  "client/src/features/payroll/pages/FullFinalSettlement.tsx": [
+    {
+      "method": "GET",
+      "url": "/employees"
+    }
+  ],
+  "client/src/features/payroll/pages/HRPayrollPortal.tsx": [
+    {
+      "method": "GET",
+      "url": "/payroll"
+    },
+    {
+      "method": "GET",
+      "url": "/employees"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll/${latestRunId}/bank-transfer"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll/${latestRunId}/compliance"
+    }
+  ],
+  "client/src/features/payroll/pages/LoanManagement.tsx": [
+    {
+      "method": "GET",
+      "url": "/payroll/loan-types"
+    },
+    {
+      "method": "GET",
+      "url": "/settings/grades"
+    },
+    {
+      "method": "GET",
+      "url": "/settings/departments"
+    },
+    {
+      "method": "POST",
+      "url": "/payroll/loan-types"
+    },
+    {
+      "method": "DELETE",
+      "url": "/payroll/loan-types/${id}"
+    },
+    {
+      "method": "GET",
+      "url": "/employees"
+    },
+    {
+      "method": "POST",
+      "url": "/payroll/loans/${loanId}/approve"
+    },
+    {
+      "method": "POST",
+      "url": "/payroll/loans/${loanId}/reject"
+    },
+    {
+      "method": "PUT",
+      "url": "/payroll/loans/${editingLoan.id}"
+    }
+  ],
+  "client/src/features/payroll/pages/ManagerPayrollPortal.tsx": [
+    {
+      "method": "GET",
+      "url": "/payroll/manager-stats"
+    }
+  ],
+  "client/src/features/payroll/pages/MassSalaryStructureUploadPage.tsx": [
+    {
+      "method": "GET",
+      "url": "/payroll/structures/mass-upload-log"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll/slabs"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll/cycles"
+    },
+    {
+      "method": "GET",
+      "url": "/employees?pageSize=1000"
+    },
+    {
+      "method": "GET",
+      "url": "/settings/departments"
+    },
+    {
+      "method": "GET",
+      "url": "/settings/grades"
+    },
+    {
+      "method": "GET",
+      "url": "/settings/pay-grades"
+    },
+    {
+      "method": "GET",
+      "url": "/settings/locations"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll/structures/mappings"
+    },
+    {
+      "method": "POST",
+      "url": "/payroll/slabs/bulk-assign"
+    },
+    {
+      "method": "POST",
+      "url": "/payroll/slabs/bulk-assign"
+    },
+    {
+      "method": "POST",
+      "url": "/payroll/slabs/bulk-assign"
+    }
+  ],
+  "client/src/features/payroll/pages/MySettlementPage.tsx": [
+    {
+      "method": "GET",
+      "url": "/payroll/settlements/my-settlement"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll/settlements"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll/settlements"
+    },
+    {
+      "method": "GET",
+      "url": "/employees/me"
+    },
+    {
+      "method": "GET",
+      "url": "/employees"
+    }
+  ],
+  "client/src/features/payroll/pages/PayrollDashboard.tsx": [
+    {
+      "method": "GET",
+      "url": "/employees"
+    },
+    {
+      "method": "GET",
+      "url": "/settings/departments"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll/slabs"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll/cycles"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll/runs"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll"
+    }
+  ],
+  "client/src/features/payroll/pages/PayrollPoliciesPage.tsx": [
+    {
+      "method": "GET",
+      "url": "/payroll/policies"
+    },
+    {
+      "method": "POST",
+      "url": "/payroll/policies"
+    }
+  ],
+  "client/src/features/payroll/pages/PayrollProcessing.tsx": [
+    {
+      "method": "POST",
+      "url": "/payroll/upload"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll/process-register"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll/${run.id}"
+    },
+    {
+      "method": "POST",
+      "url": "/payroll/${runId}/approve"
+    },
+    {
+      "method": "POST",
+      "url": "/payroll/${rejectTargetRun.id}/unlock"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll/${run.id}"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll/process-register"
+    },
+    {
+      "method": "POST",
+      "url": "/payroll/${runId}/approve"
+    },
+    {
+      "method": "POST",
+      "url": "/payroll/${runId}/publish"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll/attendance-calendar"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll/cycles"
+    },
+    {
+      "method": "GET",
+      "url": "/settings/companies"
+    },
+    {
+      "method": "GET",
+      "url": "/settings/locations"
+    },
+    {
+      "method": "GET",
+      "url": "/settings/departments"
+    },
+    {
+      "method": "GET",
+      "url": "/settings/grades"
+    },
+    {
+      "method": "GET",
+      "url": "/settings/pay-grades"
+    },
+    {
+      "method": "GET",
+      "url": "/settings/designations"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll/slabs"
+    },
+    {
+      "method": "GET",
+      "url": "/employees"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll/process-register"
+    },
+    {
+      "method": "PATCH",
+      "url": "/payroll/run-employees/${rowId}"
+    },
+    {
+      "method": "POST",
+      "url": "/payroll/process-register/override"
+    },
+    {
+      "method": "POST",
+      "url": "/payroll/process-register/override"
+    },
+    {
+      "method": "POST",
+      "url": "/payroll/process-register/reset-override"
+    },
+    {
+      "method": "POST",
+      "url": "/payroll/process-register/reset-override"
+    },
+    {
+      "method": "POST",
+      "url": "/payroll/process-register/override"
+    },
+    {
+      "method": "POST",
+      "url": "/payroll/process-register/override"
+    },
+    {
+      "method": "POST",
+      "url": "/payroll"
+    },
+    {
+      "method": "POST",
+      "url": "/payroll/${run.id}/process"
+    },
+    {
+      "method": "POST",
+      "url": "/payroll/${activeRunId}/lock"
+    },
+    {
+      "method": "POST",
+      "url": "/payroll/${activeRunId}/approve"
+    },
+    {
+      "method": "POST",
+      "url": "/payroll/${activeRunId}/publish"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll/cycles"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll"
+    }
+  ],
+  "client/src/features/payroll/pages/PayrollReportsPage.tsx": [
+    {
+      "method": "GET",
+      "url": "/payroll/process-register"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll/process-register"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll/cycles"
+    },
+    {
+      "method": "GET",
+      "url": "/settings/departments"
+    },
+    {
+      "method": "GET",
+      "url": "/departments"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll/slabs"
+    }
+  ],
+  "client/src/features/payroll/pages/PayrollSettingsPage.tsx": [
+    {
+      "method": "GET",
+      "url": "/payroll/settings"
+    },
+    {
+      "method": "PUT",
+      "url": "/payroll/settings"
+    },
+    {
+      "method": "GET",
+      "url": "/settings/departments"
+    },
+    {
+      "method": "GET",
+      "url": "/settings/locations"
+    },
+    {
+      "method": "GET",
+      "url": "/settings/grades"
+    },
+    {
+      "method": "GET",
+      "url": "/settings/pay-grades"
+    },
+    {
+      "method": "GET",
+      "url": "/settings/designations"
+    },
+    {
+      "method": "GET",
+      "url": "/employees"
+    },
+    {
+      "method": "GET",
+      "url": "/rbac/roles"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll/cycles"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll/slabs"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll/component-groups"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll/component-definitions"
+    },
+    {
+      "method": "DELETE",
+      "url": "/payroll/components/${id}"
+    },
+    {
+      "method": "PUT",
+      "url": "/payroll/cycles/${selectedCycleId}"
+    },
+    {
+      "method": "POST",
+      "url": "/payroll/cycles"
+    },
+    {
+      "method": "DELETE",
+      "url": "/payroll/cycles/${id}"
+    },
+    {
+      "method": "PUT",
+      "url": "/payroll/component-groups/${selectedGroupId}"
+    },
+    {
+      "method": "POST",
+      "url": "/payroll/component-groups"
+    },
+    {
+      "method": "PUT",
+      "url": "/payroll/component-definitions/${selectedComponentId}"
+    },
+    {
+      "method": "POST",
+      "url": "/payroll/component-definitions"
+    },
+    {
+      "method": "PUT",
+      "url": "/payroll/slabs/${selectedSlabId}"
+    },
+    {
+      "method": "POST",
+      "url": "/payroll/slabs"
+    },
+    {
+      "method": "DELETE",
+      "url": "/payroll/slabs/${id}"
+    }
+  ],
+  "client/src/features/payroll/pages/PayslipViewer.tsx": [
+    {
+      "method": "POST",
+      "url": "/payroll/payslips"
+    },
+    {
+      "method": "GET",
+      "url": "/employees"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll/structures"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll/structures/mappings"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll/settings"
+    },
+    {
+      "method": "GET",
+      "url": "/settings/departments"
+    },
+    {
+      "method": "GET",
+      "url": "/settings/companies"
+    },
+    {
+      "method": "GET",
+      "url": "/settings/company-profile"
+    },
+    {
+      "method": "POST",
+      "url": "/payroll/payslips/generate-from-process"
+    }
+  ],
+  "client/src/features/payroll/pages/SalaryRevisionManagement.tsx": [
+    {
+      "method": "GET",
+      "url": "/payroll/slabs"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll/component-definitions"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll/salary-revisions"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll/structures/mappings"
+    },
+    {
+      "method": "GET",
+      "url": "/employees"
+    },
+    {
+      "method": "POST",
+      "url": "/payroll/salary-revisions"
+    },
+    {
+      "method": "POST",
+      "url": "/payroll/structures/assign"
+    },
+    {
+      "method": "PUT",
+      "url": "/payroll/salary-revisions/${rev.id}/approve"
+    },
+    {
+      "method": "POST",
+      "url": "/payroll/structures/assign"
+    },
+    {
+      "method": "PUT",
+      "url": "/payroll/salary-revisions/${rev.id}/reject"
+    }
+  ],
+  "client/src/features/payroll/pages/SalaryStructureManagement.tsx": [
+    {
+      "method": "POST",
+      "url": "/payroll/structures/bulk-assign"
+    },
+    {
+      "method": "DELETE",
+      "url": "/payroll/slabs/${id}"
+    },
+    {
+      "method": "GET",
+      "url": "/employees"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll/cycles"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll/components"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll/slabs"
+    },
+    {
+      "method": "GET",
+      "url": "/settings/departments"
+    },
+    {
+      "method": "GET",
+      "url": "/settings/grades"
+    },
+    {
+      "method": "GET",
+      "url": "/settings/locations"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll/structures"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll/structures/mappings"
+    },
+    {
+      "method": "PUT",
+      "url": "/payroll/structures/${editingId}"
+    },
+    {
+      "method": "POST",
+      "url": "/payroll/structures"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll/structures"
+    },
+    {
+      "method": "POST",
+      "url": "/payroll/structures"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll/structures"
+    },
+    {
+      "method": "POST",
+      "url": "/payroll/structures/assign"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll/structures/mappings"
+    },
+    {
+      "method": "DELETE",
+      "url": "/payroll/structures/${id}"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll/structures"
+    }
+  ],
+  "client/src/features/payroll/pages/TaxDeclaration.tsx": [
+    {
+      "method": "GET",
+      "url": "/employees"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll/structures"
+    }
+  ],
+  "client/src/features/payroll/pages/TeamSettlementsPage.tsx": [
+    {
+      "method": "GET",
+      "url": "/payroll/settlements/team"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll/settlements"
+    },
+    {
+      "method": "GET",
+      "url": "/payroll/settlements"
+    },
+    {
+      "method": "GET",
+      "url": "/employees"
+    }
+  ]
+}

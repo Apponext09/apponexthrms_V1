@@ -3,6 +3,7 @@ import { AuditService } from '../../audit/audit.service';
 import { EmployeeTypeRepository } from '../repositories/EmployeeTypeRepository';
 import type { TenantContext } from '../../../db/types';
 import { ConflictError, NotFoundError } from '../../../common/errors/index';
+import { assertMasterNotInUse } from '../utils/masterUsage';
 
 export interface EmployeeTypeCreate {
   name: string;
@@ -24,16 +25,24 @@ export class EmployeeTypeService {
   }
 
   async listEmployeeTypes(ctx: TenantContext, options?: any) {
-    return this.employeeTypeRepo.list(ctx, options);
+    await this.employeeTypeRepo.ensureTable();
+    try {
+      return await this.employeeTypeRepo.list(ctx, options);
+    } catch (err) {
+      console.error('[EmployeeTypeService.listEmployeeTypes] Error:', err);
+      return { data: [], items: [], meta: { total: 0, page: 1, limit: 50, totalPages: 0 } };
+    }
   }
 
   async getEmployeeType(ctx: TenantContext, id: number | string) {
+    await this.employeeTypeRepo.ensureTable();
     const employeeType = await this.employeeTypeRepo.getById(ctx, id);
     if (!employeeType) throw new NotFoundError('Employee Type not found');
     return employeeType;
   }
 
   async createEmployeeType(ctx: TenantContext, data: EmployeeTypeCreate) {
+    await this.employeeTypeRepo.ensureTable();
     const name = data.name.trim();
     const isUnique = await this.employeeTypeRepo.isNameUnique(ctx, name);
     if (!isUnique) {
@@ -87,6 +96,9 @@ export class EmployeeTypeService {
 
   async deleteEmployeeType(ctx: TenantContext, id: number | string) {
     const employeeType = await this.getEmployeeType(ctx, id);
+    await assertMasterNotInUse(ctx.organizationId, id, 'employment type', [
+      { table: 'employees', column: 'employment_type', label: 'employee(s)', matchValue: String(employeeType.name) },
+    ]);
     await this.employeeTypeRepo.hardDelete(ctx, id);
     await this.auditService.log(ctx, {
       action: 'DELETE',

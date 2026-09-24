@@ -13,7 +13,7 @@ import {
   CheckCircle,
   Clock,
   Send,
-  DollarSign,
+  IndianRupee,
   Calculator,
   UserCheck,
   Edit,
@@ -334,7 +334,7 @@ export const SalaryStructureManagement: React.FC = () => {
     });
 
     if (targets.length === 0) {
-      alert(`No active employees found matching Department "${selectedDeptFilter}" and Grade "${selectedGradeFilter}"`);
+      window.appAlert(`No active employees found matching Department "${selectedDeptFilter}" and Grade "${selectedGradeFilter}"`);
       return;
     }
 
@@ -365,7 +365,7 @@ export const SalaryStructureManagement: React.FC = () => {
   };
 
   const handleDeleteSlab = async (id: string | number, name?: string) => {
-    if (!window.confirm(`Are you sure you want to delete pay slab "${name || id}"?`)) return;
+    if (!await window.appConfirm(`Are you sure you want to delete pay slab "${name || id}"?`)) return;
     try {
       await apiClient.delete(`/payroll/slabs/${id}`);
       setPayrollSlabs(prev => prev.filter(s => String(s.id) !== String(id)));
@@ -373,7 +373,7 @@ export const SalaryStructureManagement: React.FC = () => {
       setTimeout(() => setSuccessMsg(null), 4000);
     } catch (err: any) {
       console.error('Delete slab error:', err);
-      alert(err?.response?.data?.message || 'Failed to delete pay slab.');
+      window.appAlert(err?.response?.data?.message || 'Failed to delete pay slab.');
     }
   };
 
@@ -536,7 +536,10 @@ export const SalaryStructureManagement: React.FC = () => {
     apiClient.get('/settings/locations').then((res: any) => {
       const locs = res.data?.data || res.data || [];
       if (Array.isArray(locs) && locs.length > 0) {
-        const names = locs.map((l: any) => l.name || l.location_name).filter(Boolean);
+        const names = locs
+          .filter((l: any) => l.status !== 'inactive' && l.status !== 'Inactive' && l.is_active !== 'No' && l.isActive !== 'No')
+          .map((l: any) => l.name || l.location_name)
+          .filter(Boolean);
         setDbLocations(names);
       }
     }).catch(() => { });
@@ -917,7 +920,7 @@ export const SalaryStructureManagement: React.FC = () => {
   const handleAssignToEmployee = async () => {
     const emp = employees.find(e => String(e.id) === assignEmpId);
     if (!emp) {
-      alert('Please select an employee to assign the salary structure.');
+      window.appAlert('Please select an employee to assign the salary structure.');
       return;
     }
 
@@ -1045,7 +1048,7 @@ export const SalaryStructureManagement: React.FC = () => {
   };
 
   const handleDeleteStructure = async (id: number) => {
-    if (window.confirm('Are you sure you want to delete this salary structure template?')) {
+    if (await window.appConfirm('Are you sure you want to delete this salary structure template?')) {
       try {
         await apiClient.delete(`/payroll/structures/${id}`);
       } catch (e) { }
@@ -1396,7 +1399,7 @@ export const SalaryStructureManagement: React.FC = () => {
                 {/* Annual CTC Input */}
                 <div className="space-y-1">
                   <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
-                    <DollarSign className="w-3.5 h-3.5 text-emerald-600" /> Annual CTC (₹) *
+                    <IndianRupee className="w-3.5 h-3.5 text-emerald-600" /> Annual CTC (₹) *
                   </label>
                   <Input
                     type="number"
@@ -1983,7 +1986,7 @@ export const SalaryStructureManagement: React.FC = () => {
                     {/* 4. Annual CTC */}
                     <div className="space-y-1">
                       <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
-                        <DollarSign className="w-3.5 h-3.5 text-emerald-600" /> Annual Cost to Company (CTC INR) *
+                        <IndianRupee className="w-3.5 h-3.5 text-emerald-600" /> Annual Cost to Company (CTC INR) *
                       </label>
                       <Input
                         type="number"
@@ -1999,7 +2002,7 @@ export const SalaryStructureManagement: React.FC = () => {
                   {/* ── Section 2: Earnings Configuration ──────────────────────── */}
                   <div className="space-y-2">
                     <div className="flex items-center gap-2 text-xs font-bold text-slate-800 dark:text-slate-100 border-b pb-1.5">
-                      <DollarSign className="w-3.5 h-3.5 text-emerald-600" />
+                      <IndianRupee className="w-3.5 h-3.5 text-emerald-600" />
                       Earnings Configuration
                       <span className="ml-auto text-[11px] font-normal text-slate-500">Check components to include in this salary structure</span>
                     </div>

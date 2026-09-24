@@ -217,7 +217,10 @@ export const IdCardDesignerPage: React.FC = () => {
           setDepartments(deptRes.data.data.map((d: any) => ({ id: d.id, name: d.name || d.department_name })));
         }
         if (locRes.data?.data) {
-          setLocations(locRes.data.data.map((l: any) => ({ id: l.id, name: l.name || l.location_name })));
+          const rawLocs = Array.isArray(locRes.data.data) ? locRes.data.data : [];
+          setLocations(rawLocs
+            .filter((l: any) => l.status !== 'inactive' && l.status !== 'Inactive' && l.is_active !== 'No' && l.isActive !== 'No')
+            .map((l: any) => ({ id: l.id, name: l.name || l.location_name })));
         }
       } catch (err) {}
     };
@@ -352,7 +355,7 @@ export const IdCardDesignerPage: React.FC = () => {
       toast.error('Cannot delete the organization default template.');
       return;
     }
-    if (confirm(`Are you sure you want to delete template '${templateName}'?`)) {
+    if (await window.appConfirm(`Are you sure you want to delete template '${templateName}'?`)) {
       try {
         await deleteMutation.mutateAsync(selectedTemplateId);
         setSelectedTemplateId(null);
@@ -360,8 +363,8 @@ export const IdCardDesignerPage: React.FC = () => {
     }
   };
 
-  const handleResetToDefault = () => {
-    if (confirm('Reset this template layout to factory default settings?')) {
+  const handleResetToDefault = async () => {
+    if (await window.appConfirm('Reset this template layout to factory default settings?')) {
       setConfig(DEFAULT_ID_CARD_CONFIG);
       setHasUnsavedChanges(true);
       toast.info('Template reset to factory default settings.');

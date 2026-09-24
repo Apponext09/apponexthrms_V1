@@ -8,15 +8,30 @@
 
 import type { Request, Response } from 'express';
 import { getKnex } from '../../../db/knex';
+import { requireOrgId } from '../utils/payroll.utils';
+import { ValidationError } from '../../../common/errors/index';
 import { PayrollService } from '../services/PayrollService';
+
+/** Parse a positive-integer route param or throw a 400 (not a 500). */
+function intParam(value: any, name = 'id'): number {
+  const n = Number(value);
+  if (!Number.isInteger(n) || n <= 0) throw new ValidationError(`Invalid ${name}`);
+  return n;
+}
 
 export class PayrollRunController {
   constructor(private payrollService: PayrollService) {}
 
   async generatePayroll(req: Request, res: Response) {
-    try {
+    {
       const { payrollCycleId, runType, companyId, locationId, departmentId, employeeIds, month } =
-        req.body;
+        req.body || {};
+      if (!payrollCycleId && !month) {
+        throw new ValidationError('payrollCycleId or month is required to generate a payroll run');
+      }
+      if (employeeIds !== undefined && !Array.isArray(employeeIds)) {
+        throw new ValidationError('employeeIds must be an array');
+      }
       const db = getKnex();
 
       let resolvedCompanyId = companyId || req.ctx?.companyId;
@@ -83,60 +98,50 @@ export class PayrollRunController {
         month ? String(month) : undefined
       );
       res.status(201).json({ success: true, data: run });
-    } catch (e: any) {
-      console.error('generatePayroll error:', e);
-      res.status(500).json({ success: false, message: e.message || 'Error generating payroll run' });
     }
   }
 
   async processPayroll(req: Request, res: Response) {
+    const runId = intParam(req.params.id, 'payroll run id');
     try {
-      const { id } = req.params;
-      const run = await this.payrollService.processPayroll(req.ctx, parseInt(id));
+      const run = await this.payrollService.processPayroll(req.ctx, runId);
       res.json({ success: true, data: run });
     } catch (e: any) {
-      console.error('processPayroll error:', e);
-      // Reset a permanently-stuck 'processing' run back to 'draft' so HR can retry
-      try {
-        const db = getKnex();
-        await db('payroll_runs')
-          .where('id', parseInt(req.params.id))
-          .where('organization_id', req.ctx.organizationId)
-          .where('status', 'processing')
-          .update({ status: 'draft', updated_at: new Date() });
-      } catch { /* ignore reset error */ }
-      res.status(500).json({ success: false, message: e.message || 'Error processing payroll run' });
+      // Safety net: free a run left stuck in 'processing' by an unexpected crash,
+      // then re-throw so the global error handler maps the real status
+      // (ValidationError → 400, etc.) instead of a blanket 500.
+      await getKnex()('payroll_runs')
+        .where({ id: runId, organization_id: req.ctx.organizationId, status: 'processing' })
+        .update({ status: 'draft', updated_at: new Date() })
+        .catch(() => { /* ignore */ });
+      throw e;
     }
   }
 
   async lockPayroll(req: Request, res: Response) {
-    const { id } = req.params;
-    const run = await this.payrollService.lockPayroll(req.ctx, parseInt(id));
+    const run = await this.payrollService.lockPayroll(req.ctx, intParam(req.params.id, 'payroll run id'));
     res.json({ success: true, data: run });
   }
 
   async unlockPayroll(req: Request, res: Response) {
-    const { id } = req.params;
     const { reason } = req.body || {};
-    const run = await this.payrollService.unlockPayroll(req.ctx, parseInt(id), reason);
+    const run = await this.payrollService.unlockPayroll(req.ctx, intParam(req.params.id, 'payroll run id'), reason);
     res.json({ success: true, data: run });
   }
 
   async approvePayroll(req: Request, res: Response) {
     const { id } = req.params;
-    const run = await this.payrollService.approvePayroll(req.ctx, parseInt(id));
+    const run = await this.payrollService.approvePayroll(req.ctx, intParam(id, 'payroll run id'));
     res.json({ success: true, data: run });
   }
 
   async publishPayroll(req: Request, res: Response) {
-    const { id } = req.params;
-    const run = await this.payrollService.publishPayroll(req.ctx, parseInt(id));
+    const run = await this.payrollService.publishPayroll(req.ctx, intParam(req.params.id, 'payroll run id'));
     res.json({ success: true, data: run });
   }
 
   async getPayrollStatus(req: Request, res: Response) {
-    const { id } = req.params;
-    const run = await this.payrollService.getPayrollStatus(req.ctx, parseInt(id));
+    const run = await this.payrollService.getPayrollStatus(req.ctx, intParam(req.params.id, 'payroll run id'));
     res.json({ success: true, data: run });
   }
 
@@ -172,12 +177,8 @@ export class PayrollRunController {
   }
 
   async getReconciliation(req: Request, res: Response) {
-    try {
-      const data = await this.payrollService.getReconciliation(req.ctx, parseInt(req.params.id));
-      res.json({ success: true, data });
-    } catch (e: any) {
-      res.json({ success: false, message: e.message || 'Error getting reconciliation' });
-    }
+    const data = await this.payrollService.getReconciliation(req.ctx, intParam(req.params.id, 'payroll run id'));
+    res.json({ success: true, data });
   }
 
   async getPayrollRunDetails(req: Request, res: Response) {
@@ -210,7 +211,6 @@ export class PayrollRunController {
       .join('employees as e', 'pre.employee_id', 'e.id')
       .leftJoin('designations as d', 'e.current_designation_id', 'd.id')
       .leftJoin('departments as dept', 'e.current_department_id', 'dept.id')
-      .leftJoin('payroll_slabs as slab', 'e.salary_slab_id', 'slab.id')
       .where('pre.payroll_run_id', runId)
       .select(
         'pre.*',
@@ -218,11 +218,16 @@ export class PayrollRunController {
         'e.first_name',
         'e.last_name',
         'e.bank_name',
-        'e.account_number',
+        'e.account_no as account_number',
         'e.ifsc_code',
-        db.raw("COALESCE(dept.name, e.department, 'General') as department"),
-        db.raw("COALESCE(d.name, e.designation, 'Staff') as designation"),
-        db.raw("COALESCE(slab.name, 'Standard Pay Slab') as slab_name")
+        db.raw("COALESCE(dept.name, 'General') as department"),
+        db.raw("COALESCE(d.name, 'Staff') as designation"),
+        db.raw(`COALESCE((
+          SELECT ps.name FROM salary_structures ss
+          JOIN payroll_slabs ps ON ps.id = ss.slab_id
+          WHERE ss.employee_id = e.id AND ss.deleted_at IS NULL
+          ORDER BY ss.id DESC LIMIT 1
+        ), 'Standard Pay Slab') as slab_name`)
       );
 
     const deptMap: Record<string, { count: number; totalGross: number; totalNet: number }> = {};
@@ -230,8 +235,8 @@ export class PayrollRunController {
       const deptName = emp.department || 'General';
       if (!deptMap[deptName]) deptMap[deptName] = { count: 0, totalGross: 0, totalNet: 0 };
       deptMap[deptName].count += 1;
-      deptMap[deptName].totalGross += Number(emp.total_earnings || 0);
-      deptMap[deptName].totalNet += Number(emp.net_salary || 0);
+      deptMap[deptName].totalGross += Number(emp.totalEarnings ?? emp.total_earnings ?? 0);
+      deptMap[deptName].totalNet += Number(emp.netSalary ?? emp.net_salary ?? 0);
     }
     const departmentBreakdown = Object.entries(deptMap).map(([name, data]) => ({
       department: name,
@@ -263,24 +268,17 @@ export class PayrollRunController {
   async getPayrollStats(req: Request, res: Response) {
     try {
       const db = getKnex();
-      const orgId = req.ctx?.organizationId || 1;
-      const monthStr = req.query.month
-        ? String(req.query.month).slice(0, 7)
-        : new Date().toISOString().slice(0, 7);
+      const orgId = requireOrgId(req.ctx);
 
       const latestRun = await db('payroll_runs')
-        .where((b) => {
-          if (orgId) b.where('organization_id', orgId).orWhereNull('organization_id');
-        })
+        .where('organization_id', orgId)
         .whereNull('deleted_at')
         .orderBy('id', 'desc')
         .first()
         .catch(() => null);
 
       const totalEmployeesCount = await db('employees')
-        .where((b) => {
-          if (orgId) b.where('organization_id', orgId).orWhereNull('organization_id');
-        })
+        .where('organization_id', orgId)
         .where('status', 'ACTIVE')
         .whereNull('deleted_at')
         .count('id as count')
@@ -311,8 +309,8 @@ export class PayrollRunController {
           totalGross,
           totalNet,
           totalDeductions,
-          status: latestRun?.status || 'Draft',
-          runMonth: monthStr,
+          status: latestRun?.status || 'draft',
+          runMonth: latestRun ? String(latestRun.run_month || latestRun.runMonth || '') : new Date().toISOString().slice(0, 7),
         },
       });
     } catch (err: any) {
@@ -323,13 +321,11 @@ export class PayrollRunController {
   async getManagerDeptStats(req: Request, res: Response) {
     try {
       const db = getKnex();
-      const orgId = req.ctx?.organizationId || 1;
+      const orgId = requireOrgId(req.ctx);
 
       const deptStats = await db('employees as e')
         .leftJoin('departments as d', 'e.current_department_id', 'd.id')
-        .where((b) => {
-          if (orgId) b.where('e.organization_id', orgId).orWhereNull('e.organization_id');
-        })
+        .where('e.organization_id', orgId)
         .whereNull('e.deleted_at')
         .groupBy('d.id', 'd.name')
         .select(

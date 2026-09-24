@@ -172,7 +172,7 @@ export function ResourcePlanMasterForm({ onCancel, onSave }: ResourcePlanMasterF
 
   const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!window.confirm('Are you sure you want to delete this resource plan?')) return;
+    if (!await window.appConfirm('Are you sure you want to delete this resource plan?')) return;
     try {
       const res = await apiClient.delete(`/settings/resource-plans/${id}`);
       if (res.data?.success) {
@@ -530,7 +530,7 @@ export function ResourcePlanMasterForm({ onCancel, onSave }: ResourcePlanMasterF
                         <span className={cn(
                           'text-[10px] font-bold px-2 py-0.5 rounded-full border transition-colors',
                           isSelected
-                            ? 'bg-white/20 text-white border-white/30'
+                            ? 'bg-background/20 text-white border-white/30'
                             : plan.status === 'active'
                             ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
                             : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20'
@@ -545,7 +545,7 @@ export function ResourcePlanMasterForm({ onCancel, onSave }: ResourcePlanMasterF
                           className={cn(
                             'p-1.5 rounded-lg transition-colors cursor-pointer',
                             isSelected
-                              ? 'text-primary-foreground/80 hover:text-white hover:bg-white/10'
+                              ? 'text-primary-foreground/80 hover:text-white hover:bg-background/10'
                               : 'text-muted-foreground hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30'
                           )}
                         >
@@ -578,7 +578,7 @@ export function ResourcePlanMasterForm({ onCancel, onSave }: ResourcePlanMasterF
                       </span>
                       <Badge variant="outline" className={cn(
                         'text-[10px] font-bold px-2 py-0.5',
-                        isSelected ? 'bg-white/20 text-white border-white/30' : 'bg-primary/10 text-primary border-primary/20'
+                        isSelected ? 'bg-background/20 text-white border-white/30' : 'bg-primary/10 text-primary border-primary/20'
                       )}>
                         {plan.staffRequired} {plan.staffRequired === 1 ? 'Person' : 'People'}
                       </Badge>

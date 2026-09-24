@@ -1,4 +1,4 @@
-﻿import { BaseRepository } from '../../../db/BaseRepository';
+import { BaseRepository } from '../../../db/BaseRepository';
 import type { User } from '@apponexthrms/shared';
 import type { TenantContext } from '../../../db/types';
 
@@ -60,31 +60,76 @@ export class UserRepository extends BaseRepository<User> {
    * Get user with roles and permissions
    */
   async getWithPermissions(ctx: TenantContext, userId: number) {
-    const user = await this.getById(ctx, userId);
+    const user = await this.db('users').where('id', userId).first();
     if (!user) {
       return null;
     }
 
-    // Fetch roles
-    const roles = await this.db('user_roles')
+    // Fetch roles (support org-level and platform system roles)
+    const rolesRows = await this.db('user_roles')
       .join('roles', 'user_roles.role_id', 'roles.id')
       .where('user_roles.user_id', userId)
-      .where('user_roles.organization_id', ctx.organizationId)
+      .where(function(this: any) {
+        this.where('user_roles.organization_id', ctx.organizationId).orWhereNull('user_roles.organization_id');
+      })
       .select('roles.code', 'roles.name', 'roles.id');
 
+    const roleCodesSet = new Set<string>(rolesRows.map((r) => r.code));
+
+    // Resolve accessRole from actual role assignments first. The legacy user
+    // column can be stale (for example, "employee" after a promotion).
+    // IMPORTANT: Never pick rolesRows[0] blindly — the DB return order is non-deterministic
+    // and will cause lower-privilege roles (e.g. 'employee') to override higher ones
+    // (e.g. 'finance') depending on insertion order.
+    let accessRole = '';
+
+    if (rolesRows.length > 0) {
+      // Pick the highest-privilege role using a deterministic priority list
+      const ROLE_PRIORITY: Record<string, number> = {
+        super_admin: 100,
+        organization_admin: 90,
+        ceo: 90,
+        hr_admin: 80,
+        hr: 80,
+        hr_manager: 70,
+        support: 70,
+        finance: 70,
+        finance_manager: 70,
+        department_head: 60,
+        manager: 60,
+        team_lead: 50,
+        consultant: 20,
+        intern: 10,
+        employee: 5,
+      };
+      const sorted = [...rolesRows].sort(
+        (a, b) => (ROLE_PRIORITY[b.code] ?? 0) - (ROLE_PRIORITY[a.code] ?? 0)
+      );
+      accessRole = sorted[0].code;
+    }
+
+    // Retain support for legacy records which have no role assignment yet.
+    if (!accessRole) {
+      accessRole = (user as any).role || (user as any).access_role || (user as any).accessRole || '';
+    }
+
+    if (accessRole) {
+      roleCodesSet.add(accessRole.toLowerCase());
+    }
+
     // Fetch permissions via roles
-    const permissions = await this.db('role_permissions')
+    const roleIds = rolesRows.map((r) => r.id);
+    const permissions = roleIds.length > 0 ? await this.db('role_permissions')
       .join('permissions', 'role_permissions.permission_id', 'permissions.id')
-      .whereIn(
-        'role_permissions.role_id',
-        roles.map((r) => r.id)
-      )
+      .whereIn('role_permissions.role_id', roleIds)
       .distinct('permissions.code')
-      .select('permissions.code');
+      .select('permissions.code') : [];
 
     return {
       ...user,
-      roles: roles.map((r) => r.code),
+      accessRole: accessRole || 'employee',
+      access_role: accessRole || 'employee',
+      roles: Array.from(roleCodesSet),
       permissions: permissions.map((p) => p.code),
     };
   }
