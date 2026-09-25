@@ -1,5 +1,5 @@
-import { BaseRepository } from '../../../db/BaseRepository';
-import type { TenantContext, ListQueryOptions } from '../../../db/types';
+import { BaseRepository } from "../../../db/BaseRepository";
+import type { TenantContext, ListQueryOptions } from "../../../db/types";
 
 export interface ShiftTemplate {
   id: number;
@@ -7,7 +7,7 @@ export interface ShiftTemplate {
   organization_id: number;
   shift_name: string;
   shift_code: string;
-  shift_type: 'fixed' | 'flexible' | 'night' | 'roster';
+  shift_type: "fixed" | "flexible" | "night" | "roster";
   start_time: string | null;
   end_time: string | null;
   duration_hours: number;
@@ -20,8 +20,11 @@ export interface ShiftTemplate {
   color: string;
   description: string | null;
   roster_pattern: any | null;
+  attendance_rules?: any | null;
+  attendance_rules_version?: number;
+  timezone?: string | null;
   is_default: boolean;
-  status: 'active' | 'inactive';
+  status: "active" | "inactive";
   created_by: number;
   updated_by: number;
   created_at: string;
@@ -31,25 +34,35 @@ export interface ShiftTemplate {
 
 export class ShiftTemplateRepository extends BaseRepository<ShiftTemplate> {
   constructor() {
-    super('shift_templates');
+    super("shift_templates");
     this.companyScoped = true;
   }
 
-  async getByCode(ctx: TenantContext, code: string): Promise<ShiftTemplate | null> {
-    return this.query(ctx).where('shift_code', code).first() as Promise<ShiftTemplate | null>;
+  async getByCode(
+    ctx: TenantContext,
+    code: string,
+  ): Promise<ShiftTemplate | null> {
+    return this.query(ctx)
+      .where("shift_code", code)
+      .first() as Promise<ShiftTemplate | null>;
   }
 
-  async isCodeUnique(ctx: TenantContext, code: string, shiftType?: string, excludeId?: number): Promise<boolean> {
-    let query = this.query(ctx).where('shift_code', code);
+  async isCodeUnique(
+    ctx: TenantContext,
+    code: string,
+    shiftType?: string,
+    excludeId?: number,
+  ): Promise<boolean> {
+    let query = this.query(ctx).where("shift_code", code);
     if (shiftType) {
-      if (shiftType === 'roster') {
-        query = query.where('shift_type', 'roster');
+      if (shiftType === "roster") {
+        query = query.where("shift_type", "roster");
       } else {
-        query = query.whereNot('shift_type', 'roster');
+        query = query.whereNot("shift_type", "roster");
       }
     }
     if (excludeId) {
-      query = query.whereNot('id', excludeId);
+      query = query.whereNot("id", excludeId);
     }
     const result = await query.first();
     return !result;
@@ -58,7 +71,7 @@ export class ShiftTemplateRepository extends BaseRepository<ShiftTemplate> {
   async getActiveShifts(ctx: TenantContext, options?: ListQueryOptions) {
     return this.list(ctx, {
       ...options,
-      filters: { status: 'active' },
+      filters: { status: "active" },
     });
   }
 
@@ -69,10 +82,16 @@ export class ShiftTemplateRepository extends BaseRepository<ShiftTemplate> {
   }
 
   async getDefaultShift(ctx: TenantContext): Promise<ShiftTemplate | null> {
-    return this.query(ctx).where('is_default', true).first() as Promise<ShiftTemplate | null>;
+    return this.query(ctx)
+      .where("is_default", true)
+      .first() as Promise<ShiftTemplate | null>;
   }
 
-  async getByType(ctx: TenantContext, shiftType: string, options?: ListQueryOptions) {
+  async getByType(
+    ctx: TenantContext,
+    shiftType: string,
+    options?: ListQueryOptions,
+  ) {
     return this.list(ctx, {
       ...options,
       filters: { shift_type: shiftType },
@@ -85,10 +104,10 @@ export class ShiftTemplateRepository extends BaseRepository<ShiftTemplate> {
   async updateShift(
     ctx: TenantContext,
     shiftId: number,
-    data: Partial<ShiftTemplate>
+    data: Partial<ShiftTemplate>,
   ): Promise<ShiftTemplate | null> {
     await this.query(ctx)
-      .where('id', shiftId)
+      .where("id", shiftId)
       .update({
         ...data,
         updated_by: ctx.userId,
@@ -108,7 +127,7 @@ export class ShiftTemplateRepository extends BaseRepository<ShiftTemplate> {
    */
   async delete(ctx: TenantContext, shiftId: number): Promise<void> {
     await this.query(ctx)
-      .where('id', shiftId)
+      .where("id", shiftId)
       .update({
         deleted_at: this.db.fn.now(),
         updated_by: ctx.userId,
@@ -122,11 +141,15 @@ export class ShiftTemplateRepository extends BaseRepository<ShiftTemplate> {
   async toggleStatus(
     ctx: TenantContext,
     shiftId: number,
-    status: 'active' | 'inactive'
+    status: "active" | "inactive",
   ): Promise<ShiftTemplate | null> {
     await this.query(ctx)
-      .where('id', shiftId)
-      .update({ status, updated_by: ctx.userId, updated_at: this.db.fn.now() as any });
+      .where("id", shiftId)
+      .update({
+        status,
+        updated_by: ctx.userId,
+        updated_at: this.db.fn.now() as any,
+      });
     return this.getById(ctx, shiftId);
   }
 
@@ -137,43 +160,47 @@ export class ShiftTemplateRepository extends BaseRepository<ShiftTemplate> {
     const { page = 1, pageSize = 50, search } = options || {};
     const offset = (page - 1) * pageSize;
 
-    let baseQuery = this.db('shift_templates as st')
-      .where('st.organization_id', ctx.organizationId)
-      .whereNull('st.deleted_at');
+    let baseQuery = this.db("shift_templates as st")
+      .where("st.organization_id", ctx.organizationId)
+      .whereNull("st.deleted_at");
 
     if (ctx.companyId) {
-      baseQuery = baseQuery.where('st.company_id', ctx.companyId);
+      baseQuery = baseQuery.where("st.company_id", ctx.companyId);
     }
 
     baseQuery = baseQuery
       .leftJoin(
-        this.db('employee_shift_assignments')
-          .where('organization_id', ctx.organizationId)
-          .where('is_current', true)
-          .groupBy('shift_id')
-          .select('shift_id')
-          .count('* as employee_count')
-          .as('esa'),
-        'esa.shift_id',
-        'st.id'
+        this.db("employee_shift_assignments")
+          .where("organization_id", ctx.organizationId)
+          .where("is_current", true)
+          .groupBy("shift_id")
+          .select("shift_id")
+          .count("* as employee_count")
+          .as("esa"),
+        "esa.shift_id",
+        "st.id",
       )
       .select(
-        'st.*',
-        this.db.raw('COALESCE(esa.employee_count, 0) as employee_count')
+        "st.*",
+        this.db.raw("COALESCE(esa.employee_count, 0) as employee_count"),
       );
 
     if (search) {
       baseQuery = baseQuery.where((q) =>
         q
-          .where('st.shift_name', 'like', `%${search}%`)
-          .orWhere('st.shift_code', 'like', `%${search}%`)
+          .where("st.shift_name", "like", `%${search}%`)
+          .orWhere("st.shift_code", "like", `%${search}%`),
       );
     }
 
-    const countQuery = baseQuery.clone().clearSelect().count('* as total').first() as any;
+    const countQuery = baseQuery
+      .clone()
+      .clearSelect()
+      .count("* as total")
+      .first() as any;
     const [countRow, rows] = await Promise.all([
       countQuery,
-      baseQuery.orderBy('st.created_at', 'desc').limit(pageSize).offset(offset),
+      baseQuery.orderBy("st.created_at", "desc").limit(pageSize).offset(offset),
     ]);
 
     return {
@@ -189,6 +216,6 @@ export class ShiftTemplateRepository extends BaseRepository<ShiftTemplate> {
   }
 
   protected getSearchableFields(): string[] {
-    return ['shift_name', 'shift_code', 'description'];
+    return ["shift_name", "shift_code", "description"];
   }
 }

@@ -37,7 +37,7 @@ const DEFAULT_SETTINGS: AttendanceModuleSettings = {
  */
 export function useAttendanceModuleSettings(): AttendanceModuleSettings {
   const { data, isLoading } = useQuery({
-    queryKey: ['org-settings', 'attendance-module'],
+    queryKey: ['org-settings', 'attendance-punch-defaults'],
     queryFn: async () => {
       const res = await apiClient.get('/settings/org-settings');
       if (!res.data?.success || !res.data?.data) return null;
@@ -54,7 +54,9 @@ export function useAttendanceModuleSettings(): AttendanceModuleSettings {
   }
 
   return {
-    attendanceMode: (data.attendance_mode as AttendanceMode) || 'both',
+    // GPS and face punching are always available. This is deliberately not
+    // controlled by a per-organization setting.
+    attendanceMode: 'both',
     geofenceRadiusMeters: Number(data.geofence_radius_meters ?? 100),
     whitelistedIPs: String(data.whitelisted_ips ?? ''),
     requireCheckout: data.require_checkout !== undefined ? Boolean(data.require_checkout) : true,

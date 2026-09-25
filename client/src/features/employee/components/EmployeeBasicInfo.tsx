@@ -9,6 +9,7 @@ import { showToast } from '@/components/ui/toast';
 import { useAuthStore } from '@/features/auth/store/authStore';
 import { useEmployees, useUpdateEmployee } from '../hooks/useEmployees';
 import { useDepartments } from '../../settings/hooks/useDepartments';
+import { useLocations } from '../../settings/hooks/useLocations';
 import { useEmployeeTypes } from '../../settings/hooks/useEmployeeTypes';
 import { useDesignations } from '../../settings/hooks/useDesignations';
 import { useEmployeeStatuses } from '../../settings/api/useEmployeeStatuses';
@@ -112,6 +113,7 @@ export function EmployeeBasicInfo({
   const { updateEmployee, isLoading: isSaving } = useUpdateEmployee(employee.id as number);
   const { employees } = useEmployees({ pageSize: 500 });
   const { data: departmentsData } = useDepartments(1, 100);
+  const { data: locationsData } = useLocations(1, 500);
   const { employeeTypes } = useEmployeeTypes();
   const { designations } = useDesignations();
   const { employeeStatuses } = useEmployeeStatuses();
@@ -133,6 +135,15 @@ export function EmployeeBasicInfo({
       confirmPassword: '',
       jobTitle: (employee as any).jobTitle || (employee as any).job_title || '',
       accessRole: (employee as any).accessRole || 'employee',
+      currentDesignationId:
+        (employee as any).currentDesignationId ||
+        (employee as any).current_designation_id ||
+        '',
+      currentLocationId:
+        (employee as any).currentLocationId ||
+        (employee as any).current_location_id ||
+        (employee as any).locationId ||
+        '',
     });
   }, [employee]);
 
@@ -183,6 +194,12 @@ export function EmployeeBasicInfo({
         dateOfJoining: formattedDoj === '' ? undefined : formattedDoj,
         employmentType: form.employmentType || '',
         departmentId: form.currentDepartmentId ? Number(form.currentDepartmentId) : null,
+        designationId: (form as any).currentDesignationId
+          ? Number((form as any).currentDesignationId)
+          : null,
+        locationId: (form as any).currentLocationId
+          ? Number((form as any).currentLocationId)
+          : null,
         employeeCode: form.employeeCode,
         reportingManagerId: form.reportingManagerId ? Number(form.reportingManagerId) : null,
         avatarUrl: form.avatarUrl || null,
@@ -225,6 +242,15 @@ export function EmployeeBasicInfo({
       confirmPassword: '',
       jobTitle: (employee as any).jobTitle || (employee as any).job_title || '',
       accessRole: (employee as any).accessRole || 'employee',
+      currentDesignationId:
+        (employee as any).currentDesignationId ||
+        (employee as any).current_designation_id ||
+        '',
+      currentLocationId:
+        (employee as any).currentLocationId ||
+        (employee as any).current_location_id ||
+        (employee as any).locationId ||
+        '',
     });
     setIsEditing(false);
   };
@@ -451,6 +477,30 @@ export function EmployeeBasicInfo({
               )}
             </div>
             <div>
+              <Label htmlFor="jobLocation" className="flex items-center gap-1">
+                Job Location {!isAdmin && <Lock className="w-3 h-3 text-amber-500 inline shrink-0" />}
+              </Label>
+              <select
+                id="jobLocation"
+                disabled={!isAdmin}
+                className={`flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm mt-1 ${!isAdmin ? 'bg-muted text-muted-foreground cursor-not-allowed opacity-80' : ''}`}
+                value={(form as any).currentLocationId || ''}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    currentLocationId: e.target.value ? Number(e.target.value) : null,
+                  } as any)
+                }
+              >
+                <option value="">-- No Job Location --</option>
+                {(locationsData?.items || locationsData?.data || []).map((loc: any) => (
+                  <option key={loc.id} value={loc.id}>
+                    {loc.name || loc.locationName || loc.location_name || loc.code}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
               <Label htmlFor="status" className="flex items-center gap-1">
                 Employee Status {!isAdmin && <Lock className="w-3 h-3 text-amber-500 inline shrink-0" />}
               </Label>
@@ -496,24 +546,31 @@ export function EmployeeBasicInfo({
               </select>
             </div>
             <div>
-              <Label htmlFor="jobTitle" className="flex items-center gap-1">
+              <Label htmlFor="designationId" className="flex items-center gap-1">
                 Designation {!isAdmin && <Lock className="w-3 h-3 text-amber-500 inline shrink-0" />}
               </Label>
               <select
-                id="jobTitle"
+                id="designationId"
                 disabled={!isAdmin}
                 className={`flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring mt-1 ${!isAdmin ? 'bg-muted text-muted-foreground cursor-not-allowed opacity-80' : ''}`}
-                value={form.jobTitle || ''}
-                onChange={(e) => setForm({ ...form, jobTitle: e.target.value })}
+                value={(form as any).currentDesignationId || ''}
+                onChange={(e) => {
+                  const selected = designations.find((d: any) => String(d.id) === e.target.value);
+                  setForm({
+                    ...form,
+                    currentDesignationId: e.target.value ? Number(e.target.value) : null,
+                    jobTitle: selected?.name || '',
+                  } as any);
+                }}
               >
                 <option value="">-- Select Designation --</option>
                 {designations.map((desig: any) => (
-                  <option key={desig.id} value={desig.name}>
+                  <option key={desig.id} value={desig.id}>
                     {desig.name}
                   </option>
                 ))}
-                {form.jobTitle && !designations.some((d: any) => d.name === form.jobTitle) && (
-                  <option value={form.jobTitle}>{form.jobTitle}</option>
+                {form.jobTitle && !(form as any).currentDesignationId && (
+                  <option value="">{form.jobTitle}</option>
                 )}
               </select>
             </div>

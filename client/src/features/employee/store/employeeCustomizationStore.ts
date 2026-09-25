@@ -161,7 +161,7 @@ const DEFAULT_CONFIG: EmployeeCustomizationConfig = {
     employeeNameAvatar: true,
     employeeCode: true,
     contactInfo: true,
-    statusBadge: false,
+    statusBadge: true,
     accessRole: true,
     department: true,
     designation: true,
@@ -239,7 +239,7 @@ export const useEmployeeCustomizationStore = create<EmployeeCustomizationStore>(
           const digits = Math.max(1, config.customEmployeeCodeDigits || 3);
           return `${prefix}${String(nextIndex).padStart(digits, '0')}`;
         }
-        return `EMP${String(nextIndex % 1000).padStart(3, '0')}`;
+        return `EMP${String(nextIndex).padStart(3, '0')}`;
       },
       generatePassword: () => {
         const { config } = get();

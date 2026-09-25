@@ -1,13 +1,13 @@
-import { z } from 'zod';
+import { z } from "zod";
 
 // ── Safe date helper ──────────────────────────────────────────────────────────
 // Accepts YYYY-MM-DD or ISO datetime strings (DB returns ISO), strips time part.
 // Empty strings and null are treated as undefined (optional fields).
 const safeDate = z.preprocess((val) => {
-  if (val === null || val === undefined || val === '') return undefined;
-  if (typeof val === 'string') {
+  if (val === null || val === undefined || val === "") return undefined;
+  if (typeof val === "string") {
     // Strip time part from ISO datetime like "2024-01-15T00:00:00.000Z"
-    const stripped = val.split('T')[0];
+    const stripped = val.split("T")[0];
     // Validate it's a proper YYYY-MM-DD
     return /^\d{4}-\d{2}-\d{2}$/.test(stripped) ? stripped : val;
   }
@@ -15,26 +15,58 @@ const safeDate = z.preprocess((val) => {
 }, z.string().date().optional());
 
 const safeEnum = <T extends [string, ...string[]]>(values: T) =>
-  z.preprocess((val) => (val === '' || val === null ? undefined : val), z.enum(values).nullable().optional());
+  z.preprocess((val) => {
+    if (val === "" || val === null || val === undefined) return undefined;
+    return typeof val === "string" ? val.trim().toLowerCase() : val;
+  }, z.enum(values).nullable().optional());
 
 const safeInt = z.preprocess((val) => {
-  if (val === '' || val === null || val === undefined) return undefined;
+  if (val === "" || val === null || val === undefined) return undefined;
   const num = Number(val);
   return isNaN(num) ? undefined : num;
 }, z.number().int().nullable().optional());
 
 // ── Employee Schemas ──────────────────────────────────────────────────────────
 export const employeeCreateSchema = z.object({
-  employeeCode: z.string().min(1, 'Employee code is required').max(50).regex(/^[a-zA-Z0-9]+$/, 'Employee code must contain only alphanumeric characters'),
-  firstName: z.string().min(1, 'First name is required').max(100).regex(/^[a-zA-Z\s]+$/, 'First name must contain only alphabets and letters'),
-  lastName: z.string().min(1, 'Last name is required').max(100).regex(/^[a-zA-Z\s]+$/, 'Last name must contain only alphabets and letters'),
+  employeeCode: z
+    .string()
+    .min(1, "Employee code is required")
+    .max(50)
+    .regex(
+      /^[a-zA-Z0-9]+$/,
+      "Employee code must contain only alphanumeric characters",
+    ),
+  firstName: z
+    .string()
+    .min(1, "First name is required")
+    .max(100)
+    .regex(
+      /^[a-zA-Z\s]+$/,
+      "First name must contain only alphabets and letters",
+    ),
+  lastName: z
+    .string()
+    .min(1, "Last name is required")
+    .max(100)
+    .regex(
+      /^[a-zA-Z\s]+$/,
+      "Last name must contain only alphabets and letters",
+    ),
   middleName: z.string().max(100).nullable().optional(),
   email: z.string().email(),
-  phone: z.string().regex(/^\d{10}$/, 'Phone number must be exactly 10 digits').nullable().optional(),
-  mobile: z.string().regex(/^\d{10}$/, 'Mobile number must be exactly 10 digits').nullable().optional(),
+  phone: z
+    .string()
+    .regex(/^\d{10}$/, "Phone number must be exactly 10 digits")
+    .nullable()
+    .optional(),
+  mobile: z
+    .string()
+    .regex(/^\d{10}$/, "Mobile number must be exactly 10 digits")
+    .nullable()
+    .optional(),
   dateOfBirth: safeDate,
-  gender: safeEnum(['male', 'female', 'other']),
-  maritalStatus: safeEnum(['single', 'married', 'divorced', 'widowed']),
+  gender: safeEnum(["male", "female", "other"]),
+  maritalStatus: safeEnum(["single", "married", "divorced", "widowed"]),
   bloodGroup: z.string().max(10).nullable().optional(),
   aadharNumber: z.string().max(50).nullable().optional(),
   aadhar_number: z.string().max(50).nullable().optional(),
@@ -43,10 +75,19 @@ export const employeeCreateSchema = z.object({
   passportNumber: z.string().max(50).nullable().optional(),
   passport_number: z.string().max(50).nullable().optional(),
   dateOfJoining: safeDate,
-  employmentType: z.preprocess((val) => (val === '' || val === null ? undefined : val), z.string().max(100).default('full_time')),
+  employmentType: z.preprocess(
+    (val) => (val === "" || val === null ? undefined : val),
+    z.string().max(100).default("full_time"),
+  ),
   designationId: safeInt,
   status: z.string().max(100).optional(),
-  jobTitle: z.string().max(150).nullable().optional(),
+  jobTitle: z
+    .string()
+    .trim()
+    .min(1, "Job title cannot be blank")
+    .max(150)
+    .nullable()
+    .optional(),
   departmentId: safeInt,
   department_id: safeInt,
   currentDepartmentId: safeInt,
@@ -62,7 +103,28 @@ export const employeeCreateSchema = z.object({
   costCenterId: safeInt,
   avatarUrl: z.string().nullable().optional(),
   bio: z.string().nullable().optional(),
-  accessRole: z.enum(['employee', 'team_lead', 'hr_manager', 'department_head', 'cto', 'cfo', 'coo', 'cxo', 'organization_admin', 'intern', 'consultant', 'admin', 'ceo', 'hr_admin', 'hr', 'support', 'super_admin', 'finance']).optional(),
+  accessRole: z
+    .enum([
+      "employee",
+      "team_lead",
+      "hr_manager",
+      "department_head",
+      "cto",
+      "cfo",
+      "coo",
+      "cxo",
+      "organization_admin",
+      "intern",
+      "consultant",
+      "admin",
+      "ceo",
+      "hr_admin",
+      "hr",
+      "support",
+      "super_admin",
+      "finance",
+    ])
+    .optional(),
   password: z.string().min(6).optional(),
   // Statutory and Banking details
   bankName: z.string().max(100).nullable().optional(),
@@ -101,7 +163,10 @@ export const employeeCreateSchema = z.object({
 export const employeeUpdateSchema = employeeCreateSchema.partial();
 
 export const employeeBulkCreateSchema = z.object({
-  employees: z.array(employeeCreateSchema),
+  // Bulk import accepts master names/IDs (department, designation, grade,
+  // location, manager) in addition to the employee-create payload. Keep these
+  // fields through validation so the import service can resolve them.
+  employees: z.array(employeeCreateSchema.partial().passthrough()),
 });
 
 export type EmployeeCreate = z.infer<typeof employeeCreateSchema>;
@@ -113,8 +178,17 @@ export const employeePersonalInfoCreateSchema = z.object({
   fatherName: z.string().max(100).nullable().optional(),
   motherName: z.string().max(100).nullable().optional(),
   spouseName: z.string().max(100).nullable().optional(),
-  maritalStatus: safeEnum(['single', 'married', 'divorced', 'widowed']),
-  childrenCount: z.number().int().min(0).optional().default(0),
+  maritalStatus: safeEnum(["single", "married", "divorced", "widowed"]),
+  // The UI intentionally clears this field for employees without children.
+  // Treat an empty/null value as zero instead of rejecting the entire profile.
+  childrenCount: z.preprocess(
+    (value) => {
+      if (value === '' || value === null || value === undefined) return 0;
+      const count = Number(value);
+      return Number.isFinite(count) ? count : value;
+    },
+    z.number().int('Children count must be a whole number').min(0).max(50),
+  ).optional().default(0),
   permanentAddress: z.string().max(500).nullable().optional(),
   currentAddress: z.string().max(500).nullable().optional(),
   city: z.string().max(100).nullable().optional(),
@@ -123,10 +197,15 @@ export const employeePersonalInfoCreateSchema = z.object({
   postalCode: z.string().max(20).nullable().optional(),
 });
 
-export const employeePersonalInfoUpdateSchema = employeePersonalInfoCreateSchema.partial();
+export const employeePersonalInfoUpdateSchema =
+  employeePersonalInfoCreateSchema.partial();
 
-export type EmployeePersonalInfoCreate = z.infer<typeof employeePersonalInfoCreateSchema>;
-export type EmployeePersonalInfoUpdate = z.infer<typeof employeePersonalInfoUpdateSchema>;
+export type EmployeePersonalInfoCreate = z.infer<
+  typeof employeePersonalInfoCreateSchema
+>;
+export type EmployeePersonalInfoUpdate = z.infer<
+  typeof employeePersonalInfoUpdateSchema
+>;
 
 // Employee Professional Info Schemas
 export const employeeProfessionalInfoCreateSchema = z.object({
@@ -139,15 +218,20 @@ export const employeeProfessionalInfoCreateSchema = z.object({
   githubUrl: z.string().url().nullable().optional(),
 });
 
-export const employeeProfessionalInfoUpdateSchema = employeeProfessionalInfoCreateSchema.partial();
+export const employeeProfessionalInfoUpdateSchema =
+  employeeProfessionalInfoCreateSchema.partial();
 
-export type EmployeeProfessionalInfoCreate = z.infer<typeof employeeProfessionalInfoCreateSchema>;
-export type EmployeeProfessionalInfoUpdate = z.infer<typeof employeeProfessionalInfoUpdateSchema>;
+export type EmployeeProfessionalInfoCreate = z.infer<
+  typeof employeeProfessionalInfoCreateSchema
+>;
+export type EmployeeProfessionalInfoUpdate = z.infer<
+  typeof employeeProfessionalInfoUpdateSchema
+>;
 
 // Employee Compensation Schemas
 export const employeeCompensationCreateSchema = z.object({
   baseSalary: z.number().min(0).nullable().optional(),
-  currency: z.string().length(3).default('INR'),
+  currency: z.string().length(3).default("INR"),
   salaryStructureId: z.number().int().nullable().optional(),
   bankName: z.string().max(100).nullable().optional(),
   accountNumber: z.string().max(30).nullable().optional(),
@@ -157,18 +241,32 @@ export const employeeCompensationCreateSchema = z.object({
   pensionNumber: z.string().max(50).nullable().optional(),
 });
 
-export const employeeCompensationUpdateSchema = employeeCompensationCreateSchema.partial();
+export const employeeCompensationUpdateSchema =
+  employeeCompensationCreateSchema.partial();
 
-export type EmployeeCompensationCreate = z.infer<typeof employeeCompensationCreateSchema>;
-export type EmployeeCompensationUpdate = z.infer<typeof employeeCompensationUpdateSchema>;
+export type EmployeeCompensationCreate = z.infer<
+  typeof employeeCompensationCreateSchema
+>;
+export type EmployeeCompensationUpdate = z.infer<
+  typeof employeeCompensationUpdateSchema
+>;
 
 // Employee Document Schemas
 export const employeeDocumentCreateSchema = z.object({
   employeeId: z.number().int(),
   documentType: z.enum([
-    'aadhaar', 'pan', 'passport', 'visa', 'driving_license',
-    'offer_letter', 'appointment_letter', 'confirmation_letter',
-    'relieving_letter', 'experience_letter', 'resume', 'certificate'
+    "aadhaar",
+    "pan",
+    "passport",
+    "visa",
+    "driving_license",
+    "offer_letter",
+    "appointment_letter",
+    "confirmation_letter",
+    "relieving_letter",
+    "experience_letter",
+    "resume",
+    "certificate",
   ]),
   fileUrl: z.string().url(),
   fileName: z.string().max(255).optional(),
@@ -180,10 +278,16 @@ export const employeeDocumentCreateSchema = z.object({
   issuedBy: z.string().max(100).nullable().optional(),
 });
 
-export const employeeDocumentUpdateSchema = employeeDocumentCreateSchema.partial().omit({ employeeId: true });
+export const employeeDocumentUpdateSchema = employeeDocumentCreateSchema
+  .partial()
+  .omit({ employeeId: true });
 
-export type EmployeeDocumentCreate = z.infer<typeof employeeDocumentCreateSchema>;
-export type EmployeeDocumentUpdate = z.infer<typeof employeeDocumentUpdateSchema>;
+export type EmployeeDocumentCreate = z.infer<
+  typeof employeeDocumentCreateSchema
+>;
+export type EmployeeDocumentUpdate = z.infer<
+  typeof employeeDocumentUpdateSchema
+>;
 
 // Asset Schemas
 export const assetCreateSchema = z.object({
@@ -194,7 +298,7 @@ export const assetCreateSchema = z.object({
   serialNumber: z.string().max(100).nullable().optional(),
   purchaseDate: z.string().date().nullable().optional(),
   purchasePrice: z.number().min(0).nullable().optional(),
-  currency: z.string().length(3).default('INR'),
+  currency: z.string().length(3).default("INR"),
 });
 
 export const assetUpdateSchema = assetCreateSchema.partial();
@@ -207,13 +311,13 @@ export const assetAllocationCreateSchema = z.object({
   employeeId: z.number().int(),
   assetId: z.number().int(),
   allocationDate: z.string().date(),
-  conditionAtAllocation: z.enum(['good', 'fair', 'poor']).default('good'),
+  conditionAtAllocation: z.enum(["good", "fair", "poor"]).default("good"),
   notes: z.string().nullable().optional(),
 });
 
 export const assetAllocationReturnSchema = z.object({
   returnDate: z.string().date(),
-  conditionAtReturn: z.enum(['good', 'fair', 'poor']).default('good'),
+  conditionAtReturn: z.enum(["good", "fair", "poor"]).default("good"),
   notes: z.string().nullable().optional(),
 });
 
@@ -223,7 +327,15 @@ export type AssetAllocationReturn = z.infer<typeof assetAllocationReturnSchema>;
 // Status Transition Schema
 export const statusTransitionSchema = z.object({
   employeeId: z.number().int(),
-  toStatus: z.enum(['candidate', 'onboarding', 'probation', 'active', 'notice', 'exit', 'alumni']),
+  toStatus: z.enum([
+    "candidate",
+    "onboarding",
+    "probation",
+    "active",
+    "notice",
+    "exit",
+    "alumni",
+  ]),
   transitionDate: z.string().date(),
   notes: z.string().nullable().optional(),
 });

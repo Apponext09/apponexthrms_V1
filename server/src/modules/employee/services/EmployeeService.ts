@@ -1,27 +1,33 @@
-import { hash } from 'argon2';
-import { v4 as uuidv4 } from 'uuid';
-import { withTransaction, getKnex } from '../../../db/knex';
-import { EmployeeRepository, type Employee } from '../repositories/EmployeeRepository';
-import { EmployeePersonalInfoRepository } from '../repositories/EmployeePersonalInfoRepository';
-import { EmployeeProfessionalInfoRepository } from '../repositories/EmployeeProfessionalInfoRepository';
-import { AuditService } from '../../audit/audit.service';
-import { BiometricService } from '../../attendance/services/BiometricService';
-import { NotFoundError, ValidationError } from '../../../common/errors/index';
-import { OrgHierarchyService } from './OrgHierarchyService';
-import type { TenantContext, ListQueryOptions } from '../../../db/types';
+import { hash } from "argon2";
+import { v4 as uuidv4 } from "uuid";
+import { withTransaction, getKnex } from "../../../db/knex";
+import {
+  EmployeeRepository,
+  type Employee,
+} from "../repositories/EmployeeRepository";
+import { EmployeePersonalInfoRepository } from "../repositories/EmployeePersonalInfoRepository";
+import { EmployeeProfessionalInfoRepository } from "../repositories/EmployeeProfessionalInfoRepository";
+import { AuditService } from "../../audit/audit.service";
+import { BiometricService } from "../../attendance/services/BiometricService";
+import { NotFoundError, ValidationError } from "../../../common/errors/index";
+import { OrgHierarchyService } from "./OrgHierarchyService";
+import type { TenantContext, ListQueryOptions } from "../../../db/types";
 
-async function resolveAuditUserId(db: any, ctx: TenantContext): Promise<number> {
-  const user = await db('users').where({ id: ctx.userId }).first();
+async function resolveAuditUserId(
+  db: any,
+  ctx: TenantContext,
+): Promise<number> {
+  const user = await db("users").where({ id: ctx.userId }).first();
   if (user) {
     return ctx.userId;
   }
-  const fallback = await db('users')
-    .where({ organization_id: ctx.organizationId, status: 'active' })
+  const fallback = await db("users")
+    .where({ organization_id: ctx.organizationId, status: "active" })
     .first();
   if (fallback) {
     return fallback.id;
   }
-  const ultimate = await db('users').where({ status: 'active' }).first();
+  const ultimate = await db("users").where({ status: "active" }).first();
   if (ultimate) {
     return ultimate.id;
   }
@@ -41,59 +47,115 @@ export class EmployeeService {
     this.auditService = new AuditService();
   }
 
+  /** Disable credentials and revoke sessions for a terminal employment status. */
+  private async revokeLoginForTerminalStatus(
+    ctx: TenantContext,
+    employeeId: number,
+    employeeStatus: unknown,
+  ): Promise<boolean> {
+    const normalized = String(employeeStatus ?? '').trim().toLowerCase().replace(/\s+/g, '_');
+    let shouldRevoke = new Set(['inactive', 'exit', 'alumni', 'terminated']).has(normalized);
+    const db = getKnex();
+
+    // Custom statuses become terminal only when HR enables the existing
+    // "Inactive on status change" setting in Employee Status Master.
+    if (!shouldRevoke && normalized) {
+      const configuredStatus = await db('employee_statuses')
+        .where('organization_id', ctx.organizationId)
+        .whereRaw('LOWER(name) = ?', [normalized.replace(/_/g, ' ')])
+        .where('status', 'active')
+        .where('inactive_on_status_change', true)
+        .whereNull('deleted_at')
+        .first();
+      shouldRevoke = Boolean(configuredStatus);
+    }
+    if (!shouldRevoke) return false;
+
+    await db.transaction(async (trx) => {
+      const userIds = await trx('users')
+        .where({ organization_id: ctx.organizationId, employee_id: employeeId })
+        .pluck('id') as number[];
+      if (!userIds.length) return;
+
+      await trx('users').whereIn('id', userIds).update({ status: 'inactive', updated_at: new Date() });
+      await trx('auth_sessions').whereIn('user_id', userIds).whereNull('revoked_at').update({
+        revoked_at: new Date(),
+        revoked_reason: 'employee_offboarded',
+      });
+    });
+    return true;
+  }
+
   /**
    * Helper method to resolve the Organization Admin's employee ID for a tenant context
    */
-  private async getOrgAdminEmployeeId(db: any, ctx: TenantContext): Promise<number | null> {
+  private async getOrgAdminEmployeeId(
+    db: any,
+    ctx: TenantContext,
+  ): Promise<number | null> {
     try {
-      const hasAdminOrgs = await db.schema.hasTable('admin_organizations');
+      const hasAdminOrgs = await db.schema.hasTable("admin_organizations");
       if (hasAdminOrgs) {
-        const adminOrgRow = await db('admin_organizations')
-          .where({ organization_id: ctx.organizationId, status: 'active' })
+        const adminOrgRow = await db("admin_organizations")
+          .where({ organization_id: ctx.organizationId, status: "active" })
           .first();
         if (adminOrgRow?.user_id) {
-          const user = await db('users').where({ id: adminOrgRow.user_id }).first();
+          const user = await db("users")
+            .where({ id: adminOrgRow.user_id })
+            .first();
           if (user?.employee_id) {
             return Number(user.employee_id);
           }
         }
       }
 
-      const adminRoleUser = await db('users')
-        .join('user_roles', 'users.id', 'user_roles.user_id')
-        .join('roles', 'user_roles.role_id', 'roles.id')
-        .where('users.organization_id', ctx.organizationId)
-        .whereIn('roles.code', ['organization_admin', 'admin', 'super_admin', 'superadmin'])
-        .whereNotNull('users.employee_id')
-        .select('users.employee_id')
+      const adminRoleUser = await db("users")
+        .join("user_roles", "users.id", "user_roles.user_id")
+        .join("roles", "user_roles.role_id", "roles.id")
+        .where("users.organization_id", ctx.organizationId)
+        .whereIn("roles.code", [
+          "organization_admin",
+          "admin",
+          "super_admin",
+          "superadmin",
+        ])
+        .whereNotNull("users.employee_id")
+        .select("users.employee_id")
         .first();
 
       if (adminRoleUser?.employee_id) {
         return Number(adminRoleUser.employee_id);
       }
 
-      const adminUser = await db('users')
+      const adminUser = await db("users")
         .where({ organization_id: ctx.organizationId })
-        .whereNotNull('employee_id')
+        .whereNotNull("employee_id")
         .where((b: any) => {
-          b.where('email', 'like', '%admin%').orWhere('email', 'like', '%owner%');
+          b.where("email", "like", "%admin%").orWhere(
+            "email",
+            "like",
+            "%owner%",
+          );
         })
-        .select('employee_id')
+        .select("employee_id")
         .first();
 
       if (adminUser?.employee_id) {
         return Number(adminUser.employee_id);
       }
 
-      const firstEmp = await db('employees')
+      const firstEmp = await db("employees")
         .where({ organization_id: ctx.organizationId })
-        .whereNull('deleted_at')
-        .orderBy('id', 'asc')
+        .whereNull("deleted_at")
+        .orderBy("id", "asc")
         .first();
 
       return firstEmp ? Number(firstEmp.id) : null;
     } catch (err) {
-      console.warn('[EmployeeService] Error resolving org admin employee ID:', err);
+      console.warn(
+        "[EmployeeService] Error resolving org admin employee ID:",
+        err,
+      );
       return null;
     }
   }
@@ -101,90 +163,123 @@ export class EmployeeService {
   /**
    * Create a new employee
    */
-  async createEmployee(ctx: TenantContext, input: {
-    employeeCode: string;
-    firstName: string;
-    lastName: string;
-    middleName?: string;
-    email: string;
-    phone?: string;
-    mobile?: string;
-    dateOfBirth?: string;
-    gender?: 'male' | 'female' | 'other';
-    maritalStatus?: 'single' | 'married' | 'divorced' | 'widowed';
-    dateOfJoining: string;
-    employmentType: string;
-    status?: string;
-    employeeStatus?: string;
-    employee_status?: string;
-    designationId?: number;
-    departmentId?: number;
-    branchId?: number;
-    locationId?: number;
-    reportingManagerId?: number;
-    costCenterId?: number;
-    currentGradeId?: number;
-    avatarUrl?: string;
-    accessRole?: string;
-    roles?: string[];
-    jobTitle?: string;
-    password?: string;
-    salarySlabId?: number | string;
-    salary_slab_id?: number | string;
-  }): Promise<{ employee: Employee; generatedPassword?: string }> {
+  async createEmployee(
+    ctx: TenantContext,
+    input: {
+      employeeCode: string;
+      firstName: string;
+      lastName: string;
+      middleName?: string;
+      email: string;
+      phone?: string;
+      mobile?: string;
+      dateOfBirth?: string;
+      gender?: "male" | "female" | "other";
+      maritalStatus?: "single" | "married" | "divorced" | "widowed";
+      dateOfJoining: string;
+      employmentType: string;
+      status?: string;
+      employeeStatus?: string;
+      employee_status?: string;
+      designationId?: number;
+      departmentId?: number;
+      branchId?: number;
+      locationId?: number;
+      reportingManagerId?: number;
+      costCenterId?: number;
+      currentGradeId?: number;
+      avatarUrl?: string;
+      accessRole?: string;
+      roles?: string[];
+      jobTitle?: string;
+      password?: string;
+      salarySlabId?: number | string;
+      salary_slab_id?: number | string;
+    },
+  ): Promise<{ employee: Employee; generatedPassword?: string }> {
     await this.ensureEmployeeColumns();
 
     // Validate formats
     if (input.employeeCode && !/^[a-zA-Z0-9]+$/.test(input.employeeCode)) {
-      throw new ValidationError(`Employee code '${input.employeeCode}' must contain only alphanumeric characters without special characters`);
+      throw new ValidationError(
+        `Employee code '${input.employeeCode}' must contain only alphanumeric characters without special characters`,
+      );
     }
     if (input.firstName && !/^[a-zA-Z\s]+$/.test(input.firstName)) {
-      throw new ValidationError('First name must contain only alphabetic characters');
+      throw new ValidationError(
+        "First name must contain only alphabetic characters",
+      );
     }
     if (input.lastName && !/^[a-zA-Z\s]+$/.test(input.lastName)) {
-      throw new ValidationError('Last name must contain only alphabetic characters');
+      throw new ValidationError(
+        "Last name must contain only alphabetic characters",
+      );
     }
     if (input.mobile && !/^\d{10}$/.test(input.mobile)) {
-      throw new ValidationError('Mobile number must be a valid 10-digit number');
-    }
-
-    // Check if employee code is unique
-    const isUnique = await this.employeeRepo.isCodeUnique(ctx, input.employeeCode);
-    if (!isUnique) {
-      throw new ValidationError(`Employee code '${input.employeeCode}' already exists`);
+      throw new ValidationError(
+        "Mobile number must be a valid 10-digit number",
+      );
     }
 
     const db = getKnex();
 
     // Check if email is already taken
-    const existingEmp = await db('employees')
+    const existingEmp = await db("employees")
       .where({ organization_id: ctx.organizationId, email: input.email })
       .first();
     if (existingEmp) {
-      throw new ValidationError(`An employee with email '${input.email}' already exists in your organization.`);
+      throw new ValidationError(
+        `An employee with email '${input.email}' already exists in your organization.`,
+      );
     }
 
-    const existingUser = await db('users')
+    const existingUser = await db("users")
       .where({ organization_id: ctx.organizationId, email: input.email })
       .first();
     if (existingUser) {
-      throw new ValidationError(`A user account with email '${input.email}' already exists in your organization.`);
+      throw new ValidationError(
+        `A user account with email '${input.email}' already exists in your organization.`,
+      );
     }
 
     let currentDesignationId = input.designationId || null;
 
-    if (input.jobTitle && input.departmentId) {
-      let designation = await db('designations')
-        .where({ organization_id: ctx.organizationId, department_id: input.departmentId, name: input.jobTitle })
+    // A selected designation must belong to the current organization.  Store its
+    // ID directly; it is deliberately independent from the employee's job title.
+    if (currentDesignationId) {
+      const designation = await db("designations")
+        .where({
+          id: currentDesignationId,
+          organization_id: ctx.organizationId,
+        })
+        .whereNull("deleted_at")
+        .first("id");
+      if (!designation) {
+        throw new ValidationError("Please select a valid designation.");
+      }
+    }
+
+    // Backward-compatible fallback for callers that do not yet supply a
+    // designation. New employee forms always supply designationId above.
+    if (!currentDesignationId && input.jobTitle && input.departmentId) {
+      let designation = await db("designations")
+        .where({
+          organization_id: ctx.organizationId,
+          department_id: input.departmentId,
+          name: input.jobTitle,
+        })
         .first();
       if (!designation) {
         const auditUserId = await resolveAuditUserId(db, ctx);
-        const [designationId] = await db('designations').insert({
+        const [designationId] = await db("designations").insert({
           uuid: uuidv4(),
           organization_id: ctx.organizationId,
           department_id: input.departmentId,
           name: input.jobTitle,
-          code: `D${input.departmentId}_${input.jobTitle.toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_|_$/g, '')}`.slice(0, 50),
+          code: `D${input.departmentId}_${input.jobTitle
+            .toUpperCase()
+            .replace(/[^A-Z0-9]+/g, "_")
+            .replace(/^_|_$/g, "")}`.slice(0, 50),
           created_by: auditUserId,
           updated_by: auditUserId,
           created_at: new Date(),
@@ -198,18 +293,47 @@ export class EmployeeService {
 
     // Helper to get Org Admin's employee ID if no reporting manager is specified
     let finalReportingManagerId = input.reportingManagerId || null;
-    if (!finalReportingManagerId && ['department_head', 'hr', 'cto', 'cfo', 'coo', 'cxo'].includes(input.accessRole || 'employee')) {
+    if (
+      !finalReportingManagerId &&
+      ["department_head", "hr", "cto", "cfo", "coo", "cxo"].includes(
+        input.accessRole || "employee",
+      )
+    ) {
       const adminEmpId = await this.getOrgAdminEmployeeId(db, ctx);
       if (adminEmpId) {
         finalReportingManagerId = adminEmpId;
       }
     }
 
-    let finalEmpCode = input.employeeCode;
-    if (!finalEmpCode || finalEmpCode.trim() === '') {
-      const [countRow] = await db('employees').where('organization_id', ctx.organizationId).count('* as count');
-      const nextNum = (Number((countRow as any)?.count || 0) + 1);
-      finalEmpCode = `EMP${String(nextNum % 1000).padStart(3, '0')}`;
+    // Generate the sequence on the server as well as displaying it in the UI.
+    // The submitted code contributes only its configured prefix and digit width;
+    // clients cannot select an arbitrary sequence number.
+    const requestedCode = String(input.employeeCode || "EMP001").trim();
+    const requestedParts = requestedCode.match(/^(.*?)(\d+)$/);
+    const codePrefix = requestedParts?.[1] || "EMP";
+    const codeWidth = Math.max(3, requestedParts?.[2].length || 3);
+    const existingCodes = await db("employees")
+      .where("organization_id", ctx.organizationId)
+      .select("employee_code");
+    const nextNum =
+      Math.max(
+        0,
+        ...existingCodes.map((row: any) => {
+          const code = String(row.employee_code || "");
+          if (!code.startsWith(codePrefix)) return 0;
+          const suffix = code.slice(codePrefix.length);
+          return /^\d+$/.test(suffix) ? Number(suffix) : 0;
+        }),
+      ) + 1;
+    const finalEmpCode = `${codePrefix}${String(nextNum).padStart(codeWidth, "0")}`;
+
+    // Check after automatic generation so both supplied and generated codes are
+    // protected by the same organization-scoped uniqueness rule.
+    const isUnique = await this.employeeRepo.isCodeUnique(ctx, finalEmpCode);
+    if (!isUnique) {
+      throw new ValidationError(
+        `Employee code '${finalEmpCode}' already exists`,
+      );
     }
 
     // Note: the employee who gets a salary slab assigned at creation time
@@ -222,14 +346,34 @@ export class EmployeeService {
     // Resolve target company ID (use active company or fallback to parent company for org admin)
     let effectiveCompanyId = ctx.companyId || (input as any).companyId || null;
     if (!effectiveCompanyId) {
-      const parentComp = await db('company')
-        .where('organization_id', ctx.organizationId)
-        .where((b) => b.where('is_parent', 1).orWhere('is_parent', true))
-        .whereNull('deleted_at')
+      const parentComp = await db("company")
+        .where("organization_id", ctx.organizationId)
+        .where((b) => b.where("is_parent", 1).orWhere("is_parent", true))
+        .whereNull("deleted_at")
         .first();
       if (parentComp) {
-        effectiveCompanyId = Number((parentComp as any).companyId || (parentComp as any).company_id || (parentComp as any).id);
+        effectiveCompanyId = Number(
+          (parentComp as any).companyId ||
+            (parentComp as any).company_id ||
+            (parentComp as any).id,
+        );
       }
+    }
+
+    const initialStatusInput = String(
+      input.status || input.employeeStatus || input.employee_status || 'active',
+    ).trim().toLowerCase().replace(/\s+/g, '_');
+    const initialEmployeeStatus = initialStatusInput === 'terminated' ? 'exit' : initialStatusInput;
+    let initialAccountIsActive = !['inactive', 'exit', 'alumni'].includes(initialEmployeeStatus);
+    if (initialAccountIsActive && initialEmployeeStatus) {
+      const configuredTerminalStatus = await db('employee_statuses')
+        .where('organization_id', ctx.organizationId)
+        .whereRaw('LOWER(name) = ?', [initialEmployeeStatus.replace(/_/g, ' ')])
+        .where('status', 'active')
+        .where('inactive_on_status_change', true)
+        .whereNull('deleted_at')
+        .first();
+      initialAccountIsActive = !configuredTerminalStatus;
     }
 
     // Create employee
@@ -257,14 +401,27 @@ export class EmployeeService {
       reporting_manager_id: finalReportingManagerId,
       cost_center_id: input.costCenterId || null,
       avatar_url: input.avatarUrl || null,
-      status: (input.status || input.employeeStatus || input.employee_status || '').toLowerCase() === 'inactive' ? 'inactive' : 'active',
-      employee_status: input.employeeStatus || input.employee_status || ( (input.status || '').toLowerCase() === 'inactive' ? 'Inactive' : ( (input.status || '').toLowerCase() === 'active' ? 'Active' : (input.status || 'Active') ) ),
+      status: initialAccountIsActive
+        ? "active"
+        : ['inactive', 'exit', 'alumni'].includes(initialEmployeeStatus)
+          ? initialEmployeeStatus
+          : "exit",
+      employee_status:
+        input.employeeStatus ||
+        input.employee_status ||
+        ((input.status || "").toLowerCase() === "inactive"
+          ? "Inactive"
+          : (input.status || "").toLowerCase() === "active"
+            ? "Active"
+            : input.status || "Active"),
       created_by: ctx.userId,
       updated_by: ctx.userId,
     } as any);
 
     // Create user login credentials
-    const plainPassword = input.password || `${(input.firstName || 'Emp').replace(/\s+/g, '')}@${new Date().getFullYear()}!`;
+    const plainPassword =
+      input.password ||
+      `${(input.firstName || "Emp").replace(/\s+/g, "")}@${new Date().getFullYear()}!`;
     const hashedPassword = await hash(plainPassword, {
       type: 2, // argon2id
       memoryCost: 19456,
@@ -275,31 +432,38 @@ export class EmployeeService {
     try {
       await db.transaction(async (trx) => {
         // 1. Create user
-        const [userId] = await trx('users').insert({
+        const [userId] = await trx("users").insert({
           uuid: uuidv4(),
           organization_id: ctx.organizationId,
           company_id: effectiveCompanyId,
           employee_id: employee.id,
           email: input.email,
           password_hash: hashedPassword,
-          status: 'active',
+          status: initialAccountIsActive ? "active" : "inactive",
           created_at: new Date(),
           updated_at: new Date(),
         });
 
         // 2. Assign accessRole and user roles
-        await this.syncUserAccessRole(trx, ctx, userId, input.accessRole || 'employee', employee.id, input.departmentId);
+        await this.syncUserAccessRole(
+          trx,
+          ctx,
+          userId,
+          input.accessRole || "employee",
+          employee.id,
+          input.departmentId,
+        );
 
         // 3. Assign Leave Policies (check bulk mappings first, fallback to default)
-        const mappings = await trx('leave_policy_mappings')
-          .where('organization_id', ctx.organizationId)
-          .whereNull('deleted_at')
-          .orderBy('priority', 'desc');
+        const mappings = await trx("leave_policy_mappings")
+          .where("organization_id", ctx.organizationId)
+          .whereNull("deleted_at")
+          .orderBy("priority", "desc");
 
-        const targetRoleCode = input.accessRole || 'employee';
-        const roleRecord = await trx('roles')
-          .where('organization_id', ctx.organizationId)
-          .where('code', targetRoleCode)
+        const targetRoleCode = input.accessRole || "employee";
+        const roleRecord = await trx("roles")
+          .where("organization_id", ctx.organizationId)
+          .where("code", targetRoleCode)
           .first();
         const roleIdVal = roleRecord ? roleRecord.id : null;
 
@@ -309,12 +473,25 @@ export class EmployeeService {
           if (mRoleId && String(mRoleId) !== String(roleIdVal)) {
             continue;
           }
-          const mDesignationId = mapping.designationId || mapping.designation_id;
-          if (mDesignationId && String(mDesignationId) !== String((input as any).currentDesignationId || (input as any).current_designation_id || input.designationId)) {
+          const mDesignationId =
+            mapping.designationId || mapping.designation_id;
+          if (
+            mDesignationId &&
+            String(mDesignationId) !==
+              String(
+                (input as any).currentDesignationId ||
+                  (input as any).current_designation_id ||
+                  input.designationId,
+              )
+          ) {
             continue;
           }
           const mDeptId = mapping.departmentId || mapping.department_id;
-          if (mDeptId && String(mDeptId) !== String(input.departmentId || (input as any).current_department_id)) {
+          if (
+            mDeptId &&
+            String(mDeptId) !==
+              String(input.departmentId || (input as any).current_department_id)
+          ) {
             continue;
           }
           const mEmpType = mapping.employmentType || mapping.employment_type;
@@ -327,42 +504,45 @@ export class EmployeeService {
 
         let defaultPolicy = null;
         if (matchedMapping) {
-          const policyId = matchedMapping.leavePolicyId || matchedMapping.leave_policy_id;
+          const policyId =
+            matchedMapping.leavePolicyId || matchedMapping.leave_policy_id;
           if (policyId) {
-            defaultPolicy = await trx('leave_policies')
-              .where('id', policyId)
+            defaultPolicy = await trx("leave_policies")
+              .where("id", policyId)
               .first();
           }
         }
 
         if (!defaultPolicy) {
-          defaultPolicy = await trx('leave_policies')
-            .where('organization_id', ctx.organizationId)
-            .where('is_default', true)
-            .where('status', 'active')
+          defaultPolicy = await trx("leave_policies")
+            .where("organization_id", ctx.organizationId)
+            .where("is_default", true)
+            .where("status", "active")
             .first();
         }
 
         if (!defaultPolicy) {
-          defaultPolicy = await trx('leave_policies')
-            .where('organization_id', ctx.organizationId)
-            .where('status', 'active')
+          defaultPolicy = await trx("leave_policies")
+            .where("organization_id", ctx.organizationId)
+            .where("status", "active")
             .first();
         }
 
         if (!defaultPolicy) {
-          defaultPolicy = await trx('leave_policies').where('status', 'active').first();
+          defaultPolicy = await trx("leave_policies")
+            .where("status", "active")
+            .first();
         }
 
         if (defaultPolicy) {
-          let leaveTypes = await trx('leave_types')
-            .where('organization_id', ctx.organizationId)
-            .orWhereNull('organization_id');
+          let leaveTypes = await trx("leave_types")
+            .where("organization_id", ctx.organizationId)
+            .orWhereNull("organization_id");
 
           if (!leaveTypes || leaveTypes.length === 0) {
-            leaveTypes = await trx('leave_types')
-              .where('organization_id', 1)
-              .orWhereNull('organization_id');
+            leaveTypes = await trx("leave_types")
+              .where("organization_id", 1)
+              .orWhereNull("organization_id");
           }
 
           const currentYear = new Date().getFullYear();
@@ -371,31 +551,35 @@ export class EmployeeService {
 
           for (const lt of leaveTypes) {
             // Create leave policy assignment
-            await trx('leave_policy_assignments').insert({
+            await trx("leave_policy_assignments").insert({
               uuid: uuidv4(),
               organization_id: ctx.organizationId,
               employee_id: employee.id,
               leave_type_id: lt.id,
               leave_policy_id: defaultPolicy.id,
-              annual_quota: lt.default_allowance_days || lt.defaultAllowanceDays || 12,
+              annual_quota:
+                lt.default_allowance_days || lt.defaultAllowanceDays || 12,
               carry_forward_enabled: 1,
               carry_forward_limit: 5,
-              encashment_enabled: lt.leave_code === 'PL' ? 1 : 0,
-              encashment_limit: lt.leave_code === 'PL' ? 15 : 0,
-              sandwich_policy_enabled: lt.leave_code === 'SL' ? 1 : 0,
+              encashment_enabled: lt.leave_code === "PL" ? 1 : 0,
+              encashment_limit: lt.leave_code === "PL" ? 15 : 0,
+              sandwich_policy_enabled: lt.leave_code === "SL" ? 1 : 0,
               probation_excluded: 0,
-              can_take_negative: lt.leave_code === 'LOP' ? 1 : 0,
-              assignment_start_date: input.dateOfJoining ? new Date(input.dateOfJoining) : new Date(),
+              can_take_negative: lt.leave_code === "LOP" ? 1 : 0,
+              assignment_start_date: input.dateOfJoining
+                ? new Date(input.dateOfJoining)
+                : new Date(),
               is_active: true,
               created_by: ctx.userId,
               updated_by: ctx.userId,
               created_at: new Date(),
-              updated_at: new Date()
+              updated_at: new Date(),
             } as any);
 
             // Create leave balance
-            const quota = lt.default_allowance_days || lt.defaultAllowanceDays || 12;
-            await trx('leave_balances').insert({
+            const quota =
+              lt.default_allowance_days || lt.defaultAllowanceDays || 12;
+            await trx("leave_balances").insert({
               uuid: uuidv4(),
               organization_id: ctx.organizationId,
               employee_id: employee.id,
@@ -413,23 +597,29 @@ export class EmployeeService {
               created_by: ctx.userId,
               updated_by: ctx.userId,
               created_at: new Date(),
-              updated_at: new Date()
+              updated_at: new Date(),
             } as any);
           }
         }
       });
     } catch (transactionError) {
-      console.error('[EmployeeService] Transaction failed, rolling back employee creation:', transactionError);
-      await this.employeeRepo.hardDelete(ctx, employee.id).catch(delErr => {
-        console.error('[EmployeeService] Failed to rollback orphaned employee:', delErr);
+      console.error(
+        "[EmployeeService] Transaction failed, rolling back employee creation:",
+        transactionError,
+      );
+      await this.employeeRepo.hardDelete(ctx, employee.id).catch((delErr) => {
+        console.error(
+          "[EmployeeService] Failed to rollback orphaned employee:",
+          delErr,
+        );
       });
       throw transactionError;
     }
 
     // Audit log
     await this.auditService.log(ctx, {
-      action: 'CREATE',
-      entityType: 'EMPLOYEE',
+      action: "CREATE",
+      entityType: "EMPLOYEE",
       entityId: employee.id,
       afterState: {
         employeeCode: input.employeeCode,
@@ -438,12 +628,15 @@ export class EmployeeService {
       },
     });
 
-    if (input.avatarUrl && input.avatarUrl.startsWith('data:image/')) {
+    if (input.avatarUrl && input.avatarUrl.startsWith("data:image/")) {
       try {
         const biometricService = new BiometricService();
         await biometricService.enrollFace(ctx, employee.id, input.avatarUrl);
       } catch (bioErr) {
-        console.warn('[EmployeeService] Initial biometric enrollment skipped:', bioErr);
+        console.warn(
+          "[EmployeeService] Initial biometric enrollment skipped:",
+          bioErr,
+        );
       }
     }
 
@@ -453,52 +646,61 @@ export class EmployeeService {
   private async ensureEmployeeColumns() {
     try {
       const db = getKnex();
-      const hasTable = await db.schema.hasTable('employees');
+      const hasTable = await db.schema.hasTable("employees");
       if (hasTable) {
         try {
-          await db.raw('ALTER TABLE employees MODIFY COLUMN avatar_url LONGTEXT NULL');
-          await db.raw("ALTER TABLE employees MODIFY COLUMN status ENUM('candidate','onboarding','probation','active','inactive','notice','exit','alumni') DEFAULT 'active'");
+          await db.raw(
+            "ALTER TABLE employees MODIFY COLUMN avatar_url LONGTEXT NULL",
+          );
+          await db.raw(
+            "ALTER TABLE employees MODIFY COLUMN status ENUM('candidate','onboarding','probation','active','inactive','notice','exit','alumni') DEFAULT 'active'",
+          );
         } catch (e) {
           // Ignore if alter fails
         }
 
         try {
-          const hasBioTable = await db.schema.hasTable('employee_biometric_profiles');
+          const hasBioTable = await db.schema.hasTable(
+            "employee_biometric_profiles",
+          );
           if (hasBioTable) {
-            await db.raw('ALTER TABLE employee_biometric_profiles MODIFY COLUMN profile_photo LONGTEXT NULL');
+            await db.raw(
+              "ALTER TABLE employee_biometric_profiles MODIFY COLUMN profile_photo LONGTEXT NULL",
+            );
           }
         } catch (e) {
           // Ignore
         }
 
         const columnsToEnsure = [
-          { name: 'avatar_url', type: 'text' },
-          { name: 'bio', type: 'text' },
-          { name: 'job_title', type: 'string', length: 150 },
-          { name: 'blood_group', type: 'string', length: 20 },
-          { name: 'nationality', type: 'string', length: 100 },
-          { name: 'aadhar_number', type: 'string', length: 50 },
-          { name: 'pan_number', type: 'string', length: 50 },
-          { name: 'passport_number', type: 'string', length: 50 },
-          { name: 'bank_name', type: 'string', length: 100 },
-          { name: 'account_no', type: 'string', length: 50 },
-          { name: 'ifsc_code', type: 'string', length: 50 },
-          { name: 'company_bank', type: 'string', length: 100 },
-          { name: 'branch_name', type: 'string', length: 100 },
-          { name: 'pf_no', type: 'string', length: 50 },
-          { name: 'uan_no', type: 'string', length: 50 },
-          { name: 'esic_no', type: 'string', length: 50 },
-          { name: 'pan_status', type: 'string', length: 50 },
-          { name: 'user_band', type: 'string', length: 50 },
-          { name: 'eligible_for_eps', type: 'string', length: 10 },
-          { name: 'background_verification', type: 'string', length: 50 },
-          { name: 'employee_status', type: 'string', length: 100 },
+          { name: "avatar_url", type: "text" },
+          { name: "bio", type: "text" },
+          { name: "job_title", type: "string", length: 150 },
+          { name: "blood_group", type: "string", length: 20 },
+          { name: "nationality", type: "string", length: 100 },
+          { name: "aadhar_number", type: "string", length: 50 },
+          { name: "pan_number", type: "string", length: 50 },
+          { name: "passport_number", type: "string", length: 50 },
+          { name: "bank_name", type: "string", length: 100 },
+          { name: "account_no", type: "string", length: 50 },
+          { name: "ifsc_code", type: "string", length: 50 },
+          { name: "company_bank", type: "string", length: 100 },
+          { name: "branch_name", type: "string", length: 100 },
+          { name: "pf_no", type: "string", length: 50 },
+          { name: "uan_no", type: "string", length: 50 },
+          { name: "esic_no", type: "string", length: 50 },
+          { name: "pan_status", type: "string", length: 50 },
+          { name: "user_band", type: "string", length: 50 },
+          { name: "eligible_for_eps", type: "string", length: 10 },
+          { name: "background_verification", type: "string", length: 50 },
+          { name: "employee_status", type: "string", length: 100 },
+          { name: "attendance_access_settings", type: "text" },
         ];
         for (const col of columnsToEnsure) {
-          const hasCol = await db.schema.hasColumn('employees', col.name);
+          const hasCol = await db.schema.hasColumn("employees", col.name);
           if (!hasCol) {
-            await db.schema.alterTable('employees', (table) => {
-              if (col.type === 'text') {
+            await db.schema.alterTable("employees", (table) => {
+              if (col.type === "text") {
                 table.text(col.name).nullable();
               } else {
                 table.string(col.name, col.length || 100).nullable();
@@ -508,7 +710,7 @@ export class EmployeeService {
         }
       }
     } catch (e) {
-      console.warn('[EmployeeService] ensureEmployeeColumns warning:', e);
+      console.warn("[EmployeeService] ensureEmployeeColumns warning:", e);
     }
   }
 
@@ -519,42 +721,48 @@ export class EmployeeService {
     accessRole: string,
     employeeId: number,
     departmentId?: number | null,
-    rolesArray?: string[]
+    rolesArray?: string[],
   ) {
-    const targetRole = accessRole || 'employee';
+    const targetRole = accessRole || "employee";
 
     // Clear existing role assignments for this user in user_roles
-    await db('user_roles')
-      .where('user_id', userId)
-      .where(function(this: any) {
-        this.where('organization_id', ctx.organizationId).orWhereNull('organization_id');
+    await db("user_roles")
+      .where("user_id", userId)
+      .where(function (this: any) {
+        this.where("organization_id", ctx.organizationId).orWhereNull(
+          "organization_id",
+        );
       })
       .delete();
 
     const rolesToAssign = new Set<string>();
     if (Array.isArray(rolesArray) && rolesArray.length > 0) {
-      rolesArray.forEach(r => { if (r) rolesToAssign.add(String(r).trim()); });
+      rolesArray.forEach((r) => {
+        if (r) rolesToAssign.add(String(r).trim());
+      });
     }
     rolesToAssign.add(targetRole);
 
     for (const rawRoleName of rolesToAssign) {
       if (!rawRoleName) continue;
       const cleanName = rawRoleName.trim();
-      const cleanCode = cleanName.toLowerCase().replace(/\s+/g, '_');
+      const cleanCode = cleanName.toLowerCase().replace(/\s+/g, "_");
 
       // Check if role exists in roles table
-      let roleRecord = await db('roles')
-        .where(function(this: any) {
-          this.where('organization_id', ctx.organizationId).orWhereNull('organization_id');
+      let roleRecord = await db("roles")
+        .where(function (this: any) {
+          this.where("organization_id", ctx.organizationId).orWhereNull(
+            "organization_id",
+          );
         })
-        .where(function(this: any) {
-          this.where('code', cleanCode).orWhere('name', cleanName);
+        .where(function (this: any) {
+          this.where("code", cleanCode).orWhere("name", cleanName);
         })
         .first();
 
       if (!roleRecord) {
         try {
-          const [newId] = await db('roles').insert({
+          const [newId] = await db("roles").insert({
             uuid: uuidv4(),
             organization_id: ctx.organizationId,
             code: cleanCode,
@@ -568,11 +776,13 @@ export class EmployeeService {
           });
           roleRecord = { id: newId, code: cleanCode, name: cleanName };
         } catch (e) {
-          roleRecord = await db('roles')
-            .where(function(this: any) {
-              this.where('organization_id', ctx.organizationId).orWhereNull('organization_id');
+          roleRecord = await db("roles")
+            .where(function (this: any) {
+              this.where("organization_id", ctx.organizationId).orWhereNull(
+                "organization_id",
+              );
             })
-            .where('code', cleanCode)
+            .where("code", cleanCode)
             .first();
         }
       }
@@ -580,25 +790,33 @@ export class EmployeeService {
       if (roleRecord) {
         let validAssignedBy = userId;
         if (ctx.userId) {
-          const userExists = await db('users').where('id', ctx.userId).first().catch(() => null);
+          const userExists = await db("users")
+            .where("id", ctx.userId)
+            .first()
+            .catch(() => null);
           if (userExists) validAssignedBy = ctx.userId;
         }
 
-        await db('user_roles').insert({
-          organization_id: ctx.organizationId,
-          user_id: userId,
-          role_id: roleRecord.id,
-          assigned_by: validAssignedBy,
-          assigned_at: new Date(),
-        }).catch((err: any) => {
-          console.warn('[EmployeeService] user_roles insert warning:', err?.message || err);
-        });
+        await db("user_roles")
+          .insert({
+            organization_id: ctx.organizationId,
+            user_id: userId,
+            role_id: roleRecord.id,
+            assigned_by: validAssignedBy,
+            assigned_at: new Date(),
+          })
+          .catch((err: any) => {
+            console.warn(
+              "[EmployeeService] user_roles insert warning:",
+              err?.message || err,
+            );
+          });
       }
     }
 
     // Update department_head_id if role is department_head
-    if (targetRole === 'department_head' && departmentId) {
-      await db('departments')
+    if (targetRole === "department_head" && departmentId) {
+      await db("departments")
         .where({ id: departmentId, organization_id: ctx.organizationId })
         .update({
           department_head_id: employeeId,
@@ -611,101 +829,179 @@ export class EmployeeService {
   /**
    * Update employee information
    */
-  async updateEmployee(ctx: TenantContext, employeeId: number, input: Record<string, any>): Promise<Employee> {
+  async updateEmployee(
+    ctx: TenantContext,
+    employeeId: number,
+    input: Record<string, any>,
+  ): Promise<Employee> {
     await this.ensureEmployeeColumns();
 
     const employee = await this.employeeRepo.getById(ctx, employeeId);
     if (!employee) {
-      throw new NotFoundError('Employee not found');
+      throw new NotFoundError("Employee not found");
     }
 
     const payload: Record<string, any> = {};
 
-    if (input.employeeCode !== undefined) payload.employee_code = input.employeeCode;
+    if (input.employeeCode !== undefined)
+      payload.employee_code = input.employeeCode;
     if (input.firstName !== undefined) payload.first_name = input.firstName;
     if (input.middleName !== undefined) payload.middle_name = input.middleName;
     if (input.lastName !== undefined) payload.last_name = input.lastName;
     if (input.email !== undefined) payload.email = input.email;
     if (input.phone !== undefined) payload.phone = input.phone;
     if (input.mobile !== undefined) payload.mobile = input.mobile;
-    if (input.dateOfBirth !== undefined) payload.date_of_birth = input.dateOfBirth;
+    if (input.dateOfBirth !== undefined)
+      payload.date_of_birth = input.dateOfBirth;
     if (input.gender !== undefined) payload.gender = input.gender;
-    if (input.maritalStatus !== undefined) payload.marital_status = input.maritalStatus;
-    if (input.marital_status !== undefined) payload.marital_status = input.marital_status;
+    if (input.maritalStatus !== undefined)
+      payload.marital_status = input.maritalStatus;
+    if (input.marital_status !== undefined)
+      payload.marital_status = input.marital_status;
     if (input.bloodGroup !== undefined) payload.blood_group = input.bloodGroup;
-    if (input.blood_group !== undefined) payload.blood_group = input.blood_group;
-    if (input.nationality !== undefined) payload.nationality = input.nationality;
-    if (input.aadharNumber !== undefined) payload.aadhar_number = input.aadharNumber;
-    if (input.aadhar_number !== undefined) payload.aadhar_number = input.aadhar_number;
+    if (input.blood_group !== undefined)
+      payload.blood_group = input.blood_group;
+    if (input.nationality !== undefined)
+      payload.nationality = input.nationality;
+    if (input.aadharNumber !== undefined)
+      payload.aadhar_number = input.aadharNumber;
+    if (input.aadhar_number !== undefined)
+      payload.aadhar_number = input.aadhar_number;
     if (input.panNumber !== undefined) payload.pan_number = input.panNumber;
     if (input.pan_number !== undefined) payload.pan_number = input.pan_number;
-    if (input.passportNumber !== undefined) payload.passport_number = input.passportNumber;
-    if (input.passport_number !== undefined) payload.passport_number = input.passport_number;
+    if (input.passportNumber !== undefined)
+      payload.passport_number = input.passportNumber;
+    if (input.passport_number !== undefined)
+      payload.passport_number = input.passport_number;
     if (input.avatarUrl !== undefined) payload.avatar_url = input.avatarUrl;
     if (input.avatar_url !== undefined) payload.avatar_url = input.avatar_url;
     if (input.bio !== undefined) payload.bio = input.bio;
     if (input.jobTitle !== undefined) payload.job_title = input.jobTitle;
     if (input.job_title !== undefined) payload.job_title = input.job_title;
-    if (input.customIdCard !== undefined) payload.custom_id_card = input.customIdCard;
-    if (input.custom_id_card !== undefined) payload.custom_id_card = input.custom_id_card;
-    if (input.reportingManagerId !== undefined || input.reporting_manager_id !== undefined) {
-      const targetMgrId = input.reportingManagerId !== undefined ? input.reportingManagerId : input.reporting_manager_id;
-      const numTargetId = targetMgrId !== null && targetMgrId !== undefined && String(targetMgrId).trim() !== '' ? Number(targetMgrId) : null;
+    if (input.attendanceAccessSettings !== undefined)
+      payload.attendance_access_settings = JSON.stringify(input.attendanceAccessSettings);
+    if (input.attendance_access_settings !== undefined)
+      payload.attendance_access_settings = typeof input.attendance_access_settings === 'string'
+        ? input.attendance_access_settings
+        : JSON.stringify(input.attendance_access_settings);
+    if (input.customIdCard !== undefined)
+      payload.custom_id_card = input.customIdCard;
+    if (input.custom_id_card !== undefined)
+      payload.custom_id_card = input.custom_id_card;
+    if (
+      input.reportingManagerId !== undefined ||
+      input.reporting_manager_id !== undefined
+    ) {
+      const targetMgrId =
+        input.reportingManagerId !== undefined
+          ? input.reportingManagerId
+          : input.reporting_manager_id;
+      const numTargetId =
+        targetMgrId !== null &&
+        targetMgrId !== undefined &&
+        String(targetMgrId).trim() !== ""
+          ? Number(targetMgrId)
+          : null;
       // Repository records are exposed in camelCase, while raw Knex records
       // use snake_case. Resolve either form before deciding whether the
       // reporting relationship has changed. Without this, a self-profile save
       // revalidates an unchanged HR manager against the hierarchy and fails.
-      const existingMgrRaw = (employee as any).reporting_manager_id ?? (employee as any).reportingManagerId;
-      const existingMgrId = existingMgrRaw !== null && existingMgrRaw !== undefined && String(existingMgrRaw).trim() !== ''
-        ? Number(existingMgrRaw)
-        : null;
+      const existingMgrRaw =
+        (employee as any).reporting_manager_id ??
+        (employee as any).reportingManagerId;
+      const existingMgrId =
+        existingMgrRaw !== null &&
+        existingMgrRaw !== undefined &&
+        String(existingMgrRaw).trim() !== ""
+          ? Number(existingMgrRaw)
+          : null;
 
       if (numTargetId !== existingMgrId) {
         const orgHierarchyService = new OrgHierarchyService();
-        await orgHierarchyService.validateReportingManagerUpdate(ctx, Number(employeeId), numTargetId);
+        await orgHierarchyService.validateReportingManagerUpdate(
+          ctx,
+          Number(employeeId),
+          numTargetId,
+        );
       }
       payload.reporting_manager_id = targetMgrId;
     }
-    if (input.designationId !== undefined) payload.current_designation_id = input.designationId;
-    if (input.departmentId !== undefined) payload.current_department_id = input.departmentId;
-    if ((input as any).currentDepartmentId !== undefined) payload.current_department_id = (input as any).currentDepartmentId;
-    if ((input as any).current_department_id !== undefined) payload.current_department_id = (input as any).current_department_id;
-    if ((input as any).department_id !== undefined) payload.current_department_id = (input as any).department_id;
-    if (input.branchId !== undefined) payload.current_branch_id = input.branchId;
-    if (input.locationId !== undefined) payload.current_location_id = input.locationId;
-    if (input.costCenterId !== undefined) payload.cost_center_id = input.costCenterId;
-    if (input.employmentType !== undefined) payload.employment_type = input.employmentType;
-    const rawStatusInput = input.employeeStatus !== undefined ? input.employeeStatus : (input.employee_status !== undefined ? input.employee_status : input.status);
+    if (input.designationId !== undefined)
+      payload.current_designation_id = input.designationId;
+    if (input.departmentId !== undefined)
+      payload.current_department_id = input.departmentId;
+    if ((input as any).currentDepartmentId !== undefined)
+      payload.current_department_id = (input as any).currentDepartmentId;
+    if ((input as any).current_department_id !== undefined)
+      payload.current_department_id = (input as any).current_department_id;
+    if ((input as any).department_id !== undefined)
+      payload.current_department_id = (input as any).department_id;
+    if (input.branchId !== undefined)
+      payload.current_branch_id = input.branchId;
+    if (input.locationId !== undefined)
+      payload.current_location_id = input.locationId;
+    if (input.costCenterId !== undefined)
+      payload.cost_center_id = input.costCenterId;
+    if (input.employmentType !== undefined)
+      payload.employment_type = input.employmentType;
+    const rawStatusInput =
+      input.employeeStatus !== undefined
+        ? input.employeeStatus
+        : input.employee_status !== undefined
+          ? input.employee_status
+          : input.status;
     if (rawStatusInput !== undefined) {
       const sStr = String(rawStatusInput).trim();
-      const sLower = sStr.toLowerCase().replace(/\s+/g, '_');
-      const formattedLabel = sStr.split(/[\s_]+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+      const sLower = sStr.toLowerCase().replace(/\s+/g, "_");
+      const formattedLabel = sStr
+        .split(/[\s_]+/)
+        .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+        .join(" ");
 
       payload.employee_status = formattedLabel;
 
-      if (['candidate', 'onboarding', 'probation', 'active', 'inactive', 'notice', 'exit', 'alumni'].includes(sLower)) {
+      if (
+        [
+          "candidate",
+          "onboarding",
+          "probation",
+          "active",
+          "inactive",
+          "notice",
+          "exit",
+          "alumni",
+        ].includes(sLower)
+      ) {
         payload.status = sLower;
-      } else if (sLower === 'terminated') {
-        payload.status = 'exit';
+      } else if (sLower === "terminated") {
+        payload.status = "exit";
       } else {
-        payload.status = 'active';
+        payload.status = "active";
       }
     }
-    if (input.dateOfJoining !== undefined) payload.date_of_joining = input.dateOfJoining;
-    if (input.dateOfConfirmation !== undefined) payload.date_of_confirmation = input.dateOfConfirmation;
-    if (input.probationEndDate !== undefined) payload.probation_end_date = input.probationEndDate;
-    if (input.resignationDate !== undefined) payload.resignation_date = input.resignationDate;
+    if (input.dateOfJoining !== undefined)
+      payload.date_of_joining = input.dateOfJoining;
+    if (input.dateOfConfirmation !== undefined)
+      payload.date_of_confirmation = input.dateOfConfirmation;
+    if (input.probationEndDate !== undefined)
+      payload.probation_end_date = input.probationEndDate;
+    if (input.resignationDate !== undefined)
+      payload.resignation_date = input.resignationDate;
     if (input.bankName !== undefined) payload.bank_name = input.bankName;
     if (input.bank_name !== undefined) payload.bank_name = input.bank_name;
     if (input.accountNo !== undefined) payload.account_no = input.accountNo;
     if (input.account_no !== undefined) payload.account_no = input.account_no;
-    if (input.accountNumber !== undefined) payload.account_no = input.accountNumber;
+    if (input.accountNumber !== undefined)
+      payload.account_no = input.accountNumber;
     if (input.ifscCode !== undefined) payload.ifsc_code = input.ifscCode;
     if (input.ifsc_code !== undefined) payload.ifsc_code = input.ifsc_code;
     if (input.branchName !== undefined) payload.branch_name = input.branchName;
-    if (input.branch_name !== undefined) payload.branch_name = input.branch_name;
-    if (input.accountType !== undefined) payload.account_type = input.accountType;
-    if (input.account_type !== undefined) payload.account_type = input.account_type;
+    if (input.branch_name !== undefined)
+      payload.branch_name = input.branch_name;
+    if (input.accountType !== undefined)
+      payload.account_type = input.accountType;
+    if (input.account_type !== undefined)
+      payload.account_type = input.account_type;
     if (input.upiId !== undefined) payload.upi_id = input.upiId;
     if (input.upi_id !== undefined) payload.upi_id = input.upi_id;
     // Note: salary slab assignment is tracked via salary_structures.slab_id
@@ -725,12 +1021,18 @@ export class EmployeeService {
     if (input.esic_number !== undefined) payload.esic_no = input.esic_number;
     if (input.esicNumber !== undefined) payload.esic_no = input.esicNumber;
     // aadhaar variants
-    if (input.aadhaar_number !== undefined) payload.aadhar_number = input.aadhaar_number;
-    if (input.aadhaarNumber !== undefined) payload.aadhar_number = input.aadhaarNumber;
-    if (input.aadhar_number !== undefined) payload.aadhar_number = input.aadhar_number;
-    if (input.aadharNumber !== undefined) payload.aadhar_number = input.aadharNumber;
-    if (input.uidaiNumber !== undefined) payload.aadhar_number = input.uidaiNumber;
-    if (input.company_bank !== undefined) payload.company_bank = input.company_bank;
+    if (input.aadhaar_number !== undefined)
+      payload.aadhar_number = input.aadhaar_number;
+    if (input.aadhaarNumber !== undefined)
+      payload.aadhar_number = input.aadhaarNumber;
+    if (input.aadhar_number !== undefined)
+      payload.aadhar_number = input.aadhar_number;
+    if (input.aadharNumber !== undefined)
+      payload.aadhar_number = input.aadharNumber;
+    if (input.uidaiNumber !== undefined)
+      payload.aadhar_number = input.uidaiNumber;
+    if (input.company_bank !== undefined)
+      payload.company_bank = input.company_bank;
     if (input.pan_number !== undefined) payload.pan_number = input.pan_number;
     if (input.panNumber !== undefined) payload.pan_number = input.panNumber;
     if (input.pan !== undefined) payload.pan_number = input.pan;
@@ -738,32 +1040,85 @@ export class EmployeeService {
     if (input.panStatus !== undefined) payload.pan_status = input.panStatus;
     if (input.user_band !== undefined) payload.user_band = input.user_band;
     if (input.userBand !== undefined) payload.user_band = input.userBand;
-    if (input.eligible_for_eps !== undefined) payload.eligible_for_eps = input.eligible_for_eps;
-    if (input.eligibleForEps !== undefined) payload.eligible_for_eps = input.eligibleForEps;
-    if (input.background_verification !== undefined) payload.background_verification = input.background_verification;
-    if (input.backgroundVerification !== undefined) payload.background_verification = input.backgroundVerification;
+    if (input.eligible_for_eps !== undefined)
+      payload.eligible_for_eps = input.eligible_for_eps;
+    if (input.eligibleForEps !== undefined)
+      payload.eligible_for_eps = input.eligibleForEps;
+    if (input.background_verification !== undefined)
+      payload.background_verification = input.background_verification;
+    if (input.backgroundVerification !== undefined)
+      payload.background_verification = input.backgroundVerification;
 
     const allowedEmployeeColumns = new Set([
-      'employee_code', 'first_name', 'middle_name', 'last_name', 'email', 'phone', 'mobile',
-      'date_of_birth', 'gender', 'blood_group', 'nationality', 'aadhar_number', 'pan_number',
-      'passport_number', 'avatar_url', 'bio', 'job_title', 'reporting_manager_id', 'current_designation_id',
-      'current_department_id', 'current_branch_id', 'current_location_id', 'cost_center_id',
-      'employment_type', 'status', 'date_of_joining', 'date_of_confirmation', 'probation_end_date',
-      'resignation_date', 'bank_name', 'account_no', 'ifsc_code', 'company_bank', 'branch_name', 'account_type', 'upi_id',
-      'pf_no', 'uan_no', 'esic_no', 'pan_status', 'user_band', 'eligible_for_eps', 'background_verification'
+      "employee_code",
+      "first_name",
+      "middle_name",
+      "last_name",
+      "email",
+      "phone",
+      "mobile",
+      "date_of_birth",
+      "gender",
+      "blood_group",
+      "nationality",
+      "aadhar_number",
+      "pan_number",
+      "passport_number",
+      "avatar_url",
+      "bio",
+      "job_title",
+      "reporting_manager_id",
+      "current_designation_id",
+      "current_department_id",
+      "current_branch_id",
+      "current_location_id",
+      "cost_center_id",
+      "employment_type",
+      "status",
+      "date_of_joining",
+      "date_of_confirmation",
+      "probation_end_date",
+      "resignation_date",
+      "bank_name",
+      "account_no",
+      "ifsc_code",
+      "company_bank",
+      "branch_name",
+      "account_type",
+      "upi_id",
+      "pf_no",
+      "uan_no",
+      "esic_no",
+      "pan_status",
+      "user_band",
+      "eligible_for_eps",
+      "background_verification",
+      "attendance_access_settings",
     ]);
 
     // Copy any direct snake_case properties if passed and valid in employees table
     for (const key of Object.keys(input)) {
-      if (allowedEmployeeColumns.has(key) && !(key in payload) && input[key] !== undefined) {
+      if (
+        allowedEmployeeColumns.has(key) &&
+        !(key in payload) &&
+        input[key] !== undefined
+      ) {
         payload[key] = input[key];
       }
     }
 
-    const targetAccessRole = input.accessRole || input.access_role || input.role || '';
+    const targetAccessRole =
+      input.accessRole || input.access_role || input.role || "";
 
     // Default Manager ('department_head', 'cto', etc.) and HR ('hr') to Admin only if no reporting manager was provided
-    if (targetAccessRole && ['department_head', 'hr', 'cto', 'cfo', 'coo', 'cxo'].includes(targetAccessRole) && !input.reportingManagerId && !input.reporting_manager_id) {
+    if (
+      targetAccessRole &&
+      ["department_head", "hr", "cto", "cfo", "coo", "cxo"].includes(
+        targetAccessRole,
+      ) &&
+      !input.reportingManagerId &&
+      !input.reporting_manager_id
+    ) {
       const db = getKnex();
       const adminEmpId = await this.getOrgAdminEmployeeId(db, ctx);
       if (adminEmpId && adminEmpId !== employeeId) {
@@ -774,121 +1129,186 @@ export class EmployeeService {
     // Validate target department existence & organization ownership if provided
     if (payload.current_department_id) {
       const db = getKnex();
-      const dept = await db('departments')
-        .where({ id: payload.current_department_id, organization_id: ctx.organizationId })
-        .whereNull('deleted_at')
+      const dept = await db("departments")
+        .where({
+          id: payload.current_department_id,
+          organization_id: ctx.organizationId,
+        })
+        .whereNull("deleted_at")
         .first();
 
       if (!dept) {
-        throw new ValidationError('Target department does not exist in this organization.');
+        throw new ValidationError(
+          "Target department does not exist in this organization.",
+        );
       }
     }
 
     if (payload.reporting_manager_id) {
       if (Number(payload.reporting_manager_id) === Number(employeeId)) {
-        throw new ValidationError('An employee cannot be their own reporting manager.');
+        throw new ValidationError(
+          "An employee cannot be their own reporting manager.",
+        );
       }
 
       const db = getKnex();
-      const targetMgr = await db('employees')
-        .where('id', payload.reporting_manager_id)
-        .where('organization_id', ctx.organizationId)
-        .whereNull('deleted_at')
+      const targetMgr = await db("employees")
+        .where("id", payload.reporting_manager_id)
+        .where("organization_id", ctx.organizationId)
+        .whereNull("deleted_at")
         .first();
 
       if (!targetMgr) {
-        throw new ValidationError('Selected reporting manager does not exist.');
+        throw new ValidationError("Selected reporting manager does not exist.");
       }
 
-      const isAlreadyAssignedManager = Number(payload.reporting_manager_id) === Number(employee.reporting_manager_id || (employee as any).reportingManagerId);
+      const isAlreadyAssignedManager =
+        Number(payload.reporting_manager_id) ===
+        Number(
+          employee.reporting_manager_id || (employee as any).reportingManagerId,
+        );
 
-      const isDeptHead = await db('departments')
-        .where('department_head_id', targetMgr.id)
-        .where('organization_id', ctx.organizationId)
+      const isDeptHead = await db("departments")
+        .where("department_head_id", targetMgr.id)
+        .where("organization_id", ctx.organizationId)
         .first();
 
-      const isReportingMgrForOthers = await db('employees')
-        .where('reporting_manager_id', targetMgr.id)
-        .where('organization_id', ctx.organizationId)
-        .whereNull('deleted_at')
+      const isReportingMgrForOthers = await db("employees")
+        .where("reporting_manager_id", targetMgr.id)
+        .where("organization_id", ctx.organizationId)
+        .whereNull("deleted_at")
         .first();
 
-      let isManagerRole = Boolean(isAlreadyAssignedManager || isDeptHead || isReportingMgrForOthers);
+      let isManagerRole = Boolean(
+        isAlreadyAssignedManager || isDeptHead || isReportingMgrForOthers,
+      );
 
       if (!isManagerRole) {
-        let mgrUser = await db('users')
-          .where('employee_id', targetMgr.id)
-          .where('organization_id', ctx.organizationId)
+        let mgrUser = await db("users")
+          .where("employee_id", targetMgr.id)
+          .where("organization_id", ctx.organizationId)
           .first();
 
         if (!mgrUser && targetMgr.email) {
-          mgrUser = await db('users')
-            .whereRaw('LOWER(email) = ?', [targetMgr.email.toLowerCase()])
+          mgrUser = await db("users")
+            .whereRaw("LOWER(email) = ?", [targetMgr.email.toLowerCase()])
             .first();
         }
 
         if (mgrUser) {
-          const mgrRoles = await db('user_roles')
-            .join('roles', 'user_roles.role_id', 'roles.id')
-            .where('user_roles.user_id', mgrUser.id)
-            .select('roles.code');
-          const validCodes = new Set(['team_lead', 'department_head', 'hr', 'organization_admin', 'super_admin', 'cto', 'cfo', 'coo', 'cxo', 'manager', 'admin', 'hr_admin', 'hr_manager', 'executive']);
-          isManagerRole = mgrRoles.some((r: any) => validCodes.has(r.code)) || validCodes.has(mgrUser.role);
+          const mgrRoles = await db("user_roles")
+            .join("roles", "user_roles.role_id", "roles.id")
+            .where("user_roles.user_id", mgrUser.id)
+            .select("roles.code");
+          const validCodes = new Set([
+            "team_lead",
+            "department_head",
+            "hr",
+            "organization_admin",
+            "super_admin",
+            "cto",
+            "cfo",
+            "coo",
+            "cxo",
+            "manager",
+            "admin",
+            "hr_admin",
+            "hr_manager",
+            "executive",
+          ]);
+          isManagerRole =
+            mgrRoles.some((r: any) => validCodes.has(r.code)) ||
+            validCodes.has(mgrUser.role);
         }
       }
 
       if (!isManagerRole && targetMgr.job_title) {
-        if (/manager|lead|head|director|vp|chief|executive|supervisor|admin|president|officer/i.test(targetMgr.job_title)) {
+        if (
+          /manager|lead|head|director|vp|chief|executive|supervisor|admin|president|officer/i.test(
+            targetMgr.job_title,
+          )
+        ) {
           isManagerRole = true;
         }
       }
 
       if (!isManagerRole && targetMgr.current_designation_id) {
-        const desig = await db('designations').where('id', targetMgr.current_designation_id).first();
-        if (desig && /manager|lead|head|director|vp|chief|executive|supervisor|admin|president|officer/i.test(desig.title || desig.name || '')) {
+        const desig = await db("designations")
+          .where("id", targetMgr.current_designation_id)
+          .first();
+        if (
+          desig &&
+          /manager|lead|head|director|vp|chief|executive|supervisor|admin|president|officer/i.test(
+            desig.title || desig.name || "",
+          )
+        ) {
           isManagerRole = true;
         }
       }
 
-      if (!isManagerRole && !(targetMgr.employee_code || '').startsWith('CEO-') && !(targetMgr.is_ceo)) {
-        throw new ValidationError('Reporting manager must be a Team Lead, Department Manager, HR Manager, or Executive.');
+      if (
+        !isManagerRole &&
+        !(targetMgr.employee_code || "").startsWith("CEO-") &&
+        !targetMgr.is_ceo
+      ) {
+        throw new ValidationError(
+          "Reporting manager must be a Team Lead, Department Manager, HR Manager, or Executive.",
+        );
       }
 
-      let currentManagerId: number | null = Number(payload.reporting_manager_id);
+      let currentManagerId: number | null = Number(
+        payload.reporting_manager_id,
+      );
       const visited = new Set<number>([employeeId]);
 
       while (currentManagerId) {
         if (visited.has(currentManagerId)) {
-          throw new ValidationError('Circular reporting manager chain detected.');
+          throw new ValidationError(
+            "Circular reporting manager chain detected.",
+          );
         }
         visited.add(currentManagerId);
 
-        const mgr: { reporting_manager_id?: number | null } | undefined = await db('employees')
-          .where('id', currentManagerId)
-          .select('reporting_manager_id')
-          .first();
+        const mgr: { reporting_manager_id?: number | null } | undefined =
+          await db("employees")
+            .where("id", currentManagerId)
+            .select("reporting_manager_id")
+            .first();
 
-        currentManagerId = mgr?.reporting_manager_id ? Number(mgr.reporting_manager_id) : null;
+        currentManagerId = mgr?.reporting_manager_id
+          ? Number(mgr.reporting_manager_id)
+          : null;
       }
     }
 
     payload.updated_by = ctx.userId;
 
-    const updated = await this.employeeRepo.update(ctx, employeeId, payload as any);
+    const updated = await this.employeeRepo.update(
+      ctx,
+      employeeId,
+      payload as any,
+    );
+
+    const accessRevoked = await this.revokeLoginForTerminalStatus(
+      ctx,
+      Number(employeeId),
+      payload.employee_status ?? payload.status,
+    );
 
     if (payload.resignation_date) {
       const db = getKnex();
-      const leaveTypes = await db('leave_types')
-        .where('organization_id', ctx.organizationId)
-        .orWhereNull('organization_id')
-        .whereNull('deleted_at');
+      const leaveTypes = await db("leave_types")
+        .where("organization_id", ctx.organizationId)
+        .orWhereNull("organization_id")
+        .whereNull("deleted_at");
 
       const cancelEnabledTypeIds = leaveTypes
         .filter((lt: any) => {
           try {
-            const settings = typeof lt.application_settings === 'string'
-              ? JSON.parse(lt.application_settings)
-              : lt.application_settings;
+            const settings =
+              typeof lt.application_settings === "string"
+                ? JSON.parse(lt.application_settings)
+                : lt.application_settings;
             return !!settings?.cancelFutureAppliedLeaveOnResignation;
           } catch (e) {
             return false;
@@ -897,51 +1317,59 @@ export class EmployeeService {
         .map((lt: any) => lt.id);
 
       if (cancelEnabledTypeIds.length > 0) {
-        const futureApps = await db('leave_applications')
-          .where('employee_id', employeeId)
-          .whereIn('leave_type_id', cancelEnabledTypeIds)
-          .whereIn('status', ['submitted', 'pending_manager', 'pending_hr', 'approved', 'pending_hr_override'])
-          .where('application_start_date', '>=', payload.resignation_date);
+        const futureApps = await db("leave_applications")
+          .where("employee_id", employeeId)
+          .whereIn("leave_type_id", cancelEnabledTypeIds)
+          .whereIn("status", [
+            "submitted",
+            "pending_manager",
+            "pending_hr",
+            "approved",
+            "pending_hr_override",
+          ])
+          .where("application_start_date", ">=", payload.resignation_date);
 
         for (const app of futureApps) {
-          await db('leave_applications')
-            .where('id', app.id)
-            .update({
-              status: 'cancelled',
-              admin_notes: 'Automatically cancelled due to employee resignation.',
-              updated_at: new Date(),
-            });
+          await db("leave_applications").where("id", app.id).update({
+            status: "cancelled",
+            admin_notes: "Automatically cancelled due to employee resignation.",
+            updated_at: new Date(),
+          });
 
           const totalDays = parseFloat(app.total_days || app.totalDays || 0);
-          const balance = await db('leave_balances')
+          const balance = await db("leave_balances")
             .where({
               employee_id: employeeId,
               leave_type_id: app.leave_type_id,
-              financial_year_start: app.financial_year_start
+              financial_year_start: app.financial_year_start,
             })
             .first();
 
           if (balance) {
-            if (app.status === 'approved') {
-              const newConsumed = Math.max(0, (parseFloat(balance.consumed_balance) || 0) - totalDays);
-              const newAvailable = (parseFloat(balance.available_balance) || 0) + totalDays;
-              await db('leave_balances')
-                .where('id', balance.id)
-                .update({
-                  consumed_balance: newConsumed,
-                  available_balance: newAvailable,
-                  last_updated_at: new Date().toISOString(),
-                });
+            if (app.status === "approved") {
+              const newConsumed = Math.max(
+                0,
+                (parseFloat(balance.consumed_balance) || 0) - totalDays,
+              );
+              const newAvailable =
+                (parseFloat(balance.available_balance) || 0) + totalDays;
+              await db("leave_balances").where("id", balance.id).update({
+                consumed_balance: newConsumed,
+                available_balance: newAvailable,
+                last_updated_at: new Date().toISOString(),
+              });
             } else {
-              const newPending = Math.max(0, (parseFloat(balance.pending_approval_balance) || 0) - totalDays);
-              const newAvailable = (parseFloat(balance.available_balance) || 0) + totalDays;
-              await db('leave_balances')
-                .where('id', balance.id)
-                .update({
-                  pending_approval_balance: newPending,
-                  available_balance: newAvailable,
-                  last_updated_at: new Date().toISOString(),
-                });
+              const newPending = Math.max(
+                0,
+                (parseFloat(balance.pending_approval_balance) || 0) - totalDays,
+              );
+              const newAvailable =
+                (parseFloat(balance.available_balance) || 0) + totalDays;
+              await db("leave_balances").where("id", balance.id).update({
+                pending_approval_balance: newPending,
+                available_balance: newAvailable,
+                last_updated_at: new Date().toISOString(),
+              });
             }
           }
         }
@@ -956,32 +1384,43 @@ export class EmployeeService {
           updated.id,
           Array.isArray(input.biometricImages) && input.biometricImages.length
             ? input.biometricImages
-            : payload.avatar_url
+            : payload.avatar_url,
         );
       } catch (bioErr) {
-        console.warn('[EmployeeService] Automatic biometric face enrollment skipped:', bioErr);
+        console.warn(
+          "[EmployeeService] Automatic biometric face enrollment skipped:",
+          bioErr,
+        );
       }
-    } else if (payload.avatar_url === null || payload.avatar_url === '') {
+    } else if (payload.avatar_url === null || payload.avatar_url === "") {
       try {
         const biometricService = new BiometricService();
         await biometricService.deactivateFace(ctx, updated.id);
       } catch (bioErr) {
-        console.warn('[EmployeeService] Biometric profile deactivation skipped:', bioErr);
+        console.warn(
+          "[EmployeeService] Biometric profile deactivation skipped:",
+          bioErr,
+        );
       }
     }
 
     // Handle user account updates or creation (e.g. password, email, accessRole)
     try {
       const db = getKnex();
-      let existingUser = await db('users')
-        .where('employee_id', employeeId)
+      let existingUser = await db("users")
+        .where("employee_id", employeeId)
         .first();
 
-      const targetEmail = (input.email || updated.email || employee.email || '').trim();
+      const targetEmail = (
+        input.email ||
+        updated.email ||
+        employee.email ||
+        ""
+      ).trim();
 
       if (!existingUser && targetEmail) {
-        existingUser = await db('users')
-          .whereRaw('LOWER(email) = ?', [targetEmail.toLowerCase()])
+        existingUser = await db("users")
+          .whereRaw("LOWER(email) = ?", [targetEmail.toLowerCase()])
           .first();
       }
 
@@ -997,7 +1436,9 @@ export class EmployeeService {
 
       let userIdToSync: number | null = null;
       const rawRole = input.accessRole || input.access_role || input.role;
-      const targetAccessRole = rawRole ? String(rawRole).toLowerCase() : undefined;
+      const targetAccessRole = rawRole
+        ? String(rawRole).toLowerCase()
+        : undefined;
 
       if (existingUser) {
         userIdToSync = existingUser.id;
@@ -1005,23 +1446,26 @@ export class EmployeeService {
           updated_at: new Date(),
           employee_id: employeeId,
         };
+        if (accessRevoked) userUpdateData.status = "inactive";
         if (targetEmail) userUpdateData.email = targetEmail;
         if (hashedPassword) userUpdateData.password_hash = hashedPassword;
-        await db('users').where('id', existingUser.id).update(userUpdateData);
+        await db("users").where("id", existingUser.id).update(userUpdateData);
       } else if (targetEmail) {
-        const defaultHash = hashedPassword || await hash('Password@123', {
-          type: 2,
-          memoryCost: 19456,
-          timeCost: 2,
-          parallelism: 1,
-        });
-        const [newUserId] = await db('users').insert({
+        const defaultHash =
+          hashedPassword ||
+          (await hash("Password@123", {
+            type: 2,
+            memoryCost: 19456,
+            timeCost: 2,
+            parallelism: 1,
+          }));
+        const [newUserId] = await db("users").insert({
           uuid: uuidv4(),
           organization_id: ctx.organizationId,
           employee_id: employeeId,
           email: targetEmail,
           password_hash: defaultHash,
-          status: 'active',
+          status: accessRevoked ? "inactive" : "active",
           created_at: new Date(),
           updated_at: new Date(),
         });
@@ -1029,65 +1473,95 @@ export class EmployeeService {
       }
 
       if (userIdToSync && targetAccessRole) {
-        const targetDeptId = input.departmentId ?? updated.current_department_id ?? employee.current_department_id;
+        const targetDeptId =
+          input.departmentId ??
+          updated.current_department_id ??
+          employee.current_department_id;
         let rolesList: string[];
         if (Array.isArray(input.roles) && input.roles.length > 0) {
           rolesList = [...new Set([...input.roles, targetAccessRole])];
         } else {
           rolesList = [targetAccessRole];
         }
-        await this.syncUserAccessRole(db, ctx, userIdToSync, targetAccessRole, employeeId, targetDeptId, rolesList);
+        await this.syncUserAccessRole(
+          db,
+          ctx,
+          userIdToSync,
+          targetAccessRole,
+          employeeId,
+          targetDeptId,
+          rolesList,
+        );
       }
     } catch (userSyncErr) {
-      console.warn('[EmployeeService] User credentials sync warning:', userSyncErr);
+      console.warn(
+        "[EmployeeService] User credentials sync warning:",
+        userSyncErr,
+      );
     }
 
     await this.auditService.log(ctx, {
-      action: 'UPDATE',
-      entityType: 'EMPLOYEE',
+      action: "UPDATE",
+      entityType: "EMPLOYEE",
       entityId: employeeId,
       beforeState: employee as any,
       afterState: updated as any,
     });
 
-    return updated;
+    return { ...(updated as any), loginAccessRevoked: accessRevoked } as Employee;
   }
 
   /**
    * Get employee by ID
    */
-  async getEmployee(ctx: TenantContext, employeeId: number | string): Promise<Employee> {
+  async getEmployee(
+    ctx: TenantContext,
+    employeeId: number | string,
+  ): Promise<Employee> {
     await this.ensureEmployeeColumns();
     const db = getKnex();
-    const strVal = String(employeeId || '').trim();
+    const strVal = String(employeeId || "").trim();
     const numericId = parseInt(strVal, 10);
     let employee: Employee | null = null;
 
     if (!isNaN(numericId) && numericId > 0) {
-      employee = await this.employeeRepo.getById(ctx, numericId).catch(() => null);
+      employee = await this.employeeRepo
+        .getById(ctx, numericId)
+        .catch(() => null);
       if (!employee) {
         // Fallback 1: Check if numericId is a user ID in users table
-        const user = await db('users').where({ id: numericId }).first().catch(() => null);
+        const user = await db("users")
+          .where({ id: numericId })
+          .first()
+          .catch(() => null);
         if (user && user.employee_id) {
-          employee = await this.employeeRepo.getById(ctx, user.employee_id).catch(() => null);
+          employee = await this.employeeRepo
+            .getById(ctx, user.employee_id)
+            .catch(() => null);
         }
         if (!employee && user && user.email) {
-          employee = await this.employeeRepo.getByEmail(ctx, user.email).catch(() => null);
+          employee = await this.employeeRepo
+            .getByEmail(ctx, user.email)
+            .catch(() => null);
         }
       }
     }
 
     // Fallback 2: Lookup by email, employeeCode, or UUID string
     if (!employee && strVal) {
-      if (strVal.includes('@')) {
-        employee = await this.employeeRepo.getByEmail(ctx, strVal).catch(() => null);
+      if (strVal.includes("@")) {
+        employee = await this.employeeRepo
+          .getByEmail(ctx, strVal)
+          .catch(() => null);
       } else {
-        employee = await this.employeeRepo.getByCode(ctx, strVal).catch(() => null);
+        employee = await this.employeeRepo
+          .getByCode(ctx, strVal)
+          .catch(() => null);
         if (!employee) {
-          employee = (await db('employees')
+          employee = (await db("employees")
             .where({ organization_id: ctx.organizationId })
-            .whereNull('deleted_at')
-            .where('uuid', strVal)
+            .whereNull("deleted_at")
+            .where("uuid", strVal)
             .first()
             .catch(() => null)) as Employee | null;
         }
@@ -1095,7 +1569,7 @@ export class EmployeeService {
     }
 
     if (!employee) {
-      throw new NotFoundError('Employee not found');
+      throw new NotFoundError("Employee not found");
     }
 
     return employee;
@@ -1114,7 +1588,7 @@ export class EmployeeService {
   async deleteEmployee(ctx: TenantContext, employeeId: number): Promise<void> {
     const employee = await this.employeeRepo.getById(ctx, employeeId);
     if (!employee) {
-      throw new NotFoundError('Employee not found');
+      throw new NotFoundError("Employee not found");
     }
 
     const db = getKnex();
@@ -1122,33 +1596,43 @@ export class EmployeeService {
       const timestamp = Date.now();
 
       // 1. Scramble user email and deactivate
-      const user = await trx('users')
-        .where('organization_id', ctx.organizationId)
-        .where('employee_id', employeeId)
+      const user = await trx("users")
+        .where("organization_id", ctx.organizationId)
+        .where("employee_id", employeeId)
         .first();
 
       if (user) {
-        await trx('users').where('id', user.id).update({
-          status: 'inactive',
-          email: `${user.email}_del_${timestamp}`.substring(0, 255)
-        });
+        await trx("users")
+          .where("id", user.id)
+          .update({
+            status: "inactive",
+            email: `${user.email}_del_${timestamp}`.substring(0, 255),
+          });
+        await trx("auth_sessions")
+          .where("user_id", user.id)
+          .whereNull("revoked_at")
+          .update({ revoked_at: new Date(), revoked_reason: "employee_deleted" });
       }
 
       // 2. Scramble employee unique fields and soft delete
-      await trx('employees')
-        .where('organization_id', ctx.organizationId)
-        .where('id', employeeId)
+      await trx("employees")
+        .where("organization_id", ctx.organizationId)
+        .where("id", employeeId)
         .update({
           deleted_at: new Date(),
-          status: 'exit',
-          employee_code: `${(employee as any).employeeCode || (employee as any).employee_code}_del_${timestamp}`.substring(0, 50),
-          email: `${employee.email}_del_${timestamp}`.substring(0, 255)
+          status: "exit",
+          employee_code:
+            `${(employee as any).employeeCode || (employee as any).employee_code}_del_${timestamp}`.substring(
+              0,
+              50,
+            ),
+          email: `${employee.email}_del_${timestamp}`.substring(0, 255),
         });
     });
 
     await this.auditService.log(ctx, {
-      action: 'DELETE',
-      entityType: 'EMPLOYEE',
+      action: "DELETE",
+      entityType: "EMPLOYEE",
       entityId: employeeId,
       beforeState: employee as any,
     });
@@ -1157,7 +1641,11 @@ export class EmployeeService {
   /**
    * Get direct reports for a manager
    */
-  async getDirectReports(ctx: TenantContext, managerId: number, options?: ListQueryOptions) {
+  async getDirectReports(
+    ctx: TenantContext,
+    managerId: number,
+    options?: ListQueryOptions,
+  ) {
     return this.employeeRepo.getDirectReports(ctx, managerId, options);
   }
 
@@ -1167,9 +1655,12 @@ export class EmployeeService {
   async getPersonalInfo(ctx: TenantContext, employeeId: number) {
     const employee = await this.employeeRepo.getById(ctx, employeeId);
     if (!employee) {
-      throw new NotFoundError('Employee not found');
+      throw new NotFoundError("Employee not found");
     }
-    const personalInfo = await this.personalInfoRepo.getByEmployeeId(ctx, employeeId);
+    const personalInfo = await this.personalInfoRepo.getByEmployeeId(
+      ctx,
+      employeeId,
+    );
     return {
       ...(personalInfo || {}),
       maritalStatus: (employee as any).marital_status || null,
@@ -1179,25 +1670,32 @@ export class EmployeeService {
   /**
    * Create or update personal info for employee
    */
-  async upsertPersonalInfo(ctx: TenantContext, employeeId: number, input: {
-    fatherName?: string | null;
-    motherName?: string | null;
-    spouseName?: string | null;
-    maritalStatus?: 'single' | 'married' | 'divorced' | 'widowed' | null;
-    childrenCount?: number;
-    permanentAddress?: string | null;
-    currentAddress?: string | null;
-    city?: string | null;
-    state?: string | null;
-    country?: string | null;
-    postalCode?: string | null;
-  }) {
+  async upsertPersonalInfo(
+    ctx: TenantContext,
+    employeeId: number,
+    input: {
+      fatherName?: string | null;
+      motherName?: string | null;
+      spouseName?: string | null;
+      maritalStatus?: "single" | "married" | "divorced" | "widowed" | null;
+      childrenCount?: number;
+      permanentAddress?: string | null;
+      currentAddress?: string | null;
+      city?: string | null;
+      state?: string | null;
+      country?: string | null;
+      postalCode?: string | null;
+    },
+  ) {
     const employee = await this.employeeRepo.getById(ctx, employeeId);
     if (!employee) {
-      throw new NotFoundError('Employee not found');
+      throw new NotFoundError("Employee not found");
     }
 
-    const existing = await this.personalInfoRepo.getByEmployeeId(ctx, employeeId);
+    const existing = await this.personalInfoRepo.getByEmployeeId(
+      ctx,
+      employeeId,
+    );
 
     if (input.maritalStatus !== undefined) {
       await this.employeeRepo.update(ctx, employeeId, {
@@ -1210,7 +1708,7 @@ export class EmployeeService {
       father_name: input.fatherName,
       mother_name: input.motherName,
       spouse_name: input.spouseName,
-      children_count: input.childrenCount,
+      children_count: input.childrenCount ?? 0,
       permanent_address: input.permanentAddress,
       current_address: input.currentAddress,
       city: input.city,
@@ -1220,20 +1718,28 @@ export class EmployeeService {
       updated_by: ctx.userId,
     };
     // Drop undefined keys so partial updates don't overwrite existing values
-    Object.keys(data).forEach((key) => data[key] === undefined && delete data[key]);
+    Object.keys(data).forEach(
+      (key) => data[key] === undefined && delete data[key],
+    );
 
     if (!existing) {
       data.uuid = uuidv4();
       data.created_by = ctx.userId;
     }
 
-    const result = await this.personalInfoRepo.upsert(ctx, employeeId, data as any);
+    const result = await this.personalInfoRepo.upsert(
+      ctx,
+      employeeId,
+      data as any,
+    );
 
     await this.auditService.log(ctx, {
-      action: existing ? 'UPDATE' : 'CREATE',
-      entityType: 'EMPLOYEE_PERSONAL_INFO',
+      action: existing ? "UPDATE" : "CREATE",
+      entityType: "EMPLOYEE_PERSONAL_INFO",
       entityId: result.id,
-      afterState: { description: `Personal info ${existing ? 'updated' : 'created'} for employee ${employeeId}` },
+      afterState: {
+        description: `Personal info ${existing ? "updated" : "created"} for employee ${employeeId}`,
+      },
     });
 
     return result;
@@ -1245,7 +1751,7 @@ export class EmployeeService {
   async getProfessionalInfo(ctx: TenantContext, employeeId: number) {
     const employee = await this.employeeRepo.getById(ctx, employeeId);
     if (!employee) {
-      throw new NotFoundError('Employee not found');
+      throw new NotFoundError("Employee not found");
     }
     return this.professionalInfoRepo.getByEmployeeId(ctx, employeeId);
   }
@@ -1253,21 +1759,28 @@ export class EmployeeService {
   /**
    * Create or update professional info for employee
    */
-  async upsertProfessionalInfo(ctx: TenantContext, employeeId: number, input: {
-    qualification?: string | null;
-    specialization?: string | null;
-    university?: string | null;
-    graduationYear?: number | null;
-    yearsOfExperience?: number;
-    linkedinUrl?: string | null;
-    githubUrl?: string | null;
-  }) {
+  async upsertProfessionalInfo(
+    ctx: TenantContext,
+    employeeId: number,
+    input: {
+      qualification?: string | null;
+      specialization?: string | null;
+      university?: string | null;
+      graduationYear?: number | null;
+      yearsOfExperience?: number;
+      linkedinUrl?: string | null;
+      githubUrl?: string | null;
+    },
+  ) {
     const employee = await this.employeeRepo.getById(ctx, employeeId);
     if (!employee) {
-      throw new NotFoundError('Employee not found');
+      throw new NotFoundError("Employee not found");
     }
 
-    const existing = await this.professionalInfoRepo.getByEmployeeId(ctx, employeeId);
+    const existing = await this.professionalInfoRepo.getByEmployeeId(
+      ctx,
+      employeeId,
+    );
 
     const data: Record<string, unknown> = {
       qualification: input.qualification,
@@ -1279,20 +1792,28 @@ export class EmployeeService {
       github_url: input.githubUrl,
       updated_by: ctx.userId,
     };
-    Object.keys(data).forEach((key) => data[key] === undefined && delete data[key]);
+    Object.keys(data).forEach(
+      (key) => data[key] === undefined && delete data[key],
+    );
 
     if (!existing) {
       data.uuid = uuidv4();
       data.created_by = ctx.userId;
     }
 
-    const result = await this.professionalInfoRepo.upsert(ctx, employeeId, data as any);
+    const result = await this.professionalInfoRepo.upsert(
+      ctx,
+      employeeId,
+      data as any,
+    );
 
     await this.auditService.log(ctx, {
-      action: existing ? 'UPDATE' : 'CREATE',
-      entityType: 'EMPLOYEE_PROFESSIONAL_INFO',
+      action: existing ? "UPDATE" : "CREATE",
+      entityType: "EMPLOYEE_PROFESSIONAL_INFO",
       entityId: result.id,
-      afterState: { description: `Professional info ${existing ? 'updated' : 'created'} for employee ${employeeId}` },
+      afterState: {
+        description: `Professional info ${existing ? "updated" : "created"} for employee ${employeeId}`,
+      },
     });
 
     return result;
@@ -1301,10 +1822,14 @@ export class EmployeeService {
   /**
    * Update employee status (lifecycle transition)
    */
-  async updateStatus(ctx: TenantContext, employeeId: number, newStatus: string): Promise<Employee> {
+  async updateStatus(
+    ctx: TenantContext,
+    employeeId: number,
+    newStatus: string,
+  ): Promise<Employee> {
     const employee = await this.employeeRepo.getById(ctx, employeeId);
     if (!employee) {
-      throw new NotFoundError('Employee not found');
+      throw new NotFoundError("Employee not found");
     }
 
     const updated = await this.employeeRepo.update(ctx, employeeId, {
@@ -1312,23 +1837,45 @@ export class EmployeeService {
     } as any);
 
     await this.auditService.log(ctx, {
-      action: 'UPDATE',
-      entityType: 'EMPLOYEE',
+      action: "UPDATE",
+      entityType: "EMPLOYEE",
       entityId: employeeId,
       beforeState: { status: employee.status },
-      afterState: { status: newStatus, description: `Status changed from ${employee.status} to ${newStatus}` },
+      afterState: {
+        status: newStatus,
+        description: `Status changed from ${employee.status} to ${newStatus}`,
+      },
     });
 
     return updated;
   }
 
-  async createEmployeesBulk(ctx: TenantContext, inputs: Array<any>): Promise<{
+  async createEmployeesBulk(
+    ctx: TenantContext,
+    inputs: Array<any>,
+  ): Promise<{
     total: number;
     imported: number;
     failed: number;
     errors: Array<{ row: number; error: string }>;
   }> {
+    await this.ensureEmployeeColumns();
     const db = getKnex();
+
+    if (!ctx.companyId) {
+      throw new ValidationError(
+        "Select an active company before importing employees.",
+      );
+    }
+    const company = await db("company")
+      .where({ company_id: ctx.companyId, organization_id: ctx.organizationId })
+      .whereNull("deleted_at")
+      .first("company_id");
+    if (!company) {
+      throw new ValidationError(
+        "The selected company is not available for this organization.",
+      );
+    }
     const errors: Array<{ row: number; error: string }> = [];
     let imported = 0;
     let failed = 0;
@@ -1344,32 +1891,84 @@ export class EmployeeService {
     const roleCache = new Map<string, number>();
 
     // Seed caches from existing DB rows
-    const existingDepts = await db('departments').where('organization_id', ctx.organizationId).whereNull('deleted_at').select('id', 'name', 'code');
-    for (const d of existingDepts) { deptCache.set(d.name.trim().toLowerCase(), d.id); deptCache.set(d.code.trim().toLowerCase(), d.id); }
+    const existingDepts = await db("departments")
+      .where("organization_id", ctx.organizationId)
+      .whereNull("deleted_at")
+      .select("id", "name", "code");
+    for (const d of existingDepts) {
+      deptCache.set(d.name.trim().toLowerCase(), d.id);
+      deptCache.set(d.code.trim().toLowerCase(), d.id);
+    }
 
-    const existingGrades = await db('grades').where('organization_id', ctx.organizationId).whereNull('deleted_at').select('id', 'name', 'code');
-    for (const g of existingGrades) { gradeCache.set(g.name.trim().toLowerCase(), g.id); gradeCache.set(g.code.trim().toLowerCase(), g.id); }
+    const existingGrades = await db("grades")
+      .where("organization_id", ctx.organizationId)
+      .whereNull("deleted_at")
+      .select("id", "name", "code");
+    for (const g of existingGrades) {
+      gradeCache.set(g.name.trim().toLowerCase(), g.id);
+      gradeCache.set(g.code.trim().toLowerCase(), g.id);
+    }
 
-    const existingDesigs = await db('designations').where('organization_id', ctx.organizationId).whereNull('deleted_at').select('id', 'name', 'code');
-    for (const d of existingDesigs) { desigCache.set(d.name.trim().toLowerCase(), d.id); desigCache.set(d.code.trim().toLowerCase(), d.id); }
+    const existingDesigs = await db("designations")
+      .where("organization_id", ctx.organizationId)
+      .whereNull("deleted_at")
+      .select("id", "name", "code");
+    for (const d of existingDesigs) {
+      desigCache.set(d.name.trim().toLowerCase(), d.id);
+      desigCache.set(d.code.trim().toLowerCase(), d.id);
+    }
 
-    const existingRoles = await db('roles')
-      .where(function() { this.where('organization_id', ctx.organizationId).orWhereNull('organization_id'); })
-      .whereNull('deleted_at').select('id', 'name', 'code');
-    for (const r of existingRoles) { roleCache.set(r.name.trim().toLowerCase(), r.id); if (r.code) roleCache.set(r.code.trim().toLowerCase(), r.id); }
+    const existingRoles = await db("roles")
+      .where(function () {
+        this.where("organization_id", ctx.organizationId).orWhereNull(
+          "organization_id",
+        );
+      })
+      .whereNull("deleted_at")
+      .select("id", "name", "code");
+    for (const r of existingRoles) {
+      roleCache.set(r.name.trim().toLowerCase(), r.id);
+      if (r.code) roleCache.set(r.code.trim().toLowerCase(), r.id);
+    }
+
+    const codeRows = await db("employees")
+      .where("organization_id", ctx.organizationId)
+      .select("employee_code");
+    let nextEmployeeCode =
+      Math.max(
+        0,
+        ...codeRows.map((row: any) => {
+          const match = String(row.employee_code || "").match(/^EMP(\d+)$/i);
+          return match ? Number(match[1]) : 0;
+        }),
+      ) + 1;
 
     // Helper to get or create a department (uses cache to prevent duplicate inserts)
     const getOrCreateDept = async (name: string): Promise<number> => {
       const key = name.trim().toLowerCase();
       if (deptCache.has(key)) return deptCache.get(key)!;
-      const code = name.trim().toUpperCase().replace(/[^A-Z0-9]/g, '_').substring(0, 50);
+      const code = name
+        .trim()
+        .toUpperCase()
+        .replace(/[^A-Z0-9]/g, "_")
+        .substring(0, 50);
       // Ensure code is unique by checking cache
       let finalCode = code;
       let suffix = 1;
-      while ([...deptCache.keys()].some(k => k === finalCode.toLowerCase())) {
+      while ([...deptCache.keys()].some((k) => k === finalCode.toLowerCase())) {
         finalCode = `${code.substring(0, 47)}_${suffix++}`;
       }
-      const [newId] = await db('departments').insert({ uuid: uuidv4(), organization_id: ctx.organizationId, name: name.trim(), code: finalCode, status: 'active', created_by: ctx.userId, updated_by: ctx.userId, created_at: new Date(), updated_at: new Date() });
+      const [newId] = await db("departments").insert({
+        uuid: uuidv4(),
+        organization_id: ctx.organizationId,
+        name: name.trim(),
+        code: finalCode,
+        status: "active",
+        created_by: ctx.userId,
+        updated_by: ctx.userId,
+        created_at: new Date(),
+        updated_at: new Date(),
+      });
       deptCache.set(key, newId);
       deptCache.set(finalCode.toLowerCase(), newId);
       return newId;
@@ -1378,28 +1977,64 @@ export class EmployeeService {
     const getOrCreateGrade = async (name: string): Promise<number> => {
       const key = name.trim().toLowerCase();
       if (gradeCache.has(key)) return gradeCache.get(key)!;
-      const code = name.trim().toUpperCase().replace(/[^A-Z0-9]/g, '_').substring(0, 50);
+      const code = name
+        .trim()
+        .toUpperCase()
+        .replace(/[^A-Z0-9]/g, "_")
+        .substring(0, 50);
       let finalCode = code;
       let suffix = 1;
-      while ([...gradeCache.keys()].some(k => k === finalCode.toLowerCase())) {
+      while (
+        [...gradeCache.keys()].some((k) => k === finalCode.toLowerCase())
+      ) {
         finalCode = `${code.substring(0, 47)}_${suffix++}`;
       }
-      const [newId] = await db('grades').insert({ uuid: uuidv4(), organization_id: ctx.organizationId, name: name.trim(), code: finalCode, status: 'active', created_by: ctx.userId, updated_by: ctx.userId, created_at: new Date(), updated_at: new Date() });
+      const [newId] = await db("grades").insert({
+        uuid: uuidv4(),
+        organization_id: ctx.organizationId,
+        name: name.trim(),
+        code: finalCode,
+        status: "active",
+        created_by: ctx.userId,
+        updated_by: ctx.userId,
+        created_at: new Date(),
+        updated_at: new Date(),
+      });
       gradeCache.set(key, newId);
       gradeCache.set(finalCode.toLowerCase(), newId);
       return newId;
     };
 
-    const getOrCreateDesig = async (name: string, deptId: number | null): Promise<number> => {
+    const getOrCreateDesig = async (
+      name: string,
+      deptId: number | null,
+    ): Promise<number> => {
       const key = name.trim().toLowerCase();
       if (desigCache.has(key)) return desigCache.get(key)!;
-      const code = name.trim().toUpperCase().replace(/[^A-Z0-9]/g, '_').substring(0, 50);
+      const code = name
+        .trim()
+        .toUpperCase()
+        .replace(/[^A-Z0-9]/g, "_")
+        .substring(0, 50);
       let finalCode = code;
       let suffix = 1;
-      while ([...desigCache.keys()].some(k => k === finalCode.toLowerCase())) {
+      while (
+        [...desigCache.keys()].some((k) => k === finalCode.toLowerCase())
+      ) {
         finalCode = `${code.substring(0, 47)}_${suffix++}`;
       }
-      const [newId] = await db('designations').insert({ uuid: uuidv4(), organization_id: ctx.organizationId, name: name.trim(), code: finalCode, department_id: deptId, status: 'active', created_by: ctx.userId, updated_by: ctx.userId, created_at: new Date(), updated_at: new Date() });
+      const [newId] = await db("designations").insert({
+        uuid: uuidv4(),
+        organization_id: ctx.organizationId,
+        name: name.trim(),
+        code: finalCode,
+        department_id: deptId,
+        status: "active",
+        created_by: ctx.userId,
+        updated_by: ctx.userId,
+        created_at: new Date(),
+        updated_at: new Date(),
+      });
       desigCache.set(key, newId);
       desigCache.set(finalCode.toLowerCase(), newId);
       return newId;
@@ -1408,8 +2043,22 @@ export class EmployeeService {
     const getOrCreateRole = async (name: string): Promise<number> => {
       const key = name.trim().toLowerCase();
       if (roleCache.has(key)) return roleCache.get(key)!;
-      const code = name.trim().toLowerCase().replace(/[^a-z0-9]/g, '_').substring(0, 50);
-      const [newId] = await db('roles').insert({ uuid: uuidv4(), organization_id: ctx.organizationId, name: name.trim(), code, is_system: false, is_platform_role: false, is_default: false, created_at: new Date(), updated_at: new Date() });
+      const code = name
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, "_")
+        .substring(0, 50);
+      const [newId] = await db("roles").insert({
+        uuid: uuidv4(),
+        organization_id: ctx.organizationId,
+        name: name.trim(),
+        code,
+        is_system: false,
+        is_platform_role: false,
+        is_default: false,
+        created_at: new Date(),
+        updated_at: new Date(),
+      });
       roleCache.set(key, newId);
       roleCache.set(code, newId);
       return newId;
@@ -1418,44 +2067,62 @@ export class EmployeeService {
     // ── Per-row processing ──────────────────────────────────────────────────────
     for (let i = 0; i < inputs.length; i++) {
       const input = inputs[i];
-      const rowNum = i + 1;
+      const rowNum = Number(input.sourceRow) || i + 1;
 
       // Skip completely blank rows
       const isBlank = Object.values(input).every(
-        (val) => val === null || val === undefined || String(val).trim() === ''
+        (val) => val === null || val === undefined || String(val).trim() === "",
       );
       if (isBlank) continue;
 
       try {
         await withTransaction(async (trx) => {
           // 1. Mandatory Field Validations
-          if (!input.employeeCode?.trim()) throw new ValidationError('Employee Code is required');
-          if (!input.email?.trim()) throw new ValidationError('Email Address is required');
-          if (!input.firstName?.trim()) throw new ValidationError('First Name is required');
-          if (!input.lastName?.trim()) throw new ValidationError('Last Name is required');
-          if (!input.dateOfJoining?.trim()) throw new ValidationError('Date of Joining is required');
-          if (!input.email?.trim() || !/\S+@\S+\.\S+/.test(input.email.trim())) {
-            throw new ValidationError('Valid Email Address is required');
+          if (!input.email?.trim())
+            throw new ValidationError("Email Address is required");
+          if (!input.firstName?.trim())
+            throw new ValidationError("First Name is required");
+          if (!input.lastName?.trim())
+            throw new ValidationError("Last Name is required");
+          if (!input.dateOfJoining?.trim())
+            throw new ValidationError("Date of Joining is required");
+          if (
+            !input.email?.trim() ||
+            !/\S+@\S+\.\S+/.test(input.email.trim())
+          ) {
+            throw new ValidationError("Valid Email Address is required");
           }
-          if (!input.password?.trim()) throw new ValidationError('Password is required');
+          if (!input.password?.trim())
+            throw new ValidationError("Password is required");
           if (input.password.length < 6) {
-            throw new ValidationError('Password must be at least 6 characters long');
+            throw new ValidationError(
+              "Password must be at least 6 characters long",
+            );
           }
 
-          if (input.confirmPassword?.trim() && input.password.trim() !== input.confirmPassword.trim()) {
-            throw new ValidationError('Passwords do not match');
+          if (
+            input.confirmPassword?.trim() &&
+            input.password.trim() !== input.confirmPassword.trim()
+          ) {
+            throw new ValidationError("Passwords do not match");
           }
 
           // Duplicate checks
-          const codeExists = await trx('employees')
-            .where({ employee_code: input.employeeCode.trim(), organization_id: ctx.organizationId })
-            .whereNull('deleted_at')
+          const employeeCode =
+            input.employeeCode?.trim() ||
+            `EMP${String(nextEmployeeCode++).padStart(3, "0")}`;
+          const codeExists = await trx("employees")
+            .where({
+              employee_code: employeeCode,
+              organization_id: ctx.organizationId,
+            })
+            .whereNull("deleted_at")
             .first();
           if (codeExists) {
             throw new ValidationError(`Employee Code already exists`);
           }
 
-          const emailExists = await trx('users')
+          const emailExists = await trx("users")
             .where({ email: input.email.trim() })
             .first();
           if (emailExists) {
@@ -1463,9 +2130,12 @@ export class EmployeeService {
           }
 
           // Also check email uniqueness in employees table
-          const empEmailExists = await trx('employees')
-            .where({ email: input.email.trim(), organization_id: ctx.organizationId })
-            .whereNull('deleted_at')
+          const empEmailExists = await trx("employees")
+            .where({
+              email: input.email.trim(),
+              organization_id: ctx.organizationId,
+            })
+            .whereNull("deleted_at")
             .first();
           if (empEmailExists) {
             throw new ValidationError(`Email already exists in employees`);
@@ -1476,7 +2146,9 @@ export class EmployeeService {
           if (mobileVal) {
             const mobileRegex = /^[0-9]{10}$/;
             if (!mobileRegex.test(mobileVal)) {
-              throw new ValidationError('Mobile number must be exactly 10 digits');
+              throw new ValidationError(
+                "Mobile number must be exactly 10 digits",
+              );
             }
           }
 
@@ -1484,49 +2156,77 @@ export class EmployeeService {
           let normalizedGender = null;
           if (input.gender?.trim()) {
             const genLower = input.gender.trim().toLowerCase();
-            if (!['male', 'female', 'other'].includes(genLower)) {
-              throw new ValidationError('Gender must be Male, Female, or Other');
+            if (!["male", "female", "other"].includes(genLower)) {
+              throw new ValidationError(
+                "Gender must be Male, Female, or Other",
+              );
             }
             normalizedGender = genLower;
           }
 
           // Optional Employment Type format check
-          let normalizedEmploymentType = 'full_time';
+          let normalizedEmploymentType = "full_time";
           if (input.employmentType?.trim()) {
-            const etInput = input.employmentType.trim().toLowerCase().replace(/_/g, ' ');
-            if (etInput === 'full time') normalizedEmploymentType = 'full_time';
-            else if (etInput === 'part time') normalizedEmploymentType = 'part_time';
-            else if (etInput === 'contract') normalizedEmploymentType = 'contract';
-            else if (etInput === 'intern' || etInput === 'internship') normalizedEmploymentType = 'internship';
+            const etInput = input.employmentType
+              .trim()
+              .toLowerCase()
+              .replace(/_/g, " ");
+            if (etInput === "full time") normalizedEmploymentType = "full_time";
+            else if (etInput === "part time")
+              normalizedEmploymentType = "part_time";
+            else if (etInput === "contract")
+              normalizedEmploymentType = "contract";
+            else if (etInput === "intern" || etInput === "internship")
+              normalizedEmploymentType = "internship";
             else {
-              throw new ValidationError('Employment Type must be Full Time, Part Time, Contract, or Intern');
+              throw new ValidationError(
+                "Employment Type must be Full Time, Part Time, Contract, or Intern",
+              );
             }
           }
 
           // Date format validation
           const dateOfJoining = input.dateOfJoining.trim();
           if (!/^\d{4}-\d{2}-\d{2}$/.test(dateOfJoining)) {
-            throw new ValidationError('Invalid Date of Joining format (expected YYYY-MM-DD)');
+            throw new ValidationError(
+              "Invalid Date of Joining format (expected YYYY-MM-DD)",
+            );
           }
 
           // ── Resolve master data via caches (no per-row DB inserts for new masters) ──
           let deptId: number | null = input.departmentId || null;
-          if (input.department && typeof input.department === 'string' && input.department.trim()) {
+          if (
+            input.department &&
+            typeof input.department === "string" &&
+            input.department.trim()
+          ) {
             deptId = await getOrCreateDept(input.department.trim());
           }
 
           let gradeId: number | null = null;
-          if (input.grade && typeof input.grade === 'string' && input.grade.trim()) {
+          if (
+            input.grade &&
+            typeof input.grade === "string" &&
+            input.grade.trim()
+          ) {
             gradeId = await getOrCreateGrade(input.grade.trim());
           }
 
           let designationId: number | null = input.designationId || null;
-          if (input.designation && typeof input.designation === 'string' && input.designation.trim()) {
-            designationId = await getOrCreateDesig(input.designation.trim(), deptId);
+          if (
+            input.designation &&
+            typeof input.designation === "string" &&
+            input.designation.trim()
+          ) {
+            designationId = await getOrCreateDesig(
+              input.designation.trim(),
+              deptId,
+            );
           }
 
           // Resolve Role
-          const roleName = input.role?.trim() || input.accessRole?.trim() || 'Employee';
+          const roleName =
+            input.role?.trim() || input.accessRole?.trim() || "Employee";
           let roleId: number;
           const cachedRoleId = roleCache.get(roleName.trim().toLowerCase());
           if (cachedRoleId) {
@@ -1536,42 +2236,56 @@ export class EmployeeService {
           }
 
           // Resolve Reports To (Manager by email, code, or name) - graceful fallback
-          let reportingManagerId: number | null = input.reportingManagerId || null;
-          if (input.reportsTo && typeof input.reportsTo === 'string' && input.reportsTo.trim()) {
+          let reportingManagerId: number | null =
+            input.reportingManagerId || null;
+          if (
+            input.reportsTo &&
+            typeof input.reportsTo === "string" &&
+            input.reportsTo.trim()
+          ) {
             const targetMgrStr = input.reportsTo.trim().toLowerCase();
-            const mgr = await trx('employees')
-              .where('organization_id', ctx.organizationId)
-              .whereNull('deleted_at')
-              .andWhere(function() {
-                this.whereRaw('LOWER(employee_code) = ?', [targetMgrStr])
-                    .orWhereRaw('LOWER(email) = ?', [targetMgrStr])
-                    .orWhereRaw("LOWER(CONCAT(first_name, ' ', last_name)) = ?", [targetMgrStr]);
+            const mgr = await trx("employees")
+              .where("organization_id", ctx.organizationId)
+              .whereNull("deleted_at")
+              .andWhere(function () {
+                this.whereRaw("LOWER(employee_code) = ?", [targetMgrStr])
+                  .orWhereRaw("LOWER(email) = ?", [targetMgrStr])
+                  .orWhereRaw("LOWER(CONCAT(first_name, ' ', last_name)) = ?", [
+                    targetMgrStr,
+                  ]);
               })
               .first();
             if (mgr) reportingManagerId = mgr.id;
           }
 
           // Insert Employee
-          const [empId] = await trx('employees').insert({
+          const [empId] = await trx("employees").insert({
             uuid: uuidv4(),
             organization_id: ctx.organizationId,
             company_id: ctx.companyId || null,
-            employee_code: input.employeeCode.trim(),
+            employee_code: employeeCode,
             first_name: input.firstName.trim(),
+            middle_name: input.middleName?.trim() || null,
             last_name: input.lastName.trim(),
             email: input.email.trim(),
+            phone: input.phone?.trim() || null,
             mobile: mobileVal,
+            date_of_birth: input.dateOfBirth?.trim() || null,
             gender: normalizedGender,
+            marital_status: input.maritalStatus?.trim() || null,
             date_of_joining: dateOfJoining,
             employment_type: normalizedEmploymentType,
             current_designation_id: designationId,
             current_department_id: deptId,
+            current_grade_id: gradeId || input.gradeId || null,
+            current_location_id: input.locationId || null,
             reporting_manager_id: reportingManagerId,
-            status: 'active',
+            job_title: input.jobTitle?.trim() || null,
+            status: "active",
             created_by: ctx.userId,
             updated_by: ctx.userId,
             created_at: new Date(),
-            updated_at: new Date()
+            updated_at: new Date(),
           });
 
           // Generate Password Hash
@@ -1583,20 +2297,20 @@ export class EmployeeService {
           });
 
           // Create User
-          const [userId] = await trx('users').insert({
+          const [userId] = await trx("users").insert({
             uuid: uuidv4(),
             organization_id: ctx.organizationId,
             company_id: ctx.companyId || null,
             employee_id: empId,
             email: input.email.trim(),
             password_hash: hashedPassword,
-            status: 'active',
+            status: "active",
             created_at: new Date(),
             updated_at: new Date(),
           });
 
           // Assign Role to User
-          await trx('user_roles').insert({
+          await trx("user_roles").insert({
             organization_id: ctx.organizationId,
             user_id: userId,
             role_id: roleId,
@@ -1606,11 +2320,11 @@ export class EmployeeService {
 
           // Audit Log (non-blocking)
           await this.auditService.log(ctx, {
-            action: 'CREATE',
-            entityType: 'EMPLOYEE',
+            action: "CREATE",
+            entityType: "EMPLOYEE",
             entityId: empId,
             afterState: {
-              employeeCode: input.employeeCode.trim(),
+              employeeCode,
               firstName: input.firstName.trim(),
               email: input.email.trim(),
             },
@@ -1620,7 +2334,10 @@ export class EmployeeService {
       } catch (err: any) {
         console.error(`Bulk Import Row ${rowNum} Error:`, err?.message || err);
         failed++;
-        errors.push({ row: rowNum, error: err.message || 'Unknown error during import' });
+        errors.push({
+          row: rowNum,
+          error: err.message || "Unknown error during import",
+        });
       }
     }
 
@@ -1635,50 +2352,56 @@ export class EmployeeService {
   /**
    * Submit a profile update request (Employee side)
    */
-  async createProfileUpdateRequest(ctx: TenantContext, input: {
-    employeeId?: number;
-    requestType?: 'personal_info' | 'contact' | 'bank_details' | 'emergency_contact';
-    targetArea?: string;
-    requestedChanges: string;
-    reason: string;
-  }) {
+  async createProfileUpdateRequest(
+    ctx: TenantContext,
+    input: {
+      employeeId?: number;
+      requestType?:
+        "personal_info" | "contact" | "bank_details" | "emergency_contact";
+      targetArea?: string;
+      requestedChanges: string;
+      reason: string;
+    },
+  ) {
     const db = getKnex();
     const uuid = uuidv4();
 
     let empId = input.employeeId;
     if (!empId && ctx.userId) {
-      const user = await db('users').where('id', ctx.userId).first();
+      const user = await db("users").where("id", ctx.userId).first();
       empId = user?.employee_id;
       if (!empId && user?.email) {
-        const emp = await db('employees').whereRaw('LOWER(email) = ?', [user.email.toLowerCase()]).first();
+        const emp = await db("employees")
+          .whereRaw("LOWER(email) = ?", [user.email.toLowerCase()])
+          .first();
         empId = emp?.id;
       }
     }
 
     if (!empId) {
-      throw new Error('Employee profile not linked to user account.');
+      throw new Error("Employee profile not linked to user account.");
     }
 
-    const empObj = await db('employees').where('id', empId).first();
+    const empObj = await db("employees").where("id", empId).first();
     const orgId = ctx.organizationId || empObj?.organization_id || 8;
     const compId = ctx.companyId || empObj?.company_id || null;
 
-    const reqType = input.requestType || 'personal_info';
+    const reqType = input.requestType || "personal_info";
 
-    const [id] = await db('employee_profile_update_requests').insert({
+    const [id] = await db("employee_profile_update_requests").insert({
       uuid,
       organization_id: orgId,
       company_id: compId,
       employee_id: empId,
       request_type: reqType,
-      profile_section: input.targetArea || 'General Profile Information',
+      profile_section: input.targetArea || "General Profile Information",
       reason: input.reason,
       requested_value: JSON.stringify({
-        targetArea: input.targetArea || 'General Profile Information',
+        targetArea: input.targetArea || "General Profile Information",
         requestedChanges: input.requestedChanges,
         reason: input.reason,
       }),
-      status: 'pending',
+      status: "pending",
       submitted_at: new Date(),
       created_by: ctx.userId || 1,
       updated_by: ctx.userId || 1,
@@ -1686,7 +2409,12 @@ export class EmployeeService {
       updated_at: new Date(),
     });
 
-    return { id, uuid, success: true, message: 'Profile edit request submitted successfully.' };
+    return {
+      id,
+      uuid,
+      success: true,
+      message: "Profile edit request submitted successfully.",
+    };
   }
 
   /**
@@ -1694,63 +2422,69 @@ export class EmployeeService {
    */
   async getProfileUpdateRequests(ctx: TenantContext, companyId?: number) {
     const db = getKnex();
-    let query = db('employee_profile_update_requests as pr')
-      .join('employees as e', 'pr.employee_id', 'e.id')
-      .leftJoin('departments as d', 'e.current_department_id', 'd.id')
-      .leftJoin('company as c', 'pr.company_id', 'c.company_id')
+    let query = db("employee_profile_update_requests as pr")
+      .join("employees as e", "pr.employee_id", "e.id")
+      .leftJoin("departments as d", "e.current_department_id", "d.id")
+      .leftJoin("company as c", "pr.company_id", "c.company_id")
       .select(
-        'pr.id',
-        'pr.uuid',
-        'pr.request_type as requestType',
-        'pr.profile_section as profileSection',
-        'pr.reason as reason',
-        'pr.requested_value as requestedValue',
-        'pr.status',
-        'pr.rejection_reason as rejectionReason',
-        'pr.submitted_at as submittedAt',
-        'pr.approved_at as approvedAt',
-        'pr.approved_by as approvedBy',
-        'e.id as employeeId',
-        'e.first_name as firstName',
-        'e.last_name as lastName',
-        'e.employee_code as employeeCode',
-        'e.avatar_url as avatarUrl',
-        'd.name as departmentName',
-        'c.name as companyName'
+        "pr.id",
+        "pr.uuid",
+        "pr.request_type as requestType",
+        "pr.profile_section as profileSection",
+        "pr.reason as reason",
+        "pr.requested_value as requestedValue",
+        "pr.status",
+        "pr.rejection_reason as rejectionReason",
+        "pr.submitted_at as submittedAt",
+        "pr.approved_at as approvedAt",
+        "pr.approved_by as approvedBy",
+        "e.id as employeeId",
+        "e.first_name as firstName",
+        "e.last_name as lastName",
+        "e.employee_code as employeeCode",
+        "e.avatar_url as avatarUrl",
+        "d.name as departmentName",
+        "c.name as companyName",
       )
-      .where('pr.organization_id', ctx.organizationId || 8)
-      .whereNull('pr.deleted_at')
-      .orderBy('pr.id', 'desc');
+      .where("pr.organization_id", ctx.organizationId || 8)
+      .whereNull("pr.deleted_at")
+      .orderBy("pr.id", "desc");
 
     if (companyId) {
-      query = query.where((q) => q.where('pr.company_id', companyId).orWhereNull('pr.company_id'));
+      query = query.where((q) =>
+        q.where("pr.company_id", companyId).orWhereNull("pr.company_id"),
+      );
     }
 
     const rows = await query;
     return rows.map((r: any) => {
       let parsedVal: any = {};
       try {
-        parsedVal = typeof r.requestedValue === 'string' ? JSON.parse(r.requestedValue) : (r.requestedValue || {});
+        parsedVal =
+          typeof r.requestedValue === "string"
+            ? JSON.parse(r.requestedValue)
+            : r.requestedValue || {};
       } catch (e) {
         parsedVal = {};
       }
       return {
         id: r.id,
-        reqId: `PRF-${String(r.id).padStart(4, '0')}`,
+        reqId: `PRF-${String(r.id).padStart(4, "0")}`,
         uuid: r.uuid,
         requestType: r.requestType,
-        profileSection: r.profileSection || parsedVal.targetArea || 'General',
-        reason: r.reason || parsedVal.reason || '',
-        requestedChanges: parsedVal.requestedChanges || '',
+        profileSection: r.profileSection || parsedVal.targetArea || "General",
+        reason: r.reason || parsedVal.reason || "",
+        requestedChanges: parsedVal.requestedChanges || "",
         employeeId: r.employeeId,
-        employeeName: `${r.firstName || ''} ${r.lastName || ''}`.trim() || 'Employee',
+        employeeName:
+          `${r.firstName || ""} ${r.lastName || ""}`.trim() || "Employee",
         employeeCode: r.employeeCode || `EMP${r.employeeId}`,
-        departmentName: r.departmentName || '-',
-        companyName: r.companyName || '-',
+        departmentName: r.departmentName || "-",
+        companyName: r.companyName || "-",
         avatarUrl: r.avatarUrl,
         submittedAt: r.submittedAt,
         approvedAt: r.approvedAt,
-        status: (r.status || 'pending').toLowerCase(),
+        status: (r.status || "pending").toLowerCase(),
         rejectionReason: r.rejectionReason,
       };
     });
@@ -1759,16 +2493,21 @@ export class EmployeeService {
   /**
    * Update profile update request status (Approve / Reject)
    */
-  async updateProfileUpdateRequestStatus(ctx: TenantContext, id: number, status: 'approved' | 'rejected', reason?: string) {
+  async updateProfileUpdateRequestStatus(
+    ctx: TenantContext,
+    id: number,
+    status: "approved" | "rejected",
+    reason?: string,
+  ) {
     const db = getKnex();
-    await db('employee_profile_update_requests')
-      .where('id', id)
-      .where('organization_id', ctx.organizationId)
+    await db("employee_profile_update_requests")
+      .where("id", id)
+      .where("organization_id", ctx.organizationId)
       .update({
         status,
         rejection_reason: reason || null,
-        approved_at: status === 'approved' ? new Date() : null,
-        approved_by: status === 'approved' ? (ctx.userId || 1) : null,
+        approved_at: status === "approved" ? new Date() : null,
+        approved_by: status === "approved" ? ctx.userId || 1 : null,
         updated_at: new Date(),
         updated_by: ctx.userId || 1,
       });
@@ -1781,33 +2520,38 @@ export class EmployeeService {
    */
   async getMyProfileUpdateRequests(empId: number) {
     const db = getKnex();
-    const rows = await db('employee_profile_update_requests as pr')
+    const rows = await db("employee_profile_update_requests as pr")
       .select(
-        'pr.id',
-        'pr.profile_section as profileSection',
-        'pr.reason',
-        'pr.requested_value as requestedValue',
-        'pr.status',
-        'pr.rejection_reason as rejectionReason',
-        'pr.submitted_at as submittedAt',
-        'pr.approved_at as approvedAt',
+        "pr.id",
+        "pr.profile_section as profileSection",
+        "pr.reason",
+        "pr.requested_value as requestedValue",
+        "pr.status",
+        "pr.rejection_reason as rejectionReason",
+        "pr.submitted_at as submittedAt",
+        "pr.approved_at as approvedAt",
       )
-      .where('pr.employee_id', empId)
-      .whereNull('pr.deleted_at')
-      .orderBy('pr.id', 'desc');
+      .where("pr.employee_id", empId)
+      .whereNull("pr.deleted_at")
+      .orderBy("pr.id", "desc");
 
     return rows.map((r: any) => {
       let parsedVal: any = {};
       try {
-        parsedVal = typeof r.requestedValue === 'string' ? JSON.parse(r.requestedValue) : (r.requestedValue || {});
-      } catch { parsedVal = {}; }
+        parsedVal =
+          typeof r.requestedValue === "string"
+            ? JSON.parse(r.requestedValue)
+            : r.requestedValue || {};
+      } catch {
+        parsedVal = {};
+      }
       return {
         id: r.id,
-        reqId: `PRF-${String(r.id).padStart(4, '0')}`,
-        profileSection: r.profileSection || parsedVal.targetArea || 'General',
-        reason: r.reason || parsedVal.reason || '',
-        requestedChanges: parsedVal.requestedChanges || '',
-        status: (r.status || 'pending').toLowerCase(),
+        reqId: `PRF-${String(r.id).padStart(4, "0")}`,
+        profileSection: r.profileSection || parsedVal.targetArea || "General",
+        reason: r.reason || parsedVal.reason || "",
+        requestedChanges: parsedVal.requestedChanges || "",
+        status: (r.status || "pending").toLowerCase(),
         rejectionReason: r.rejectionReason,
         submittedAt: r.submittedAt,
         approvedAt: r.approvedAt,

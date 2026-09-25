@@ -39,6 +39,7 @@ import {
   Plus,
   MapPin,
   Calendar,
+  Star,
 } from "lucide-react";
 import { toast } from "sonner";
 import { apiClient } from "@/config/api";
@@ -48,6 +49,7 @@ import {
   EmployeeLifecycleDetails,
 } from "./api/lifecycleApi";
 import { ChronologicalLifecycleFlow } from "./components/ChronologicalLifecycleFlow";
+import { ResignationApprovalPanel } from "./components/ResignationApprovalPanel";
 import { fetchWithFallback, API_ENDPOINTS } from "@/lib/apiHelpers";
 import { useLocation } from "react-router-dom";
 import {
@@ -414,6 +416,7 @@ const FormInput = ({
   placeholder = "",
   required = false,
   list = "",
+  readOnly = false,
 }: any) => (
   <input
     type={type}
@@ -422,6 +425,7 @@ const FormInput = ({
     placeholder={placeholder}
     required={required}
     list={list || undefined}
+    readOnly={readOnly}
     style={{
       width: "100%",
       height: 36,
@@ -542,6 +546,7 @@ export default function EmployeeLifecyclePage() {
   });
 
   const [offbOpen, setOffbOpen] = useState(false);
+  const [resignationApprovalsOpen, setResignationApprovalsOpen] = useState(false);
   const [offbForm, setOffbForm] = useState({
     exitType: "resignation",
     resignationDate: "",
@@ -557,17 +562,7 @@ export default function EmployeeLifecyclePage() {
   });
 
   useEffect(() => {
-    const path = location.pathname;
-    if (path.includes("/onboarding")) {
-      setStageFilter("onboarding");
-      setMainTab("onboarding");
-    } else if (path.includes("/offboarding")) {
-      setStageFilter("notice");
-      setMainTab("offboarding");
-    } else if (path.includes("/transfers")) {
-      setStageFilter("all");
-      setMainTab("transfers");
-    } else setStageFilter("all");
+    setStageFilter("all");
   }, [location.pathname]);
 
   const fetchData = async () => {
@@ -735,10 +730,12 @@ export default function EmployeeLifecyclePage() {
     if (!empDetails) return;
     const ob = empDetails.onboarding;
     setOnbForm({
-      interviewerName: ob.interviewerName || "",
+      interviewerName: empDetails.profile.reportingManager || ob.interviewerName || "",
       onboardedByName: ob.onboardedByName || "",
       interviewDate: ob.interviewDate || "",
-      interviewRating: ob.interviewRating || "4.5 / 5",
+      interviewRating: String(
+        Math.max(0, Math.min(5, Math.round(Number.parseFloat(ob.interviewRating || "") || 0))),
+      ),
       interviewNotes: ob.interviewNotes || "",
       joiningDate: ob.joiningDate || empDetails.profile.joiningDate || "",
       probationEndDate: ob.probationEndDate || "",
@@ -754,7 +751,16 @@ export default function EmployeeLifecyclePage() {
     e.preventDefault();
     if (!selectedEmpId) return;
     try {
-      await lifecycleApi.saveOnboarding(selectedEmpId, onbForm);
+      const rating = Math.max(
+        0,
+        Math.min(5, Math.round(Number.parseFloat(onbForm.interviewRating) || 0)),
+      );
+      await lifecycleApi.saveOnboarding(selectedEmpId, {
+        ...onbForm,
+        interviewerName:
+          empDetails?.profile.reportingManager || onbForm.interviewerName,
+        interviewRating: rating ? `${rating} / 5` : "",
+      });
       toast.success("Onboarding records updated");
       setOnbOpen(false);
       openDetails(selectedEmpId, "onboarding");
@@ -796,8 +802,10 @@ export default function EmployeeLifecyclePage() {
       setOffbOpen(false);
       openDetails(selectedEmpId, "offboarding");
       fetchData();
-    } catch {
-      toast.error("Failed to update offboarding");
+    } catch (error: any) {
+      toast.error(
+        error?.response?.data?.message || "Failed to update offboarding",
+      );
     }
   };
 
@@ -995,6 +1003,15 @@ export default function EmployeeLifecyclePage() {
           background: T.pageBg,
         }}
       >
+        <Dialog open={resignationApprovalsOpen} onOpenChange={setResignationApprovalsOpen}>
+          <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto border-border bg-background p-5 text-foreground sm:p-6">
+            <DialogHeader>
+              <DialogTitle>Resignation approvals</DialogTitle>
+              <DialogDescription>Review employee resignation requests. Approval begins the notice-period offboarding process.</DialogDescription>
+            </DialogHeader>
+            <ResignationApprovalPanel onReviewed={() => { void fetchData(); }} />
+          </DialogContent>
+        </Dialog>
         {/* ── Page Header ──────────────────────────────────────────────── */}
         <div
           style={{
@@ -1036,49 +1053,25 @@ export default function EmployeeLifecyclePage() {
               Directory with onboarding, transfer, and offboarding records.
             </p>
           </div>
-          <button
-            onClick={fetchData}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              background: T.mutedBg,
-              color: T.navyMid,
-              border: `1px solid ${T.border}`,
-              borderRadius: 8,
-              padding: "0 14px",
-              height: 34,
-              fontSize: 12,
-              fontWeight: 600,
-              cursor: "pointer",
-              fontFamily: "inherit",
-            }}
-          >
-            <RefreshCw
-              size={13}
-              strokeWidth={2}
-              className={loading ? "animate-spin" : ""}
-              style={{ color: T.blue }}
-            />
-            Refresh
-          </button>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+            <button
+              onClick={() => setResignationApprovalsOpen(true)}
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, background: T.warnBg, color: T.navyMid, border: `1px solid ${T.border}`, borderRadius: 8, padding: "0 14px", height: 34, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}
+            >
+              <UserMinus size={13} style={{ color: T.danger }} />
+              Resignation approvals
+            </button>
+            <button
+              onClick={fetchData}
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, background: T.mutedBg, color: T.navyMid, border: `1px solid ${T.border}`, borderRadius: 8, padding: "0 14px", height: 34, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
+            >
+              <RefreshCw size={13} strokeWidth={2} className={loading ? "animate-spin" : ""} style={{ color: T.blue }} />
+              Refresh
+            </button>
+          </div>
         </div>
 
         {/* ── Tab Bar ──────────────────────────────────────────────────── */}
-        <div className="elc-tabbar">
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              className={`elc-tab${mainTab === t.id ? " elc-tab--active" : ""}`}
-              onClick={() => setMainTab(t.id)}
-            >
-              {t.icon}
-              <span className="elc-tab-label-full">{t.label}</span>
-              <span className="elc-tab-label-short">{t.mobileLabel}</span>
-              <span className="elc-count">{t.count}</span>
-            </button>
-          ))}
-        </div>
 
         {/* ── Search & Filter bar ───────────────────────────────────────── */}
         <div style={{ ...cardStyle, padding: "12px 16px" }}>
@@ -1296,6 +1289,9 @@ export default function EmployeeLifecyclePage() {
                     <Th>Department</Th>
                     <Th>Joined</Th>
                     <Th>Status</Th>
+                    <Th>Onboarding</Th>
+                    <Th>Transfers</Th>
+                    <Th>Offboarding</Th>
                     <Th right>Actions</Th>
                   </tr>
                 </thead>
@@ -1303,7 +1299,7 @@ export default function EmployeeLifecyclePage() {
                   {loading ? (
                     <tr>
                       <td
-                        colSpan={7}
+                        colSpan={10}
                         style={{
                           padding: 40,
                           textAlign: "center",
@@ -1326,7 +1322,7 @@ export default function EmployeeLifecyclePage() {
                   ) : filteredEmps.length === 0 ? (
                     <tr>
                       <td
-                        colSpan={7}
+                        colSpan={10}
                         style={{
                           padding: 40,
                           textAlign: "center",
@@ -1386,6 +1382,21 @@ export default function EmployeeLifecyclePage() {
                         </Td>
                         <Td>
                           <StatusPill status={emp.lifecycleStatus} />
+                        </Td>
+                        <Td>
+                          <span style={{ color: T.muted, fontSize: 11 }}>
+                            {emp.onboarding?.orientationCompleted ? "Complete" : emp.lifecycleStatus === "onboarding" ? "In progress" : "—"}
+                          </span>
+                        </Td>
+                        <Td>
+                          <span style={{ color: T.muted, fontSize: 11 }}>
+                            {emp.transfersCount ? `${emp.transfersCount} record${emp.transfersCount === 1 ? "" : "s"}` : "—"}
+                          </span>
+                        </Td>
+                        <Td>
+                          <span style={{ color: T.muted, fontSize: 11 }}>
+                            {emp.offboarding?.exitType || (["notice", "exit", "alumni"].includes(emp.lifecycleStatus) ? emp.lifecycleStatus : "—")}
+                          </span>
                         </Td>
                         <Td right>
                           <div
@@ -2215,6 +2226,7 @@ export default function EmployeeLifecyclePage() {
           <DialogContent
             style={{
               maxWidth: 760,
+              width: "calc(100vw - 24px)",
               maxHeight: "90vh",
               borderRadius: 14,
               padding: 0,
@@ -2255,7 +2267,7 @@ export default function EmployeeLifecyclePage() {
                 {/* Modal header */}
                 <div
                   style={{
-                    padding: "18px 20px",
+                    padding: "18px 64px 18px 20px",
                     borderBottom: `1px solid ${T.border}`,
                     background: T.mutedBg,
                     display: "flex",
@@ -2399,7 +2411,7 @@ export default function EmployeeLifecyclePage() {
                           value={empDetails.profile.designationName}
                         />
                         <InfoCell
-                          label="Location"
+                          label="Job location"
                           value={empDetails.profile.locationName || "—"}
                         />
                         <InfoCell
@@ -2770,7 +2782,7 @@ export default function EmployeeLifecyclePage() {
                         >
                           Offboarding & Exit
                         </span>
-                        <BtnOutline
+                        {empDetails.offboarding && <BtnOutline
                           onClick={openOffbEdit}
                           danger
                           style={{
@@ -2780,7 +2792,7 @@ export default function EmployeeLifecyclePage() {
                           }}
                         >
                           <Edit size={11} /> Manage
-                        </BtnOutline>
+                        </BtnOutline>}
                       </div>
                       {!empDetails.offboarding ? (
                         <div
@@ -2794,14 +2806,7 @@ export default function EmployeeLifecyclePage() {
                           }}
                         >
                           Employee is active — no exit record initiated.
-                          <div style={{ marginTop: 12 }}>
-                            <BtnPrimary
-                              onClick={openOffbEdit}
-                              style={{ background: T.danger }}
-                            >
-                              Initiate Offboarding
-                            </BtnPrimary>
-                          </div>
+                          <p style={{ marginTop: 12 }}>For a resignation, the employee must submit the request first. HR/Admin can approve it from Pending resignation approvals above.</p>
                         </div>
                       ) : (
                         <>
@@ -3119,20 +3124,16 @@ export default function EmployeeLifecyclePage() {
               style={{ display: "flex", flexDirection: "column", gap: 12 }}
             >
               <div>
-                <FormLabel>Interviewer name</FormLabel>
+                <FormLabel>Interviewer (reporting manager)</FormLabel>
                 <FormInput
                   value={onbForm.interviewerName}
-                  onChange={(e: any) =>
-                    setOnbForm({ ...onbForm, interviewerName: e.target.value })
-                  }
-                  list="mgr-list"
-                  placeholder="e.g. Manager name"
+                  onChange={() => undefined}
+                  readOnly
+                  placeholder="No reporting manager assigned"
                 />
-                <datalist id="mgr-list">
-                  {managers.map((m) => (
-                    <option key={m.id} value={m.name} />
-                  ))}
-                </datalist>
+                <div style={{ marginTop: 5, fontSize: 11, color: T.muted }}>
+                  Automatically taken from this employee's reporting manager.
+                </div>
               </div>
               <div>
                 <FormLabel>Onboarded by (HR)</FormLabel>
@@ -3156,15 +3157,47 @@ export default function EmployeeLifecyclePage() {
                 </div>
                 <div>
                   <FormLabel>Rating</FormLabel>
-                  <FormInput
-                    value={onbForm.interviewRating}
-                    onChange={(e: any) =>
-                      setOnbForm({
-                        ...onbForm,
-                        interviewRating: e.target.value,
-                      })
-                    }
-                  />
+                  <div
+                    role="radiogroup"
+                    aria-label="Interview rating out of five"
+                    style={{ height: 36, display: "flex", alignItems: "center", gap: 3 }}
+                  >
+                    {[1, 2, 3, 4, 5].map((star) => {
+                      const selected = Math.round(
+                        Number.parseFloat(onbForm.interviewRating) || 0,
+                      );
+                      const active = star <= selected;
+                      return (
+                        <button
+                          key={star}
+                          type="button"
+                          role="radio"
+                          aria-checked={star === selected}
+                          aria-label={`${star} star${star === 1 ? "" : "s"}`}
+                          onClick={() =>
+                            setOnbForm({ ...onbForm, interviewRating: String(star) })
+                          }
+                          style={{
+                            border: 0,
+                            background: "transparent",
+                            padding: 2,
+                            cursor: "pointer",
+                            lineHeight: 0,
+                          }}
+                        >
+                          <Star
+                            size={21}
+                            color={active ? "#F59E0B" : T.muted}
+                            fill={active ? "#F59E0B" : "transparent"}
+                          />
+                        </button>
+                      );
+                    })}
+                    <span style={{ marginLeft: 5, fontSize: 12, fontWeight: 700, color: T.navy }}>
+                      {(Math.round(Number.parseFloat(onbForm.interviewRating) || 0) || "Not rated") +
+                        (Math.round(Number.parseFloat(onbForm.interviewRating) || 0) ? " / 5" : "")}
+                    </span>
+                  </div>
                 </div>
               </div>
               <div className="elc-form-grid2">
@@ -3310,7 +3343,9 @@ export default function EmployeeLifecyclePage() {
                       setOffbForm({ ...offbForm, exitType: e.target.value })
                     }
                   >
-                    <option value="resignation">Resignation</option>
+                    {offbForm.exitType === "resignation" && (
+                      <option value="resignation">Resignation (approved request)</option>
+                    )}
                     <option value="termination">Termination</option>
                     <option value="contract_end">Contract end</option>
                     <option value="retirement">Retirement</option>

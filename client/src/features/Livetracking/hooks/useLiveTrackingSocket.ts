@@ -18,7 +18,10 @@ import type {
 
 import { detectBreakPoints } from '../utils/breakDetector';
 
-const SOCKET_URL = (import.meta as any).env.VITE_SOCKET_URL || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5001');
+const SOCKET_URL =
+  import.meta.env.VITE_SOCKET_URL ||
+  import.meta.env.VITE_API_URL?.replace(/\/api(?:\/v1)?\/?$/, '') ||
+  (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5000');
 
 interface UseLiveTrackingSocketOptions {
   token: string | null;
@@ -72,7 +75,12 @@ export function useLiveTrackingSocket({
   });
 
   useEffect(() => {
-    const activeToken = token || localStorage.getItem('accessToken') || 'active_session';
+    const activeToken = token || localStorage.getItem('accessToken');
+
+    if (!activeToken) {
+      setIsConnected(false);
+      return;
+    }
 
     const socket = io(`${SOCKET_URL}/live-tracking`, {
       auth: { token: activeToken },

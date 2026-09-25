@@ -192,14 +192,14 @@ export const IdCardRenderer: React.FC<IdCardRendererProps> = ({
         <div className="leading-none text-left flex flex-col justify-center">
           <span
             className="font-black text-[18px] tracking-tight font-sans block leading-none"
-            style={{ color: config?.header?.orgNameColor || (isDarkMode ? '#ffffff' : '#0b1e36') }}
+            style={{ color: isDarkMode ? '#ffffff' : (config?.header?.orgNameColor || '#0b1e36') }}
           >
             {orgDisplayName}
           </span>
           {subtitle !== '' && (
             <div
               className="flex items-center gap-1 mt-1 text-[6.5px] font-black tracking-wider uppercase leading-none"
-              style={{ color: config?.header?.subtitleColor || (isDarkMode ? '#cbd5e1' : '#1e293b') }}
+              style={{ color: isDarkMode ? '#cbd5e1' : (config?.header?.subtitleColor || '#1e293b') }}
             >
               {subtitle.includes('•') ? (
                 subtitle.split('•').map((part, i, arr) => (
@@ -440,8 +440,8 @@ export const IdCardRenderer: React.FC<IdCardRendererProps> = ({
     const hasHeaderImage = !!headerImageSrc;
     const hasBottomImage = !!(config?.footer?.bottomBarcodeImageUrl || config?.footer?.footerImageUrl);
 
-    const cardBgImageUrl = config?.theme?.bgImageUrl;
-    const cardBgColor = config?.theme?.solidBgColor || (isDarkMode ? '#0f172a' : '#ffffff');
+    const cardBgImageUrl = isDarkMode ? undefined : config?.theme?.bgImageUrl;
+    const cardBgColor = isDarkMode ? '#0f172a' : (config?.theme?.solidBgColor || '#ffffff');
 
     return (
       <div
@@ -568,8 +568,8 @@ export const IdCardRenderer: React.FC<IdCardRendererProps> = ({
   const renderBackCard = () => {
     const hasBackHeaderImage = !!config?.back?.backHeaderImageUrl;
 
-    const backBgImageUrl = config?.back?.bgImageUrl || config?.theme?.bgImageUrl;
-    const backBgColor = config?.theme?.solidBgColor || (isDarkMode ? '#0f172a' : '#ffffff');
+    const backBgImageUrl = isDarkMode ? undefined : (config?.back?.bgImageUrl || config?.theme?.bgImageUrl);
+    const backBgColor = isDarkMode ? '#0f172a' : (config?.theme?.solidBgColor || '#ffffff');
     const orgDisplayName = config?.header?.orgName || 'Company';
 
     return (

@@ -1966,10 +1966,6 @@ router.get('/org-settings', asyncHandler(async (req: Request, res: Response) => 
     settingsMap['sick_leave_doc_threshold'] = 3;
   }
 
-  // Default values for Attendance Module Configuration
-  if (settingsMap['attendance_mode'] === undefined) {
-    settingsMap['attendance_mode'] = 'gps';
-  }
   if (settingsMap['geofence_radius_meters'] === undefined) {
     settingsMap['geofence_radius_meters'] = 100;
   }
@@ -4946,5 +4942,3 @@ router.get('/id-card/active-template', asyncHandler((req, res) => idCardCtrl.res
 router.post('/id-card/upload-asset', asyncHandler((req, res) => idCardCtrl.uploadAsset(req, res)));
 
 export default router;
-
-

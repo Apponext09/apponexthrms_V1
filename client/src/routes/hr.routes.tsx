@@ -8,11 +8,11 @@ const SettingsLayout = lazy(() => import('../features/settings/pages/SettingsLay
 
 // ── Lazy Imports ──────────────────────────────────────────────────────────────
 const EmployeeListPage = lazy(() => import('../features/employee/pages/EmployeeListPage').then(m => ({ default: m.EmployeeListPage })));
+const EmployeeLifecyclePage = lazy(() => import('../features/HR/EmployeeLifecycle/EmployeeLifecyclePage'));
 const EmployeeProfilePage = lazy(() => import('../features/employee/pages/EmployeeProfilePage').then(m => ({ default: m.EmployeeProfilePage })));
 const ProfilePage = lazy(() => import('../features/employee/portal-pages/ProfilePage'));
 const HRDashboardPage = lazy(() => import('../features/HR/Dashboard/HRDashboardPage').then(m => ({ default: m.HRDashboardPage })));
 const EmployeeEditPage = lazy(() => import('../features/employee/pages/EmployeeEditPage').then(m => ({ default: m.EmployeeEditPage })));
-const EmployeeLifecyclePage = lazy(() => import('../features/HR/EmployeeLifecycle/EmployeeLifecyclePage'));
 const MyLifecyclePage = lazy(() => import('../features/employee/pages/MyLifecyclePage').then(m => ({ default: m.MyLifecyclePage })));
 const IDCardPage = lazy(() => import('../features/employee/portal-pages/IDCardPage'));
 const OrgStructurePage = lazy(() => import('../features/org-structure/pages/OrgStructurePage').then(m => ({ default: m.OrgStructurePage })));
@@ -131,7 +131,6 @@ const LocationsPage = lazy(() => import('../features/settings/pages/LocationsPag
 const BrandingPage = lazy(() => import('../features/settings/pages/BrandingPage').then(m => ({ default: m.BrandingPage })));
 const LeavePoliciesPage = lazy(() => import('../features/settings/pages/LeavePoliciesPage').then(m => ({ default: m.LeavePoliciesPage })));
 const OrgLeaveSettings = lazy(() => import('../features/settings/pages/OrgLeaveSettings').then(m => ({ default: m.OrgLeaveSettings })));
-const AttendanceModulePage = lazy(() => import('../features/settings/pages/AttendanceModulePage').then(m => ({ default: m.AttendanceModulePage })));
 const ModuleManagementPage = lazy(() => import('../features/modules/modules').then(m => ({ default: m.ModuleManagementPage })));
 const AdminPolicyDashboardPage = lazy(() => import('../features/policies/pages/AdminPolicyDashboardPage').then(m => ({ default: m.AdminPolicyDashboardPage })));
 const CreatePolicyPage = lazy(() => import('../features/policies/pages/CreatePolicyPage').then(m => ({ default: m.CreatePolicyPage })));
@@ -392,7 +391,6 @@ export const hrRoutes = (
       <Route path="branding" element={<BrandingPage />} />
       <Route path="leave-policies" element={<LeavePoliciesPage />} />
       <Route path="org-leave-settings" element={<OrgLeaveSettings />} />
-      <Route path="attendance-module" element={<AttendanceModulePage />} />
       <Route path="id-card-designer" element={<IdCardDesignerPage />} />
       <Route path="career-customization" element={<CareerPortalCustomizationPage />} />
       <Route path="lms-integrations" element={<LmsIntegrationSettingsPage />} />

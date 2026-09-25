@@ -238,27 +238,23 @@ export default function ShiftRosterPage() {
         const res = await apiClient.get('/attendance/locations');
         if (res.data?.success && Array.isArray(res.data.data) && res.data.data.length > 0) {
           const loc = res.data.data[0];
-          setOfficeLocation({
-            lat: Number(loc.latitude || 19.0330),
-            lng: Number(loc.longitude || 73.0297),
-            name: loc.geofence_name || loc.geofenceName || 'Office Geofence',
-            radius: Number(loc.radius_meters || loc.geofence_radius_m || 200)
-          });
+          const lat = Number(loc.latitude);
+          const lng = Number(loc.longitude);
+          if (Number.isFinite(lat) && Number.isFinite(lng)) {
+            setOfficeLocation({
+              lat,
+              lng,
+              name: loc.geofence_name || loc.geofenceName || 'Office Geofence',
+              radius: Number(loc.radius_meters || loc.geofence_radius_m || 200)
+            });
+          } else {
+            setOfficeLocation(null);
+          }
         } else {
-          setOfficeLocation({
-            lat: 19.0330,
-            lng: 73.0297,
-            name: 'Navi Mumbai HQ Geofence',
-            radius: 200
-          });
+          setOfficeLocation(null);
         }
       } catch (err) {
-        setOfficeLocation({
-          lat: 19.0330,
-          lng: 73.0297,
-          name: 'Navi Mumbai HQ Geofence',
-          radius: 200
-        });
+        setOfficeLocation(null);
       }
     };
     fetchOfficeLoc();

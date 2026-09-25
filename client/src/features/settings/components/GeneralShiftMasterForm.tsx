@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Plus, X, Info, Clock, Search, CheckCircle2, XCircle, ChevronDown, ChevronUp,
   Loader2, Sun, Moon, Sparkles, Shield, Palette, Tag, Timer, CalendarDays, Zap, AlertTriangle, Check
@@ -6,6 +6,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useShifts } from '@/features/attendance/hooks/useShifts';
 import { showToast } from '@/components/ui/toast';
+import { attendanceRules, validateShiftRules } from '@/features/attendance/shiftRules';
 
 interface GeneralShiftMasterFormProps {
   onCancel?: () => void;
@@ -121,6 +122,8 @@ export function GeneralShiftMasterForm({ onCancel, onSave }: GeneralShiftMasterF
   const [checkInTime, setCheckInTime] = useState('09:00');
   const [bufferTime, setBufferTime] = useState('00:15');
   const [considerHalfDayAfterCheckin, setConsiderHalfDayAfterCheckin] = useState('11:00');
+  const [flexibleStartRangeStart, setFlexibleStartRangeStart] = useState('08:00');
+  const [flexibleStartRangeEnd, setFlexibleStartRangeEnd] = useState('11:00');
   const [totalTime, setTotalTime] = useState('09:00');
   const [logBreakTime, setLogBreakTime] = useState('01:00');
 
@@ -220,6 +223,8 @@ export function GeneralShiftMasterForm({ onCancel, onSave }: GeneralShiftMasterF
     setCheckInTime('09:00');
     setBufferTime('00:15');
     setConsiderHalfDayAfterCheckin('11:00');
+    setFlexibleStartRangeStart('08:00');
+    setFlexibleStartRangeEnd('11:00');
     setTotalTime('09:00');
     setLogBreakTime('01:00');
     setDaysIncluded(['mon', 'tue', 'wed', 'thu', 'fri']);
@@ -264,10 +269,11 @@ export function GeneralShiftMasterForm({ onCancel, onSave }: GeneralShiftMasterF
       return;
     }
 
-    if (!isFlexible && startTime && endTime && startTime === endTime) {
-      setSubmitError('Shift end time must be different from the start time.');
-      return;
-    }
+    const ruleInput = { isFlexible, startTime, endTime, flexibleStartRangeStart, flexibleStartRangeEnd,
+      totalTime, logBreakTime, bufferTime, halfDayStartTime: considerHalfDayAfterCheckin,
+      minHoursFullDayIncluded, minHoursFullDayExcluded, minHoursHalfDay, shiftCutOffTime, minExcludedDaysWorked };
+    const ruleError = validateShiftRules(ruleInput);
+    if (ruleError) { setSubmitError(ruleError); return; }
 
     // A shift ending before it starts is only valid as a deliberate
     // overnight shift — the server now rejects end<start unless this is
@@ -298,6 +304,7 @@ export function GeneralShiftMasterForm({ onCancel, onSave }: GeneralShiftMasterF
         return acc;
       }, {} as Record<string, ExcludedDayPattern>);
 
+      const globalAttendanceRules = attendanceRules(ruleInput);
       const rosterPatternObj = {
         totalTime,
         logBreakTime,
@@ -305,13 +312,7 @@ export function GeneralShiftMasterForm({ onCancel, onSave }: GeneralShiftMasterF
         daysIncluded,
         holidayDays,
         excludedWorkingPattern,
-        globalAttendanceRules: {
-          minHoursFullDayExcluded,
-          minHoursFullDayIncluded,
-          minHoursHalfDay,
-          minExcludedDaysWorked,
-          shiftCutOffTime,
-        },
+        globalAttendanceRules,
         behaviorToggles,
       };
 
@@ -327,6 +328,10 @@ export function GeneralShiftMasterForm({ onCancel, onSave }: GeneralShiftMasterF
         shiftCategory: 'General',
         isFlexible,
         is_flexible: isFlexible,
+        flexibleStartRangeStart: isFlexible ? `${flexibleStartRangeStart}:00` : null,
+        flexible_start_range_start: isFlexible ? `${flexibleStartRangeStart}:00` : null,
+        flexibleStartRangeEnd: isFlexible ? `${flexibleStartRangeEnd}:00` : null,
+        flexible_start_range_end: isFlexible ? `${flexibleStartRangeEnd}:00` : null,
         startTime: !isFlexible && startTime ? `${startTime}:00` : null,
         start_time: !isFlexible && startTime ? `${startTime}:00` : null,
         endTime: !isFlexible && endTime ? `${endTime}:00` : null,
@@ -345,6 +350,8 @@ export function GeneralShiftMasterForm({ onCancel, onSave }: GeneralShiftMasterF
         break_duration_minutes: breakMins,
         bufferTime: !isFlexible ? bufferTime : null,
         considerHalfDayAfterCheckin: !isFlexible ? considerHalfDayAfterCheckin : null,
+        globalAttendanceRules,
+        behaviorToggles,
         description: `General Shift (${actualHours} actual working hours)`,
         rosterPattern: rosterPatternObj,
         roster_pattern: rosterPatternObj,
@@ -496,6 +503,17 @@ export function GeneralShiftMasterForm({ onCancel, onSave }: GeneralShiftMasterF
             </div>
 
             {/* CARD 2: FIXED SHIFT TIMING & HOURS */}
+            {isFlexible && (
+              <div className="bg-card border border-border/80 rounded-2xl p-5 shadow-xs space-y-4">
+                <div className="font-bold text-xs uppercase flex items-center gap-2"><Clock className="h-4 w-4 text-amber-500" />Flexible shift timing & hours</div>
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                  <div><label className="block font-bold text-[11px] mb-1">Earliest check-in *</label><input type="time" value={flexibleStartRangeStart} onChange={(e) => setFlexibleStartRangeStart(e.target.value)} className="w-full h-9 px-3 border border-input rounded-xl bg-background" /></div>
+                  <div><label className="block font-bold text-[11px] mb-1">Latest check-in *</label><input type="time" value={flexibleStartRangeEnd} onChange={(e) => setFlexibleStartRangeEnd(e.target.value)} className="w-full h-9 px-3 border border-input rounded-xl bg-background" /></div>
+                  <div><label className="block font-bold text-[11px] mb-1">Total time *</label><input value={totalTime} onChange={(e) => setTotalTime(e.target.value)} className="w-full h-9 px-3 border border-input rounded-xl bg-background font-mono" /></div>
+                  <div><label className="block font-bold text-[11px] mb-1">Break time *</label><input value={logBreakTime} onChange={(e) => setLogBreakTime(e.target.value)} className="w-full h-9 px-3 border border-input rounded-xl bg-background font-mono" /></div>
+                </div>
+              </div>
+            )}
             {!isFlexible && (
               <div className="bg-card border border-border/80 rounded-2xl p-5 shadow-xs space-y-4">
                 <div className="flex items-center justify-between border-b border-border pb-3">

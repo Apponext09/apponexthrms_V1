@@ -101,6 +101,8 @@ export interface Employee {
   documentPolicyAccepted?: boolean;
   document_policy_accepted_at?: string | null;
   documentPolicyAcceptedAt?: string | null;
+  attendance_access_settings?: string | null;
+  attendanceAccessSettings?: string | null;
 }
 
 export class EmployeeRepository extends BaseRepository<Employee> {
@@ -181,6 +183,23 @@ export class EmployeeRepository extends BaseRepository<Employee> {
         .first();
       if (dept) {
         (employee as any).department = dept.name;
+      }
+    }
+
+    // A single-employee profile fetch does not go through list(), so resolve
+    // the assigned job location here as well.
+    const locationId = (employee as any).currentLocationId || (employee as any).current_location_id;
+    if (locationId) {
+      const location = await this.db('locations')
+        .where('organization_id', ctx.organizationId)
+        .where('id', locationId)
+        .select('name', 'location_name')
+        .first();
+      if (location) {
+        const locationName = (location as any).name || (location as any).locationName || (location as any).location_name;
+        (employee as any).location = locationName;
+        (employee as any).locationName = locationName;
+        (employee as any).location_name = locationName;
       }
     }
 

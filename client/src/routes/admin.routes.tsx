@@ -20,6 +20,9 @@ const EmployeeListPage = lazy(() =>
     default: m.EmployeeListPage,
   })),
 );
+const EmployeeLifecyclePage = lazy(
+  () => import("../features/HR/EmployeeLifecycle/EmployeeLifecyclePage"),
+);
 const EmployeeProfilePage = lazy(() =>
   import("../features/employee/pages/EmployeeProfilePage").then((m) => ({
     default: m.EmployeeProfilePage,
@@ -39,9 +42,6 @@ const OrgStructurePage = lazy(() =>
   import("../features/org-structure/pages/OrgStructurePage").then((m) => ({
     default: m.OrgStructurePage,
   })),
-);
-const EmployeeLifecyclePage = lazy(
-  () => import("../features/HR/EmployeeLifecycle/EmployeeLifecyclePage"),
 );
 const AttendanceDashboard = lazy(() =>
   import("../features/attendance/pages/AttendanceDashboard").then((m) => ({
@@ -605,11 +605,6 @@ const OrgLeaveSettings = lazy(() =>
     default: m.OrgLeaveSettings,
   })),
 );
-const AttendanceModulePage = lazy(() =>
-  import("../features/settings/pages/AttendanceModulePage").then((m) => ({
-    default: m.AttendanceModulePage,
-  })),
-);
 const MastersHubPage = lazy(() =>
   import("../features/settings/pages/MastersHubPage").then((m) => ({
     default: m.MastersHubPage,
@@ -1085,10 +1080,6 @@ export const adminRoutes = (
     <Route path="/settings/branding" element={<BrandingPage />} />
     <Route path="/settings/leave-policies" element={<LeavePoliciesPage />} />
     <Route path="/settings/org-leave-settings" element={<OrgLeaveSettings />} />
-    <Route
-      path="/settings/attendance-module"
-      element={<AttendanceModulePage />}
-    />
     <Route path="/settings/id-card-designer" element={<IdCardDesignerPage />} />
     <Route
       path="/settings/id-card-templates"
@@ -1131,7 +1122,6 @@ export const adminRoutes = (
       <Route path="branding" element={<BrandingPage />} />
       <Route path="leave-policies" element={<LeavePoliciesPage />} />
       <Route path="org-leave-settings" element={<OrgLeaveSettings />} />
-      <Route path="attendance-module" element={<AttendanceModulePage />} />
       <Route
         path="career-customization"
         element={<CareerPortalCustomizationPage />}

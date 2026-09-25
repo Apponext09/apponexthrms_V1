@@ -532,7 +532,7 @@ export function EmployeeStatusMasterForm({ onBack }: EmployeeStatusMasterFormPro
                         </button>
                       </TooltipTrigger>
                       <TooltipContent side="right" className="max-w-[240px] text-xs">
-                        Automatically deactivates the employee account (disables login, hides from active directory) when this status is applied (e.g. Terminated, Retired).
+                        Automatically revokes the employee account and all active sessions when this status is applied (e.g. Terminated, Retired). Exit, Inactive, and Alumni always revoke access.
                       </TooltipContent>
                     </Tooltip>
                   </div>

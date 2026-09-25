@@ -1,5 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import type { TenantContext } from '../../../db/types';
+import { sendMail } from '../../../common/lib/mail';
+import { ValidationError } from '../../../common/errors';
 
 function formatDateISO(val: any): string | null {
   if (!val) return null;
@@ -297,27 +299,6 @@ export class LifecycleService {
       ? `${adminUser.first_name || adminUser.firstName || 'Organization'} ${adminUser.last_name || adminUser.lastName || 'Admin'}`.trim()
       : 'Harsh Gawali (Organization Admin)';
 
-    const primaryLocRow = await db('attendance_locations')
-      .where('organization_id', ctx.organizationId)
-      .whereNull('deleted_at')
-      .where(function(this: any) {
-        if (effectiveCompanyId) {
-          this.where('company_id', effectiveCompanyId).orWhereNull('company_id');
-        }
-      })
-      .orderBy('is_primary', 'desc')
-      .select('location_name')
-      .first()
-      .catch(() => null);
-
-    const compRow = await db('company')
-      .where('organization_id', ctx.organizationId)
-      .whereNull('deleted_at')
-      .first()
-      .catch(() => null);
-
-    const defaultCompanyLoc = primaryLocRow?.location_name || compRow?.name || 'Main Office';
-
     return employees.map((emp: any) => {
       const empId = Number(emp.id);
       const rawFn = emp.firstName || emp.first_name || emp.userFirstName || emp.user_first_name;
@@ -364,7 +345,9 @@ export class LifecycleService {
         reportingManagerId: (emp.reportingManagerId || emp.reporting_manager_id) ? Number(emp.reportingManagerId || emp.reporting_manager_id) : null,
         reportingManager,
         currentLocationId: (emp.currentLocationId || emp.current_location_id) ? Number(emp.currentLocationId || emp.current_location_id) : null,
-        locationName: emp.locationName || emp.location_name || defaultCompanyLoc,
+        // This is the employee's assigned job location only. Do not substitute an
+        // attendance primary location or company name when none is assigned.
+        locationName: emp.locationName || emp.location_name || '—',
         transfersCount: trfData?.count || 0,
         lastTransferDate: trfData?.lastTransferDate || null,
         transferReason: trfData?.transferReason || null,
@@ -533,8 +516,8 @@ export class LifecycleService {
       .leftJoin('departments as to_dept', 'employee_transfers.to_department_id', 'to_dept.id')
       .leftJoin('designations as from_desig', 'employee_transfers.from_designation_id', 'from_desig.id')
       .leftJoin('designations as to_desig', 'employee_transfers.to_designation_id', 'to_desig.id')
-      .leftJoin('attendance_locations as from_loc', 'employee_transfers.from_location_id', 'from_loc.id')
-      .leftJoin('attendance_locations as to_loc', 'employee_transfers.to_location_id', 'to_loc.id')
+      .leftJoin('locations as from_loc', 'employee_transfers.from_location_id', 'from_loc.id')
+      .leftJoin('locations as to_loc', 'employee_transfers.to_location_id', 'to_loc.id')
       .leftJoin('employees as from_mgr', 'employee_transfers.from_reporting_manager_id', 'from_mgr.id')
       .leftJoin('employees as to_mgr', 'employee_transfers.to_reporting_manager_id', 'to_mgr.id')
       .leftJoin('users as creator', 'employee_transfers.created_by', 'creator.id')
@@ -610,26 +593,7 @@ export class LifecycleService {
     const obJoiningDate = formatDateISO(onboarding?.joiningDate || onboarding?.joining_date) || joinDateISO;
     const obProbationDate = formatDateISO(onboarding?.probationEndDate || onboarding?.probation_end_date);
 
-    const primaryLocRow = await db('attendance_locations')
-      .where('organization_id', ctx.organizationId)
-      .whereNull('deleted_at')
-      .where(function(this: any) {
-        if (resolvedCompanyId) {
-          this.where('company_id', resolvedCompanyId).orWhereNull('company_id');
-        }
-      })
-      .orderBy('is_primary', 'desc')
-      .select('location_name')
-      .first()
-      .catch(() => null);
-
-    const compRow = await db('company')
-      .where('organization_id', ctx.organizationId)
-      .whereNull('deleted_at')
-      .first()
-      .catch(() => null);
-
-    const defaultCompanyLoc = primaryLocRow?.location_name || compRow?.name || 'Main Office';
+    const jobLocation = safeEmp.locationName || safeEmp.location_name || '';
 
     return {
       profile: {
@@ -652,12 +616,12 @@ export class LifecycleService {
         reportingManagerId: (safeEmp.reportingManagerId || safeEmp.reporting_manager_id) ? Number(safeEmp.reportingManagerId || safeEmp.reporting_manager_id) : null,
         reportingManager,
         currentLocationId: (safeEmp.currentLocationId || safeEmp.current_location_id) ? Number(safeEmp.currentLocationId || safeEmp.current_location_id) : null,
-        locationName: safeEmp.locationName || safeEmp.location_name || defaultCompanyLoc,
+        locationName: jobLocation || '—',
       },
       onboarding: onboarding ? {
         id: Number(onboarding.id),
         uuid: onboarding.uuid,
-        interviewerName: onboarding.interviewerName || onboarding.interviewer_name || 'HR Team',
+        interviewerName: onboarding.interviewerName || onboarding.interviewer_name || reportingManager,
         interviewerId: (onboarding.interviewerId || onboarding.interviewer_id) ? Number(onboarding.interviewerId || onboarding.interviewer_id) : null,
         onboardedByName: onboarding.onboardedByName || onboarding.onboarded_by_name || 'HR Admin',
         onboardedById: (onboarding.onboardedById || onboarding.onboarded_by_id) ? Number(onboarding.onboardedById || onboarding.onboarded_by_id) : null,
@@ -673,7 +637,7 @@ export class LifecycleService {
         createdAt: formatDateISO(onboarding.createdAt || onboarding.created_at),
         updatedAt: formatDateISO(onboarding.updatedAt || onboarding.updated_at),
       } : {
-        interviewerName: 'HR Team',
+        interviewerName: reportingManager,
         onboardedByName: 'HR Lead',
         interviewDate: joinDateISO,
         interviewRating: '4.5 / 5',
@@ -733,10 +697,10 @@ export class LifecycleService {
           toDepartmentName: t.toDepartmentName || t.to_department_name || 'General',
           fromDesignationName: t.fromDesignationName || t.from_designation_name || 'Employee',
           toDesignationName: t.toDesignationName || t.to_designation_name || 'Employee',
-          fromLocationName: t.fromLocationName || t.from_location_name || defaultCompanyLoc,
-          toLocationName: t.toLocationName || t.to_location_name || defaultCompanyLoc,
-          fromManagerName: (t.fromMgrFirstName || t.from_mgr_first_name) ? `${t.fromMgrFirstName || t.from_mgr_first_name} ${t.fromMgrLastName || t.from_mgr_last_name || ''}`.trim() : 'Unassigned',
-          toManagerName: (t.toMgrFirstName || t.to_mgr_first_name) ? `${t.toMgrFirstName || t.to_mgr_first_name} ${t.toMgrLastName || t.to_mgr_last_name || ''}`.trim() : 'Unassigned',
+          fromLocationName: t.fromLocationName || t.from_location_name || '—',
+          toLocationName: t.toLocationName || t.to_location_name || '—',
+          fromManagerName: (t.fromMgrFirstName || t.from_mgr_first_name) ? `${t.fromMgrFirstName || t.from_mgr_first_name} ${t.fromMgrLastName || t.from_mgr_last_name || ''}`.trim() : reportingManager,
+          toManagerName: (t.toMgrFirstName || t.to_mgr_first_name) ? `${t.toMgrFirstName || t.to_mgr_first_name} ${t.toMgrLastName || t.to_mgr_last_name || ''}`.trim() : reportingManager,
           createdBy: (t.creatorFirstName || t.creator_first_name) ? `${t.creatorFirstName || t.creator_first_name} ${t.creatorLastName || t.creator_last_name || ''}`.trim() : 'HR Admin',
           createdAt: createDate || 'N/A',
         };
@@ -775,14 +739,14 @@ export class LifecycleService {
             title: `Joined Organization as ${resolvedDesigName}`,
             subtitle: `Department: ${resolvedDeptName}`,
             date: formattedJoinDate,
-            description: `Official date of joining recorded. Allocated to ${resolvedCompanyName} at ${safeEmp.locationName || safeEmp.location_name || 'Primary Location'}. Reporting Manager: ${reportingManager}.`,
+            description: `Official date of joining recorded. Allocated to ${resolvedCompanyName}.${jobLocation ? ` Job location: ${jobLocation}.` : ' No job location assigned.'} Reporting Manager: ${reportingManager}.`,
             status: 'completed',
             iconType: 'user_plus',
             metadata: {
               department: resolvedDeptName,
               designation: resolvedDesigName,
               reportingManager,
-              location: safeEmp.locationName || safeEmp.location_name || 'Primary Location'
+              location: jobLocation || '—'
             }
           });
         }
@@ -837,7 +801,7 @@ export class LifecycleService {
             title: transferTypeStr === 'promotion' ? `Promoted to ${toDesig}` : `Internal Transfer: ${fromDept} ➔ ${toDept}`,
             subtitle: `Effective: ${effDate}`,
             date: effDate,
-            description: `Transferred from ${fromDept} (${fromDesig}) to ${toDept} (${toDesig}). Location: ${t.toLocationName || t.to_location_name || defaultCompanyLoc}. Manager: ${t.toManagerName || t.to_mgr_first_name || 'N/A'}. Reason: ${t.transferReason || t.transfer_reason || 'Organizational Realignment'}.`,
+            description: `Transferred from ${fromDept} (${fromDesig}) to ${toDept} (${toDesig}). Job location: ${t.toLocationName || t.to_location_name || '—'}. Manager: ${t.toManagerName || t.to_mgr_first_name || 'N/A'}. Reason: ${t.transferReason || t.transfer_reason || 'Organizational Realignment'}.`,
             status: 'completed',
             iconType: transferTypeStr === 'promotion' ? 'award' : 'arrow_left_right',
             metadata: {
@@ -1156,32 +1120,102 @@ export class LifecycleService {
     return { success: true, message: 'Onboarding details saved successfully.' };
   }
 
-  /** Submit an offboarding request for the logged-in employee. */
-  async submitMyResignation(ctx: TenantContext, input: { resignationDate: string; lastWorkingDay: string; reason: string }) {
+  private async getResignationApproverEmails(db: any, organizationId: number): Promise<string[]> {
+    const recipients = await db('users')
+      .join('user_roles', 'users.id', 'user_roles.user_id')
+      .join('roles', 'user_roles.role_id', 'roles.id')
+      .where('users.organization_id', organizationId)
+      .where('users.status', 'active')
+      .whereIn('roles.code', ['organization_admin', 'admin', 'hr', 'hr_admin', 'hr_manager'])
+      .distinct('users.email')
+      .pluck('users.email');
+    return recipients.filter(Boolean);
+  }
+
+  private async assertResignationApprover(ctx: TenantContext, db: any): Promise<void> {
+    const roles = await db('user_roles')
+      .join('roles', 'user_roles.role_id', 'roles.id')
+      .where('user_roles.organization_id', ctx.organizationId)
+      .where('user_roles.user_id', ctx.userId)
+      .pluck('roles.code');
+    if (!roles.some((role: string) => ['organization_admin', 'admin', 'hr', 'hr_admin', 'hr_manager'].includes(role))) {
+      throw new Error('Only HR or an organization admin can approve or reject a resignation.');
+    }
+  }
+
+  /** Employees create a pending request only; no offboarding begins here. */
+  async submitMyResignation(ctx: TenantContext, input: { subject: string; resignationDate: string; lastWorkingDay: string; reason: string; description: string }) {
     const details = await this.getEmployeeLifecycleDetails(ctx, 0);
     const employeeId = Number(details?.profile?.id);
     if (!employeeId) throw new Error('Your employee profile could not be resolved.');
 
     const { getKnex } = await import('../../../db/knex');
     const db = getKnex();
-    const existing = await db('employee_offboarding_records')
+    const callerRoles = await db('user_roles').join('roles', 'user_roles.role_id', 'roles.id')
+      .where('user_roles.organization_id', ctx.organizationId).where('user_roles.user_id', ctx.userId).pluck('roles.code');
+    if (callerRoles.some((role: string) => ['organization_admin', 'admin', 'hr', 'hr_admin', 'hr_manager'].includes(role))) {
+      throw new Error('HR and administrators cannot submit resignation requests. Resignations must be submitted by the employee.');
+    }
+    const existing = await db('exit_requests')
       .where('organization_id', ctx.organizationId)
       .where('employee_id', employeeId)
+      .whereIn('status', ['initiated', 'approved'])
+      .whereNull('deleted_at')
       .first();
-    if (existing?.resignation_date || existing?.resignationDate) {
+    if (existing) {
       throw new Error('A resignation has already been submitted for your profile.');
     }
 
-    await this.saveOffboardingDetails(ctx, {
-      employeeId,
-      exitType: 'resignation',
-      resignationDate: input.resignationDate,
-      lastWorkingDay: input.lastWorkingDay,
-      exitReason: input.reason,
-      exitNotes: 'Submitted by employee through My Lifecycle.',
-      updateEmployeeStatus: 'notice',
+    await db('exit_requests').insert({
+      uuid: uuidv4(), organization_id: ctx.organizationId, employee_id: employeeId,
+      resignation_date: input.resignationDate, last_working_day: input.lastWorkingDay,
+      subject: input.subject, reason_for_leaving: input.reason, description: input.description,
+      status: 'initiated', created_by: ctx.userId, updated_by: ctx.userId,
+      created_at: new Date(), updated_at: new Date(),
     });
-    return { employeeId, status: 'submitted', resignationDate: input.resignationDate, lastWorkingDay: input.lastWorkingDay };
+    const employee = await db('employees').where('id', employeeId).first();
+    const recipients = await this.getResignationApproverEmails(db, ctx.organizationId);
+    if (recipients.length) {
+      void sendMail({ organizationId: ctx.organizationId, to: recipients,
+        subject: `Resignation review required: ${input.subject}`,
+        text: `Employee: ${employee?.first_name || ''} ${employee?.last_name || ''}\nSubject: ${input.subject}\nReason: ${input.reason}\nDescription: ${input.description}\nLast working day: ${input.lastWorkingDay}`,
+        html: `<h2>Resignation review required</h2><p><strong>Employee:</strong> ${employee?.first_name || ''} ${employee?.last_name || ''}</p><p><strong>Subject:</strong> ${input.subject}</p><p><strong>Reason:</strong> ${input.reason}</p><p><strong>Description:</strong> ${input.description}</p><p><strong>Proposed last working day:</strong> ${input.lastWorkingDay}</p>` });
+    }
+    return { employeeId, status: 'pending_review', resignationDate: input.resignationDate, lastWorkingDay: input.lastWorkingDay };
+  }
+
+  async listPendingResignations(ctx: TenantContext) {
+    const { getKnex } = await import('../../../db/knex'); const db = getKnex();
+    await this.assertResignationApprover(ctx, db);
+    return db('exit_requests as er').join('employees as e', 'er.employee_id', 'e.id')
+      .where('er.organization_id', ctx.organizationId).where('er.status', 'initiated').whereNull('er.deleted_at')
+      .select('er.id', 'er.subject', 'er.reason_for_leaving as reason', 'er.description', 'er.resignation_date as resignationDate', 'er.last_working_day as lastWorkingDay', 'er.created_at as submittedAt', 'e.id as employeeId', 'e.employee_code as employeeCode', 'e.first_name as firstName', 'e.last_name as lastName', 'e.email').orderBy('er.created_at', 'desc');
+  }
+
+  async reviewResignation(ctx: TenantContext, requestId: number, decision: 'approved' | 'rejected', reviewComment: string) {
+    const { getKnex } = await import('../../../db/knex'); const db = getKnex();
+    await this.assertResignationApprover(ctx, db);
+    const request = await db('exit_requests').where({ id: requestId, organization_id: ctx.organizationId, status: 'initiated' }).whereNull('deleted_at').first();
+    if (!request) throw new Error('Pending resignation request not found.');
+    if (decision === 'rejected' && !reviewComment.trim()) throw new Error('A rejection comment is required.');
+    const reviewUpdate = { status: decision, approved_by: decision === 'approved' ? ctx.userId : null, rejected_by: decision === 'rejected' ? ctx.userId : null, approval_date: decision === 'approved' ? new Date() : null, reviewed_at: new Date(), review_comment: reviewComment || null, updated_by: ctx.userId, updated_at: new Date() };
+    await db('exit_requests').where('id', requestId).update(reviewUpdate);
+    if (decision === 'approved') {
+      try {
+        await this.saveOffboardingDetails(ctx, { employeeId: request.employee_id, exitType: 'resignation', resignationDate: request.resignation_date, lastWorkingDay: request.last_working_day, exitReason: request.reason_for_leaving, exitNotes: `Approved resignation request: ${request.subject}`, updateEmployeeStatus: 'notice' });
+      } catch (error) {
+        // Do not leave a request approved if its required offboarding record
+        // could not be created. It stays in the HR queue for a safe retry.
+        await db('exit_requests').where('id', requestId).update({ status: 'initiated', approved_by: null, approval_date: null, reviewed_at: null, review_comment: null, updated_by: ctx.userId, updated_at: new Date() });
+        throw error;
+      }
+    }
+    const employee = await db('employees').where('id', request.employee_id).first();
+    if (employee?.email) void sendMail({ organizationId: ctx.organizationId, to: employee.email,
+      subject: `Resignation ${decision}: ${request.subject}`,
+      text: `Subject: ${request.subject}\nReason: ${request.reason_for_leaving}\nDecision: ${decision}\nReviewer comment: ${reviewComment || 'None'}`,
+      html: `<h2>Resignation ${decision}</h2><p><strong>Subject:</strong> ${request.subject}</p><p><strong>Reason:</strong> ${request.reason_for_leaving}</p><p><strong>Decision:</strong> ${decision}</p><p><strong>Reviewer comment:</strong> ${reviewComment || 'None'}</p>` });
+    return { status: decision };
   }
 
   /**
@@ -1211,6 +1245,21 @@ export class LifecycleService {
       .whereNull('deleted_at')
       .first();
     if (!employee) throw new Error('Employee not found in this organization.');
+
+    // A resignation record can only be initiated by the employee's approved
+    // self-service request. HR/Admin may manage the later offboarding steps,
+    // but cannot create a resignation on someone else's behalf.
+    if (input.exitType === 'resignation') {
+      const approvedRequest = await db('exit_requests')
+        .where({ organization_id: ctx.organizationId, employee_id: input.employeeId, status: 'approved' })
+        .whereNull('deleted_at')
+        .first();
+      if (!approvedRequest) {
+        throw new ValidationError(
+          'A resignation must be submitted by the employee and approved from Resignation approvals before offboarding can begin.',
+        );
+      }
+    }
 
     const existing = await db('employee_offboarding_records')
       .where('organization_id', ctx.organizationId)
@@ -1259,6 +1308,21 @@ export class LifecycleService {
         .where('organization_id', ctx.organizationId)
         .where('id', input.employeeId)
         .update(employeeUpdatePayload);
+
+      // The lifecycle module writes employees directly, so it must also
+      // enforce account revocation here instead of relying on EmployeeService.
+      if (['exit', 'alumni', 'inactive'].includes(String(input.updateEmployeeStatus || '').toLowerCase())) {
+        const userIds = await trx('users')
+          .where({ organization_id: ctx.organizationId, employee_id: input.employeeId })
+          .pluck('id') as number[];
+        if (userIds.length) {
+          await trx('users').whereIn('id', userIds).update({ status: 'inactive', updated_at: new Date() });
+          await trx('auth_sessions').whereIn('user_id', userIds).whereNull('revoked_at').update({
+            revoked_at: new Date(),
+            revoked_reason: 'employee_exited',
+          });
+        }
+      }
 
       if (input.updateEmployeeStatus && input.updateEmployeeStatus !== employee.status) {
         await trx('employee_lifecycle').insert({

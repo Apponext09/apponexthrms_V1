@@ -401,8 +401,8 @@ export const LiveTrackingDashboardPage: React.FC = () => {
               aria-live="polite"
               className={`flex items-center gap-2 h-9 px-3 rounded-xl border text-[11.5px] font-bold ${
                 isConnected
-                  ? "bg-[#EAF6F0] border-[#BFE3D2] text-[#12795A]"
-                  : "bg-[#FDEDEE] border-[#F5C5C8] text-[#B3272F]"
+                  ? "bg-[#EAF6F0] border-[#BFE3D2] text-[#12795A] dark:border-emerald-800/70 dark:bg-emerald-950/40 dark:text-emerald-300"
+                  : "bg-[#FDEDEE] border-[#F5C5C8] text-[#B3272F] dark:border-rose-800/70 dark:bg-rose-950/40 dark:text-rose-300"
               }`}
             >
               <span className="relative flex w-2 h-2">
@@ -414,10 +414,6 @@ export const LiveTrackingDashboardPage: React.FC = () => {
               </span>
               {isConnected ? "Live" : "Disconnected"}
             </div>
-
-            <span className="hidden xl:inline text-[11px] font-medium text-[#6B86AB] tabular-nums">
-              Seeded {lastRefreshed.toLocaleTimeString("en-IN")}
-            </span>
 
             {isHROrAdmin && (
               <Button
@@ -484,7 +480,7 @@ export const LiveTrackingDashboardPage: React.FC = () => {
               <span className="text-[13px] font-extrabold text-[#0B2B57] dark:text-foreground">
                 Field Roster
               </span>
-              <span className="text-[11px] font-bold text-[#1B6BFF] bg-[#EAF1FF] rounded-md px-1.5 py-0.5">
+              <span className="text-[11px] font-bold text-[#1B6BFF] bg-[#EAF1FF] rounded-md px-1.5 py-0.5 dark:bg-blue-500/15 dark:text-blue-300">
                 {employees.length}
               </span>
             </div>
@@ -502,13 +498,13 @@ export const LiveTrackingDashboardPage: React.FC = () => {
           <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
             {employees.length === 0 && !loading && (
               <div className="px-3 py-8 text-center">
-              <div className="w-10 h-10 mx-auto rounded-full bg-[#EAF1FF] flex items-center justify-center mb-2 dark:bg-primary/15">
+                <div className="w-10 h-10 mx-auto rounded-full bg-[#EAF1FF] flex items-center justify-center mb-2 dark:bg-primary/15">
                   <MapPin className="w-4 h-4 text-[#1B6BFF]" />
                 </div>
                 <p className="text-[12px] font-semibold text-[#0B2B57] dark:text-foreground">
                   Nobody checked in
                 </p>
-                <p className="text-[11px] text-[#6B86AB] mt-1">
+                <p className="text-[11px] text-[#6B86AB] mt-1 dark:text-muted-foreground">
                   Field staff appear here as soon as they punch attendance.
                 </p>
               </div>
@@ -536,7 +532,7 @@ export const LiveTrackingDashboardPage: React.FC = () => {
                   }}
                   className={`group cursor-pointer rounded-xl border px-3 py-2.5 transition-colors ${
                     active
-                      ? "bg-[#EAF1FF] border-[#B9D2FF]"
+                      ? "bg-[#EAF1FF] border-[#B9D2FF] dark:border-blue-500/50 dark:bg-blue-500/15"
                       : "bg-white border-transparent hover:bg-[#F5F9FF] hover:border-[#E3EDFA] dark:bg-card dark:hover:bg-muted dark:hover:border-border"
                   }`}
                 >
@@ -546,13 +542,13 @@ export const LiveTrackingDashboardPage: React.FC = () => {
                         className={`w-9 h-9 rounded-xl flex items-center justify-center text-[11.5px] font-extrabold ${
                           active
                             ? "bg-[#1B6BFF] text-white"
-                            : "bg-[#EEF4FC] text-[#3E6390]"
+                            : "bg-[#EEF4FC] text-[#3E6390] dark:bg-muted dark:text-muted-foreground"
                         }`}
                       >
                         {initialsOf(emp.name)}
                       </div>
                       <span
-                        className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white ${
+                        className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white dark:border-card ${
                           stale
                             ? "bg-[#D64550]"
                             : online
@@ -566,7 +562,7 @@ export const LiveTrackingDashboardPage: React.FC = () => {
                       <p className="text-[12.5px] font-bold text-[#0B2B57] truncate dark:text-foreground">
                         {emp.name}
                       </p>
-                      <p className="text-[11px] text-[#6B86AB] font-medium truncate">
+                      <p className="text-[11px] text-[#6B86AB] font-medium truncate dark:text-muted-foreground">
                         {emp.designation || "Field staff"}
                       </p>
                     </div>
@@ -580,7 +576,7 @@ export const LiveTrackingDashboardPage: React.FC = () => {
                         setHistoryEmployee(emp);
                       }}
                       title="Route playback"
-                      className="shrink-0 w-7 h-7 rounded-lg border border-[#DCE7F7] bg-white flex items-center justify-center text-[#3E6390] hover:text-[#1B6BFF] hover:border-[#B9D2FF] transition-colors"
+                      className="shrink-0 w-7 h-7 rounded-lg border border-[#DCE7F7] bg-white flex items-center justify-center text-[#3E6390] hover:text-[#1B6BFF] hover:border-[#B9D2FF] transition-colors dark:border-border dark:bg-background dark:text-muted-foreground dark:hover:border-blue-500/60 dark:hover:bg-blue-500/10 dark:hover:text-blue-300"
                     >
                       <History className="w-3.5 h-3.5" />
                     </button>
@@ -593,7 +589,7 @@ export const LiveTrackingDashboardPage: React.FC = () => {
                     <Tag tone={gpsOff ? "amber" : "blue"}>
                       {gpsOff ? "GPS off" : "GPS on"}
                     </Tag>
-                    <span className="text-[10.5px] font-semibold text-[#8AA0BC] ml-auto tabular-nums">
+                    <span className="text-[10.5px] font-semibold text-[#8AA0BC] ml-auto tabular-nums dark:text-muted-foreground">
                       {pingLabel(emp.last_ping_at as any)}
                     </span>
                   </div>
@@ -623,10 +619,10 @@ export const LiveTrackingDashboardPage: React.FC = () => {
           )}
 
           {!loading && employees.length === 0 && (
-            <div className="absolute left-1/2 top-4 z-20 flex w-[calc(100%-2rem)] max-w-md -translate-x-1/2 items-start gap-2.5 rounded-xl border border-blue-100 bg-white px-4 py-3 shadow-sm">
+            <div className="absolute left-1/2 top-4 z-20 flex w-[calc(100%-2rem)] max-w-md -translate-x-1/2 items-start gap-2.5 rounded-xl border border-blue-100 bg-white px-4 py-3 shadow-sm dark:border-border dark:bg-card">
               <AlertTriangle className="w-4 h-4 text-[#1B6BFF] mt-0.5 shrink-0" />
               <div>
-                <p className="text-sm font-medium text-[#0B2545]">
+                <p className="text-sm font-medium text-[#0B2545] dark:text-foreground">
                   No employees have punched attendance today (
                   {new Date().toLocaleDateString("en-IN", {
                     day: "numeric",
@@ -650,15 +646,15 @@ export const LiveTrackingDashboardPage: React.FC = () => {
 
           {/* Focus indicator overlay */}
           {selectedEmployee && (
-            <div className="absolute left-3 top-3 z-20 flex items-center gap-2 rounded-xl border border-blue-100 bg-white/95 py-1.5 pl-2.5 pr-1.5 shadow-sm">
+            <div className="absolute left-3 top-3 z-20 flex items-center gap-2 rounded-xl border border-blue-100 bg-white/95 py-1.5 pl-2.5 pr-1.5 shadow-sm dark:border-border dark:bg-card/95">
               <Crosshair className="w-3.5 h-3.5 text-[#1B6BFF]" />
-              <span className="text-[11.5px] font-bold text-[#0B2B57] max-w-[180px] truncate">
+              <span className="text-[11.5px] font-bold text-[#0B2B57] max-w-[180px] truncate dark:text-foreground">
                 Focused · {selectedEmployee.name}
               </span>
               <button
                 type="button"
                 onClick={() => setSelectedEmployee(null)}
-                className="text-[11px] font-bold text-[#1B6BFF] hover:bg-[#EAF1FF] rounded-lg px-2 py-0.5 transition-colors"
+                className="text-[11px] font-bold text-[#1B6BFF] hover:bg-[#EAF1FF] rounded-lg px-2 py-0.5 transition-colors dark:text-blue-300 dark:hover:bg-blue-500/15"
               >
                 Clear
               </button>
@@ -692,12 +688,30 @@ export const LiveTrackingDashboardPage: React.FC = () => {
 /* ── Presentational subcomponents (UI only) ─────────────── */
 
 const toneMap = {
-  navy: { chip: "bg-[#EEF4FC] text-[#3E6390]", value: "text-[#0B2B57]" },
-  blue: { chip: "bg-[#EAF1FF] text-[#1B6BFF]", value: "text-[#1B6BFF]" },
-  green: { chip: "bg-[#EAF6F0] text-[#12795A]", value: "text-[#12795A]" },
-  red: { chip: "bg-[#FDEDEE] text-[#B3272F]", value: "text-[#B3272F]" },
-  amber: { chip: "bg-[#FDF3E4] text-[#9A6410]", value: "text-[#9A6410]" },
-  muted: { chip: "bg-[#F1F5FA] text-[#8AA0BC]", value: "text-[#8AA0BC]" },
+  navy: {
+    chip: "bg-[#EEF4FC] text-[#3E6390] dark:bg-slate-700/60 dark:text-slate-200",
+    value: "text-[#0B2B57]",
+  },
+  blue: {
+    chip: "bg-[#EAF1FF] text-[#1B6BFF] dark:bg-blue-500/15 dark:text-blue-300",
+    value: "text-[#1B6BFF]",
+  },
+  green: {
+    chip: "bg-[#EAF6F0] text-[#12795A] dark:bg-emerald-500/15 dark:text-emerald-300",
+    value: "text-[#12795A]",
+  },
+  red: {
+    chip: "bg-[#FDEDEE] text-[#B3272F] dark:bg-rose-500/15 dark:text-rose-300",
+    value: "text-[#B3272F]",
+  },
+  amber: {
+    chip: "bg-[#FDF3E4] text-[#9A6410] dark:bg-amber-500/15 dark:text-amber-300",
+    value: "text-[#9A6410]",
+  },
+  muted: {
+    chip: "bg-[#F1F5FA] text-[#8AA0BC] dark:bg-muted dark:text-muted-foreground",
+    value: "text-[#8AA0BC]",
+  },
 } as const;
 
 const StatCard: React.FC<{

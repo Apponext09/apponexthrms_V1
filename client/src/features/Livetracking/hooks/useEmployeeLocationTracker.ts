@@ -13,7 +13,10 @@ import { useEffect, useRef, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { pingLocationHttp } from '../api/livetrackingApi';
 
-const SOCKET_URL = (import.meta as any).env.VITE_SOCKET_URL || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5001');
+const SOCKET_URL =
+  import.meta.env.VITE_SOCKET_URL ||
+  import.meta.env.VITE_API_URL?.replace(/\/api(?:\/v1)?\/?$/, '') ||
+  (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5000');
 const MIN_DISTANCE_METERS = 0; // 0 meters — emit on every 2.5s tick for continuous live streaming
 const FORCE_PING_INTERVAL_MS = 2_500; // 2.5 seconds automatic high-frequency emission
 // Reject fixes worse than this radius — 10km previously let wildly inaccurate

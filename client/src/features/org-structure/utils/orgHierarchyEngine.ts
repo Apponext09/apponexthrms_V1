@@ -245,23 +245,15 @@ export function validateDragAndDrop(
 
   // 4. Target is Organization Admin / CEO
   if (targetIsAdmin) {
-    if (sourcePos === 'Employee') {
-      return {
-        isValid: false,
-        errorTitle: 'Invalid Reporting Structure',
-        errorMessage: 'This Employee cannot be assigned to the selected position. Employees can only report directly to a Team Leader.',
-      };
-    }
-    if (sourcePos === 'Intern') {
-      return {
-        isValid: false,
-        errorTitle: 'Invalid Reporting Structure',
-        errorMessage: 'This Intern cannot be assigned to the selected position. Interns can only report directly to an Employee.',
-      };
-    }
-    if (['COO', 'CTO', 'CFO', 'CEO', 'HR Manager', 'Finance Manager', 'Organization Manager', 'IT Head', 'Department Head', 'Department Manager', 'Project Manager'].includes(sourcePos)) {
+    if (sourcePos === 'CEO') {
       return { isValid: true };
     }
+    const rule = customRules.find((r) => r.designationOrRole.toLowerCase() === sourcePos.toLowerCase()) ||
+      DEFAULT_HIERARCHY_RULES.find((r) => r.designationOrRole.toLowerCase() === sourcePos.toLowerCase());
+    const allowsAdmin = rule?.allowedParentDesignations.some((parent) =>
+      ['ceo', 'organization admin'].includes(parent.toLowerCase()),
+    );
+    if (allowsAdmin) return { isValid: true };
     return {
       isValid: false,
       errorTitle: 'Invalid Reporting Structure',
@@ -301,29 +293,6 @@ export function validateDragAndDrop(
         errorMessage: `Cannot assign ${sourceEmp.firstName || 'Employee'} (${srcDeptDisp}) under ${targetEmp.firstName || 'Manager'} (${tgtDeptDisp}). Drag-and-drop reporting is allowed only within the same department.`,
       };
     }
-  }
-
-  // Enforce explicit rules for Employee and Intern
-  if (sourcePos === 'Employee') {
-    if (targetPos === 'Team Leader') {
-      return { isValid: true };
-    }
-    return {
-      isValid: false,
-      errorTitle: 'Invalid Reporting Structure',
-      errorMessage: 'This Employee cannot be assigned to the selected position. Employees can only report directly to a Team Leader.',
-    };
-  }
-
-  if (sourcePos === 'Intern') {
-    if (['Employee', 'HR Executive', 'Accountant'].includes(targetPos)) {
-      return { isValid: true };
-    }
-    return {
-      isValid: false,
-      errorTitle: 'Invalid Reporting Structure',
-      errorMessage: 'This Intern cannot be assigned to the selected position. Interns can only report directly to an Employee.',
-    };
   }
 
   // 6. Find Rule for Other Source Positions

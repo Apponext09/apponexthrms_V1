@@ -5,15 +5,14 @@ import { useActiveIdCardTemplate } from '@/features/id-card/api/useIdCardTemplat
 import { DEFAULT_ID_CARD_CONFIG } from '@/features/id-card/constants/defaultIdCardConfig';
 import { IdCardRenderer } from '@/features/id-card/components/IdCardRenderer';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { 
   Download, 
   Printer, 
   RotateCw, 
-  Layers, 
-  Shield,
   Sun,
-  Moon
+  Moon,
+  ChevronUp,
+  ChevronDown,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import html2canvas from 'html2canvas';
@@ -47,6 +46,15 @@ export const IDCardPage: React.FC<IDCardPageProps> = ({ employeeId }) => {
   const [personalDetails, setPersonalDetails] = useState<any>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+
+  // Keep the card legible when the application theme is changed elsewhere.
+  useEffect(() => {
+    const root = document.documentElement;
+    const syncTheme = () => setCardDarkMode(root.classList.contains('dark'));
+    const observer = new MutationObserver(syncTheme);
+    observer.observe(root, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
 
   // References for rendering and exports
   const cardFrontRef = useRef<HTMLDivElement>(null);
@@ -263,7 +271,7 @@ export const IDCardPage: React.FC<IDCardPageProps> = ({ employeeId }) => {
   };
 
   return (
-    <div className="space-y-5 max-w-4xl mx-auto pb-10">
+    <div className="space-y-5 max-w-6xl mx-auto pb-10">
       {/* Printable CSS style overlay */}
       <style>{`
         @media print {
@@ -290,81 +298,8 @@ export const IDCardPage: React.FC<IDCardPageProps> = ({ employeeId }) => {
         }
       `}</style>
 
-      {/* Header Actions Card */}
-      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 no-print bg-card border border-border/80 rounded-xl p-4 sm:p-5 shadow-2xs">
-        <div className="shrink-0">
-          <div className="flex items-center gap-2">
-            <h2 className="text-xl font-black text-foreground tracking-tight flex items-center gap-2">
-              <Shield className="w-5 h-5 text-primary" /> Digital ID Card
-            </h2>
-            <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-[10px] font-bold">
-              Official Credential
-            </Badge>
-          </div>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Official Organization Security Credentials & Digital Access Badge
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2 overflow-x-auto max-w-full pb-1 xl:pb-0 scrollbar-none">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setCardDarkMode(!cardDarkMode)}
-            className="gap-1.5 rounded-lg font-bold text-xs h-8 px-3 border-border text-foreground hover:bg-muted shrink-0"
-          >
-            {cardDarkMode ? <Sun className="w-3.5 h-3.5 text-amber-500" /> : <Moon className="w-3.5 h-3.5 text-indigo-500" />}
-            {cardDarkMode ? 'Light Card' : 'Dark Card'}
-          </Button>
-
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setIsFlipped(!isFlipped)}
-            className="gap-1.5 rounded-lg font-bold text-xs h-8 px-3 border-border text-foreground hover:bg-muted shrink-0"
-          >
-            <RotateCw className="w-3.5 h-3.5 text-primary" /> {isFlipped ? 'Show Front' : 'Show Back'}
-          </Button>
-
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handlePrint}
-            className="gap-1.5 rounded-lg font-bold text-xs h-8 px-3 border-border text-foreground hover:bg-muted shrink-0"
-          >
-            <Printer className="w-3.5 h-3.5 text-muted-foreground" /> Print ID Sheet
-          </Button>
-
-          <Button
-            size="sm"
-            onClick={() => handleDownload('front')}
-            disabled={isGenerating}
-            className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs h-8 px-3 rounded-lg gap-1 shadow-2xs shrink-0"
-          >
-            <Download className="w-3.5 h-3.5" /> Front PNG
-          </Button>
-          <Button
-            size="sm"
-            onClick={() => handleDownload('back')}
-            disabled={isGenerating}
-            className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs h-8 px-3 rounded-lg gap-1 shadow-2xs shrink-0"
-          >
-            <Download className="w-3.5 h-3.5" /> Back PNG
-          </Button>
-          <Button
-            size="sm"
-            onClick={() => handleDownload('both')}
-            disabled={isGenerating}
-            variant="secondary"
-            className="font-bold text-xs h-8 px-3 rounded-lg gap-1 border border-border shrink-0"
-          >
-            <Layers className="w-3.5 h-3.5" /> Full Sheet
-          </Button>
-        </div>
-      </div>
-
       {/* Interactive ID Card Display Area */}
-      <div className="flex flex-col items-center justify-center py-4 no-print">
+      <div className="flex items-center justify-center gap-3 py-4 no-print">
         <IdCardRenderer
           config={cardConfig}
           employeeData={currentEmployee}
@@ -376,6 +311,48 @@ export const IDCardPage: React.FC<IDCardPageProps> = ({ employeeId }) => {
           avatarOverride={avatar}
           isDarkMode={cardDarkMode}
         />
+
+        {/* Icon-only controls stay beside the card instead of occupying a header. */}
+        <div
+          className="flex flex-col overflow-hidden rounded-xl border border-border bg-card shadow-sm"
+          role="toolbar"
+          aria-label="Digital ID card controls"
+        >
+          <Button type="button" variant="ghost" size="icon" onClick={() => setCardDarkMode((value) => !value)} className="h-10 w-10 rounded-none text-muted-foreground hover:bg-muted hover:text-foreground" title={cardDarkMode ? 'Use light card theme' : 'Use dark card theme'} aria-label={cardDarkMode ? 'Use light card theme' : 'Use dark card theme'}>
+            {cardDarkMode ? <Sun className="h-4 w-4 text-amber-500" /> : <Moon className="h-4 w-4 text-indigo-500" />}
+          </Button>
+          <Button type="button" variant="ghost" size="icon" onClick={() => setIsFlipped((value) => !value)} className="h-10 w-10 rounded-none border-t border-border text-muted-foreground hover:bg-muted hover:text-foreground" title={isFlipped ? 'Show front of ID card' : 'Show back of ID card'} aria-label={isFlipped ? 'Show front of ID card' : 'Show back of ID card'}>
+            <RotateCw className="h-4 w-4" />
+          </Button>
+          <Button type="button" variant="ghost" size="icon" onClick={handlePrint} className="h-10 w-10 rounded-none border-t border-border text-muted-foreground hover:bg-muted hover:text-foreground" title="Print ID sheet" aria-label="Print ID sheet">
+            <Printer className="h-4 w-4" />
+          </Button>
+          <Button type="button" variant="ghost" size="icon" onClick={() => handleDownload('front')} disabled={isGenerating} className="h-10 w-10 rounded-none border-t border-border text-muted-foreground hover:bg-muted hover:text-foreground" title="Download front as PNG" aria-label="Download front as PNG">
+            <Download className="h-4 w-4" />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={() => setIsFlipped(false)}
+            className={`h-11 w-10 rounded-none border-b border-border ${!isFlipped ? 'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}
+            title="Show front of ID card"
+            aria-label="Show front of ID card"
+          >
+            <ChevronUp className="h-4 w-4" />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={() => setIsFlipped(true)}
+            className={`h-11 w-10 rounded-none ${isFlipped ? 'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}
+            title="Show back of ID card"
+            aria-label="Show back of ID card"
+          >
+            <ChevronDown className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
 
       {/* =========================================================================================
@@ -393,6 +370,7 @@ export const IDCardPage: React.FC<IDCardPageProps> = ({ employeeId }) => {
             mode="flat-2d"
             frontRef={cardFrontRef}
             avatarOverride={avatar}
+            isDarkMode={cardDarkMode}
           />
 
           {/* 2D FLAT BACK CARD */}
@@ -403,6 +381,7 @@ export const IDCardPage: React.FC<IDCardPageProps> = ({ employeeId }) => {
             side="back"
             mode="flat-2d"
             backRef={cardBackRef}
+            isDarkMode={cardDarkMode}
             avatarOverride={avatar}
           />
         </div>

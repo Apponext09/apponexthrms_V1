@@ -4,6 +4,7 @@ import { EmployeeRepository } from '../repositories/EmployeeRepository';
 import { AuditService } from '../../audit/audit.service';
 import { NotFoundError } from '../../../common/errors/index';
 import type { TenantContext, ListQueryOptions } from '../../../db/types';
+import { getKnex } from '../../../db/knex';
 
 export class EmployeeLifecycleService {
   private lifecycleRepo: EmployeeLifecycleRepository;
@@ -14,6 +15,17 @@ export class EmployeeLifecycleService {
     this.lifecycleRepo = new EmployeeLifecycleRepository();
     this.employeeRepo = new EmployeeRepository();
     this.auditService = new AuditService();
+  }
+
+  private async revokeAccessForTerminalStatus(ctx: TenantContext, employeeId: number, status: string) {
+    if (!['exit', 'alumni', 'inactive'].includes(String(status).toLowerCase())) return;
+    const db = getKnex();
+    await db.transaction(async (trx) => {
+      const userIds = await trx('users').where({ organization_id: ctx.organizationId, employee_id: employeeId }).pluck('id') as number[];
+      if (!userIds.length) return;
+      await trx('users').whereIn('id', userIds).update({ status: 'inactive', updated_at: new Date() });
+      await trx('auth_sessions').whereIn('user_id', userIds).whereNull('revoked_at').update({ revoked_at: new Date(), revoked_reason: 'employee_exited' });
+    });
   }
 
   /**
@@ -45,6 +57,7 @@ export class EmployeeLifecycleService {
     await this.employeeRepo.update(ctx, input.employeeId, {
       status: input.toStatus,
     } as any);
+    await this.revokeAccessForTerminalStatus(ctx, input.employeeId, input.toStatus);
 
     await this.auditService.log(ctx, {
       action: 'CREATE',
@@ -124,6 +137,7 @@ export class EmployeeLifecycleService {
     await this.employeeRepo.update(ctx, employeeId, {
       status: 'exit',
     } as any);
+    await this.revokeAccessForTerminalStatus(ctx, employeeId, 'exit');
 
     return lifecycle;
   }

@@ -18,7 +18,9 @@ import { useThemeStore } from '@/features/settings/store/themeStore';
 import { computeRouteStats, formatMinutesLabel } from '../utils/routeStats';
 
 // ── Default map focus when nobody is active (Navi Mumbai) ────────────────────
-const NAVI_MUMBAI_CENTER: [number, number] = [73.0297, 19.033];
+// Neutral fallback used only before live data is available. Live employee data
+// determines the real focus, so no office location is hardcoded here.
+const DEFAULT_MAP_CENTER: [number, number] = [78.9629, 20.5937];
 
 // ── Coordinate Validator ──────────────────────────────────────────────────────
 function isValidCoord(lat: any, lng: any): boolean {
@@ -360,7 +362,7 @@ const InnerMap: React.FC<Props> = ({
     const firstEmp = employees.find((e) => isValidCoord(e.latitude, e.longitude));
     const center: [number, number] = firstEmp
       ? [Number(firstEmp.longitude), Number(firstEmp.latitude)]
-      : NAVI_MUMBAI_CENTER;
+      : DEFAULT_MAP_CENTER;
 
     const map = new maplibregl.Map({
       container: mapContainerRef.current,
@@ -685,7 +687,7 @@ const InnerMap: React.FC<Props> = ({
       fitMapToEmployees(map, validEmployeesRef.current);
     } else {
       // Nobody active/visible — default focus on Navi Mumbai
-      map.flyTo({ center: NAVI_MUMBAI_CENTER, zoom: 12, duration: 1200, essential: true });
+      map.flyTo({ center: DEFAULT_MAP_CENTER, zoom: 4, duration: 1200, essential: true });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedEmployee, validEmployeeIdsKey, fitMapToEmployees]);

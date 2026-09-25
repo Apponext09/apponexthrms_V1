@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Globe, Smartphone, Fingerprint, Save, Sliders, CheckCircle2, XCircle, ShieldCheck } from 'lucide-react';
 import { showToast } from '@/components/ui/toast';
+import { apiClient } from '@/config/api';
 import type { Employee } from '@/types';
 
 interface EmployeeCheckInSettingProps {
@@ -21,12 +22,30 @@ export function EmployeeCheckInSetting({ employee, readOnly = false }: EmployeeC
 
   const [isSaving, setIsSaving] = useState(false);
 
-  const handleSave = () => {
+  useEffect(() => {
+    const employeeData = employee as unknown as Record<string, unknown>;
+    const raw = employeeData.attendanceAccessSettings ?? employeeData.attendance_access_settings;
+    if (!raw) return;
+    try {
+      const settings = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      setWebCheckIn(settings.webCheckIn !== false);
+      setMobileCheckIn(settings.mobileCheckIn !== false);
+      setBiometricCheckIn(settings.biometricCheckIn !== false);
+    } catch { /* Use secure defaults for malformed legacy data. */ }
+  }, [employee]);
+
+  const handleSave = async () => {
     setIsSaving(true);
-    setTimeout(() => {
-      setIsSaving(false);
+    try {
+      await apiClient.patch(`/employees/${employee.id}`, {
+        attendanceAccessSettings: { webCheckIn, mobileCheckIn, biometricCheckIn },
+      });
       showToast.success('Check-in / out settings updated successfully');
-    }, 250);
+    } catch {
+      showToast.error('Unable to save check-in / out settings');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -101,8 +120,8 @@ export function EmployeeCheckInSetting({ employee, readOnly = false }: EmployeeC
                 <span className="text-xs font-semibold text-muted-foreground">Portal Access</span>
                 {readOnly ? (
                   /* Employee Side: Status Display Only (No switch) */
-                  <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-600 dark:text-emerald-400">
-                    <CheckCircle2 className="w-3.5 h-3.5" /> Allowed
+                  <span className={`inline-flex items-center gap-1 text-xs font-bold ${webCheckIn ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                    {webCheckIn ? <CheckCircle2 className="w-3.5 h-3.5" /> : <XCircle className="w-3.5 h-3.5" />} {webCheckIn ? 'Allowed' : 'Blocked'}
                   </span>
                 ) : (
                   /* Admin Side: Interactive Switch Control */
@@ -145,8 +164,8 @@ export function EmployeeCheckInSetting({ employee, readOnly = false }: EmployeeC
                 <span className="text-xs font-semibold text-muted-foreground">Mobile Access</span>
                 {readOnly ? (
                   /* Employee Side: Status Display Only (No switch) */
-                  <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-600 dark:text-emerald-400">
-                    <CheckCircle2 className="w-3.5 h-3.5" /> Allowed
+                  <span className={`inline-flex items-center gap-1 text-xs font-bold ${mobileCheckIn ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                    {mobileCheckIn ? <CheckCircle2 className="w-3.5 h-3.5" /> : <XCircle className="w-3.5 h-3.5" />} {mobileCheckIn ? 'Allowed' : 'Blocked'}
                   </span>
                 ) : (
                   /* Admin Side: Interactive Switch Control */
@@ -189,8 +208,8 @@ export function EmployeeCheckInSetting({ employee, readOnly = false }: EmployeeC
                 <span className="text-xs font-semibold text-muted-foreground">Hardware Punch</span>
                 {readOnly ? (
                   /* Employee Side: Status Display Only (No switch) */
-                  <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-600 dark:text-emerald-400">
-                    <CheckCircle2 className="w-3.5 h-3.5" /> Allowed
+                  <span className={`inline-flex items-center gap-1 text-xs font-bold ${biometricCheckIn ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                    {biometricCheckIn ? <CheckCircle2 className="w-3.5 h-3.5" /> : <XCircle className="w-3.5 h-3.5" />} {biometricCheckIn ? 'Allowed' : 'Blocked'}
                   </span>
                 ) : (
                   /* Admin Side: Interactive Switch Control */

@@ -118,11 +118,7 @@ export const ExpenseSettingsPage: React.FC = () => {
         setMileageRateCar(settingsRes.mileageRateCar || 12.00);
         setMileageRateBike(settingsRes.mileageRateBike || 6.00);
         setMileageRatesByDesignation(
-<<<<<<< HEAD
-          (settingsRes.mileageRatesByDesignation || []).reduce((acc: MileageDesignationRate[], row: any) => {
-=======
           (settingsRes.mileageRatesByDesignation || []).reduce((acc: MileageDesignationRate[], row: MileageDesignationRate) => {
->>>>>>> b13431884f6e3fb77d4463ab4da204cadac8faca
             const key = String(row.designationName || '').trim().toLowerCase();
             if (!key) return acc;
             const existing = acc.find((r) => r.designationName.trim().toLowerCase() === key);

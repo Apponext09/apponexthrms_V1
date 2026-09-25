@@ -194,6 +194,16 @@ export const lifecycleApi = {
     return res.data;
   },
 
+  getPendingResignations: async () => {
+    const res = await apiClient.get('/hr/lifecycle/resignations/pending');
+    return res.data?.data || [];
+  },
+
+  reviewResignation: async (id: number, decision: 'approved' | 'rejected', reviewComment = '') => {
+    const res = await apiClient.post(`/hr/lifecycle/resignations/${id}/review`, { decision, reviewComment });
+    return res.data?.data;
+  },
+
   getManagers: async (companyId?: number | string) => {
     const res = await apiClient.get('/hr/lifecycle/managers', { params: { companyId } });
     return (res.data?.data || []) as Array<{ id: number; name: string; designation?: string; department?: string }>;

@@ -155,11 +155,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         name: 'Live Tracking',
         href: '/live-tracking',
         icon: 'Navigation',
-<<<<<<< HEAD
-        minRoles: ['organization_admin', 'hr_manager', 'department_head'],
-=======
         minRoles: ['organization_admin', 'hr', 'hr_manager', 'department_head', 'ceo'],
->>>>>>> b13431884f6e3fb77d4463ab4da204cadac8faca
       },
       {
         name: 'Location Management & Mapping',
@@ -524,7 +520,6 @@ const NAVIGATION_SECTIONS: NavSection[] = [
     subscriptionModule: 'Settings & RBAC',
     items: [
       { name: 'General Settings', href: '/settings/general', icon: 'Sliders' },
-      { name: 'Attendance Module', href: '/settings/attendance-module', icon: 'Clock' },
       {
         name: 'Workflow Settings',
         href: '/settings/workflows',

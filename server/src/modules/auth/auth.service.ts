@@ -635,6 +635,12 @@ export class AuthService {
       throw new UnauthorizedError('Invalid email or password');
     }
 
+    // Offboarding changes users.status to inactive. Refuse credentials before
+    // a new session can be created.
+    if ((user as any).status !== 'active') {
+      traceLog(`LOGIN FAILED: Account is not active (status=${(user as any).status})`);
+      throw new UnauthorizedError('Your company access has been revoked. Please contact HR.');
+    }
 
     // Check if account is locked
     if (user.lockedUntil && new Date(user.lockedUntil) > new Date()) {
@@ -1389,6 +1395,4 @@ export class AuthService {
     }
   }
 }
-
-
 

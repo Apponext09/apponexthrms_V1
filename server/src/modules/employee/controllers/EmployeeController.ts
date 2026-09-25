@@ -295,12 +295,19 @@ export class EmployeeController {
       sortBy: sortBy as string,
       sortOrder: (sortOrder === 'asc' ? 'asc' : 'desc') as 'asc' | 'desc',
       filters: {
-        ...(status && { status: status as string }),
+        ...(status && status !== 'offboarded' && { status: status as string }),
         ...(empType && { employment_type: empType }),
         ...(deptId && { current_department_id: parseInt(deptId, 10) }),
         ...(targetCompId && targetCompId.toLowerCase() !== 'all' && { company_id: parseInt(targetCompId, 10) }),
         ...(shouldExcludeCeo && { is_ceo: 0 }),
       },
+      // The Employee Directory is an active-workforce view. Offboarded records
+      // are excluded unless a caller deliberately requests a specific status.
+      ...(status === 'offboarded'
+        ? { customWhere: (query: any) => query.whereIn('status', ['exit', 'exited', 'offboarded', 'alumni']) }
+        : !status && {
+        customWhere: (query: any) => query.whereNotIn('status', ['exit', 'exited', 'offboarded', 'alumni']),
+      }),
     });
 
     res.json({
@@ -863,4 +870,3 @@ export class EmployeeController {
 }
 
 export const employeeController = new EmployeeController();
-

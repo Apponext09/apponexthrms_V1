@@ -13,7 +13,8 @@ import type { LiveEmployee, RoutePoint } from '../types/livetracking.types';
 // Fix for Vite bundling — not needed with MapLibre, kept as no-op for safety
 
 // Default focus when a route hasn't loaded yet (Navi Mumbai — matches the live dashboard default)
-const NAVI_MUMBAI_CENTER: [number, number] = [73.0297, 19.033];
+// Neutral fallback before route data loads; route coordinates set the real focus.
+const DEFAULT_MAP_CENTER: [number, number] = [78.9629, 20.5937];
 
 
 /** Helper to convert 0-indexed integer into alphabet label (0->A, 1->B, 2->C, 3->D...) */
@@ -236,7 +237,7 @@ const PlaybackMap: React.FC<PlaybackMapProps> = ({
     const first = interpolatedRoute[0];
     const center: [number, number] = first
       ? [first.longitude, first.latitude]
-      : NAVI_MUMBAI_CENTER;
+      : DEFAULT_MAP_CENTER;
 
     const map = new maplibregl.Map({
       container: containerRef.current,

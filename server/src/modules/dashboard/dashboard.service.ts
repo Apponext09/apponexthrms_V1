@@ -199,44 +199,16 @@ export class AdminDashboardService {
     // company switch has supplied ctx.companyId.
     const targetCompanyId = companyId || null;
 
-    // Fallback Location Resolution if company record doesn't specify address:
-    if (!location && targetCompanyId) {
-      // A switched company shows only its own location.
-      const hasLocationsTable = await db.schema.hasTable('locations');
-      if (hasLocationsTable) {
-        const compLoc = await db('locations')
-          .where('company_id', targetCompanyId)
-          .whereNull('deleted_at')
-          .first();
-        if (compLoc) {
-          location = buildLocationStr(compLoc) || compLoc.locationName || compLoc.name || '';
-        }
-      }
-    }
-
-    if (!location && organizationId) {
-      // Check organization table
+    // Dashboard header location belongs to the organization itself. A company
+    // address or a Location Master record must not override organizations.location.
+    if (organizationId) {
       const org = await db('organizations').where('id', organizationId).first();
       if (org) {
         if (!companyName || companyName === 'Organization') {
           companyName = org.name || companyName;
           companyCode = org.code || '';
         }
-        location = org.location || buildLocationStr(org) || org.addressLine1 || org.address_line_1 || '';
-      }
-    }
-
-    if (!location && organizationId) {
-      // Check primary location record in locations table for the organization
-      const hasLocationsTable = await db.schema.hasTable('locations');
-      if (hasLocationsTable) {
-        const orgLoc = await db('locations')
-          .where('organization_id', organizationId)
-          .whereNull('deleted_at')
-          .first();
-        if (orgLoc) {
-          location = buildLocationStr(orgLoc) || orgLoc.locationName || orgLoc.name || '';
-        }
+        location = org.location || buildLocationStr(org) || org.addressLine1 || org.address_line_1 || location;
       }
     }
 
@@ -249,6 +221,10 @@ export class AdminDashboardService {
     try {
       let empQuery = db('employees')
         .whereNull('employees.deleted_at')
+        // Dashboard headcount is active workforce only. Notice, exited,
+        // inactive, alumni, onboarding and candidate records are not staff
+        // currently counted by the Total Employees KPI.
+        .where('employees.status', 'active')
         .whereNotExists(function () {
           this.select('ceo_user.id')
             .from('users as ceo_user')
@@ -268,7 +244,9 @@ export class AdminDashboardService {
     } catch (e) {
       console.warn('[AdminDashboardService] empQuery error fallback:', e);
       try {
-        let fallbackEmp = db('employees').whereNull('deleted_at');
+        let fallbackEmp = db('employees')
+          .whereNull('deleted_at')
+          .where('status', 'active');
         if (targetCompanyId) {
           fallbackEmp = fallbackEmp.where('company_id', targetCompanyId);
         } else {
