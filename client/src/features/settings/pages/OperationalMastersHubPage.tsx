@@ -11,7 +11,7 @@ const EventMasterForm = lazy(() => import('../components/EventMasterForm').then(
 const NotificationTemplateMasterForm = lazy(() => import('../components/NotificationTemplateMasterForm').then(m => ({ default: m.NotificationTemplateMasterForm })));
 const NotificationMergeCodeMasterForm = lazy(() => import('../components/NotificationMergeCodeMasterForm').then(m => ({ default: m.NotificationMergeCodeMasterForm })));
 const OfferTemplateMasterForm = lazy(() => import('../components/OfferTemplateMasterForm').then(m => ({ default: m.OfferTemplateMasterForm })));
-const RolesResponsibilityMasterForm = lazy(() => import('../components/RolesResponsibilityMasterForm').then(m => ({ default: m.RolesResponsibilityMasterForm })));
+const AccessRolesMasterForm = lazy(() => import('../components/AccessRolesMasterForm').then(m => ({ default: m.AccessRolesMasterForm })));
 const KraMasterForm = lazy(() => import('../components/KraMasterForm').then(m => ({ default: m.KraMasterForm })));
 const ResourcePlanMasterForm = lazy(() => import('../components/ResourcePlanMasterForm').then(m => ({ default: m.ResourcePlanMasterForm })));
 
@@ -35,7 +35,7 @@ const VALID_TABS = [
   'notification-templates',
   'notification-merge-codes',
   'offer-templates',
-  'roles-responsibility',
+  'access-roles',
   'kra',
   'resource-plan',
 ];
@@ -63,8 +63,9 @@ const TAB_ALIASES: Record<string, string> = {
   templates: 'offer-templates',
   'letter-templates': 'offer-templates',
   'offer-master': 'offer-templates',
-  roles: 'roles-responsibility',
-  'roles-responsibilities': 'roles-responsibility',
+  roles: 'access-roles',
+  'roles-responsibility': 'access-roles',
+  'roles-responsibilities': 'access-roles',
   kras: 'kra',
   'kra-form': 'kra',
   'kra-forms': 'kra',
@@ -129,8 +130,8 @@ export function OperationalMastersHubPage() {
           <NotificationMergeCodeMasterForm onCancel={handleBack} />
         ) : selectedMasterId === 'offer-templates' ? (
           <OfferTemplateMasterForm onCancel={handleBack} />
-        ) : selectedMasterId === 'roles-responsibility' ? (
-          <RolesResponsibilityMasterForm onCancel={handleBack} />
+        ) : selectedMasterId === 'access-roles' ? (
+          <AccessRolesMasterForm onCancel={handleBack} />
         ) : selectedMasterId === 'kra' ? (
           <KraMasterForm onCancel={handleBack} />
         ) : selectedMasterId === 'resource-plan' ? (

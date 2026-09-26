@@ -301,9 +301,7 @@ export function NotificationTemplateMasterForm({ onCancel, onSave }: Notificatio
         <div>
           <div className="flex items-center gap-2">
             <h2 className="text-xl font-bold text-foreground">Notification Templates</h2>
-            <Badge variant="outline" className="text-[11px] font-semibold bg-primary/10 text-primary border-primary/20">
-              Templates & System
-            </Badge>
+            
           </div>
           <p className="text-xs text-muted-foreground mt-1">
             Configure automated email & in-app notification templates with dynamic merge tags.

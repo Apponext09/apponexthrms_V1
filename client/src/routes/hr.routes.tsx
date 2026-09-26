@@ -3,7 +3,7 @@ import { Route, Navigate } from 'react-router-dom';
 import { ProtectedRoute } from '../components/ProtectedRoute';
 
 // Portal shell is lazy-loaded so it is not part of the pre-login bundle
-const HRLayout = lazy(() => import('../layouts/HRLayout').then(m => ({ default: m.HRLayout })));
+const SharedPortalLayout = lazy(() => import('../layouts/SharedPortalLayout').then(m => ({ default: m.SharedPortalLayout })));
 const SettingsLayout = lazy(() => import('../features/settings/pages/SettingsLayout').then(m => ({ default: m.SettingsLayout })));
 
 // ── Lazy Imports ──────────────────────────────────────────────────────────────
@@ -155,7 +155,7 @@ export const hrRoutes = (
   <Route
     element={
       <ProtectedRoute allowedRoles={['hr', 'hr_admin', 'hr_manager']}>
-        <HRLayout />
+        <SharedPortalLayout portal="hr" />
       </ProtectedRoute>
     }
   >

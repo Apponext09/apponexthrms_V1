@@ -103,7 +103,7 @@ export class UserRepository extends BaseRepository<User> {
         employee: 5,
       };
       const sorted = [...rolesRows].sort(
-        (a, b) => (ROLE_PRIORITY[b.code] ?? 0) - (ROLE_PRIORITY[a.code] ?? 0)
+        (a, b) => (ROLE_PRIORITY[b.code] ?? 30) - (ROLE_PRIORITY[a.code] ?? 30)
       );
       accessRole = sorted[0].code;
     }

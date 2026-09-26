@@ -42,7 +42,7 @@ const C = {
 };
 
 // ── Nav definitions ───────────────────────────────────────────────────────────
-const INTERN_NAV = [
+export const INTERN_NAV = [
   {
     label: 'Overview',
     items: [{ name: 'Dashboard', href: '/intern/dashboard', icon: LayoutDashboard }],

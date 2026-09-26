@@ -1,7 +1,7 @@
 import React, { lazy } from 'react';
 import { Route, Navigate } from 'react-router-dom';
 import { ProtectedRoute } from '../components/ProtectedRoute';
-import { EmployeeLayout } from '../features/employee/layout/EmployeeLayout';
+import { SharedPortalLayout } from '../layouts/SharedPortalLayout';
 
 // ── Lazy Imports ──────────────────────────────────────────────────────────────
 const EmployeeDashboardPage = lazy(() => import('../features/employee/Dashboard/EmployeeDashboardPage').then(m => ({ default: m.EmployeeDashboardPage })));
@@ -60,7 +60,7 @@ export const employeePortalRoutes = (
   <Route
     element={
       <ProtectedRoute allowedRoles={['employee', 'intern', 'consultant']}>
-        <EmployeeLayout />
+        <SharedPortalLayout portal="employee" />
       </ProtectedRoute>
     }
   >

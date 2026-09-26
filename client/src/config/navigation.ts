@@ -37,7 +37,7 @@ export interface NavSection {
   subscriptionModule?: string | null;
 }
 
-const NAVIGATION_SECTIONS: NavSection[] = [
+export const NAVIGATION_SECTIONS: NavSection[] = [
   // ── 1. Dashboard ──────────────────────────────────────────────────────────
   {
     id: 'dashboard',
@@ -440,7 +440,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
     id: 'policy_management',
     label: 'Policy Governance',
     icon: 'ShieldCheck',
-    minRoles: ['organization_admin', 'hr', 'hr_manager', 'super_admin'],
+    minRoles: ['organization_admin', 'ceo', 'hr', 'hr_admin', 'hr_manager', 'super_admin'],
     subscriptionModule: 'Core HR & Directory',
     items: [
       { name: 'Policy Dashboard', href: '/policies/manage', icon: 'ShieldCheck' },
@@ -474,7 +474,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
     id: 'operational_masters',
     label: 'Master Operations',
     icon: 'Layers',
-    minRoles: ['organization_admin', 'hr', 'hr_manager', 'super_admin'],
+    minRoles: ['organization_admin', 'ceo', 'hr', 'hr_admin', 'hr_manager', 'super_admin'],
     collapsible: true,
     subscriptionModule: null, // Always visible (core settings)
     items: [
@@ -485,7 +485,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
       { name: 'Notification Templates', href: '/operational-masters?tab=notification-templates', icon: 'Bell' },
       { name: 'Notification Merge Codes', href: '/operational-masters?tab=notification-merge-codes', icon: 'Code2' },
       { name: 'Letter & Offer Master', href: '/operational-masters?tab=offer-templates', icon: 'FileText', badge: 'MNC' },
-      { name: 'Roles & Responsibility', href: '/operational-masters?tab=roles-responsibility', icon: 'ShieldCheck' },
+      { name: 'Access Roles', href: '/operational-masters?tab=access-roles', icon: 'ShieldCheck', minRoles: ['organization_admin', 'ceo', 'hr', 'hr_admin', 'hr_manager'] },
       { name: 'KRA Form', href: '/operational-masters?tab=kra', icon: 'FileText' },
       { name: 'Resource Plan', href: '/operational-masters?tab=resource-plan', icon: 'Grid' },
     ],

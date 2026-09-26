@@ -23,7 +23,7 @@ let pendingRequest: ConfirmationRequest | null = null;
 /** Opens the application's shared, asynchronous confirmation dialog. */
 export function confirmAction(message: string): Promise<boolean> {
   return new Promise((resolve) => {
-    const request = { message, kind: 'confirm' as const, resolve };
+    const request: ConfirmationRequest = { message, kind: 'confirm', resolve: (value) => resolve(value === true) };
     pendingRequest = request;
     listener?.(request);
   });
@@ -37,7 +37,7 @@ export function showNotice(message: string): void {
 
 export function promptForValue(message: string, defaultValue = ''): Promise<string | null> {
   return new Promise((resolve) => {
-    const request = { message, kind: 'prompt' as const, defaultValue, resolve };
+    const request: ConfirmationRequest = { message, kind: 'prompt', defaultValue, resolve: (value) => resolve(typeof value === 'string' ? value : null) };
     pendingRequest = request;
     listener?.(request);
   });

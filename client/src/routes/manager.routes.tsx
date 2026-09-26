@@ -1,7 +1,7 @@
 import React, { lazy } from 'react';
 import { Route, Navigate } from 'react-router-dom';
 import { ProtectedRoute } from '../components/ProtectedRoute';
-import { ManagerLayout } from '../layouts/ManagerLayout';
+import { SharedPortalLayout } from '../layouts/SharedPortalLayout';
 import type { Role } from '@/config/roles';
 
 // ── Lazy Imports ──────────────────────────────────────────────────────────────
@@ -57,7 +57,7 @@ export const managerRoutes = (
   <Route
     element={
       <ProtectedRoute allowedRoles={MANAGER_ALLOWED_ROLES}>
-        <ManagerLayout />
+        <SharedPortalLayout portal="manager" />
       </ProtectedRoute>
     }
   >

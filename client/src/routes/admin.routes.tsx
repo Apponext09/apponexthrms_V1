@@ -1,7 +1,7 @@
 import React, { lazy } from "react";
 import { Route, Navigate } from "react-router-dom";
 import { ProtectedRoute } from "../components/ProtectedRoute";
-import { AppShellLayout } from "../layouts/AppShellLayout";
+import { SharedPortalLayout } from "../layouts/SharedPortalLayout";
 import { SettingsLayout } from "../features/settings/pages/SettingsLayout";
 
 // ── Lazy Imports ──────────────────────────────────────────────────────────────
@@ -682,7 +682,7 @@ export const adminRoutes = (
           "consultant",
         ]}
       >
-        <AppShellLayout />
+        <SharedPortalLayout portal="admin" />
       </ProtectedRoute>
     }
   >

@@ -151,7 +151,7 @@ export function EmployeePersonalInfo({ employeeId, editUnlocked = false, approve
                 className="mt-1 h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
                 value={form.maritalStatus || ''}
                 onChange={(e) => {
-                  const status = e.target.value || null;
+                  const status = (e.target.value || null) as typeof form.maritalStatus;
                   // Clear spouse name if switching away from married
                   // Clear children count if switching to single
                   setForm({

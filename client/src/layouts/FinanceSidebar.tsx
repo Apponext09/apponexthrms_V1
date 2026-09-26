@@ -49,7 +49,7 @@ const C = {
 };
 
 // -- Nav definitions ------------------------------------------------------------
-const FINANCE_NAV = [
+export const FINANCE_NAV = [
   {
     label: "Overview",
     items: [

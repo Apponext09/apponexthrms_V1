@@ -13,6 +13,7 @@ import { useLocations } from '../../settings/hooks/useLocations';
 import { useEmployeeTypes } from '../../settings/hooks/useEmployeeTypes';
 import { useDesignations } from '../../settings/hooks/useDesignations';
 import { useEmployeeStatuses } from '../../settings/api/useEmployeeStatuses';
+import { useAccessRoles } from '@/features/settings/hooks/useAccessRoles';
 import { ProfileEditRequestModal } from './ProfileEditRequestModal';
 import type { Employee } from '@/types';
 
@@ -117,6 +118,7 @@ export function EmployeeBasicInfo({
   const { employeeTypes } = useEmployeeTypes();
   const { designations } = useDesignations();
   const { employeeStatuses } = useEmployeeStatuses();
+  const { data: accessRoles = [] } = useAccessRoles();
   const [internalIsEditing, setInternalIsEditing] = useState(false);
 
   const isEditing = internalIsEditing;
@@ -536,13 +538,7 @@ export function EmployeeBasicInfo({
                 value={form.accessRole || 'employee'}
                 onChange={(e) => setForm({ ...form, accessRole: e.target.value })}
               >
-                <option value="employee">Employee</option>
-                <option value="team_lead">Team Lead</option>
-                <option value="department_head">Manager</option>
-                <option value="hr_manager">HR</option>
-                <option value="intern">Intern</option>
-                <option value="consultant">Consultant</option>
-                <option value="finance">Finance</option>
+                {accessRoles.map((role) => <option key={role.id} value={role.code}>{role.name}</option>)}
               </select>
             </div>
             <div>

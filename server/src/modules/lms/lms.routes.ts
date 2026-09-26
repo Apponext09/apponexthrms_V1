@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { authenticate } from '../../common/middleware/authenticate';
 import { resolveTenant } from '../../common/middleware/resolveTenant';
 import { asyncHandler } from '../../common/utils/asyncHandler';
+import { requireMenuModule } from '../rbac/requireMenuAccess';
 
 import { categoryController } from './controllers/CategoryController';
 import { courseController } from './controllers/CourseController';
@@ -17,6 +18,7 @@ import { lmsIntegrationController } from './controllers/LmsIntegrationController
 const router = Router();
 
 router.use(authenticate, resolveTenant);
+router.use(requireMenuModule('learning'));
 
 // ── Analytics & Dashboard ──────────────────────────────────────────
 router.get('/dashboard/analytics', asyncHandler((req, res) => lmsReportController.getDashboardAnalytics(req, res)));

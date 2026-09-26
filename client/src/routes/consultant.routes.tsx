@@ -1,7 +1,7 @@
 import React, { lazy } from 'react';
 import { Route, Navigate } from 'react-router-dom';
 import { ProtectedRoute } from '../components/ProtectedRoute';
-import { ConsultantLayout } from '../layouts/ConsultantLayout';
+import { SharedPortalLayout } from '../layouts/SharedPortalLayout';
 
 // ── Lazy Imports ──────────────────────────────────────────────────────────────
 const ConsultantDashboardPage = lazy(() => import('../features/consultant/pages/ConsultantDashboardPage').then(m => ({ default: m.ConsultantDashboardPage })));
@@ -28,7 +28,7 @@ export const consultantRoutes = (
   <Route
     element={
       <ProtectedRoute allowedRoles={['consultant']}>
-        <ConsultantLayout />
+        <SharedPortalLayout portal="consultant" />
       </ProtectedRoute>
     }
   >

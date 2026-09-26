@@ -2,10 +2,21 @@ import { useEffect, useRef, useState, type ComponentType } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useMenuAccess } from '@/features/access/useMenuAccess';
 import { create } from 'zustand';
 //Imports
 export type SectionLink = { name: string; href: string; icon?: ComponentType<{ className?: string }>; isLocked?: boolean; children?: SectionLink[]; subItems?: SectionLink[] };
 export type SectionGroup = { label: string; icon?: ComponentType<{ className?: string }>; items: SectionLink[] };
+
+export function filterGrantedGroups(groups: SectionGroup[], canAccessPath: (path: string) => boolean): SectionGroup[] {
+  const filterLinks = (items: SectionLink[]): SectionLink[] => items.flatMap((item) => {
+    const children = item.children ? filterLinks(item.children) : undefined;
+    const subItems = item.subItems ? filterLinks(item.subItems) : undefined;
+    if (!canAccessPath(item.href) && !children?.length && !subItems?.length) return [];
+    return [{ ...item, ...(children ? { children } : {}), ...(subItems ? { subItems } : {}) }];
+  });
+  return groups.map((group) => ({ ...group, items: filterLinks(group.items) })).filter((group) => group.items.length > 0);
+}
 
 const useSectionGroups = create<{ groups: Record<string, SectionGroup[]>; setGroups: (id: string, groups: SectionGroup[]) => void }>(set => ({
   groups: {},
@@ -104,12 +115,20 @@ export function formatRailLabel(label: string): string {
 export function SectionRail({ id, groups, open, onNavigate }: { id: string; groups: SectionGroup[]; open: boolean; onNavigate?: () => void }) {
   const navigate = useNavigate();
   const location = useLocation();
+  const { ready, error, retry, access, canAccessPath } = useMenuAccess();
+  const canAccessSidebarPath = (href: string) => {
+    if (href.includes('tab=access-roles') && !access?.roleCodes.some((code) => ['organization_admin', 'ceo', 'hr', 'hr_admin', 'hr_manager'].includes(code))) return false;
+    return canAccessPath(href);
+  };
+  const grantedGroups = ready ? filterGrantedGroups(groups, canAccessSidebarPath) : [];
   const setGroups = useSectionGroups(state => state.setGroups);
   // Keep the tab strip in the adjacent layout synchronized with role and license filtering.
-  usePublishGroups(setGroups, id, groups);
-  const selected = activeLink(groups, location.pathname, location.search);
+  usePublishGroups(setGroups, id, grantedGroups);
+  const selected = activeLink(grantedGroups, location.pathname, location.search);
+  if (error) return <div role="alert" className="p-3 text-xs text-destructive">Access rules unavailable. <button type="button" className="underline" onClick={retry}>Retry</button></div>;
+  if (!ready) return <div className="p-3 text-xs text-muted-foreground">Loading menu...</div>;
   return <nav aria-label="Main navigation" className="sidebar-scrollbar flex-1 space-y-1 overflow-y-auto px-2.5 py-2 md:px-1.5">
-    {groups.map(group => {
+    {grantedGroups.map(group => {
       const groupLinks = links(group);
       if (!groupLinks.length) return null;
       const Icon = group.icon || group.items[0]?.icon;

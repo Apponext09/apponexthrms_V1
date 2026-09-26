@@ -1,7 +1,7 @@
 import React, { lazy } from 'react';
 import { Route, Navigate } from 'react-router-dom';
 import { ProtectedRoute } from '../components/ProtectedRoute';
-import { InternLayout } from '../layouts/InternLayout';
+import { SharedPortalLayout } from '../layouts/SharedPortalLayout';
 
 // ── Lazy Imports ──────────────────────────────────────────────────────────────
 const InternDashboardPage = lazy(() => import('../features/intern/pages/InternDashboardPage').then(m => ({ default: m.InternDashboardPage })));
@@ -28,7 +28,7 @@ export const internRoutes = (
   <Route
     element={
       <ProtectedRoute allowedRoles={['intern']}>
-        <InternLayout />
+        <SharedPortalLayout portal="intern" />
       </ProtectedRoute>
     }
   >

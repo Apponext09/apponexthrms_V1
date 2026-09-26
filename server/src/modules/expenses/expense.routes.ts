@@ -4,11 +4,13 @@ import { authenticate } from '../../common/middleware/authenticate';
 import { resolveTenant } from '../../common/middleware/resolveTenant';
 import { asyncHandler } from '../../common/utils/asyncHandler';
 import { WorkflowExpenseService } from './services/WorkflowExpenseService';
+import { requireMenuModule } from '../rbac/requireMenuAccess';
 
 const router = Router();
 const controller = new ExpenseController();
 
 router.use(authenticate, resolveTenant);
+router.use(requireMenuModule('expenses'));
 const workflowExpense = new WorkflowExpenseService();
 router.use(asyncHandler(async (req, _res, next) => {
   const section = req.path.split('/')[1];

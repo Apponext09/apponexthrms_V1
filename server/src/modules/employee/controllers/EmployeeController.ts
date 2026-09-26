@@ -177,7 +177,7 @@ export class EmployeeController {
       intern: 10, employee: 5,
     };
     const roles = Array.from(new Set(assignedRoles.map((row: any) => String(row.code).toLowerCase())));
-    const accessRole = [...roles].sort((a, b) => (rolePriority[b] ?? 0) - (rolePriority[a] ?? 0))[0];
+    const accessRole = [...roles].sort((a, b) => (rolePriority[b] ?? 30) - (rolePriority[a] ?? 30))[0];
     res.json({
       success: true,
       data: {

@@ -226,9 +226,7 @@ export function EventMasterForm({
           <div>
             <div className="flex items-center gap-2">
               <h2 className="text-xl font-bold text-foreground">Events Master</h2>
-              <Badge variant="outline" className="text-xs font-semibold rounded-lg">
-                Org #{selectedEvent?.organizationId || 1}
-              </Badge>
+              
             </div>
             <p className="text-xs text-muted-foreground mt-0.5">
               Configure company events, townhalls, celebration schedules, and segment audience targeting

@@ -725,16 +725,6 @@ export class EmployeeService {
   ) {
     const targetRole = accessRole || "employee";
 
-    // Clear existing role assignments for this user in user_roles
-    await db("user_roles")
-      .where("user_id", userId)
-      .where(function (this: any) {
-        this.where("organization_id", ctx.organizationId).orWhereNull(
-          "organization_id",
-        );
-      })
-      .delete();
-
     const rolesToAssign = new Set<string>();
     if (Array.isArray(rolesArray) && rolesArray.length > 0) {
       rolesArray.forEach((r) => {
@@ -743,49 +733,30 @@ export class EmployeeService {
     }
     rolesToAssign.add(targetRole);
 
+    const roleRecords = await db('roles')
+      .where('organization_id', ctx.organizationId)
+      .where('is_platform_role', false)
+      .whereIn('code', Array.from(rolesToAssign, (role) => String(role).trim().toLowerCase()))
+      .whereNull('deleted_at');
+    const roleByCode = new Map(roleRecords.map((role: any) => [role.code, role]));
+    for (const role of rolesToAssign) {
+      if (!roleByCode.has(String(role).trim().toLowerCase())) {
+        throw new ValidationError(`Unknown or unavailable access role: ${role}`);
+      }
+    }
+
+    // Validation must finish before replacing any existing assignments.
+    await db('user_roles')
+      .where('user_id', userId)
+      .where('organization_id', ctx.organizationId)
+      .delete();
+
     for (const rawRoleName of rolesToAssign) {
       if (!rawRoleName) continue;
       const cleanName = rawRoleName.trim();
       const cleanCode = cleanName.toLowerCase().replace(/\s+/g, "_");
 
-      // Check if role exists in roles table
-      let roleRecord = await db("roles")
-        .where(function (this: any) {
-          this.where("organization_id", ctx.organizationId).orWhereNull(
-            "organization_id",
-          );
-        })
-        .where(function (this: any) {
-          this.where("code", cleanCode).orWhere("name", cleanName);
-        })
-        .first();
-
-      if (!roleRecord) {
-        try {
-          const [newId] = await db("roles").insert({
-            uuid: uuidv4(),
-            organization_id: ctx.organizationId,
-            code: cleanCode,
-            name: cleanName,
-            description: `Role ${cleanName}`,
-            is_system: false,
-            is_platform_role: false,
-            is_default: false,
-            created_at: new Date(),
-            updated_at: new Date(),
-          });
-          roleRecord = { id: newId, code: cleanCode, name: cleanName };
-        } catch (e) {
-          roleRecord = await db("roles")
-            .where(function (this: any) {
-              this.where("organization_id", ctx.organizationId).orWhereNull(
-                "organization_id",
-              );
-            })
-            .where("code", cleanCode)
-            .first();
-        }
-      }
+      const roleRecord = roleByCode.get(cleanCode) as any;
 
       if (roleRecord) {
         let validAssignedBy = userId;
@@ -797,20 +768,13 @@ export class EmployeeService {
           if (userExists) validAssignedBy = ctx.userId;
         }
 
-        await db("user_roles")
-          .insert({
-            organization_id: ctx.organizationId,
-            user_id: userId,
-            role_id: roleRecord.id,
-            assigned_by: validAssignedBy,
-            assigned_at: new Date(),
-          })
-          .catch((err: any) => {
-            console.warn(
-              "[EmployeeService] user_roles insert warning:",
-              err?.message || err,
-            );
-          });
+        await db("user_roles").insert({
+          organization_id: ctx.organizationId,
+          user_id: userId,
+          role_id: roleRecord.id,
+          assigned_by: validAssignedBy,
+          assigned_at: new Date(),
+        });
       }
     }
 
@@ -1494,10 +1458,7 @@ export class EmployeeService {
         );
       }
     } catch (userSyncErr) {
-      console.warn(
-        "[EmployeeService] User credentials sync warning:",
-        userSyncErr,
-      );
+      throw userSyncErr;
     }
 
     await this.auditService.log(ctx, {

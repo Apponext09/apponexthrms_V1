@@ -42,6 +42,7 @@ import { useEmployeeCustomizationStore } from '../store/employeeCustomizationSto
 import { useCompanyStore } from '@/features/settings/store/companyStore';
 import { usePolicies } from '@/features/policy/api/usePolicies';
 import { useEmployeeLinkedMasters } from '@/features/master-builder/hooks/useEmployeeCustomMasters';
+import { useAccessRoles } from '@/features/settings/hooks/useAccessRoles';
 
 export const createEmployeeCode = (nextNum: number = 1) =>
   `EMP${String(nextNum).padStart(3, '0')}`;
@@ -273,6 +274,7 @@ export function EmployeeCreateModal({
   const { config: customConfig, generateEmployeeCode, generatePassword } = useEmployeeCustomizationStore();
   const { employees: allEmployees } = useEmployees({ pageSize: 500 });
   const { employeeTypes } = useEmployeeTypes();
+  const { data: accessRoles = [] } = useAccessRoles();
   const { employeeStatuses } = useEmployeeStatuses();
   const { data: allOrgPolicies = [] } = usePolicies();
   const nextCodeNum = Math.max(0, ...(allEmployees || []).map((employee: { employeeCode?: string; employee_code?: string }) => {
@@ -1333,13 +1335,7 @@ export function EmployeeCreateModal({
                           value={formData.accessRole}
                           onChange={(e) => handleFieldChange('accessRole', e.target.value)}
                         >
-                          <option value="employee">Employee </option>
-                          <option value="team_lead">Team Lead </option>
-                          <option value="department_head">Department Head / Manager</option>
-                          <option value="hr_manager">HR Manager </option>
-                          <option value="intern">Intern </option>
-                          <option value="consultant">Consultant </option>
-                          <option value="finance">Finance </option>
+                          {accessRoles.map((role) => <option key={role.id} value={role.code}>{role.name}</option>)}
 
                         </select>
                         

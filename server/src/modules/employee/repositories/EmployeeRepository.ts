@@ -274,7 +274,7 @@ export class EmployeeRepository extends BaseRepository<Employee> {
           employee: 1,
         };
         for (const ur of userRoles) {
-          const priority = rolePriority[ur.code] || 0;
+          const priority = rolePriority[ur.code] ?? 2.5;
           if (priority > highestPriority) {
             highestPriority = priority;
             highestRole = ur.code;
@@ -282,7 +282,7 @@ export class EmployeeRepository extends BaseRepository<Employee> {
         }
       }
       (employee as any).accessRole = highestRole;
-      const roleList = userRoles.map((ur: any) => ur.name || ur.code);
+      const roleList = userRoles.map((ur: any) => ur.code);
       (employee as any).assignedRoles = roleList;
       (employee as any).roles = roleList;
     }
@@ -558,7 +558,6 @@ export class EmployeeRepository extends BaseRepository<Employee> {
             this.where('user_roles.organization_id', ctx.organizationId).orWhereNull('user_roles.organization_id');
           })
           .whereIn('user_roles.user_id', userIds)
-          .whereIn('roles.code', ['employee', 'team_lead', 'hr', 'hr_manager', 'department_head', 'cto', 'cfo', 'coo', 'cxo', 'intern', 'consultant', 'finance'])
           .select('user_roles.user_id', 'roles.code');
 
         const rolePriority: Record<string, number> = {
@@ -581,8 +580,8 @@ export class EmployeeRepository extends BaseRepository<Employee> {
         for (const ur of userRoles) {
           const uId = Number((ur as any).userId || ur.user_id);
           const currentRole = roleMap.get(uId);
-          const currentPriority = currentRole ? (rolePriority[currentRole] || 0) : 0;
-          const newPriority = rolePriority[ur.code] || 0;
+          const currentPriority = currentRole ? (rolePriority[currentRole] ?? 2.5) : 0;
+          const newPriority = rolePriority[ur.code] ?? 2.5;
           if (newPriority > currentPriority) {
             roleMap.set(uId, ur.code);
           }

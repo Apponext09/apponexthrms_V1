@@ -70,7 +70,6 @@ export interface ShiftTemplate {
   flexibleStartRangeEnd?: string | null;
   isDefault?: boolean;
   rosterPattern?: any;
-  roster_pattern?: any;
   globalAttendanceRules?: {
     minHoursFullDayExcluded: string;
     minHoursFullDayIncluded: string;
