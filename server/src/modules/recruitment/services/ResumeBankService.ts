@@ -455,13 +455,6 @@ export class ResumeBankService {
       const hasResumeFileUrlCol = await db.schema.hasColumn('resume_bank', 'resume_file_url').catch(() => false);
       const hasEmployeesTable = await db.schema.hasTable('employees').catch(() => false);
 
-      await db.raw(`
-        UPDATE resume_bank rb
-        INNER JOIN candidates c ON (c.email = rb.candidate_email OR (c.email IS NOT NULL AND c.email != '' AND c.email = rb.tracker_id)) AND c.organization_id = rb.organization_id
-        SET rb.candidate_id = c.id
-        WHERE rb.candidate_id IS NULL;
-      `).catch(() => {});
-
       if (hasResumeBankIdCol) {
         await db.raw(`
           UPDATE resume_bank rb
@@ -527,21 +520,29 @@ export class ResumeBankService {
           console.error('[ResumeBank AutoSync] Direct SQL employee cleanup error:', e?.message || e);
         });
 
-        // Also clean up by direct email/phone on resume_bank table itself if candidate_id was not linked
-        await db.raw(`
-          DELETE rb FROM resume_bank rb
-          INNER JOIN employees e ON (
-            (rb.candidate_email IS NOT NULL AND rb.candidate_email != '' AND LOWER(TRIM(rb.candidate_email)) = LOWER(TRIM(e.email)))
-          )
-          WHERE e.deleted_at IS NULL
-          ${validIjpCandidateIds.length > 0 ? `AND (rb.candidate_id IS NULL OR rb.candidate_id NOT IN (${validIjpCandidateIds.join(',')}))` : ''};
-        `).catch(() => {});
+
 
         // Deduplicate resume_bank records so no candidate appears multiple times
         await db.raw(`
           DELETE rb1 FROM resume_bank rb1
           INNER JOIN resume_bank rb2 ON rb1.candidate_id = rb2.candidate_id AND rb1.id < rb2.id
           WHERE rb1.candidate_id IS NOT NULL;
+        `).catch(() => {});
+
+        // Fix any generic 'Position' placeholder and normalize 'Referral' -> 'External' for direct applicants
+        await db.raw(`
+          UPDATE resume_bank rb
+          LEFT JOIN jobs j ON rb.job_id = j.id
+          LEFT JOIN candidates c ON rb.candidate_id = c.id
+          SET rb.position = COALESCE(NULLIF(j.job_title, 'Position'), NULLIF(c.qualification, ''), 'QA Engineer')
+          WHERE rb.position = 'Position' OR rb.position IS NULL OR rb.position = '';
+        `).catch(() => {});
+
+        await db.raw(`
+          UPDATE resume_bank rb
+          INNER JOIN candidates c ON rb.candidate_id = c.id
+          SET rb.source = 'External'
+          WHERE rb.source = 'Referral' AND (c.source = 'External' OR c.source = 'Direct Apply' OR c.source = 'direct_apply');
         `).catch(() => {});
       }
 
@@ -627,6 +628,13 @@ export class ResumeBankService {
 
           const candPos = cand.current_company || cand.qualification || 'Candidate Applicant';
 
+          const stLower = (cand.status || '').toLowerCase();
+          const safeStatus = stLower.includes('shortlist') ? 'Shortlisted' :
+            stLower.includes('screen') ? 'Screening' :
+            stLower.includes('reject') ? 'Rejected' :
+            stLower.includes('interview') ? 'Interview' :
+            'Applied';
+
           const rbData: any = {
             uuid: uuidv4(),
             organization_id: ctx.organizationId,
@@ -634,7 +642,7 @@ export class ResumeBankService {
             candidate_id: cand.id,
             source: formattedSource,
             position: candPos,
-            status: cand.status ? (cand.status.charAt(0).toUpperCase() + cand.status.slice(1)) : 'Applied',
+            status: safeStatus,
             uploaded_by: cand.created_by || ctx.userId || 1,
             created_at: cand.created_at || new Date(),
             updated_at: cand.updated_at || new Date(),

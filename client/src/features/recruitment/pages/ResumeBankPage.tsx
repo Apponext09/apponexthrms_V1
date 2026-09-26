@@ -258,7 +258,11 @@ export const ResumeBankPage: React.FC = () => {
               ? `${item.candidateExperience} Years` 
               : (item.candidate_experience ? `${item.candidate_experience} Years` : '-'),
             source: item.source || '-',
-            position: item.position || '-',
+            position: (item.position && item.position !== 'Position' && item.position !== 'Job Position')
+              ? item.position
+              : ((item.jobTitle && item.jobTitle !== 'Position' && item.jobTitle !== 'Job Position')
+                  ? item.jobTitle
+                  : (item.job_title || item.position || '-')),
             jobId: item.jobId || item.job_id || null,
             jobTitle: item.jobTitle || item.job_title || null,
             jobCode: item.jobCode || item.job_code || null,
@@ -474,7 +478,11 @@ export const ResumeBankPage: React.FC = () => {
               ? `${item.candidateExperience} Years` 
               : (item.candidate_experience ? `${item.candidate_experience} Years` : '-'),
             source: item.source || '-',
-            position: item.position || '-',
+            position: (item.position && item.position !== 'Position' && item.position !== 'Job Position')
+              ? item.position
+              : ((item.jobTitle && item.jobTitle !== 'Position' && item.jobTitle !== 'Job Position')
+                  ? item.jobTitle
+                  : (item.job_title || item.position || '-')),
             jobId: item.jobId || item.job_id || null,
             jobTitle: item.jobTitle || item.job_title || null,
             jobCode: item.jobCode || item.job_code || null,
@@ -899,12 +907,12 @@ export const ResumeBankPage: React.FC = () => {
                                 className={`text-[10px] rounded-lg capitalize px-2.5 py-0.5 font-bold border ${
                                   (item.source || '').toLowerCase().includes('internal') || (item.source || '').toLowerCase().includes('ijp')
                                     ? 'bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/30'
+                                    : (item.source || '').toLowerCase().includes('external') || (item.source || '').toLowerCase().includes('career') || (item.source || '').toLowerCase().includes('direct')
+                                    ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30'
                                     : (item.source || '').toLowerCase().includes('referral')
                                     ? 'bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/30'
                                     : (item.source || '').toLowerCase().includes('bulk')
                                     ? 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border-indigo-500/30'
-                                    : (item.source || '').toLowerCase().includes('career')
-                                    ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30'
                                     : 'bg-muted text-muted-foreground border-border'
                                 }`}
                               >

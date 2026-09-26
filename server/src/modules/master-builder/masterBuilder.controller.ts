@@ -208,7 +208,6 @@ export class MasterBuilderController {
   async listRecords(req: Request, res: Response) {
     const orgId = this.getOrgId(req);
     const companyId = this.getCompanyId(req);
-    if (!companyId) return res.status(400).json({ success: false, message: 'A company context is required to access master records.' });
     const masterId = Number(req.params.id);
     const search = req.query.search as string;
     const status = req.query.status as string;
@@ -226,8 +225,7 @@ export class MasterBuilderController {
 
   async createRecord(req: Request, res: Response) {
     const orgId = this.getOrgId(req);
-    const companyId = this.getCompanyId(req);
-    if (!companyId) return res.status(400).json({ success: false, message: 'A company context is required to create master records.' });
+    const companyId = this.getCompanyId(req) || (req.body.companyId ? Number(req.body.companyId) : undefined);
     const masterId = Number(req.params.id);
     const userId = this.getUserId(req);
     try {
@@ -240,8 +238,7 @@ export class MasterBuilderController {
 
   async updateRecord(req: Request, res: Response) {
     const orgId = this.getOrgId(req);
-    const companyId = this.getCompanyId(req);
-    if (!companyId) return res.status(400).json({ success: false, message: 'A company context is required to update master records.' });
+    const companyId = this.getCompanyId(req) || (req.body.companyId ? Number(req.body.companyId) : undefined);
     const masterId = Number(req.params.id);
     const recordId = Number(req.params.recordId);
     const userId = this.getUserId(req);
@@ -256,7 +253,6 @@ export class MasterBuilderController {
   async deleteRecord(req: Request, res: Response) {
     const orgId = this.getOrgId(req);
     const companyId = this.getCompanyId(req);
-    if (!companyId) return res.status(400).json({ success: false, message: 'A company context is required to delete master records.' });
     const masterId = Number(req.params.id);
     const recordId = Number(req.params.recordId);
     await masterBuilderService.deleteRecord(orgId, companyId, masterId, recordId);

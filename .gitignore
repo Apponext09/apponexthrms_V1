@@ -6,6 +6,8 @@ package-lock.json
 yarn.lock
 pnpm-lock.yaml
 
+server/uploads/policies/
+server/uploads/resumes/
 # IDE
 .vscode/
 .idea/
@@ -85,13 +87,14 @@ __pycache__/
 *.py[cod]
 # Virtual Environments
 venv/
+myenv/
 .venv/
 **/venv/
 **/.venv/
 **/venv_app/
 **/myenv/
 **/venv_new/
-biometric/venv_new/
+biometric/myenv/
 biometric/venv/
 # Biometric Python environment (each developer creates this locally)
 biometric/.venv/

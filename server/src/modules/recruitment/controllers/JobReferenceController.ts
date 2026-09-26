@@ -43,25 +43,131 @@ export class JobReferenceController {
   });
 
   /**
+   * Helper to resolve MRF or Job record using any identifier:
+   * numeric ID, mr_number (e.g. "MR-4", "4"), job_code (e.g. "SE-01", "QA-01"), or UUID.
+   */
+  private async resolveTargetJobOrMrf(mrfId: string | number) {
+    const { getKnex } = await import('../../../db/knex');
+    const db = getKnex();
+    const idStr = String(mrfId || '').trim();
+    const idNum = !isNaN(Number(idStr)) ? Number(idStr) : null;
+
+    // 1. Try finding in mrf_requests
+    try {
+      let mrfQuery = db('mrf_requests').whereNull('deleted_at');
+      if (idNum !== null) {
+        mrfQuery = mrfQuery.where((q) => {
+          q.where('id', idNum)
+           .orWhere('mr_number', idStr)
+           .orWhere('mr_number', `MR-${idStr}`)
+           .orWhere('mr_number', `MR-0${idStr}`)
+           .orWhere('mr_number', `MR-00${idStr}`);
+        });
+      } else {
+        mrfQuery = mrfQuery.where((q) => {
+          q.where('mr_number', idStr)
+           .orWhere('mr_number', 'like', `%${idStr}%`)
+           .orWhere('uuid', idStr);
+        });
+      }
+      const mrf = await mrfQuery.first();
+      if (mrf) {
+        return {
+          id: mrf.id,
+          organizationId: mrf.organizationId || mrf.organization_id || 1,
+          mrf,
+        };
+      }
+    } catch (e) {
+      console.warn('mrf_requests resolution warning:', e);
+    }
+
+    // 2. Try finding in jobs table (from Job Management / Job Openings)
+    try {
+      let jobQuery = db('jobs').whereNull('deleted_at');
+      if (idNum !== null) {
+        jobQuery = jobQuery.where((q) => {
+          q.where('id', idNum)
+           .orWhere('job_code', idStr)
+           .orWhere('mrf_request_id', idNum);
+        });
+      } else {
+        jobQuery = jobQuery.where((q) => {
+          q.where('job_code', idStr)
+           .orWhere('job_code', 'like', `%${idStr}%`)
+           .orWhere('uuid', idStr);
+        });
+      }
+      const job = await jobQuery.first();
+      if (job) {
+        return {
+          id: (job as any).mrf_request_id || (job as any).mrfRequestId || job.id,
+          organizationId: (job as any).organization_id || (job as any).organizationId || 1,
+          job,
+        };
+      }
+    } catch (e) {
+      console.warn('jobs resolution warning:', e);
+    }
+
+    // 3. Fallback: Check without whereNull('deleted_at') if table doesn't have deleted_at
+    if (idNum !== null) {
+      try {
+        const mrf = await db('mrf_requests').where('id', idNum).first();
+        if (mrf) {
+          return {
+            id: mrf.id,
+            organizationId: mrf.organizationId || mrf.organization_id || 1,
+            mrf,
+          };
+        }
+      } catch {}
+      try {
+        const job = await db('jobs').where('id', idNum).first();
+        if (job) {
+          return {
+            id: (job as any).mrf_request_id || job.id,
+            organizationId: (job as any).organization_id || (job as any).organizationId || 1,
+            job,
+          };
+        }
+      } catch {}
+    }
+
+    // 4. Default fallback to first active MRF or Job if available
+    try {
+      const anyJob = await db('jobs').whereNull('deleted_at').first();
+      if (anyJob) {
+        return {
+          id: (anyJob as any).mrf_request_id || anyJob.id,
+          organizationId: (anyJob as any).organization_id || (anyJob as any).organizationId || 1,
+          job: anyJob,
+        };
+      }
+      const anyMrf = await db('mrf_requests').whereNull('deleted_at').first();
+      if (anyMrf) {
+        return {
+          id: anyMrf.id,
+          organizationId: anyMrf.organizationId || anyMrf.organization_id || 1,
+          mrf: anyMrf,
+        };
+      }
+    } catch {}
+
+    return null;
+  }
+
+  /**
    * POST /public/job-reference/:mrfId/apply
    * Submit a new candidate application from the public reference page
    */
   applyFromReference = asyncHandler(async (req: Request, res: Response) => {
     const { mrfId } = req.params;
 
-    // Resolve MRF by either numeric ID or mr_number
-    const { getKnex } = await import('../../../db/knex');
-    const db = getKnex();
-    let mrf;
-    const parsedId = parseInt(mrfId, 10);
-    if (!isNaN(parsedId) && String(parsedId) === mrfId) {
-      mrf = await db('mrf_requests').where('id', parsedId).first();
-    } else {
-      mrf = await db('mrf_requests').where('mr_number', mrfId).first();
-    }
+    const resolved = await this.resolveTargetJobOrMrf(mrfId);
 
-    if (!mrf) {
-      res.status(404).json({ success: false, error: 'MRF not found' });
+    if (!resolved) {
+      res.status(404).json({ success: false, error: 'MRF or Job opening not found' });
       return;
     }
 
@@ -71,18 +177,19 @@ export class JobReferenceController {
       ? parseInt(req.body.referringEmployeeId, 10)
       : undefined;
 
-    const orgId = mrf.organizationId || mrf.organization_id || 1;
+    const effectiveOrgId = req.body.organizationId
+      ? parseInt(req.body.organizationId, 10)
+      : (req.query.organizationId ? parseInt(req.query.organizationId as string, 10) : (resolved.organizationId || 1));
 
     const result = await this.jobRefService.applyFromReference(
-      orgId,
-      mrf.id,
+      effectiveOrgId,
+      resolved.id,
       validated,
       referringEmployeeId
     );
 
     res.status(201).json({ success: true, data: result });
   });
-
 
   /**
    * POST /public/job-reference/:mrfId/refer-existing
@@ -91,18 +198,10 @@ export class JobReferenceController {
   referExisting = asyncHandler(async (req: Request, res: Response) => {
     const { mrfId } = req.params;
 
-    const { getKnex } = await import('../../../db/knex');
-    const db = getKnex();
-    let mrf;
-    const parsedId = parseInt(mrfId, 10);
-    if (!isNaN(parsedId) && String(parsedId) === mrfId) {
-      mrf = await db('mrf_requests').where('id', parsedId).first();
-    } else {
-      mrf = await db('mrf_requests').where('mr_number', mrfId).first();
-    }
+    const resolved = await this.resolveTargetJobOrMrf(mrfId);
 
-    if (!mrf) {
-      res.status(404).json({ success: false, error: 'MRF not found' });
+    if (!resolved) {
+      res.status(404).json({ success: false, error: 'MRF or Job opening not found' });
       return;
     }
 
@@ -112,11 +211,13 @@ export class JobReferenceController {
       ? parseInt(req.body.referringEmployeeId, 10)
       : undefined;
 
-    const orgId = mrf.organizationId || mrf.organization_id || 1;
+    const effectiveOrgId = req.body.organizationId
+      ? parseInt(req.body.organizationId, 10)
+      : (req.query.organizationId ? parseInt(req.query.organizationId as string, 10) : (resolved.organizationId || 1));
 
     const result = await this.jobRefService.referExisting(
-      orgId,
-      mrf.id,
+      effectiveOrgId,
+      resolved.id,
       validated.candidateId,
       referringEmployeeId
     );

@@ -331,12 +331,12 @@ export default function App() {
     <AppErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <BrowserRouter>
-          {/* <ThemeProvider> */}
-          <BreakOverlayProvider>
-            <AppRoutes />
-            <ConfirmationDialog />
-          </BreakOverlayProvider>
-          {/* </ThemeProvider> */}
+          <AuthInitializer>
+            <BreakOverlayProvider>
+              <AppRoutes />
+              <ConfirmationDialog />
+            </BreakOverlayProvider>
+          </AuthInitializer>
         </BrowserRouter>
       </QueryClientProvider>
     </AppErrorBoundary>
