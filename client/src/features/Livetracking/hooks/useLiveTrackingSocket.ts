@@ -4,30 +4,30 @@
 //
 // PURPOSE: Used by HR, Admin, and Manager dashboards.
 //          Subscribes to /live-tracking Socket.IO namespace.
-//          Applies live updates to the employee list state.
+//
+// Location deltas (`tracking:locations`, batched by the server) go straight
+// into the live store — they do NOT touch React state, so a GPS update never
+// re-renders the dashboard. Only status transitions reach React (toasts).
 //
 // FIX: Uses ref-based event callbacks to prevent socket teardown/reconnect loops.
 // ============================================================
 import { useEffect, useRef, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
-import type {
-  LiveEmployee,
-  TrackingLocationUpdatedEvent,
-  TrackingStatusChangedEvent,
-} from '../types/livetracking.types';
-
-import { detectBreakPoints } from '../utils/breakDetector';
+import type { LocationDelta, TrackingStatusChangedEvent } from '../types/livetracking.types';
+import { liveTrackingStore } from '../store/liveTrackingStore';
 
 const SOCKET_URL = (import.meta as any).env.VITE_SOCKET_URL || 'http://localhost:5000';
 
 interface UseLiveTrackingSocketOptions {
   token: string | null;
-  employees: LiveEmployee[];
-  setEmployees: React.Dispatch<React.SetStateAction<LiveEmployee[]>>;
-  onLocationOff?: (employeeId: number, name: string) => void;
-  onLocationOn?: (employeeId: number, name: string) => void;
-  onOffline?: (employeeId: number, name: string) => void;
-  onOnline?: (employeeId: number, name: string) => void;
+  /** Deltas arrived for employees not on the roster yet (e.g. checked in after page load) */
+  onUnknownEmployees?: (employeeIds: number[]) => void;
+  /** Called after reconnecting — deltas sent while disconnected were missed */
+  onReconnect?: () => void;
+  onLocationOff?: (employeeId: number) => void;
+  onLocationOn?: (employeeId: number) => void;
+  onOffline?: (employeeId: number) => void;
+  onOnline?: (employeeId: number) => void;
 }
 
 interface UseLiveTrackingSocketReturn {
@@ -37,8 +37,8 @@ interface UseLiveTrackingSocketReturn {
 
 export function useLiveTrackingSocket({
   token,
-  employees,
-  setEmployees,
+  onUnknownEmployees,
+  onReconnect,
   onLocationOff,
   onLocationOn,
   onOffline,
@@ -47,36 +47,18 @@ export function useLiveTrackingSocket({
   const socketRef = useRef<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
 
-  // Keep state and callbacks in stable refs so socket effect NEVER tears down on re-render
-  const employeesRef = useRef<LiveEmployee[]>(employees);
+  // Keep callbacks in stable refs so the socket effect NEVER tears down on re-render
+  const callbacksRef = useRef({ onUnknownEmployees, onReconnect, onLocationOff, onLocationOn, onOffline, onOnline });
   useEffect(() => {
-    employeesRef.current = employees;
-  }, [employees]);
-
-  const callbacksRef = useRef({
-    setEmployees,
-    onLocationOff,
-    onLocationOn,
-    onOffline,
-    onOnline,
+    callbacksRef.current = { onUnknownEmployees, onReconnect, onLocationOff, onLocationOn, onOffline, onOnline };
   });
 
   useEffect(() => {
-    callbacksRef.current = {
-      setEmployees,
-      onLocationOff,
-      onLocationOn,
-      onOffline,
-      onOnline,
-    };
-  });
-
-  useEffect(() => {
-    const activeToken = token || localStorage.getItem('accessToken') || 'active_session';
+    const activeToken = token || localStorage.getItem('accessToken');
+    if (!activeToken) return;
 
     const socket = io(`${SOCKET_URL}/live-tracking`, {
       auth: { token: activeToken },
-      query: { token: activeToken },
       transports: ['websocket', 'polling'],
       reconnection: true,
       reconnectionAttempts: Infinity,
@@ -85,9 +67,12 @@ export function useLiveTrackingSocket({
     });
 
     socketRef.current = socket;
+    let connectedBefore = false;
 
     socket.on('connect', () => {
       setIsConnected(true);
+      if (connectedBefore) callbacksRef.current.onReconnect?.();
+      connectedBefore = true;
       if (import.meta.env.DEV) {
         console.info('[LiveTrackingSocket] Connected to /live-tracking');
       }
@@ -107,102 +92,32 @@ export function useLiveTrackingSocket({
       }
     });
 
-    // ── Location updated ──────────────────────────────────────────────────────
-    // ✅ FIXED: Now uses server-generated routed trails instead of client-side OSRM
-    socket.on('tracking:location_updated', (event: TrackingLocationUpdatedEvent) => {
-      callbacksRef.current.setEmployees((prev) =>
-        prev.map((emp) => {
-          if (emp.employee_id !== event.employee_id) return emp;
-
-          return {
-            ...emp,
-            latitude: Number(event.latitude),
-            longitude: Number(event.longitude),
-            speed: event.speed ?? emp.speed,
-            heading: event.heading ?? emp.heading,
-            accuracy: event.accuracy ?? emp.accuracy,
-            location_status: event.location_status ?? emp.location_status,
-            connection_status: event.connection_status ?? emp.connection_status,
-            last_ping_at: event.last_ping_at ?? emp.last_ping_at,
-            // Keep existing trail/breaks - will be updated by routed_trail_updated event
-          };
-        })
-      );
-    });
-
-    // ── Routed Trail Updated (Server-generated routes like Swiggy) ─────────────
-    // New event from server with real-time routed polylines
-    socket.on('tracking:routed_trail_updated', (event: any) => {
-      callbacksRef.current.setEmployees((prev) =>
-        prev.map((emp) => {
-          if (emp.employee_id !== event.employee_id) return emp;
-
-          // Defensive: never let an update SHRINK today's line — a stale/partial
-          // broadcast (e.g. right after a socket reconnect) should never erase an
-          // already-drawn portion of the route, so always keep the longer trail.
-          const incoming = event.routedTrail || [];
-          const routedTrail = incoming.length >= (emp.routeTrail?.length || 0) ? incoming : emp.routeTrail;
-          const updatedBreaks = detectBreakPoints(routedTrail || []);
-
-          return {
-            ...emp,
-            routeTrail: routedTrail,
-            breakPoints: updatedBreaks,
-          };
-        })
-      );
+    // ── Location deltas (batched) → live store only ──────────────────────────
+    socket.on('tracking:locations', (deltas: LocationDelta[]) => {
+      if (!Array.isArray(deltas) || deltas.length === 0) return;
+      const unknown = liveTrackingStore.applyDeltas(deltas);
+      if (unknown.length) callbacksRef.current.onUnknownEmployees?.([...new Set(unknown)]);
     });
 
     // ── Location status changed ───────────────────────────────────────────────
     socket.on('tracking:location_status_changed', (event: TrackingStatusChangedEvent) => {
-      const emp = employeesRef.current.find((e) => e.employee_id === event.employee_id);
-
-      callbacksRef.current.setEmployees((prev) =>
-        prev.map((e) =>
-          e.employee_id === event.employee_id
-            ? {
-                ...e,
-                location_status: event.location_status ?? e.location_status,
-                connection_status: event.connection_status ?? e.connection_status,
-              }
-            : e
-        )
-      );
-
-      if (event.location_status === 'OFF' && callbacksRef.current.onLocationOff && emp) {
-        callbacksRef.current.onLocationOff(event.employee_id, emp.name);
-      }
-      if (event.location_status === 'ON' && callbacksRef.current.onLocationOn && emp) {
-        callbacksRef.current.onLocationOn(event.employee_id, emp.name);
-      }
+      const known = Boolean(liveTrackingStore.get(event.employee_id));
+      liveTrackingStore.setStatus(event.employee_id, {
+        location_status: event.location_status,
+        connection_status: event.connection_status,
+      });
+      if (!known) return;
+      if (event.location_status === 'OFF') callbacksRef.current.onLocationOff?.(event.employee_id);
+      if (event.location_status === 'ON') callbacksRef.current.onLocationOn?.(event.employee_id);
     });
 
     // ── Connection status changed ─────────────────────────────────────────────
     socket.on('tracking:status_changed', (event: TrackingStatusChangedEvent) => {
-      const emp = employeesRef.current.find((e) => e.employee_id === event.employee_id);
-
-      callbacksRef.current.setEmployees((prev) =>
-        prev.map((e) =>
-          e.employee_id === event.employee_id
-            ? {
-                ...e,
-                connection_status: event.connection_status ?? e.connection_status,
-              }
-            : e
-        )
-      );
-
-      if (event.connection_status === 'OFFLINE' && callbacksRef.current.onOffline && emp) {
-        callbacksRef.current.onOffline(event.employee_id, emp.name);
-      }
-      if (event.connection_status === 'ONLINE' && callbacksRef.current.onOnline && emp) {
-        callbacksRef.current.onOnline(event.employee_id, emp.name);
-      }
-    });
-
-    // ── Snapshot ──────────────────────────────────────────────────────────────
-    socket.on('tracking:snapshot', (data: LiveEmployee[]) => {
-      callbacksRef.current.setEmployees(data);
+      const known = Boolean(liveTrackingStore.get(event.employee_id));
+      liveTrackingStore.setStatus(event.employee_id, { connection_status: event.connection_status });
+      if (!known) return;
+      if (event.connection_status === 'OFFLINE') callbacksRef.current.onOffline?.(event.employee_id);
+      if (event.connection_status === 'ONLINE') callbacksRef.current.onOnline?.(event.employee_id);
     });
 
     return () => {

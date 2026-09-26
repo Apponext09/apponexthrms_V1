@@ -6,8 +6,10 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import * as maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
+import '../map/maplibreWorker';
 import { X, Play, Pause, RotateCcw, ChevronLeft, ChevronRight, Loader2, Navigation } from 'lucide-react';
 import { fetchRouteHistory } from '../api/livetrackingApi';
+import { localDateStr, shiftDateStr } from '../utils/dates';
 import type { LiveEmployee, RoutePoint } from '../types/livetracking.types';
 
 // Fix for Vite bundling — not needed with MapLibre, kept as no-op for safety
@@ -274,10 +276,10 @@ const PlaybackMap: React.FC<PlaybackMapProps> = ({
         paint: { 'line-color': '#64748b', 'line-width': 4, 'line-opacity': 0.45, 'line-dasharray': [2, 4] },
       });
 
-      // Played path source (animated theme trail: Dark Black in Light mode, White in Dark mode)
+      // Played path source (animated theme trail: Pure Black in Light mode, White in Dark mode)
       const isDark = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
-      const lineColor = isDark ? '#ffffff' : '#0f172a';
-      const glowColor = isDark ? 'rgba(255, 255, 255, 0.25)' : 'rgba(15, 23, 42, 0.2)';
+      const lineColor = isDark ? '#ffffff' : '#000000';
+      const glowColor = isDark ? 'rgba(255, 255, 255, 0.25)' : 'rgba(0, 0, 0, 0.2)';
 
       map.addSource('played-path', {
         type: 'geojson',
@@ -498,7 +500,7 @@ interface Props {
 const SPEEDS = [1, 2, 4, 8];
 
 export const RoutePlaybackModal: React.FC<Props> = ({ employee, onClose }) => {
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(localDateStr());
   const [rawRoute, setRawRoute] = useState<RoutePoint[]>([]);
   const [interpolatedRoute, setInterpolatedRoute] = useState<RoutePoint[]>([]);
   const [loading, setLoading] = useState(false);
@@ -517,7 +519,12 @@ export const RoutePlaybackModal: React.FC<Props> = ({ employee, onClose }) => {
       let pointsToUse: RoutePoint[] = [];
 
       if (data && data.length >= 2) {
-        pointsToUse = data;
+        // Breadcrumbs are raw GPS; follow the road-snapped point where one exists
+        pointsToUse = data.map((p) =>
+          p.snapped_latitude != null && p.snapped_longitude != null
+            ? { ...p, latitude: Number(p.snapped_latitude), longitude: Number(p.snapped_longitude) }
+            : p
+        );
       } else if (employee.routeTrail && employee.routeTrail.length >= 2) {
         pointsToUse = employee.routeTrail;
       }
@@ -606,9 +613,7 @@ export const RoutePlaybackModal: React.FC<Props> = ({ employee, onClose }) => {
 
   // Date navigation
   const shiftDate = (days: number) => {
-    const d = new Date(date);
-    d.setDate(d.getDate() + days);
-    setDate(d.toISOString().slice(0, 10));
+    setDate(shiftDateStr(date, days));
   };
 
   return (
@@ -645,7 +650,7 @@ export const RoutePlaybackModal: React.FC<Props> = ({ employee, onClose }) => {
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
-            max={new Date().toISOString().slice(0, 10)}
+            max={localDateStr()}
             className="bg-background border border-border/80 rounded-xl px-3 py-1.5 text-xs font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 cursor-pointer"
           />
           <button

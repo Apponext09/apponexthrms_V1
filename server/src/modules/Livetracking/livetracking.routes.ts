@@ -32,6 +32,18 @@ router.get('/history/:employeeId', controller.getRouteHistory);
 router.post('/ping', controller.postLocationPing);
 
 /**
+ * POST /api/v1/livetracking/ping/batch
+ * Replay of fixes buffered offline (used when the socket is also down)
+ */
+router.post('/ping/batch', controller.postLocationBatch);
+
+/**
+ * GET /api/v1/livetracking/trails?employee_ids=1,2&date=YYYY-MM-DD&max_points=300
+ * Today's route for many employees in one request (dashboard seeding)
+ */
+router.get('/trails', controller.getTrails);
+
+/**
  * GET /api/v1/livetracking/sessions?date=YYYY-MM-DD
  * All employee session summaries for a date (HR/Admin only)
  */
@@ -41,6 +53,8 @@ router.get('/sessions', controller.getSessionsForDate);
  * GET /api/v1/livetracking/sessions/:employeeId?from=YYYY-MM-DD&to=YYYY-MM-DD
  * Session history for a specific employee (HR/Admin only)
  */
+router.get('/sessions/:employeeId', controller.getEmployeeSessions);
+
 /**
  * POST /api/v1/livetracking/save-location
  * Explicitly save/pin employee location & auto-update location_walk history

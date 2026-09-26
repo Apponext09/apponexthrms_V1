@@ -31,6 +31,31 @@ export async function fetchRouteHistory(
 }
 
 /**
+ * Fetch one day's route for many employees in a single request (dashboard seeding).
+ * Returns compact [latitude, longitude, epochMs] tuples per employee id,
+ * thinned server-side and capped at maxPoints (latest points kept).
+ */
+export async function fetchLiveTrails(
+  employeeIds: number[],
+  date: string,
+  maxPoints = 300
+): Promise<Record<number, Array<[number, number, number]>>> {
+  if (employeeIds.length === 0) return {};
+  const res = await apiClient.get('/livetracking/trails', {
+    params: { employee_ids: employeeIds.join(','), date, max_points: maxPoints },
+  });
+  return (res.data?.data || {}) as Record<number, Array<[number, number, number]>>;
+}
+
+/**
+ * HTTP replay of fixes buffered while offline (used when the socket is also down).
+ */
+export async function pingLocationBatchHttp(points: object[]): Promise<{ accepted: number; rejected: number }> {
+  const res = await apiClient.post('/livetracking/ping/batch', { points });
+  return { accepted: Number(res.data?.accepted ?? 0), rejected: Number(res.data?.rejected ?? 0) };
+}
+
+/**
  * Fetch all employee session summaries for a specific date (HR/Admin only).
  * @param date - 'YYYY-MM-DD' format date string
  */
