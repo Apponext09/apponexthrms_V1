@@ -4,11 +4,13 @@ import { resolveTenant } from '../../common/middleware/resolveTenant';
 import { asyncHandler } from '../../common/utils/asyncHandler';
 import { requirePermission } from '../../common/middleware/requirePermission';
 import { PayrollController } from './controllers/PayrollController';
+import { requireMenuModule } from '../rbac/requireMenuAccess';
 
 const router = Router();
 const controller = new PayrollController();
 
 router.use(authenticate, resolveTenant);
+router.use(requireMenuModule('payroll'));
 
 // Attendance calendar for the Process Payroll "View Attendance" modal
 router.get('/attendance-calendar', asyncHandler((req, res) => controller.getAttendanceCalendar(req, res)));

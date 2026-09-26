@@ -3,6 +3,7 @@ import { useAuthStore } from '@/features/auth/store/authStore';
 import { useEmployee } from '../hooks/useEmployees';
 import { useEmployeeProfessionalInfo } from '../hooks/useEmployeeProfile';
 import { useProfileEditPermission } from '../hooks/useProfileEditPermission';
+import { useAccessRoles } from '@/features/settings/hooks/useAccessRoles';
 import { apiClient } from '@/config/api';
 
 import {
@@ -320,7 +321,7 @@ function resolveEffectiveRole(...values: unknown[]): string {
     .flatMap((value) => Array.isArray(value) ? value : [value])
     .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
     .map((value) => value.trim().toLowerCase().replace(/[\s-]+/g, '_'));
-  return candidates.sort((a, b) => (ROLE_PRIORITY[b] ?? 0) - (ROLE_PRIORITY[a] ?? 0))[0] || 'employee';
+  return candidates.sort((a, b) => (ROLE_PRIORITY[b] ?? 30) - (ROLE_PRIORITY[a] ?? 30))[0] || 'employee';
 }
 
 export default function ProfilePage() {
@@ -330,6 +331,7 @@ export default function ProfilePage() {
   const { employee, isLoading, refetch } = useEmployee('me');
   const resolvedEmpId = Number(employee?.id || 0);
   const { professionalInfo } = useEmployeeProfessionalInfo(resolvedEmpId);
+  const { data: accessRoles = [] } = useAccessRoles();
 
   const [activeTab, setActiveTab] = useState<
     'details' | 'payroll' | 'documents' | 'statutory' | 'checkin' | 'roles'
@@ -511,7 +513,7 @@ export default function ProfilePage() {
     intern: 'Intern',
     employee: 'Employee',
   };
-  const roleLabel = ROLE_LABEL_MAP[roleCode] || (roleCode ? roleCode.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Employee');
+  const roleLabel = accessRoles.find((role) => role.code === roleCode)?.name || ROLE_LABEL_MAP[roleCode] || (roleCode ? roleCode.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Employee');
 
   const jobTitle = (professionalInfo as any)?.designation?.name || (professionalInfo as any)?.specialization || (activeEmp as any)?.jobTitle || roleLabel;
   const department = activeEmp.department || (activeEmp as any)?.department_name || (user as any)?.departmentName || 'Engineering & Product';

@@ -62,8 +62,27 @@ export class OrgHierarchyService {
    * Update hierarchy rules for an organization
    */
   async saveHierarchyRules(ctx: TenantContext, rules: HierarchyRuleBackend[]): Promise<void> {
+    if (!Array.isArray(rules) || rules.length === 0) {
+      throw new ValidationError('At least one organization hierarchy rule is required.');
+    }
+    const normalizedRules = rules.map((rule, index) => {
+      const designationOrRole = String(rule?.designationOrRole || '').trim();
+      const hierarchyLevel = Number(rule?.hierarchyLevel);
+      if (!designationOrRole || !Number.isFinite(hierarchyLevel) || hierarchyLevel < 1) {
+        throw new ValidationError(`Hierarchy rule ${index + 1} must include a position name and a valid level.`);
+      }
+      return {
+        id: String(rule.id || `rule-${designationOrRole.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`),
+        designationOrRole,
+        allowedParentDesignations: Array.from(new Set((Array.isArray(rule.allowedParentDesignations) ? rule.allowedParentDesignations : [])
+          .map((parent) => String(parent).trim())
+          .filter(Boolean))),
+        ...(rule.departmentScope ? { departmentScope: String(rule.departmentScope).trim() } : {}),
+        hierarchyLevel,
+      };
+    });
     const db = getKnex();
-    const settingValue = JSON.stringify(rules);
+    const settingValue = JSON.stringify(normalizedRules);
 
     const existing = await db('organization_settings')
       .where({
@@ -138,12 +157,6 @@ export class OrgHierarchyService {
 
     // Target is Org Admin / Top Root / null
     if (!targetManagerId || targetManagerId === 999999) {
-      if (sourcePos === 'Employee') {
-        throw new ValidationError('This Employee cannot be assigned to the selected position. Employees can only report directly to a Team Leader.');
-      }
-      if (sourcePos === 'Intern') {
-        throw new ValidationError('This Intern cannot be assigned to the selected position. Interns can only report directly to an Employee.');
-      }
       const rules = await this.getHierarchyRules(ctx);
       const rule = rules.find((r) => r.designationOrRole.toLowerCase() === sourcePos.toLowerCase()) ||
         DEFAULT_BACKEND_HIERARCHY_RULES.find((r) => r.designationOrRole.toLowerCase() === sourcePos.toLowerCase());
@@ -204,20 +217,6 @@ export class OrgHierarchyService {
           throw new ValidationError('Cross-department reporting is not allowed. Employees can only report to managers within their own department.');
         }
       }
-    }
-
-    if (sourcePos === 'Employee') {
-      if (targetPos === 'Team Leader') {
-        return;
-      }
-      throw new ValidationError('This Employee cannot be assigned to the selected position. Employees can only report directly to a Team Leader.');
-    }
-
-    if (sourcePos === 'Intern') {
-      if (['Employee', 'HR Executive', 'Accountant'].includes(targetPos)) {
-        return;
-      }
-      throw new ValidationError('This Intern cannot be assigned to the selected position. Interns can only report directly to an Employee.');
     }
 
     const rules = await this.getHierarchyRules(ctx);

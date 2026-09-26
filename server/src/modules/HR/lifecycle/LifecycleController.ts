@@ -66,9 +66,9 @@ export class LifecycleController {
   /** Submit a resignation for the authenticated employee only. */
   submitMyResignation = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
-    const { resignationDate, lastWorkingDay, reason } = req.body || {};
-    if (!resignationDate || !lastWorkingDay || !reason?.trim()) {
-      return res.status(400).json({ success: false, message: 'Resignation date, last working day, and reason are required.' });
+    const { subject, resignationDate, lastWorkingDay, reason, description } = req.body || {};
+    if (!subject?.trim() || !resignationDate || !lastWorkingDay || !reason?.trim() || !description?.trim()) {
+      return res.status(400).json({ success: false, message: 'Subject, resignation date, last working day, reason, and description are required.' });
     }
     if (Number.isNaN(new Date(resignationDate).getTime()) || Number.isNaN(new Date(lastWorkingDay).getTime())) {
       return res.status(400).json({ success: false, message: 'Please provide valid resignation and last working dates.' });
@@ -76,8 +76,15 @@ export class LifecycleController {
     if (new Date(lastWorkingDay) < new Date(resignationDate)) {
       return res.status(400).json({ success: false, message: 'Last working day cannot be before the resignation date.' });
     }
-    const result = await this.lifecycleService.submitMyResignation(ctx, { resignationDate, lastWorkingDay, reason: reason.trim() });
+    const result = await this.lifecycleService.submitMyResignation(ctx, { subject: subject.trim(), resignationDate, lastWorkingDay, reason: reason.trim(), description: description.trim() });
     res.status(201).json({ success: true, data: result });
+  });
+
+  listPendingResignations = asyncHandler(async (req: Request, res: Response) => res.json({ success: true, data: await this.lifecycleService.listPendingResignations(req.ctx!) }));
+  reviewResignation = asyncHandler(async (req: Request, res: Response) => {
+    const decision = req.body?.decision;
+    if (!['approved', 'rejected'].includes(decision)) return res.status(400).json({ success: false, message: 'Decision must be approved or rejected.' });
+    res.json({ success: true, data: await this.lifecycleService.reviewResignation(req.ctx!, Number(req.params.id), decision, String(req.body?.reviewComment || '')) });
   });
 
   transferEmployee = asyncHandler(async (req: Request, res: Response) => {

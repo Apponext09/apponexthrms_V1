@@ -16,6 +16,9 @@ import { CSS } from "@dnd-kit/utilities";
 import { useEmployees } from "@/features/employee/hooks/useEmployees";
 import { useDesignations } from "@/features/settings/hooks/useDesignations";
 import { EmployeeCreateModal } from "@/features/employee/components/EmployeeCreateModal";
+import { OrgHierarchyConfigModal } from "../components/OrgHierarchyConfigModal";
+import type { HierarchyRule } from "../types/orgHierarchy";
+import { DEFAULT_HIERARCHY_RULES, validateDragAndDrop } from "../utils/orgHierarchyEngine";
 import { useAuthStore } from "@/features/auth/store/authStore";
 import { apiClient } from "@/config/api";
 import { Button } from "@/components/ui/button";
@@ -581,6 +584,8 @@ export function OrgStructurePage() {
   const [isUpdatingManager, setIsUpdatingManager] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [isHierarchyRulesModalOpen, setIsHierarchyRulesModalOpen] = useState(false);
+  const [hierarchyRules, setHierarchyRules] = useState<HierarchyRule[]>(DEFAULT_HIERARCHY_RULES);
 
   // Admin Setting: Export Chart Visibility for Employees
   const [isExportEnabledForEmployees, setIsExportEnabledForEmployees] =
@@ -608,6 +613,18 @@ export function OrgStructurePage() {
   useEffect(() => {
     setLocalEmps(employees || null);
   }, [employees]);
+
+  useEffect(() => {
+    if (!isAdminOrManager) return;
+    let isActive = true;
+    apiClient.get("/employees/org-hierarchy/rules")
+      .then((response) => {
+        const rules = response.data?.data;
+        if (isActive && Array.isArray(rules) && rules.length) setHierarchyRules(rules);
+      })
+      .catch(() => toast.error("Could not load organization hierarchy settings."));
+    return () => { isActive = false; };
+  }, [isAdminOrManager]);
 
   useEffect(() => {
     if (selectedEmp) {
@@ -674,6 +691,17 @@ export function OrgStructurePage() {
     const targetIsAdmin: boolean = !!over.data.current?.isAdmin;
 
     if (!activeEmp || !targetEmp || activeEmp.id === targetEmp.id) return;
+
+    const validation = validateDragAndDrop(
+      activeEmp,
+      { emp: targetEmp, isAdmin: targetIsAdmin },
+      hierarchyRules,
+      localEmps || (employees as Employee[]) || [],
+    );
+    if (!validation.isValid) {
+      toast.error(validation.errorMessage || "This move violates the organization hierarchy.");
+      return;
+    }
 
     setReassignConfirm({ activeEmp, targetEmp, targetIsAdmin });
   };
@@ -1118,29 +1146,43 @@ export function OrgStructurePage() {
     }
   };
 
-  const handleExportPNG = async () => {
-    if (!exportTreeRef.current) return;
+  const captureFullTree = async () => {
+    if (!exportTreeRef.current) throw new Error("Organization chart is not ready.");
+    // Capture an untransformed clone outside the scrollable chart viewport. This
+    // prevents the viewport from clipping wide/deep reporting trees.
+    const previousCollapsedMap = collapsedMap;
+    if (Object.values(previousCollapsedMap).some(Boolean)) {
+      setCollapsedMap({});
+      await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+    }
+    const clone = exportTreeRef.current.cloneNode(true) as HTMLDivElement;
+    clone.style.cssText = "position:fixed;left:0;top:0;z-index:-1;width:max-content;min-width:0;max-width:none;padding:48px;background:#fff;color:#0f172a;visibility:visible;pointer-events:none;overflow:visible;border-radius:0;";
+    document.body.appendChild(clone);
     try {
-      toast.info("Generating high-resolution PNG of entire org structure...");
-      const prevScale = scale;
-      const prevPan = pan;
-      setScale(1);
-      setPan({ x: 0, y: 0 });
-
-      await new Promise((r) => setTimeout(r, 120));
-
-      const targetEl = exportTreeRef.current;
-      const canvas = await html2canvas(targetEl, {
-        scale: 2,
+      await document.fonts?.ready;
+      const width = Math.ceil(clone.scrollWidth);
+      const height = Math.ceil(clone.scrollHeight);
+      const captureScale = Math.min(3, Math.max(2, 12000 / Math.max(width, height)));
+      return await html2canvas(clone, {
+        scale: captureScale,
         useCORS: true,
         backgroundColor: "#ffffff",
         logging: false,
-        width: targetEl.scrollWidth + 40,
-        height: targetEl.scrollHeight + 40,
+        width,
+        height,
+        windowWidth: width,
+        windowHeight: height,
       });
+    } finally {
+      clone.remove();
+      if (Object.values(previousCollapsedMap).some(Boolean)) setCollapsedMap(previousCollapsedMap);
+    }
+  };
 
-      setScale(prevScale);
-      setPan(prevPan);
+  const handleExportPNG = async () => {
+    try {
+      toast.info("Generating high-resolution PNG of entire org structure...");
+      const canvas = await captureFullTree();
 
       const image = canvas.toDataURL("image/png");
       const link = document.createElement("a");
@@ -1155,28 +1197,9 @@ export function OrgStructurePage() {
   };
 
   const handleExportPDF = async () => {
-    if (!exportTreeRef.current) return;
     try {
       toast.info("Preparing PDF document of entire org structure...");
-      const prevScale = scale;
-      const prevPan = pan;
-      setScale(1);
-      setPan({ x: 0, y: 0 });
-
-      await new Promise((r) => setTimeout(r, 120));
-
-      const targetEl = exportTreeRef.current;
-      const canvas = await html2canvas(targetEl, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: "#ffffff",
-        logging: false,
-        width: targetEl.scrollWidth + 40,
-        height: targetEl.scrollHeight + 40,
-      });
-
-      setScale(prevScale);
-      setPan(prevPan);
+      const canvas = await captureFullTree();
 
       const imgData = canvas.toDataURL("image/png");
 
@@ -1189,13 +1212,13 @@ export function OrgStructurePage() {
               <title>Full Organization Structure Hierarchy</title>
               <style>
                 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');
-                @page { size: A4 landscape; margin: 10mm; }
+                @page { size: ${Math.max(11, Math.ceil(canvas.width / 96 + 0.5))}in ${Math.max(8.5, Math.ceil(canvas.height / 96 + 1.1))}in; margin: 0.25in; }
                 body { margin: 0; padding: 15px; font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif; background: #ffffff; text-align: center; }
                 .header { margin-bottom: 15px; }
                 .header h2 { margin: 0; font-size: 20px; color: #0B2545; }
                 .header p { margin: 4px 0 0; font-size: 12px; color: #5B7089; }
-                .img-container { width: 100%; display: flex; justify-content: center; }
-                img { max-width: 100%; height: auto; border: 1px solid #D5E3F2; border-radius: 12px; }
+                .img-container { width: max-content; display: inline-block; }
+                img { display: block; width: ${canvas.width}px; height: ${canvas.height}px; border: 1px solid #D5E3F2; border-radius: 12px; }
               </style>
             </head>
             <body>
@@ -1537,6 +1560,25 @@ export function OrgStructurePage() {
                 <div className="flex items-center justify-between gap-4 p-3.5 bg-muted/50 border border-border rounded-xl">
                   <div className="space-y-0.5 max-w-[280px]">
                     <label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                      <ShieldCheck className="w-3.5 h-3.5 text-primary" />
+                      Reporting hierarchy rules
+                    </label>
+                    <p className="text-[11px] text-muted-foreground">
+                      Define which positions can be selected as an employee’s direct manager.
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className={`h-8 text-xs font-semibold ${BTN_OUTLINE}`}
+                    onClick={() => { setIsSettingsModalOpen(false); setIsHierarchyRulesModalOpen(true); }}
+                  >
+                    Configure rules
+                  </Button>
+                </div>
+                <div className="flex items-center justify-between gap-4 p-3.5 bg-muted/50 border border-border rounded-xl">
+                  <div className="space-y-0.5 max-w-[280px]">
+                    <label className="text-xs font-bold text-foreground flex items-center gap-1.5">
                       <Eye className="w-3.5 h-3.5 text-primary" />
                       Allow employee chart export
                     </label>
@@ -1576,6 +1618,16 @@ export function OrgStructurePage() {
             </DialogContent>
           </Dialog>
         )}
+
+        <OrgHierarchyConfigModal
+          open={isHierarchyRulesModalOpen}
+          onClose={() => setIsHierarchyRulesModalOpen(false)}
+          rules={hierarchyRules}
+          onSaveRules={async (rules) => {
+            await apiClient.put("/employees/org-hierarchy/rules", { rules });
+            setHierarchyRules(rules);
+          }}
+        />
 
         {/* ─── Reassign confirmation dialog ─── */}
         {reassignConfirm && (

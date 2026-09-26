@@ -131,17 +131,15 @@ export function HRDashboardPage() {
         <div className="space-y-1">
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-2xl font-black tracking-tight text-foreground flex items-center gap-2">
-              <Crown className="w-6 h-6 text-primary" />
-              {companyName} — HR Dashboard
+              
+              {companyName} - HR Dashboard
             </h1>
-            <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 font-bold text-xs px-2.5 py-0.5">
-              HR Operations Control
-            </Badge>
+           
           </div>
           <p className="text-xs text-muted-foreground flex flex-wrap items-center gap-2">
             <MapPin className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-            <span>Headquarters: <strong className="text-foreground font-semibold">{primaryLocation}</strong></span>
-            <span className="text-muted-foreground">• Scope: <strong className="text-primary font-semibold">{roleInfo.formattedRoleDept}</strong></span>
+            <span>Location: <strong className="text-foreground font-semibold">{primaryLocation}</strong></span>
+            
           </p>
         </div>
 

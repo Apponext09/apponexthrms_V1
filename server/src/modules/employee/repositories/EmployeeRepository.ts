@@ -101,6 +101,8 @@ export interface Employee {
   documentPolicyAccepted?: boolean;
   document_policy_accepted_at?: string | null;
   documentPolicyAcceptedAt?: string | null;
+  attendance_access_settings?: string | null;
+  attendanceAccessSettings?: string | null;
 }
 
 export class EmployeeRepository extends BaseRepository<Employee> {
@@ -184,6 +186,23 @@ export class EmployeeRepository extends BaseRepository<Employee> {
       }
     }
 
+    // A single-employee profile fetch does not go through list(), so resolve
+    // the assigned job location here as well.
+    const locationId = (employee as any).currentLocationId || (employee as any).current_location_id;
+    if (locationId) {
+      const location = await this.db('locations')
+        .where('organization_id', ctx.organizationId)
+        .where('id', locationId)
+        .select('name', 'location_name')
+        .first();
+      if (location) {
+        const locationName = (location as any).name || (location as any).locationName || (location as any).location_name;
+        (employee as any).location = locationName;
+        (employee as any).locationName = locationName;
+        (employee as any).location_name = locationName;
+      }
+    }
+
     const desigId = (employee as any).currentDesignationId || (employee as any).current_designation_id;
     if (desigId) {
       const desig = await this.db('designations')
@@ -255,7 +274,7 @@ export class EmployeeRepository extends BaseRepository<Employee> {
           employee: 1,
         };
         for (const ur of userRoles) {
-          const priority = rolePriority[ur.code] || 0;
+          const priority = rolePriority[ur.code] ?? 2.5;
           if (priority > highestPriority) {
             highestPriority = priority;
             highestRole = ur.code;
@@ -263,7 +282,7 @@ export class EmployeeRepository extends BaseRepository<Employee> {
         }
       }
       (employee as any).accessRole = highestRole;
-      const roleList = userRoles.map((ur: any) => ur.name || ur.code);
+      const roleList = userRoles.map((ur: any) => ur.code);
       (employee as any).assignedRoles = roleList;
       (employee as any).roles = roleList;
     }
@@ -539,7 +558,6 @@ export class EmployeeRepository extends BaseRepository<Employee> {
             this.where('user_roles.organization_id', ctx.organizationId).orWhereNull('user_roles.organization_id');
           })
           .whereIn('user_roles.user_id', userIds)
-          .whereIn('roles.code', ['employee', 'team_lead', 'hr', 'hr_manager', 'department_head', 'cto', 'cfo', 'coo', 'cxo', 'intern', 'consultant', 'finance'])
           .select('user_roles.user_id', 'roles.code');
 
         const rolePriority: Record<string, number> = {
@@ -562,8 +580,8 @@ export class EmployeeRepository extends BaseRepository<Employee> {
         for (const ur of userRoles) {
           const uId = Number((ur as any).userId || ur.user_id);
           const currentRole = roleMap.get(uId);
-          const currentPriority = currentRole ? (rolePriority[currentRole] || 0) : 0;
-          const newPriority = rolePriority[ur.code] || 0;
+          const currentPriority = currentRole ? (rolePriority[currentRole] ?? 2.5) : 0;
+          const newPriority = rolePriority[ur.code] ?? 2.5;
           if (newPriority > currentPriority) {
             roleMap.set(uId, ur.code);
           }

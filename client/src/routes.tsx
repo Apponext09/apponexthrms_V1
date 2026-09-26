@@ -1,6 +1,7 @@
 import React, { Suspense, lazy } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore, useAuthHydrated, hasStoredAccessToken } from './features/auth/store/authStore';
+import { firstGrantedPage, useMenuAccess } from './features/access/useMenuAccess';
 
 // ── Portal Route Modules ──────────────────────────────────────────────────────
 import { adminRoutes }        from './routes/admin.routes';
@@ -33,6 +34,14 @@ function PageLoader() {
   );
 }
 
+function RedirectToGrantedPage({ preferred }: { preferred: string }) {
+  const { access, ready, error, canAccessPath } = useMenuAccess();
+  if (error) return <Navigate to="/unauthorized" replace />;
+  if (!ready) return <PageLoader />;
+  const firstPage = firstGrantedPage(access?.paths ?? []);
+  return <Navigate to={canAccessPath(preferred) ? preferred : firstPage ?? '/unauthorized'} replace />;
+}
+
 // ── Root Redirect — routes user to their portal based on role ─────────────────
 function RootRedirect() {
   const { isAuthenticated, user } = useAuthStore();
@@ -43,7 +52,7 @@ function RootRedirect() {
   if (!user) return <PageLoader />;
 
   const roles = user?.roles || [];
-  const accessRole = String((user as any)?.accessRole || (user as any)?.role || '').toLowerCase();
+  const accessRole = String(user.accessRole || user.role || '').toLowerCase();
   const userRolesNorm = roles.map((r: string) => String(r).toLowerCase());
 
   if (userRolesNorm.includes('super_admin') || accessRole === 'super_admin')
@@ -55,7 +64,7 @@ function RootRedirect() {
     accessRole === 'finance' ||
     accessRole === 'finance_manager'
   ) {
-    return <Navigate to="/finance/dashboard" replace />;
+    return <RedirectToGrantedPage preferred="/finance/dashboard" />;
   }
 
   // CEO and HR (organization_admin, ceo, hr_manager, hr_admin, hr) — all go to Admin portal
@@ -63,32 +72,32 @@ function RootRedirect() {
     userRolesNorm.includes('organization_admin') ||
     userRolesNorm.includes('ceo') ||
     ['organization_admin', 'ceo'].includes(accessRole)
-  ) return <Navigate to="/dashboard" replace />;
+  ) return <RedirectToGrantedPage preferred="/dashboard" />;
 
   if (
     userRolesNorm.includes('hr') ||
     userRolesNorm.includes('hr_admin') ||
     userRolesNorm.includes('hr_manager') ||
     ['hr', 'hr_admin', 'hr_manager'].includes(accessRole)
-  ) return <Navigate to="/hr/dashboard" replace />;
+  ) return <RedirectToGrantedPage preferred="/hr/dashboard" />;
 
   if (
     userRolesNorm.includes('department_head') ||
     userRolesNorm.includes('manager') ||
     accessRole === 'department_head' ||
     accessRole === 'manager'
-  ) return <Navigate to="/manager/dashboard" replace />;
+  ) return <RedirectToGrantedPage preferred="/manager/dashboard" />;
 
   if (userRolesNorm.includes('team_lead') || accessRole === 'team_lead')
-    return <Navigate to="/team-lead/dashboard" replace />;
+    return <RedirectToGrantedPage preferred="/team-lead/dashboard" />;
 
   if (userRolesNorm.includes('intern') || accessRole === 'intern')
-    return <Navigate to="/intern/dashboard" replace />;
+    return <RedirectToGrantedPage preferred="/intern/dashboard" />;
 
   if (userRolesNorm.includes('consultant') || accessRole === 'consultant')
-    return <Navigate to="/consultant/dashboard" replace />;
+    return <RedirectToGrantedPage preferred="/consultant/dashboard" />;
 
-  return <Navigate to="/employee/dashboard" replace />;
+  return <RedirectToGrantedPage preferred="/employee/dashboard" />;
 }
 
 // ── App Routes ────────────────────────────────────────────────────────────────

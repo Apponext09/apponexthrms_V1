@@ -36,7 +36,7 @@ import {
 // ── Static icon registry — only icons referenced in navigation config ────────
 // This replaces `import * as LucideIcons` (which imports all ~1000 icons).
 // Vite/Rollup tree-shakes this object, keeping bundle size minimal.
-const ICON_REGISTRY: Record<string, React.ComponentType<{ className?: string }>> = {
+export const ICON_REGISTRY: Record<string, React.ComponentType<{ className?: string }>> = {
   LayoutDashboard, Users, RefreshCw, GitBranch, BarChart3, Calendar, FilePlus,
   Briefcase, UserCheck, FileText, ClipboardList, Clock, MapPin, Wifi, Coffee,
   ScanFace, Palmtree, FileBarChart, CheckSquare, DollarSign, CreditCard,
@@ -111,7 +111,7 @@ export function Sidebar({ open, onOpenChange, onNavigate }: SidebarProps) {
       'notification-templates', 'notification_templates',
       'notification-merge-codes', 'notification_merge_codes',
       'break', 'general-shift', 'general_shift', 'roster-shift', 'roster_shift',
-      'holiday', 'offer-templates', 'roles-responsibility',
+      'holiday', 'offer-templates', 'access-roles',
       'kra', 'resource-plan', 'employment_status', 'employment_type',
       'custom_company', 'test1',
     ]);
@@ -141,7 +141,9 @@ export function Sidebar({ open, onOpenChange, onNavigate }: SidebarProps) {
   // Removed location.pathname from deps: pathname changes no longer trigger
   // the heavy getVisibleSections() computation on every navigation.
   const visibleSections = useMemo(
-    () => getVisibleSections(roles, licensedFeatures, attendanceMode, liveTrackingEnabled, enabledModules),
+    // Role grants are enforced by SectionRail. Build the complete admin menu here
+    // so a newly created role is not hidden by legacy hardcoded minRoles rules.
+    () => getVisibleSections([...roles, 'organization_admin', 'hr'], licensedFeatures, attendanceMode, liveTrackingEnabled, enabledModules),
     [roles, licensedFeatures, attendanceMode, liveTrackingEnabled, enabledModules]
   );
 

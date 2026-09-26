@@ -15,12 +15,40 @@ import {
 import { useAuthStore, useAuthHydrated } from '../store/authStore';
 import { useThemeStore } from '@/features/settings/store/themeStore';
 import hrmsLogo from '@/assests/hrms.png';
+import { apiClient } from '@/lib/api';
+import type { User as AuthUser } from '../store/authStore';
+import { firstGrantedPage } from '@/features/access/useMenuAccess';
+
+function preferredLandingPath(user: AuthUser): string {
+  const roles = new Set([...(user.roles || []), user.accessRole || '', user.role || ''].map((role) => role.toLowerCase()));
+  if (roles.has('super_admin')) return '/superadmin/dashboard';
+  if (roles.has('finance') || roles.has('finance_manager')) return '/finance/dashboard';
+  if (roles.has('organization_admin') || roles.has('ceo')) return '/dashboard';
+  if (roles.has('hr') || roles.has('hr_admin') || roles.has('hr_manager') || roles.has('support')) return '/hr/dashboard';
+  if (roles.has('manager') || roles.has('department_head')) return '/manager/dashboard';
+  if (roles.has('team_lead')) return '/team-lead/dashboard';
+  if (roles.has('intern')) return '/intern/dashboard';
+  if (roles.has('consultant')) return '/consultant/dashboard';
+  return '/employee/dashboard';
+}
+
+async function permittedLandingPath(user: AuthUser): Promise<string> {
+  const preferred = preferredLandingPath(user);
+  if (preferred.startsWith('/superadmin')) return preferred;
+  try {
+    const response = await apiClient.get('/rbac/me/menus');
+    const data = response.data?.data ?? response.data;
+    const paths = (Array.isArray(data?.paths) ? data.paths : []) as string[];
+    return paths.includes(preferred) ? preferred : firstGrantedPage(paths) ?? '/unauthorized';
+  } catch {
+    return preferred;
+  }
+}
 
 export function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -33,29 +61,9 @@ export function LoginPage() {
 
   useEffect(() => {
     if (!authHydrated || !isAuthenticated || !user) return;
-    const roles = user.roles || [];
-    const accessRole = String((user as any)?.accessRole || (user as any)?.role || '').toLowerCase();
-    const userRolesNorm = roles.map((r: string) => String(r).toLowerCase());
-
-    if (userRolesNorm.includes('super_admin') || accessRole === 'super_admin') {
-      navigate('/superadmin/dashboard', { replace: true });
-    } else if (userRolesNorm.includes('finance') || userRolesNorm.includes('finance_manager') || accessRole === 'finance' || accessRole === 'finance_manager') {
-      navigate('/finance/dashboard', { replace: true });
-    } else if (userRolesNorm.includes('organization_admin') || userRolesNorm.includes('ceo') || accessRole === 'organization_admin' || accessRole === 'ceo') {
-      navigate('/dashboard', { replace: true });
-    } else if (userRolesNorm.includes('hr_manager') || userRolesNorm.includes('hr_admin') || accessRole === 'hr_manager' || accessRole === 'hr_admin') {
-      navigate('/hr/dashboard', { replace: true });
-    } else if (userRolesNorm.includes('department_head') || userRolesNorm.includes('manager') || accessRole === 'department_head' || accessRole === 'manager') {
-      navigate('/manager/dashboard', { replace: true });
-    } else if (userRolesNorm.includes('team_lead') || accessRole === 'team_lead') {
-      navigate('/team-lead/dashboard', { replace: true });
-    } else if (userRolesNorm.includes('intern') || accessRole === 'intern') {
-      navigate('/intern/dashboard', { replace: true });
-    } else if (userRolesNorm.includes('consultant') || accessRole === 'consultant') {
-      navigate('/consultant/dashboard', { replace: true });
-    } else {
-      navigate('/employee/dashboard', { replace: true });
-    }
+    let active = true;
+    permittedLandingPath(user).then((path) => { if (active) navigate(path, { replace: true }); });
+    return () => { active = false; };
   }, [authHydrated, isAuthenticated, user, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -67,36 +75,13 @@ export function LoginPage() {
       await login(email, password);
 
       const currentUser = useAuthStore.getState().user;
-      const roles = currentUser?.roles || [];
-      const accessRole = String((currentUser as any)?.accessRole || (currentUser as any)?.role || '').toLowerCase();
-      const userRolesNorm = roles.map((r: string) => String(r).toLowerCase());
-
-      if (userRolesNorm.includes('super_admin') || accessRole === 'super_admin') {
-        navigate('/superadmin/dashboard', { replace: true });
-      } else if (userRolesNorm.includes('finance') || userRolesNorm.includes('finance_manager') || accessRole === 'finance' || accessRole === 'finance_manager') {
-        navigate('/finance/dashboard', { replace: true });
-      } else if (userRolesNorm.includes('organization_admin') || userRolesNorm.includes('ceo') || accessRole === 'organization_admin' || accessRole === 'ceo') {
-        navigate('/dashboard', { replace: true });
-      } else if (userRolesNorm.includes('hr_manager') || userRolesNorm.includes('hr_admin') || userRolesNorm.includes('hr') || accessRole === 'hr_manager' || accessRole === 'hr_admin' || accessRole === 'hr') {
-        navigate('/hr/dashboard', { replace: true });
-      } else if (userRolesNorm.includes('support') || accessRole === 'support') {
-        navigate('/hr/dashboard', { replace: true });
-      } else if (userRolesNorm.includes('department_head') || userRolesNorm.includes('manager') || accessRole === 'department_head' || accessRole === 'manager') {
-        navigate('/manager/dashboard', { replace: true });
-      } else if (userRolesNorm.includes('team_lead') || accessRole === 'team_lead') {
-        navigate('/team-lead/dashboard', { replace: true });
-      } else if (userRolesNorm.includes('intern') || accessRole === 'intern') {
-        navigate('/intern/dashboard', { replace: true });
-      } else if (userRolesNorm.includes('consultant') || accessRole === 'consultant') {
-        navigate('/consultant/dashboard', { replace: true });
-      } else {
-        navigate('/employee/dashboard', { replace: true });
-      }
-    } catch (err: any) {
+      if (currentUser) navigate(await permittedLandingPath(currentUser), { replace: true });
+    } catch (err: unknown) {
+      const failure = err as { response?: { data?: { error?: { message?: string }; message?: string } }; message?: string };
       const serverMsg =
-        err?.response?.data?.error?.message ||
-        err?.response?.data?.message ||
-        err?.message ||
+        failure?.response?.data?.error?.message ||
+        failure?.response?.data?.message ||
+        failure?.message ||
         'Invalid username, employee ID, or password';
       setError(serverMsg);
       setLoading(false);

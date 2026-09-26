@@ -225,10 +225,11 @@ export function DynamicMasterView({ masterIdOrCode, onManageFields }: DynamicMas
       }
 
       if (resolvedMasterId) {
-        const [mDetail, cLists, recRes] = await Promise.all([
+        const [mDetail, cLists, recRes, allMList] = await Promise.all([
           masterBuilderApi.getMasterById(resolvedMasterId),
           masterBuilderApi.getChoiceLists(),
           masterBuilderApi.getRecords(resolvedMasterId, { limit: 100 }),
+          masterBuilderApi.getMasters().catch(() => []),
         ]);
         setMaster(mDetail);
         setChoiceLists(cLists);
@@ -237,46 +238,81 @@ export function DynamicMasterView({ masterIdOrCode, onManageFields }: DynamicMas
 
         // Load lookup records if master has lookup fields
         const lookupFields = (mDetail?.fields || []).filter(
-          (f: any) => (f.fieldType === 'lookup' || f.field_type === 'lookup') && (f.lookupMasterId || f.lookup_master_id)
+          (f: any) =>
+            f.fieldType === 'lookup' || f.field_type === 'lookup'
         );
         if (lookupFields.length > 0) {
-          const map: Record<number, DynamicRecordItem[]> = {};
+          const map: Record<string, DynamicRecordItem[]> = {};
           await Promise.all(
             lookupFields.map(async (lf: any) => {
-              const targetId = lf.lookupMasterId || lf.lookup_master_id;
+              let targetId = Number(lf.lookupMasterId || lf.lookup_master_id || lf.optionsJson?.lookupMasterId || lf.options_json?.lookupMasterId);
+              if (!targetId) {
+                const targetCode = lf.optionsJson?.lookupMasterCode || lf.options_json?.lookupMasterCode || lf.fieldKey || lf.field_name;
+                const found = (allMList || []).find((m: any) => m.code === targetCode || m.name?.toLowerCase() === lf.fieldName?.toLowerCase());
+                if (found) targetId = found.id;
+              }
+              if (!targetId) {
+                // If named Ref or Company, fallback to Company master
+                const companyMaster = (allMList || []).find((m: any) => m.code === 'company' || m.name?.toLowerCase() === 'company');
+                if (companyMaster) targetId = companyMaster.id;
+              }
               if (targetId) {
                 try {
                   const res = await masterBuilderApi.getRecords(targetId, { limit: 100 });
-                  map[targetId] = res.records || [];
-                } catch (e) {}
+                  const records = res.records || [];
+                  map[targetId] = records;
+                  map[String(targetId)] = records;
+                  const foundM = (allMList || []).find((m: any) => m.id === targetId);
+                  if (foundM?.code) {
+                    map[foundM.code] = records;
+                  }
+                  if (lf.fieldKey) {
+                    map[lf.fieldKey] = records;
+                  }
+                  if (lf.fieldName) {
+                    map[lf.fieldName.toLowerCase()] = records;
+                  }
+                } catch (e) {
+                  console.warn('Failed to load lookup records for target master', targetId, e);
+                }
               }
             })
           );
-          setLookupRecordsMap(map);
+          setLookupRecordsMap(map as any);
         }
 
-        // Load live DB lookup options (e.g. department, designation, company, etc.)
+        // Always load company DB lookup options so company dropdowns are never empty
+        const dbMap: Record<string, DbLookupOption[]> = {};
+        try {
+          const compOpts = await masterBuilderApi.getDbLookupOptions('companies');
+          if (compOpts && compOpts.length > 0) {
+            dbMap['companies'] = compOpts;
+            dbMap['company'] = compOpts;
+          }
+        } catch (e) {}
+
+        // Load live DB lookup options (e.g. department, designation, company, grade, etc.)
         const dbLookupFields = (mDetail?.fields || []).filter(
           (f: any) =>
-            (f.fieldType === 'db_lookup' || f.field_type === 'db_lookup') &&
-            (f.optionsJson?.dbLookupEntity || f.options_json?.dbLookupEntity)
+            f.fieldType === 'db_lookup' || f.field_type === 'db_lookup'
         );
         if (dbLookupFields.length > 0) {
-          const dbMap: Record<string, DbLookupOption[]> = {};
           await Promise.all(
             dbLookupFields.map(async (df: any) => {
               const opts = df.optionsJson || df.options_json || {};
-              const entity = opts.dbLookupEntity;
-              if (entity && !dbMap[entity]) {
+              const entity = opts.dbLookupEntity || df.fieldKey || df.field_name || df.fieldName;
+              if (entity) {
                 try {
                   const o = await masterBuilderApi.getDbLookupOptions(entity);
                   dbMap[entity] = o || [];
+                  if (df.fieldKey) dbMap[df.fieldKey] = o || [];
+                  if (df.fieldName) dbMap[df.fieldName.toLowerCase()] = o || [];
                 } catch (e) {}
               }
             })
           );
-          setDbLookupOptionsMap(dbMap);
         }
+        setDbLookupOptionsMap(dbMap);
 
         // If records exist, select the first record by default (like Company form), otherwise start new record
         if (recList.length > 0) {
@@ -356,27 +392,94 @@ export function DynamicMasterView({ masterIdOrCode, onManageFields }: DynamicMas
       if (k4) next[k4] = value;
 
       // Check if this field triggers any autofill mappings
-      const ft = field?.fieldType || field?.field_type;
-      if (field && ft === 'lookup') {
-        const lookupId = Number(field.lookupMasterId || field.lookup_master_id);
-        const lRecords = lookupRecordsMap[lookupId] || [];
-        const matched = lRecords.find(
-          (lr) =>
-            lr.data?.name === value ||
-            lr.data?.title === value ||
-            lr.recordCode === value ||
-            String(lr.id) === String(value)
-        );
-        if (matched && master?.autofillMappings?.length) {
-          master.autofillMappings.forEach((af: any) => {
-            const afLookupKey = af.lookupFieldKey || af.lookup_field_key;
-            const afSourceKey = af.sourceFieldKey || af.source_field_key;
-            const afTargetKey = af.targetFieldKey || af.target_field_key;
-            if (afLookupKey === key && matched.data?.[afSourceKey] !== undefined) {
-              next[afTargetKey] = matched.data[afSourceKey];
+      if (master?.autofillMappings?.length) {
+        const lookupId = Number(field?.lookupMasterId || field?.lookup_master_id || field?.optionsJson?.lookupMasterId);
+        const lRecords: DynamicRecordItem[] =
+          (lookupId && (lookupRecordsMap[lookupId] || (lookupRecordsMap as any)[String(lookupId)])) ||
+          (lookupRecordsMap as any)[key] ||
+          (lookupRecordsMap as any)[field?.fieldKey] ||
+          (lookupRecordsMap as any)[field?.fieldName?.toLowerCase()] ||
+          (lookupRecordsMap as any)['company'] ||
+          [];
+
+        const matched = lRecords.find((lr) => {
+          const rowId = String(lr.id);
+          const code = String(lr.recordCode || '');
+          const d = lr.data || {};
+          return (
+            rowId === String(value) ||
+            code === String(value) ||
+            d.name === value ||
+            d.companyName === value ||
+            d.employerName === value ||
+            d.title === value ||
+            Object.values(d).some((v) => String(v) === String(value))
+          );
+        });
+
+        master.autofillMappings.forEach((af: any) => {
+          if (af.isActive === false || af.is_active === 0) return;
+          const afLookupKey = af.lookupFieldKey || af.lookup_field_key;
+          const afSourceKey = af.sourceFieldKey || af.source_field_key;
+          const afTargetKey = af.targetFieldKey || af.target_field_key;
+
+          const isTriggerMatch =
+            afLookupKey === key ||
+            afLookupKey === field?.fieldKey ||
+            afLookupKey === field?.field_key ||
+            afLookupKey?.toLowerCase() === field?.fieldName?.toLowerCase();
+
+          if (isTriggerMatch) {
+            let extractedVal: any = undefined;
+            if (matched) {
+              const d = matched.data || {};
+              const sourceCamel = afSourceKey.replace(/_([a-z0-9])/g, (_: any, g: string) => g.toUpperCase());
+              const sourceSnake = afSourceKey.replace(/([A-Z])/g, '_$1').toLowerCase();
+
+              extractedVal =
+                d[afSourceKey] !== undefined
+                  ? d[afSourceKey]
+                  : d[sourceCamel] !== undefined
+                  ? d[sourceCamel]
+                  : d[sourceSnake] !== undefined
+                  ? d[sourceSnake]
+                  : afSourceKey === 'id' || afSourceKey === 'company_id'
+                  ? matched.id
+                  : afSourceKey === 'code' || afSourceKey === 'record_code'
+                  ? matched.recordCode
+                  : undefined;
             }
-          });
-        }
+
+            // Fallback to meta in dbLookupOptions if present
+            if (extractedVal === undefined) {
+              const dbOpts = dbLookupOptionsMap['companies'] || dbLookupOptionsMap['company'] || dbLookupOptionsMap[key] || [];
+              const matchedOpt = dbOpts.find((o) => String(o.value) === String(value) || o.label === value);
+              if (matchedOpt) {
+                if (afSourceKey === 'code') extractedVal = matchedOpt.meta?.code || matchedOpt.value;
+                else if (afSourceKey === 'name') extractedVal = matchedOpt.label;
+              }
+            }
+
+            if (extractedVal !== undefined && extractedVal !== null) {
+              next[afTargetKey] = extractedVal;
+              const targetCamel = afTargetKey.replace(/_([a-z0-9])/g, (_: any, g: string) => g.toUpperCase());
+              const targetSnake = afTargetKey.replace(/([A-Z])/g, '_$1').toLowerCase();
+              if (targetCamel !== afTargetKey) next[targetCamel] = extractedVal;
+              if (targetSnake !== afTargetKey) next[targetSnake] = extractedVal;
+
+              const targetF = (master.fields || []).find((tf: any) =>
+                tf.fieldKey === afTargetKey ||
+                tf.field_key === afTargetKey ||
+                tf.fieldName?.toLowerCase() === afTargetKey?.toLowerCase()
+              );
+              if (targetF) {
+                if (targetF.fieldKey) next[targetF.fieldKey] = extractedVal;
+                if (targetF.field_key) next[targetF.field_key] = extractedVal;
+                if (targetF.fieldName) next[targetF.fieldName] = extractedVal;
+              }
+            }
+          }
+        });
       }
 
       return next;
@@ -388,6 +491,61 @@ export function DynamicMasterView({ masterIdOrCode, onManageFields }: DynamicMas
     if (!master) return;
     setSaving(true);
     setFormErrors([]);
+
+    // Client-side rule validation for instant user feedback
+    const clientErrors: string[] = [];
+    (master.validationRules || []).forEach((r: any) => {
+      if (r.isActive === false || r.is_active === 0) return;
+      const keyA = r.fieldA || r.field_a;
+      const keyB = r.fieldB || r.field_b;
+      const op = r.operator;
+      const valA = formData[keyA];
+      const valB = keyB ? formData[keyB] : r.customValue;
+
+      if (op === 'required_if') {
+        const isBConditionMet = valB !== undefined && valB !== null && String(valB).trim() !== '' && valB !== false;
+        const isAEmpty = valA === undefined || valA === null || String(valA).trim() === '';
+        if (isBConditionMet && isAEmpty) {
+          clientErrors.push(r.errorMessage || r.error_message || `${keyA} is required when ${keyB || 'condition'} is provided.`);
+        }
+        return;
+      }
+
+      if (valA !== undefined && valA !== null && valA !== '' && valB !== undefined && valB !== null && valB !== '') {
+        const numA = Number(valA);
+        const numB = Number(valB);
+        const isBothNumeric = !isNaN(numA) && !isNaN(numB) && typeof valA !== 'boolean' && typeof valB !== 'boolean';
+
+        const dateA = new Date(valA).getTime();
+        const dateB = new Date(valB).getTime();
+        const isBothDate = !isBothNumeric && !isNaN(dateA) && !isNaN(dateB) && String(valA).includes('-') && String(valB).includes('-');
+
+        let isViolated = false;
+        if (op === '==') {
+          isViolated = String(valA).trim().toLowerCase() !== String(valB).trim().toLowerCase();
+        } else if (op === '!=') {
+          isViolated = String(valA).trim().toLowerCase() === String(valB).trim().toLowerCase();
+        } else if (op === '>=') {
+          isViolated = isBothNumeric ? !(numA >= numB) : isBothDate ? !(dateA >= dateB) : !(String(valA) >= String(valB));
+        } else if (op === '<=') {
+          isViolated = isBothNumeric ? !(numA <= numB) : isBothDate ? !(dateA <= dateB) : !(String(valA) <= String(valB));
+        } else if (op === '>') {
+          isViolated = isBothNumeric ? !(numA > numB) : isBothDate ? !(dateA > dateB) : !(String(valA) > String(valB));
+        } else if (op === '<') {
+          isViolated = isBothNumeric ? !(numA < numB) : isBothDate ? !(dateA < dateB) : !(String(valA) < String(valB));
+        }
+
+        if (isViolated) {
+          clientErrors.push(r.errorMessage || r.error_message || `${keyA} must satisfy condition (${op}) with ${keyB || r.customValue}`);
+        }
+      }
+    });
+
+    if (clientErrors.length > 0) {
+      setFormErrors(clientErrors);
+      setSaving(false);
+      return;
+    }
 
     try {
       if (isNewMode || !selectedRecordId) {
@@ -600,7 +758,12 @@ export function DynamicMasterView({ masterIdOrCode, onManageFields }: DynamicMas
         : (field.field_name && formData[field.field_name] !== undefined)
         ? formData[field.field_name]
         : '';
-    const choiceList = choiceLists.find((cl) => cl.id === choiceListId);
+    const choiceList = choiceLists.find(
+      (cl) =>
+        (choiceListId && String(cl.id) === String(choiceListId)) ||
+        (cl.code && (cl.code === opts.choiceListCode || cl.code === opts.choiceList || cl.code === fieldKey || cl.code === fieldName.toLowerCase())) ||
+        (cl.name && cl.name.toLowerCase() === fieldName.toLowerCase())
+    );
 
     // 1. SECTION HEADER / DIVIDER (When rendered in flat mode)
     if (fieldType === 'section') {
@@ -808,8 +971,10 @@ export function DynamicMasterView({ masterIdOrCode, onManageFields }: DynamicMas
 
     // 4. LIVE DB LOOKUP
     if (fieldType === 'db_lookup') {
-      const entity = opts.dbLookupEntity || '';
-      const options = (entity && dbLookupOptionsMap[entity]) || [];
+      const entity = opts.dbLookupEntity || fieldKey || fieldName.toLowerCase();
+      const options =
+        (entity && (dbLookupOptionsMap[entity] || dbLookupOptionsMap[fieldKey] || dbLookupOptionsMap[fieldName.toLowerCase()])) ||
+        [];
       return (
         <div
           key={field.id}
@@ -939,7 +1104,7 @@ export function DynamicMasterView({ masterIdOrCode, onManageFields }: DynamicMas
           )}
         </label>
 
-        {fieldType === 'choice' && choiceList ? (
+        {fieldType === 'choice' && (choiceList || opts.options || opts.choiceList) ? (
           <select
             value={val}
             onChange={(e) => handleFieldChange(fieldKey, e.target.value, field)}
@@ -947,11 +1112,15 @@ export function DynamicMasterView({ masterIdOrCode, onManageFields }: DynamicMas
             className="w-full h-10 px-3 rounded-xl border border-input bg-background text-xs text-foreground font-medium focus:outline-none focus:ring-2 focus:ring-primary/20"
           >
             <option value="">-- Select {fieldName} --</option>
-            {choiceList.options?.map((opt, i) => (
-              <option key={i} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
+            {((choiceList?.options?.length ? choiceList.options : (opts.options || opts.choiceList || [])) as any[]).map((opt, i) => {
+              const optVal = typeof opt === 'string' ? opt : (opt.value !== undefined ? opt.value : opt.label);
+              const optLabel = typeof opt === 'string' ? opt : (opt.label || opt.name || opt.value);
+              return (
+                <option key={i} value={optVal}>
+                  {optLabel}
+                </option>
+              );
+            })}
           </select>
         ) : fieldType === 'lookup' ? (
           <select
@@ -962,16 +1131,55 @@ export function DynamicMasterView({ masterIdOrCode, onManageFields }: DynamicMas
           >
             <option value="">-- Select {fieldName} --</option>
             {(() => {
-              const lookupId = Number(field.lookupMasterId || field.lookup_master_id);
-              const lRecords: DynamicRecordItem[] = (lookupId && lookupRecordsMap[lookupId]) || [];
-              return lRecords.map((lr: DynamicRecordItem) => {
-                const label = lr.data?.name || lr.data?.title || lr.recordCode || `Record #${lr.id}`;
-                return (
-                  <option key={lr.id} value={label}>
-                    {label} {lr.recordCode ? `(${lr.recordCode})` : ''}
-                  </option>
-                );
-              });
+              const lookupId = Number(field.lookupMasterId || field.lookup_master_id || opts.lookupMasterId);
+              const lRecords: DynamicRecordItem[] =
+                (lookupId && (lookupRecordsMap[lookupId] || (lookupRecordsMap as any)[String(lookupId)])) ||
+                (lookupRecordsMap as any)[fieldKey] ||
+                (lookupRecordsMap as any)[fieldName?.toLowerCase()] ||
+                (lookupRecordsMap as any)[opts.lookupMasterCode] ||
+                (lookupRecordsMap as any)['company'] ||
+                [];
+
+              if (lRecords && lRecords.length > 0) {
+                return lRecords.map((lr: DynamicRecordItem) => {
+                  const label =
+                    lr.data?.name ||
+                    lr.data?.companyName ||
+                    lr.data?.company_name ||
+                    lr.data?.employerName ||
+                    lr.data?.employer_name ||
+                    lr.data?.departmentName ||
+                    lr.data?.department_name ||
+                    lr.data?.designationName ||
+                    lr.data?.designation_name ||
+                    lr.data?.locationName ||
+                    lr.data?.location_name ||
+                    lr.data?.city ||
+                    lr.data?.title ||
+                    lr.recordCode ||
+                    Object.values(lr.data || {})[0] ||
+                    `Record #${lr.id}`;
+                  const optionVal = lr.data?.name || lr.data?.companyName || lr.data?.employerName || lr.recordCode || String(lr.id);
+                  return (
+                    <option key={lr.id} value={optionVal}>
+                      {label} {lr.recordCode && label !== lr.recordCode ? `(${lr.recordCode})` : ''}
+                    </option>
+                  );
+                });
+              }
+
+              // Fallback to dbLookup options if available (e.g. for company or matching key)
+              const fallbackDbOpts =
+                dbLookupOptionsMap['companies'] ||
+                dbLookupOptionsMap['company'] ||
+                dbLookupOptionsMap[fieldKey] ||
+                dbLookupOptionsMap[fieldName?.toLowerCase()] ||
+                [];
+              return fallbackDbOpts.map((opt) => (
+                <option key={opt.value} value={opt.label || opt.value}>
+                  {opt.label}
+                </option>
+              ));
             })()}
           </select>
         ) : fieldType === 'textarea' ? (

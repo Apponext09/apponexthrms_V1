@@ -11,12 +11,58 @@
 // ============================================================
 import { useEffect, useRef, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
+import { pingLocationBatchHttp } from '../api/livetrackingApi';
 
-const SOCKET_URL = (import.meta as any).env.VITE_SOCKET_URL || 'http://localhost:5000';
+const SOCKET_URL =
+  import.meta.env.VITE_SOCKET_URL ||
+  import.meta.env.VITE_API_URL?.replace(/\/api(?:\/v1)?\/?$/, '') ||
+  (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5000');
 const MIN_DISTANCE_METERS = 0; // 0 meters — emit on every 2.5s tick for continuous live streaming
 const FORCE_PING_INTERVAL_MS = 2_500; // 2.5 seconds automatic high-frequency emission
-const MAX_ACCEPTABLE_ACCURACY_METERS = 10000; // Support laptop Wi-Fi/IP geolocation
+// Reject fixes worse than this radius — 10km previously let wildly inaccurate
+// cell-tower/IP-only fixes through as if they were the employee's real position.
+// 500m still comfortably covers laptop Wi-Fi/IP geolocation (usually well under 300m).
+const MAX_ACCEPTABLE_ACCURACY_METERS = 500;
 const WAKE_LOCK_HEARTBEAT_MS = 30_000; // Re-acquire Wake Lock every 30s
+
+// ── Offline buffer ────────────────────────────────────────────────────────────
+// Fixes that can't be delivered (socket down AND HTTP failing) are kept here,
+// persisted so a tab reload doesn't lose them, and replayed in order on
+// reconnect. While anything is buffered, new fixes queue BEHIND it — the
+// server drops fixes older than the last one it accepted, so sending a live
+// fix first would make the whole buffer look out-of-order.
+const BUFFER_KEY = 'livetracking:pending-fixes';
+const BUFFER_MAX = 2000; // ~80 min at 2.5s — oldest dropped beyond this
+const REPLAY_CHUNK = 100; // server accepts ≤200 per batch
+const REPLAY_ACK_TIMEOUT_MS = 10_000;
+const REPLAY_RETRY_MS = 15_000;
+
+interface BufferedFix {
+  latitude: number;
+  longitude: number;
+  accuracy?: number;
+  speed?: number;
+  heading?: number;
+  timestamp: string;
+}
+
+function loadBuffer(): BufferedFix[] {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(BUFFER_KEY) || '[]');
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveBuffer(buffer: BufferedFix[]): void {
+  try {
+    if (buffer.length) localStorage.setItem(BUFFER_KEY, JSON.stringify(buffer));
+    else localStorage.removeItem(BUFFER_KEY);
+  } catch {
+    // Storage full / blocked — the in-memory buffer still works for this tab
+  }
+}
 
 // ── Haversine distance ────────────────────────────────────────────────────────
 function haversineDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
@@ -31,24 +77,44 @@ function haversineDistance(lat1: number, lng1: number, lat2: number, lng2: numbe
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-// ── 1D Kalman Filter ──────────────────────────────────────────────────────────
+// ── Kalman Filter (position, variance in metres²) ─────────────────────────────
+// Both the process noise and the measurement noise are in metres², so the gain
+// is dimensionless. The previous version mixed degrees² (Q) with metres (R):
+// its gain collapsed to <1% within a minute and a moving employee's marker
+// trailed kilometres behind their real position.
 interface KalmanState {
-  estimate: number;
-  errorCovariance: number;
+  lat: number;
+  lng: number;
+  /** Estimate variance in metres² */
+  variance: number;
+  timestampMs: number;
 }
 
+/** Minimum assumed movement uncertainty (m/s) — covers walking / GPS drift */
+const KALMAN_MIN_PROCESS_SPEED_MPS = 3;
+
 function kalmanUpdate(
-  state: KalmanState,
-  measurement: number,
-  Q = 0.0001,
-  R = 3
+  state: KalmanState | null,
+  lat: number,
+  lng: number,
+  accuracyM: number | null | undefined,
+  speedMps: number | null | undefined,
+  timestampMs: number
 ): KalmanState {
-  const predicted = state.estimate;
-  const predictedErr = state.errorCovariance + Q;
-  const K = predictedErr / (predictedErr + R);
+  const accuracy = Math.max(1, accuracyM ?? 15);
+  if (!state) return { lat, lng, variance: accuracy * accuracy, timestampMs };
+
+  const dtSec = Math.max(0, (timestampMs - state.timestampMs) / 1000);
+  // Faster movement → trust new fixes more, so a vehicle isn't smoothed into lag
+  const q = Math.max(KALMAN_MIN_PROCESS_SPEED_MPS, speedMps ?? 0);
+  const predictedVariance = state.variance + dtSec * q * q;
+  const K = predictedVariance / (predictedVariance + accuracy * accuracy);
+
   return {
-    estimate: predicted + K * (measurement - predicted),
-    errorCovariance: (1 - K) * predictedErr,
+    lat: state.lat + K * (lat - state.lat),
+    lng: state.lng + K * (lng - state.lng),
+    variance: (1 - K) * predictedVariance,
+    timestampMs,
   };
 }
 
@@ -110,52 +176,110 @@ export function useEmployeeLocationTracker({ token, enabled }: TrackerOptions): 
   const permissionListenerRef = useRef<AbortController | null>(null);
   const wakeLockRef = useRef<WakeLockManager>(new WakeLockManager());
 
-  const kalmanLatRef = useRef<KalmanState | null>(null);
-  const kalmanLngRef = useRef<KalmanState | null>(null);
+  const kalmanRef = useRef<KalmanState | null>(null);
+  /** Last status actually sent on the current socket — only transitions are emitted */
+  const sentStatusRef = useRef<'ON' | 'OFF' | null>(null);
 
-  const emitLocationStatus = useCallback((status: 'ON' | 'OFF') => {
-    if (socketRef.current?.connected) {
-      socketRef.current.emit('employee:location_status_change', { status });
+  const bufferRef = useRef<BufferedFix[]>(loadBuffer());
+  const flushingRef = useRef(false);
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /** Replay buffered fixes oldest-first: socket batch (acked) if connected, else HTTP batch */
+  const flushBuffer = useCallback(async () => {
+    if (flushingRef.current || bufferRef.current.length === 0) return;
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+    flushingRef.current = true;
+    try {
+      while (bufferRef.current.length > 0) {
+        const chunk = bufferRef.current.slice(0, REPLAY_CHUNK);
+        const socket = socketRef.current;
+        if (socket?.connected) {
+          const res: any = await socket
+            .timeout(REPLAY_ACK_TIMEOUT_MS)
+            .emitWithAck('employee:location_batch', { points: chunk });
+          if (!res?.ok) throw new Error('batch rejected');
+        } else {
+          await pingLocationBatchHttp(chunk);
+        }
+        // Server has processed this chunk (duplicates/stale points are dropped there)
+        bufferRef.current = bufferRef.current.slice(chunk.length);
+        saveBuffer(bufferRef.current);
+      }
+    } catch {
+      if (!retryTimerRef.current) {
+        retryTimerRef.current = setTimeout(() => {
+          retryTimerRef.current = null;
+          flushBuffer();
+        }, REPLAY_RETRY_MS);
+      }
+    } finally {
+      flushingRef.current = false;
     }
   }, []);
 
+  const bufferFix = useCallback(
+    (fix: BufferedFix) => {
+      const buffer = bufferRef.current;
+      buffer.push(fix);
+      if (buffer.length > BUFFER_MAX) buffer.splice(0, buffer.length - BUFFER_MAX);
+      saveBuffer(buffer);
+      flushBuffer();
+    },
+    [flushBuffer]
+  );
+
+  const emitLocationStatus = useCallback((status: 'ON' | 'OFF') => {
+    if (!socketRef.current?.connected || sentStatusRef.current === status) return;
+    socketRef.current.emit('employee:location_status_change', { status });
+    sentStatusRef.current = status;
+  }, []);
+
   // Process and emit geolocation fix
-  const processFix = useCallback((coords: GeolocationCoordinates) => {
-    const { latitude, longitude, accuracy, speed, heading } = coords;
+  const processFix = useCallback((position: GeolocationPosition) => {
+    const { latitude, longitude, accuracy, speed, heading } = position.coords;
     const now = Date.now();
     const last = lastPositionRef.current;
 
-    // Skip pings with accuracy > 10000m
+    // Skip coarse fixes (cell-tower / IP-only)
     if (accuracy != null && accuracy > MAX_ACCEPTABLE_ACCURACY_METERS) return;
 
-    // Kalman Filter
-    if (kalmanLatRef.current === null || kalmanLngRef.current === null) {
-      kalmanLatRef.current = { estimate: latitude, errorCovariance: 1 };
-      kalmanLngRef.current = { estimate: longitude, errorCovariance: 1 };
-    } else {
-      kalmanLatRef.current = kalmanUpdate(kalmanLatRef.current, latitude);
-      kalmanLngRef.current = kalmanUpdate(kalmanLngRef.current, longitude);
+    // The heartbeat reads cached positions — only a NEWER fix updates the filter
+    // (re-feeding an old one would drag the estimate backwards), but the current
+    // estimate is still re-sent below as a keep-alive for a stationary employee.
+    if (!kalmanRef.current || position.timestamp > kalmanRef.current.timestampMs) {
+      kalmanRef.current = kalmanUpdate(kalmanRef.current, latitude, longitude, accuracy, speed, position.timestamp);
     }
-
-    const smoothLat = kalmanLatRef.current.estimate;
-    const smoothLng = kalmanLngRef.current.estimate;
+    const smoothLat = kalmanRef.current.lat;
+    const smoothLng = kalmanRef.current.lng;
 
     const shouldEmit =
       !last ||
       now - last.time >= FORCE_PING_INTERVAL_MS ||
       haversineDistance(last.lat, last.lng, smoothLat, smoothLng) >= MIN_DISTANCE_METERS;
 
-    if (shouldEmit && socketRef.current?.connected) {
-      socketRef.current.emit('employee:ping_location', {
-        latitude: smoothLat,
-        longitude: smoothLng,
-        accuracy: accuracy ?? undefined,
-        speed: speed ?? undefined,
-        heading: heading ?? undefined,
-      });
-      lastPositionRef.current = { lat: smoothLat, lng: smoothLng, time: now };
+    if (!shouldEmit) return;
+
+    const payload: BufferedFix = {
+      latitude: smoothLat,
+      longitude: smoothLng,
+      accuracy: accuracy ?? undefined,
+      speed: speed ?? undefined,
+      heading: heading != null && !Number.isNaN(heading) ? heading : undefined,
+      // When the fix was taken — lets the server order/dedupe it and place
+      // buffered fixes at the right time on replay.
+      timestamp: new Date(kalmanRef.current.timestampMs).toISOString(),
+    };
+
+    if (socketRef.current?.connected && bufferRef.current.length === 0) {
+      socketRef.current.emit('employee:ping_location', payload);
+    } else {
+      // Socket down (reconnecting, network drop, …) or older fixes still queued:
+      // buffer and replay in order (socket batch, or HTTP batch while the socket is down).
+      bufferFix(payload);
     }
-  }, []);
+
+    lastPositionRef.current = { lat: smoothLat, lng: smoothLng, time: now };
+  }, [bufferFix]);
 
   // Primary watchPosition setup
   const startTracking = useCallback(() => {
@@ -168,7 +292,7 @@ export function useEmployeeLocationTracker({ token, enabled }: TrackerOptions): 
     watchIdRef.current = navigator.geolocation.watchPosition(
       (position) => {
         emitLocationStatus('ON');
-        processFix(position.coords);
+        processFix(position);
       },
       (error) => {
         if (import.meta.env.DEV) {
@@ -179,9 +303,12 @@ export function useEmployeeLocationTracker({ token, enabled }: TrackerOptions): 
         }
       },
       {
-        enableHighAccuracy: false, // Use fast Wi-Fi/IP location on laptops & desktops
+        // High accuracy requests the real GPS chip on mobile instead of coarse
+        // Wi-Fi/cell-tower positioning — devices without GPS (laptops) just fall
+        // back to their best available source anyway, so this is safe everywhere.
+        enableHighAccuracy: true,
         maximumAge: 3000,
-        timeout: 6000,
+        timeout: 10000,
       }
     );
   }, [emitLocationStatus, processFix]);
@@ -238,6 +365,10 @@ export function useEmployeeLocationTracker({ token, enabled }: TrackerOptions): 
     socketRef.current = socket;
 
     socket.on('connect', async () => {
+      // New socket (first connect or reconnect) — the server hasn't heard our status yet
+      sentStatusRef.current = null;
+      // Replay anything buffered while offline before new live fixes go out
+      flushBuffer();
       await wakeLockRef.current.acquire();
       wakeLockRef.current.startHeartbeat();
       startTracking();
@@ -252,49 +383,55 @@ export function useEmployeeLocationTracker({ token, enabled }: TrackerOptions): 
     socket.on('connect_error', () => {});
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('online', flushBuffer);
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('online', flushBuffer);
+      if (retryTimerRef.current) {
+        clearTimeout(retryTimerRef.current);
+        retryTimerRef.current = null;
+      }
       stopTracking();
       permissionListenerRef.current?.abort();
       wakeLockRef.current.release();
       socket.disconnect();
       socketRef.current = null;
       lastPositionRef.current = null;
-      kalmanLatRef.current = null;
-      kalmanLngRef.current = null;
+      kalmanRef.current = null;
+      sentStatusRef.current = null;
     };
-  }, [enabled, token, startTracking, stopTracking, watchPermission, handleVisibilityChange, emitLocationStatus]);
+  }, [enabled, token, startTracking, stopTracking, watchPermission, handleVisibilityChange, emitLocationStatus, flushBuffer]);
 
-  // ── DEDICATED 2.5-SECOND BACKGROUND LOCATION TRIGGER ENGINE ────────────────
-  // Forces a fresh getCurrentPosition query every 2.5s in the background
+  // ── 2.5-SECOND KEEP-ALIVE HEARTBEAT ─────────────────────────────────────────
+  // watchPosition (above) is the sole source of fresh, high-accuracy GPS fixes —
+  // it fires on its own whenever the OS reports movement. This heartbeat exists
+  // only so a STATIONARY employee still pings roughly every 2.5s (so "last seen"
+  // stays fresh and the socket/DB path stays exercised even without movement).
+  // It deliberately asks for a CACHED position (maximumAge: 10s, no high-accuracy)
+  // instead of forcing a second independent fresh GPS acquisition — running two
+  // concurrent high-accuracy GPS requests every 2.5s doubled battery drain and
+  // had them competing for the same GPS hardware for no benefit.
   useEffect(() => {
     const activeToken = token || localStorage.getItem('accessToken');
     if (!enabled || !activeToken) return;
 
-    const backgroundTrigger = setInterval(() => {
-      if (!navigator.geolocation || !socketRef.current?.connected) return;
+    const heartbeat = setInterval(() => {
+      if (!navigator.geolocation) return;
 
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           emitLocationStatus('ON');
-          processFix(pos.coords);
+          processFix(pos);
         },
-        () => {
-          // Fallback: request cached fix if fresh fix times out
-          navigator.geolocation.getCurrentPosition(
-            (pos) => {
-              emitLocationStatus('ON');
-              processFix(pos.coords);
-            },
-            () => {},
-            { enableHighAccuracy: false, maximumAge: 60000, timeout: 2000 }
-          );
-        },
-        { enableHighAccuracy: false, maximumAge: 0, timeout: 3000 }
+        () => {},
+        { enableHighAccuracy: false, maximumAge: 10000, timeout: 5000 }
       );
+      // Note: no socket-connected gate here — processFix() falls back to the
+      // HTTP ping endpoint on its own when the socket is down, so the heartbeat
+      // should keep running through outages too, not go silent.
     }, FORCE_PING_INTERVAL_MS);
 
-    return () => clearInterval(backgroundTrigger);
+    return () => clearInterval(heartbeat);
   }, [enabled, token, emitLocationStatus, processFix]);
 }

@@ -7,6 +7,7 @@ import { resolveTenant } from '../../common/middleware/resolveTenant';
 import { requirePermission } from '../../common/middleware/requirePermission';
 import { asyncHandler } from '../../common/utils/asyncHandler';
 import multer from 'multer';
+import { requireMenuModule } from '../rbac/requireMenuAccess';
 
 const router = Router();
 
@@ -18,6 +19,7 @@ const upload = multer({
 
 // Apply authentication and tenant resolution
 router.use(authenticate, resolveTenant);
+router.use(requireMenuModule('recruitment'));
 
 
 // ==================== MRF Request Routes ====================

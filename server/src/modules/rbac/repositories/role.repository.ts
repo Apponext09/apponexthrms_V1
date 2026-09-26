@@ -36,12 +36,12 @@ export class RoleRepository extends BaseRepository<Role> {
       .first() as Promise<Role | null>;
   }
 
-  /**
-   * Get all roles for organization (including platform roles)
-   */
+  /** Organization roles only; platform roles are managed separately. */
   async getForOrganization(ctx: TenantContext) {
     return (await this.query(ctx)
-      .orWhere('is_platform_role', true)
+      .where('is_platform_role', false)
+      .whereNot('code', 'super_admin')
+      .whereNull('deleted_at')
       .select()) as Promise<Role[]>;
   }
 

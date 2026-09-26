@@ -74,40 +74,7 @@ interface NavSection {
   items: EmployeeNavItem[];
 }
 
-export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
-  const navigate = useNavigate();
-  const location = useLocation();
-  const { user, logout } = useAuthStore();
-  const { hasModule, isGatingEnabled } = useSubscriptionStore();
-
-  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
-    'EMPLOYEE CORE': true,
-    'ATTENDANCE': true,
-    'LEAVES': true,
-    'PAYROLL': true,
-    'LOAN MANAGEMENT': true,
-    'EXPENSE MANAGEMENT': true,
-    'LEARNING & ACADEMY (LMS)': true,
-    'DEVELOPMENT & ENGAGEMENT': true,
-    'CAREER & OPENINGS': true,
-    'TOOLS & SUPPORT': true,
-  });
-
-  const employeeId = user?.employeeId || 0;
-  const { employee } = useEmployee(employeeId);
-
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
-  };
-
-  const handleItemClick = (href: string, name: string) => {
-    navigate(href);
-  };
-
-  const isDashboardActive = location.pathname === '/employee/dashboard' || location.pathname === '/employee';
-
-  const navSections: NavSection[] = [
+export const EMPLOYEE_NAV_SECTIONS: NavSection[] = [
     {
       label: 'CoreHR',
       subscriptionModule: 'Core HR & Directory',
@@ -374,6 +341,41 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
       ],
     },
   ];
+
+export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { user, logout } = useAuthStore();
+  const { hasModule, isGatingEnabled } = useSubscriptionStore();
+
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
+    'EMPLOYEE CORE': true,
+    'ATTENDANCE': true,
+    'LEAVES': true,
+    'PAYROLL': true,
+    'LOAN MANAGEMENT': true,
+    'EXPENSE MANAGEMENT': true,
+    'LEARNING & ACADEMY (LMS)': true,
+    'DEVELOPMENT & ENGAGEMENT': true,
+    'CAREER & OPENINGS': true,
+    'TOOLS & SUPPORT': true,
+  });
+
+  const employeeId = user?.employeeId || 0;
+  const { employee } = useEmployee(employeeId);
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
+
+  const handleItemClick = (href: string, name: string) => {
+    navigate(href);
+  };
+
+  const isDashboardActive = location.pathname === '/employee/dashboard' || location.pathname === '/employee';
+
+  const navSections = EMPLOYEE_NAV_SECTIONS;
 
   const visibleNavSections = navSections.filter(sec => {
     if (!isGatingEnabled || !sec.subscriptionModule) return true;

@@ -43,7 +43,7 @@ const C = {
 import { useSubscriptionStore } from '@/features/subscriptions/store/subscriptionStore';
 
 // ── Nav definitions ───────────────────────────────────────────────────────────
-const CONSULTANT_NAV = [
+export const CONSULTANT_NAV = [
   {
     label: 'Overview',
     subscriptionModule: null,

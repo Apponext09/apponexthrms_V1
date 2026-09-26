@@ -135,6 +135,10 @@ export const jobReferenceApplySchema = z.object({
   resumeUrl: z.string().optional().nullable(),
   signatureUrl: z.string().optional().nullable(),
   referringEmployeeId: z.any().optional().nullable(),
+  organizationId: z.any().optional().nullable(),
+  positionTitle: z.string().optional().nullable(),
+  position: z.string().optional().nullable(),
+  source: z.string().optional().nullable(),
 });
 
 export const jobReferenceReferExistingSchema = z.object({

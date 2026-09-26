@@ -5,6 +5,7 @@ import { requirePermission } from '../../common/middleware/requirePermission';
 import { requireRoles } from '../../common/middleware/requireRoles';
 import { AttendanceController } from './controllers/AttendanceController';
 import { BiometricController } from './controllers/BiometricController';
+import { requireMenuModule } from '../rbac/requireMenuAccess';
 
 // Roles permitted to manage shift templates and assignments — mirrors the
 // SHIFT MANAGEMENT sidebar's minRoles in client/src/config/navigation.ts.
@@ -17,6 +18,7 @@ const controller = new AttendanceController();
 const biometricController = new BiometricController();
 
 router.use(authenticate, resolveTenant);
+router.use(requireMenuModule('attendance'));
 
 // Root endpoint - list attendance records
 router.get('/', controller.getHistory);

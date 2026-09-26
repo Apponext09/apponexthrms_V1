@@ -64,7 +64,7 @@ export function EmployeeListPage() {
   const { data: dashboardData } = useAdminDashboard();
   const { user } = useAuthStore();
 
-  const orgLocation = dashboardData?.companyInfo?.location || user?.organizationLocation || '';
+  const orgLocation = dashboardData?.companyInfo?.location || user?.organizationLocation;
 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
@@ -74,6 +74,7 @@ export function EmployeeListPage() {
   const [departmentId, setDepartmentId] = useState<string>('');
   const [designationId, setDesignationId] = useState<string>('');
   const [locationId, setLocationId] = useState<string>('');
+  const [statusFilter, setStatusFilter] = useState<string>('');
 
   const { data: departmentsData } = useDepartments(1, 100);
   const { designations } = useDesignations();
@@ -87,10 +88,14 @@ export function EmployeeListPage() {
     page: config.enablePagination ? page : 1,
     pageSize: config.enablePagination ? pageSize : 1000,
     search: config.enableSearchBar ? searchTerm : '',
+    status: statusFilter,
   });
 
   const filteredEmployees = React.useMemo(() => {
     return employees.filter((emp: any) => {
+      const lifecycleStatus = String(emp.status || emp.lifecycleStatus || emp.lifecycle_status || '').toLowerCase();
+      if (!statusFilter && ['exit', 'exited', 'offboarded', 'alumni'].includes(lifecycleStatus)) return false;
+      if (statusFilter === 'offboarded' && !['exit', 'exited', 'offboarded', 'alumni'].includes(lifecycleStatus)) return false;
       if (departmentId && String(emp.departmentId || emp.department_id || emp.currentDepartmentId || emp.department?.id || '') !== departmentId) return false;
       if (designationId) {
         const empDesigId = String(emp.designationId || emp.designation_id || emp.currentDesignationId || emp.designation?.id || '');
@@ -102,12 +107,12 @@ export function EmployeeListPage() {
       if (locationId && String(emp.locationId || emp.location_id || emp.currentLocationId || emp.location?.id || '') !== locationId) return false;
       return true;
     });
-  }, [employees, departmentId, designationId, locationId, designations]);
+  }, [employees, departmentId, designationId, locationId, statusFilter, designations]);
 
   useEffect(() => { refetch(); }, [page, pageSize, searchTerm]);
 
-  const activeFiltersCount = [departmentId, designationId, locationId].filter(Boolean).length;
-  const clearAllFilters = () => { setDepartmentId(''); setDesignationId(''); setLocationId(''); setPage(1); };
+  const activeFiltersCount = [departmentId, designationId, locationId, statusFilter].filter(Boolean).length;
+  const clearAllFilters = () => { setDepartmentId(''); setDesignationId(''); setLocationId(''); setStatusFilter(''); setPage(1); };
 
   const totalPages = Math.ceil(total / pageSize) || 1;
   const rangeStart = total === 0 ? 0 : (page - 1) * pageSize + 1;
@@ -301,6 +306,15 @@ export function EmployeeListPage() {
                     <DropdownMenuLabel className="text-xs font-bold">Filter Employees</DropdownMenuLabel>
                     <DropdownMenuSeparator />
                     <DropdownMenuSub>
+                      <DropdownMenuSubTrigger className="text-xs">Employment Status</DropdownMenuSubTrigger>
+                      <DropdownMenuSubContent className="w-52 text-xs">
+                        <DropdownMenuRadioGroup value={statusFilter} onValueChange={(val) => { setStatusFilter(val); setPage(1); }}>
+                          <DropdownMenuRadioItem value="" className="text-xs">Active Workforce</DropdownMenuRadioItem>
+                          <DropdownMenuRadioItem value="offboarded" className="text-xs">Offboarded / Exited</DropdownMenuRadioItem>
+                        </DropdownMenuRadioGroup>
+                      </DropdownMenuSubContent>
+                    </DropdownMenuSub>
+                    <DropdownMenuSub>
                       <DropdownMenuSubTrigger className="text-xs">Department</DropdownMenuSubTrigger>
                       <DropdownMenuSubContent className="w-52 text-xs max-h-60 overflow-y-auto">
                         <DropdownMenuRadioGroup value={departmentId} onValueChange={(val) => { setDepartmentId(val); setPage(1); }}>
@@ -369,6 +383,12 @@ export function EmployeeListPage() {
                   <span className="elp-filter-pill">
                     Location: {locationsList.find((l: any) => String(l.id) === locationId)?.name || locationId}
                     <span className="elp-filter-pill-x" onClick={() => setLocationId('')}><X size={10} strokeWidth={2.5} /></span>
+                  </span>
+                )}
+                {statusFilter && (
+                  <span className="elp-filter-pill">
+                    Status: Offboarded / Exited
+                    <span className="elp-filter-pill-x" onClick={() => setStatusFilter('')}><X size={10} strokeWidth={2.5} /></span>
                   </span>
                 )}
                 <button

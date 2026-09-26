@@ -1,5 +1,5 @@
 import { SectionTabs } from '@/layouts/SectionNavigation';
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { EmployeeSidebar } from './EmployeeSidebar';
 import { Bell, Sun, Moon, Building2, Menu, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
@@ -16,6 +16,8 @@ import { useThemeStore } from '@/features/settings/store/themeStore';
 import { Toaster } from '@/components/ui/toast';
 import { useEmployeeLocationTracker } from '@/features/Livetracking';
 import { GlobalSearchButton } from '@/features/search/components/GlobalSearch';
+import { useAttendanceStore } from '@/features/attendance';
+import { useAttendance } from '@/features/attendance/hooks/useAttendance';
 
 export function EmployeeLayout() {
   useNotificationSocket();
@@ -35,10 +37,51 @@ export function EmployeeLayout() {
   const employeeId = user?.employeeId || 0;
   const { employee } = useEmployee(employeeId);
 
-  // Silent background GPS tracker — no map UI shown to employee
+  // ── Gate live tracking on the employee's real attendance check-in status ──
+  // Tracking must switch on automatically the moment they check in, and off the
+  // moment they check out — never a manual toggle, and never running before
+  // check-in / after check-out.
+  const storeIsCheckedIn = useAttendanceStore((s) => s.isCheckedIn);
+  const { getTodayRecord } = useAttendance();
+  const [serverCheckedIn, setServerCheckedIn] = useState<boolean | null>(null);
+
+  const syncAttendanceStatus = useCallback(async () => {
+    const record = await getTodayRecord();
+    const inTime = record?.check_in_time || (record as any)?.checkInTime;
+    const outTime = record?.check_out_time || (record as any)?.checkOutTime;
+    setServerCheckedIn(!!inTime && !outTime);
+  }, [getTodayRecord]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const record = await getTodayRecord();
+      if (cancelled) return;
+      const inTime = record?.check_in_time || (record as any)?.checkInTime;
+      const outTime = record?.check_out_time || (record as any)?.checkOutTime;
+      setServerCheckedIn(!!inTime && !outTime);
+    })();
+    // Safety-net re-sync every 5 minutes in case check-in/out happened elsewhere
+    // (e.g. a face-punch kiosk) and this tab's local state hasn't heard about it.
+    const interval = setInterval(syncAttendanceStatus, 5 * 60 * 1000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+    // Re-run whenever THIS device's own check-in/out button flips the store flag,
+    // so tracking reacts within one request instead of waiting for the interval.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storeIsCheckedIn]);
+
+  // Prefer the confirmed server status; fall back to the persisted store flag
+  // only until the first sync resolves, so there's no startup gap mid-shift.
+  const isCurrentlyCheckedIn = serverCheckedIn ?? storeIsCheckedIn;
+
+  // Silent background GPS tracker — no map UI shown to employee. Runs only
+  // while checked in; automatically stops the instant they check out.
   useEmployeeLocationTracker({
     token: localStorage.getItem('accessToken'),
-    enabled: true,
+    enabled: isCurrentlyCheckedIn,
   });
 
 

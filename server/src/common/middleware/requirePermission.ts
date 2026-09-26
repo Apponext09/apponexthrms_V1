@@ -84,6 +84,14 @@ async function permissionCheckAsync(
   );
 
   if (!hasAllPerms) {
+    // A page grant permits loading that page's read data, never mutation or approval.
+    // The lookup is DB-backed and subscription-filtered, not inferred from a role name.
+    if (['GET', 'HEAD'].includes(req.method) &&
+      (await Promise.all(requiredPermissions.map((permission) => rbacService.hasMenuReadPermission(req.ctx!, permission))))
+        .every(Boolean)) {
+      next();
+      return;
+    }
     // Check DB user roles fallback via user_roles JOIN roles
     try {
       const db = (await import('../../db/knex')).getKnex();
@@ -92,12 +100,11 @@ async function permissionCheckAsync(
         .where('user_roles.organization_id', organizationId)
         .where('user_roles.user_id', userId)
         .select('roles.code');
-        
+
       const roleCodes = dbRoles.map(r => String(r.code || '').toLowerCase());
-      
-      // If user has no explicit restricted role or has admin/hr role, grant access
+
+      // Legacy administrator exception. An account with no DB role is never privileged.
       if (
-        roleCodes.length === 0 ||
         roleCodes.some(r => ['superadmin', 'admin', 'org_admin', 'organization_admin', 'hr_admin', 'hr_manager', 'owner'].includes(r))
       ) {
         next();
@@ -113,9 +120,8 @@ async function permissionCheckAsync(
         return;
       }
     } catch (err) {
-      // In case of query fallback error, allow authenticated org user
-      next();
-      return;
+      // A failed permission lookup must never turn into access.
+      throw err;
     }
 
     throw new ForbiddenError(

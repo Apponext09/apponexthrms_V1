@@ -19,7 +19,6 @@ export const DEFAULT_FORM_FIELDS_CONFIG = {
   skills: { enabled: true, required: false },
   comments: { enabled: true, required: false },
   resume: { enabled: true, required: true },
-  signature: { enabled: true, required: true },
 };
 
 export class CareerPortalSettingsService {

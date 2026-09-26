@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { showToast } from '@/components/ui/toast';
 import { cn } from '@/lib/utils';
+import { attendanceRules, validateShiftRules } from '../shiftRules';
 
 // ─────────────────────────────────────────────────────
 // Types & Interfaces
@@ -108,11 +109,6 @@ function calculateTotalTimeFromStartEnd(startTime: string, endTime: string): str
 // Strict HH:MM validator for the free-text duration fields (Buffer/Total/Log
 // Break Time) — rejects malformed input like "xx:30" instead of silently
 // coercing it to "00:30".
-const STRICT_HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
-function isValidHHMM(value: string): boolean {
-  return STRICT_HHMM.test(value.trim());
-}
-
 // ─────────────────────────────────────────────────────
 // Main Create Shift Modal Component
 // ─────────────────────────────────────────────────────
@@ -152,9 +148,10 @@ export function CreateShiftModal({
   // 2. Time Settings (Fixed vs Flexible)
   const [startTime, setStartTime] = useState('09:00');
   const [endTime, setEndTime] = useState('18:00');
-  const [checkInTime, setCheckInTime] = useState('09:00');
   const [bufferTime, setBufferTime] = useState('00:15');
   const [considerHalfDayAfterCheckin, setConsiderHalfDayAfterCheckin] = useState('11:00');
+  const [flexibleStartRangeStart, setFlexibleStartRangeStart] = useState('08:00');
+  const [flexibleStartRangeEnd, setFlexibleStartRangeEnd] = useState('11:00');
   const [totalTime, setTotalTime] = useState('09:00');
   const [logBreakTime, setLogBreakTime] = useState('01:00');
 
@@ -164,7 +161,6 @@ export function CreateShiftModal({
   // Handlers for automatic totalTime calculation
   const handleStartTimeChange = (val: string) => {
     setStartTime(val);
-    setCheckInTime(val);
     if (val && endTime) {
       setTotalTime(calculateTotalTimeFromStartEnd(val, endTime));
     }
@@ -211,23 +207,6 @@ export function CreateShiftModal({
 
   // 7. Status
   const [isActive, setIsActive] = useState(true);
-
-  // Clear hidden fields when flexible mode is toggled ON
-  useEffect(() => {
-    if (isFlexible) {
-      setStartTime('');
-      setEndTime('');
-      setCheckInTime('');
-      setBufferTime('');
-      setConsiderHalfDayAfterCheckin('');
-    } else if (!startTime) {
-      setStartTime('09:00');
-      setEndTime('18:00');
-      setCheckInTime('09:00');
-      setBufferTime('00:15');
-      setConsiderHalfDayAfterCheckin('11:00');
-    }
-  }, [isFlexible]);
 
   const cycleDayState = (dayKey: WeekdayKey) => {
     const isIncluded = daysIncluded.includes(dayKey);
@@ -280,9 +259,10 @@ export function CreateShiftModal({
     setIsFlexible(false);
     setStartTime('09:00');
     setEndTime('18:00');
-    setCheckInTime('09:00');
     setBufferTime('00:15');
     setConsiderHalfDayAfterCheckin('11:00');
+    setFlexibleStartRangeStart('08:00');
+    setFlexibleStartRangeEnd('11:00');
     setTotalTime('09:00');
     setLogBreakTime('01:00');
     setDaysIncluded(['mon', 'tue', 'wed', 'thu', 'fri']);
@@ -342,21 +322,11 @@ export function CreateShiftModal({
       return;
     }
 
-    if (!isFlexible && startTime && endTime && startTime === endTime) {
-      showToast.error('Validation Error', 'Shift end time must be different from the start time.');
-      return;
-    }
-
-    for (const [label, value] of [
-      ['Buffer Time', bufferTime],
-      ['Total Time', totalTime],
-      ['Log Break Time', logBreakTime],
-    ] as const) {
-      if (value && !isValidHHMM(value)) {
-        showToast.error('Validation Error', `${label} must be a valid HH:MM value (e.g. 01:30), not "${value}".`);
-        return;
-      }
-    }
+    const ruleInput = { isFlexible, startTime, endTime, flexibleStartRangeStart, flexibleStartRangeEnd,
+      totalTime, logBreakTime, bufferTime, halfDayStartTime: considerHalfDayAfterCheckin,
+      minHoursFullDayIncluded, minHoursFullDayExcluded, minHoursHalfDay, shiftCutOffTime, minExcludedDaysWorked };
+    const ruleError = validateShiftRules(ruleInput);
+    if (ruleError) { showToast.error('Validation Error', ruleError); return; }
 
     // A shift ending before it starts is only ever valid if it deliberately
     // crosses midnight — detect that here so it's sent to the server
@@ -419,6 +389,7 @@ export function CreateShiftModal({
         return acc;
       }, {} as Record<string, ExcludedDayPattern>);
 
+      const globalAttendanceRules = attendanceRules(ruleInput);
       const rosterPatternObj = {
         totalTime,
         logBreakTime,
@@ -426,13 +397,7 @@ export function CreateShiftModal({
         daysIncluded,
         holidayDays,
         excludedWorkingPattern,
-        globalAttendanceRules: {
-          minHoursFullDayExcluded,
-          minHoursFullDayIncluded,
-          minHoursHalfDay,
-          minExcludedDaysWorked,
-          shiftCutOffTime,
-        },
+        globalAttendanceRules,
         behaviorToggles,
       };
 
@@ -448,6 +413,10 @@ export function CreateShiftModal({
         shiftCategory: shiftType,
         isFlexible,
         is_flexible: isFlexible,
+        flexibleStartRangeStart: isFlexible ? `${flexibleStartRangeStart}:00` : null,
+        flexible_start_range_start: isFlexible ? `${flexibleStartRangeStart}:00` : null,
+        flexibleStartRangeEnd: isFlexible ? `${flexibleStartRangeEnd}:00` : null,
+        flexible_start_range_end: isFlexible ? `${flexibleStartRangeEnd}:00` : null,
         startTime: !isFlexible && startTime ? `${startTime}:00` : null,
         start_time: !isFlexible && startTime ? `${startTime}:00` : null,
         endTime: !isFlexible && endTime ? `${endTime}:00` : null,
@@ -472,13 +441,7 @@ export function CreateShiftModal({
         daysIncluded,
         holidayDays,
         excludedWorkingPattern,
-        globalAttendanceRules: {
-          minHoursFullDayExcluded,
-          minHoursFullDayIncluded,
-          minHoursHalfDay,
-          minExcludedDaysWorked,
-          shiftCutOffTime,
-        },
+        globalAttendanceRules,
         behaviorToggles,
         status: isActive ? 'active' : 'inactive',
         color: color || '#10B981',
@@ -680,12 +643,18 @@ export function CreateShiftModal({
                 </div>
               </div>
             ) : (
-              /* 2b. Flexible Shift Info Banner */
-              <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-xs text-amber-700 dark:text-amber-300 flex items-center gap-2">
-                <Info className="w-4 h-4 text-amber-500 flex-shrink-0" />
-                <span>
-                  Start Time, End Time, Buffer Time, and Half Day Checkin are hidden for Flexible Shifts. Employees can clock in at any time.
-                </span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold">Earliest flexible check-in <span className="text-rose-500">*</span></Label>
+                  <Input type="time" value={flexibleStartRangeStart} onChange={(e) => setFlexibleStartRangeStart(e.target.value)} className="rounded-xl text-sm font-mono h-9" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold">Latest flexible check-in <span className="text-rose-500">*</span></Label>
+                  <Input type="time" value={flexibleStartRangeEnd} onChange={(e) => setFlexibleStartRangeEnd(e.target.value)} className="rounded-xl text-sm font-mono h-9" />
+                </div>
+                <p className="sm:col-span-2 text-xs text-muted-foreground flex items-center gap-2">
+                  <Info className="w-4 h-4 flex-shrink-0" /> Employees must check in inside this window; required hours are measured from their actual check-in.
+                </p>
               </div>
             )}
 

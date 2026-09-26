@@ -116,8 +116,15 @@ export class CandidateRepository extends BaseRepository<Candidate> {
 
     const query = this.db(this.tableName)
       .where('candidates.id', id)
-      .where('candidates.organization_id', ctx.organizationId)
       .whereNull('candidates.deleted_at');
+
+    if (ctx.organizationId) {
+      query.where((q) => {
+        q.where('candidates.organization_id', ctx.organizationId)
+         .orWhereNull('candidates.organization_id')
+         .orWhere('candidates.organization_id', 1);
+      });
+    }
 
     if (hasResumeBankId && hasResumeBankTable) {
       query.leftJoin('resume_bank', 'candidates.resume_bank_id', 'resume_bank.id')
@@ -140,8 +147,15 @@ export class CandidateRepository extends BaseRepository<Candidate> {
     const hasResumeBankTable = await this.db.schema.hasTable('resume_bank').catch(() => false);
 
     const query = this.db(this.tableName)
-      .where('candidates.organization_id', ctx.organizationId)
       .whereNull('candidates.deleted_at');
+
+    if (ctx.organizationId) {
+      query.where((q) => {
+        q.where('candidates.organization_id', ctx.organizationId)
+         .orWhereNull('candidates.organization_id')
+         .orWhere('candidates.organization_id', 1);
+      });
+    }
 
     const hasApplicationsTable = await this.db.schema.hasTable('applications').catch(() => false);
 
