@@ -12,6 +12,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { fetchDailySessions } from '../api/livetrackingApi';
+import { localDateStr, shiftDateStr } from '../utils/dates';
 import { fetchRouteHistory } from '../api/livetrackingApi';
 import { RoutePlaybackModal } from '../components/RoutePlaybackModal';
 import type { TrackingSession, LiveEmployee } from '../types/livetracking.types';
@@ -120,7 +121,7 @@ function sessionToLiveEmployee(session: TrackingSession): LiveEmployee {
 
 export const TrackingHistoryPage: React.FC = () => {
   const navigate = useNavigate();
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(localDateStr());
   const [sessions, setSessions] = useState<TrackingSession[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
@@ -144,9 +145,7 @@ export const TrackingHistoryPage: React.FC = () => {
   }, [load]);
 
   const shiftDate = (days: number) => {
-    const d = new Date(date);
-    d.setDate(d.getDate() + days);
-    setDate(d.toISOString().slice(0, 10));
+    setDate(shiftDateStr(date, days));
   };
 
   const filtered = useMemo(() => {
@@ -251,13 +250,13 @@ export const TrackingHistoryPage: React.FC = () => {
             <input
               type="date"
               value={date}
-              max={new Date().toISOString().slice(0, 10)}
+              max={localDateStr()}
               onChange={(e) => setDate(e.target.value)}
               className="bg-transparent text-xs font-semibold focus:outline-none cursor-pointer px-1"
             />
             <button
               onClick={() => shiftDate(1)}
-              disabled={date >= new Date().toISOString().slice(0, 10)}
+              disabled={date >= localDateStr()}
               className="p-1.5 rounded-lg hover:bg-muted transition-colors disabled:opacity-30"
             >
               <ChevronRight className="w-4 h-4" />

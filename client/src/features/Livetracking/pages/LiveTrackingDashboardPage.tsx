@@ -4,7 +4,7 @@
 // Palette: white surfaces · soft blue canvas · navy text · blue accents
 // Font: Plus Jakarta Sans
 // ============================================================
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   RefreshCw,
@@ -21,9 +21,14 @@ import {
 import { toast } from "sonner";
 import { LiveTrackingMap } from "../components/LiveTrackingMap";
 import { RoutePlaybackModal } from "../components/RoutePlaybackModal";
-import { fetchLiveLocations, fetchRouteHistory } from "../api/livetrackingApi";
+import {
+  fetchLiveLocations,
+  fetchLiveTrails,
+  fetchRouteHistory,
+} from "../api/livetrackingApi";
 import { useLiveTrackingSocket } from "../hooks/useLiveTrackingSocket";
-import { detectBreakPoints } from "../utils/breakDetector";
+import { liveTrackingStore } from "../store/liveTrackingStore";
+import { localDateStr } from "../utils/dates";
 import type { LiveEmployee } from "../types/livetracking.types";
 import { useAuthStore } from "@/features/auth/store/authStore";
 import { useCompanyStore } from "@/features/settings/store/companyStore";
@@ -69,9 +74,37 @@ function isStaleSignal(
   }
 }
 
-/** An employee currently online with GPS on — eligible for default map focus */
-function isActiveEmployee(emp: LiveEmployee): boolean {
-  return emp.connection_status === "ONLINE" && emp.location_status === "ON";
+/** Points per employee used to seed the overview map; the selected employee loads the full day */
+const OVERVIEW_TRAIL_POINTS = 300;
+/** Roster labels (online / GPS / "x m ago") are synced from the live store at this cadence */
+const ROSTER_SYNC_MS = 5000;
+
+function normalizeLiveRow(item: any): LiveEmployee {
+  return {
+    ...item,
+    employee_id: item.employee_id ?? item.employeeId ?? item.id,
+    check_in_time: item.check_in_time ?? item.checkInTime,
+    attendance_status: item.attendance_status ?? item.attendanceStatus,
+    location_status: item.location_status ?? item.locationStatus,
+    connection_status: item.connection_status ?? item.connectionStatus,
+    last_ping_at: item.last_ping_at ?? item.lastPingAt,
+  };
+}
+
+/** Seed the live store with today's routes for these employees (one request) */
+async function seedTrails(ids: number[]): Promise<void> {
+  if (ids.length === 0) return;
+  try {
+    const trails = await fetchLiveTrails(ids, localDateStr(), OVERVIEW_TRAIL_POINTS);
+    for (const [id, points] of Object.entries(trails)) {
+      liveTrackingStore.seedRoute(
+        Number(id),
+        points.map(([lat, lng, ts]) => ({ lat, lng, ts })),
+      );
+    }
+  } catch {
+    // Routes are cosmetic on first paint — live deltas still draw from here on
+  }
 }
 
 function isCheckedInEmployee(rawEmp: any): boolean {
@@ -137,24 +170,25 @@ export const LiveTrackingDashboardPage: React.FC = () => {
   const isHROrAdmin = useMemo(() => {
     const roles: string[] = Array.isArray(user?.roles) ? [...user.roles] : [];
     if ((user as any)?.role) roles.push((user as any).role);
-    const adminPatterns = [
-      "admin",
-      "hr",
-      "organization_admin",
-      "hr_manager",
-      "hr_admin",
+    // Exact match, mirroring the server — a substring match treated any role
+    // containing "admin"/"executive"/"director" as HR.
+    const hrAdminRoles = new Set([
       "super_admin",
+      "organization_admin",
+      "org_admin",
+      "admin",
+      "hr_admin",
+      "hr_manager",
+      "hr",
       "ceo",
       "owner",
-      "director",
-      "executive",
-    ];
+    ]);
     return roles.some((r) =>
-      adminPatterns.some((p) =>
+      hrAdminRoles.has(
         String(r)
+          .trim()
           .toLowerCase()
-          .replace(/[\s-]+/g, "_")
-          .includes(p),
+          .replace(/[\s-]+/g, "_"),
       ),
     );
   }, [user]);
@@ -197,6 +231,11 @@ export const LiveTrackingDashboardPage: React.FC = () => {
   const [selectedEmployee, setSelectedEmployee] = useState<LiveEmployee | null>(
     null,
   );
+  const [follow, setFollow] = useState(false);
+  const employeesRef = useRef<LiveEmployee[]>([]);
+  useEffect(() => {
+    employeesRef.current = employees;
+  }, [employees]);
 
   // Derived stats (computed from employees list — no extra state)
   const stats = useMemo(
@@ -210,77 +249,35 @@ export const LiveTrackingDashboardPage: React.FC = () => {
   );
 
   // ── Load initial & continuous snapshot ───────────────────────────────
-  const loadSnapshot = useCallback(async (isInitial = false) => {
+  // ── Load the roster + seed today's routes ─────────────────────────────
+  // Positions/routes live in the live store (outside React); `employees` is
+  // the roster metadata. A full reload replaces both; `onlyNew` merges in
+  // employees that checked in after the page loaded.
+  const loadSnapshot = useCallback(async (isInitial = false, onlyNew = false) => {
     try {
       if (isInitial) setLoading(true);
       const data = await fetchLiveLocations();
 
-      // Normalize camelCase and snake_case properties
-      const normalizedData = (data || []).map((item: any) => ({
-        ...item,
-        employee_id: item.employee_id ?? item.employeeId ?? item.id,
-        check_in_time: item.check_in_time ?? item.checkInTime,
-        attendance_status: item.attendance_status ?? item.attendanceStatus,
-        location_status: item.location_status ?? item.locationStatus,
-        connection_status: item.connection_status ?? item.connectionStatus,
-        last_ping_at: item.last_ping_at ?? item.lastPingAt,
-      }));
-
       // Filter to show STRICTLY ONLY employees who punched attendance TODAY
-      const dataToUse = normalizedData.filter(isCheckedInEmployee);
+      const roster = (data || []).map(normalizeLiveRow).filter(isCheckedInEmployee);
+      const known = new Set(employeesRef.current.map((e) => Number(e.employee_id)));
+      const incoming = onlyNew ? roster.filter((e) => !known.has(Number(e.employee_id))) : roster;
 
-      // Pre-fetch today's route trails safely for active employees
-      // ✅ Using server-generated routed trails
-      const todayStr = new Date().toISOString().slice(0, 10);
-      const enrichedData = await Promise.all(
-        dataToUse.map(async (emp) => {
-          const empId = emp.employee_id;
-          if (!empId) return emp;
-          try {
-            const history = await fetchRouteHistory(empId, todayStr).catch(
-              () => [],
-            );
-            if (history && history.length > 0) {
-              // History now contains snapped coordinates from server
-              // Breaks will be detected by socket updates
-              const breaks = detectBreakPoints(history);
-              return { ...emp, routeTrail: history, breakPoints: breaks };
-            }
-          } catch {
-            // fallback if history fetch fails
-          }
-          if (emp.latitude != null && emp.longitude != null) {
-            const initialPoint = {
-              latitude: Number(emp.latitude),
-              longitude: Number(emp.longitude),
-              speed: null,
-              recorded_at: emp.last_ping_at || new Date().toISOString(),
-            };
-            return { ...emp, routeTrail: [initialPoint], breakPoints: [] };
-          }
-          return emp;
-        }),
-      );
+      if (!onlyNew) liveTrackingStore.retain(roster.map((e) => Number(e.employee_id)));
+      incoming.forEach((emp) => liveTrackingStore.upsertSnapshot(emp));
 
-      setEmployees(enrichedData);
-      setLastRefreshed(new Date());
+      if (onlyNew) {
+        if (incoming.length) setEmployees((prev) => [...prev, ...incoming]);
+      } else {
+        setEmployees(roster);
+        setLastRefreshed(new Date());
+        // Keep the current selection only if that employee is still on the roster
+        setSelectedEmployee((prev) =>
+          prev && roster.some((e) => Number(e.employee_id) === Number(prev.employee_id)) ? prev : null,
+        );
+      }
 
-      // Auto-select the first checked-in employee for single-employee focus
-      setSelectedEmployee((prev) => {
-        if (
-          prev &&
-          enrichedData.some(
-            (e) =>
-              (e.employee_id ?? (e as any).id) ===
-              (prev.employee_id ?? (prev as any).id),
-          )
-        ) {
-          return prev;
-        }
-        // Default focus: prefer a currently active (online + GPS on) employee.
-        // If nobody is active, leave selection empty so the map falls back to Navi Mumbai.
-        return enrichedData.find(isActiveEmployee) || null;
-      });
+      await seedTrails(incoming.map((e) => Number(e.employee_id)));
     } catch {
       // Ignore background poll errors quietly
     } finally {
@@ -291,40 +288,101 @@ export const LiveTrackingDashboardPage: React.FC = () => {
   const { selectedCompanyId } = useCompanyStore();
 
   useEffect(() => {
-    // Load snapshot ONCE on mount to seed initial route trails + live list.
-    // After this, all real-time state changes are driven purely by the Socket.IO
-    // useLiveTrackingSocket hook. The 3-second HTTP polling loop has been removed
-    // to prevent stale HTTP data from overwriting live socket-updated state.
+    // Load snapshot ONCE on mount (and on company switch) to seed the roster and
+    // today's routes. After this, positions are driven by Socket.IO deltas.
+    liveTrackingStore.reset();
     loadSnapshot(true);
   }, [loadSnapshot, selectedCompanyId]);
 
-  // ── Employee map list: Show all employees on map by default, or focus on selected single employee ──
-  const mapEmployees = useMemo(() => {
-    if (!selectedEmployee) return employees;
-    const updated = employees.find(
-      (e) =>
-        (e.employee_id ?? (e as any).id) ===
-        (selectedEmployee.employee_id ?? (selectedEmployee as any).id),
-    );
-    return updated ? [updated] : [selectedEmployee];
-  }, [selectedEmployee, employees]);
+  // Someone we don't know yet sent a location (checked in after load) — merge them in
+  const unknownTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scheduleRosterMerge = useCallback(() => {
+    if (unknownTimerRef.current) return;
+    unknownTimerRef.current = setTimeout(() => {
+      unknownTimerRef.current = null;
+      loadSnapshot(false, true);
+    }, 5000);
+  }, [loadSnapshot]);
+  useEffect(() => () => {
+    if (unknownTimerRef.current) clearTimeout(unknownTimerRef.current);
+  }, []);
+
+  // ── Selected employee: load the full-resolution route for today ───────
+  const selectedIdNum = selectedEmployee ? Number(selectedEmployee.employee_id) : null;
+  useEffect(() => {
+    setFollow(false);
+    if (!selectedIdNum) return;
+    let cancelled = false;
+    fetchRouteHistory(selectedIdNum, localDateStr())
+      .then((history) => {
+        if (cancelled || !history?.length) return;
+        liveTrackingStore.seedRoute(
+          selectedIdNum,
+          history.map((p) => ({
+            lat: Number(p.latitude),
+            lng: Number(p.longitude),
+            ts: new Date(String(p.recorded_at).replace(" ", "T")).getTime(),
+          })),
+        );
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedIdNum]);
+
+  // ── Roster labels follow the live store (throttled — not per GPS update) ─
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setEmployees((prev) => {
+        let changed = false;
+        const next = prev.map((emp) => {
+          const track = liveTrackingStore.get(Number(emp.employee_id));
+          if (!track) return emp;
+          const lastPing = track.lastPingAt ? new Date(track.lastPingAt).toISOString() : emp.last_ping_at;
+          if (
+            emp.location_status === track.locationStatus &&
+            emp.connection_status === track.connectionStatus &&
+            emp.last_ping_at === lastPing
+          ) {
+            return emp;
+          }
+          changed = true;
+          return {
+            ...emp,
+            location_status: track.locationStatus,
+            connection_status: track.connectionStatus,
+            last_ping_at: lastPing,
+            latitude: track.lat,
+            longitude: track.lng,
+          };
+        });
+        return changed ? next : prev;
+      });
+    }, ROSTER_SYNC_MS);
+    return () => clearInterval(timer);
+  }, []);
+
+  const nameOf = (id: number) =>
+    employeesRef.current.find((e) => Number(e.employee_id) === id)?.name ?? `Employee #${id}`;
 
   // ── Real-time socket updates ────────────────────────────
   const { isConnected } = useLiveTrackingSocket({
     token,
-    employees,
-    setEmployees,
-    onLocationOff: (_, name) => {
-      toast.warning(`${name} turned OFF location tracking`, { duration: 8000 });
+    onUnknownEmployees: scheduleRosterMerge,
+    // Deltas sent while we were disconnected are gone — reseed routes quietly
+    onReconnect: () => seedTrails(employeesRef.current.map((e) => Number(e.employee_id))),
+    onLocationOff: (id) => {
+      toast.warning(`${nameOf(id)} turned OFF location tracking`, { duration: 8000 });
     },
-    onLocationOn: (_, name) => {
-      toast.success(`${name} resumed location tracking`, { duration: 5000 });
+    onLocationOn: (id) => {
+      toast.success(`${nameOf(id)} resumed location tracking`, { duration: 5000 });
     },
-    onOffline: (_, name) => {
-      toast.info(`${name} went offline`, { duration: 4000 });
+    onOffline: (id) => {
+      toast.info(`${nameOf(id)} went offline`, { duration: 4000 });
     },
-    onOnline: (_, name) => {
-      toast.success(`${name} is back online`, { duration: 3000 });
+    onOnline: (id) => {
+      toast.success(`${nameOf(id)} is back online`, { duration: 3000 });
     },
   });
 
@@ -401,8 +459,8 @@ export const LiveTrackingDashboardPage: React.FC = () => {
               aria-live="polite"
               className={`flex items-center gap-2 h-9 px-3 rounded-xl border text-[11.5px] font-bold ${
                 isConnected
-                  ? "bg-[#EAF6F0] border-[#BFE3D2] text-[#12795A] dark:border-emerald-800/70 dark:bg-emerald-950/40 dark:text-emerald-300"
-                  : "bg-[#FDEDEE] border-[#F5C5C8] text-[#B3272F] dark:border-rose-800/70 dark:bg-rose-950/40 dark:text-rose-300"
+                  ? "bg-[#EAF6F0] border-[#BFE3D2] text-[#12795A]"
+                  : "bg-[#FDEDEE] border-[#F5C5C8] text-[#B3272F]"
               }`}
             >
               <span className="relative flex w-2 h-2">
@@ -414,6 +472,10 @@ export const LiveTrackingDashboardPage: React.FC = () => {
               </span>
               {isConnected ? "Live" : "Disconnected"}
             </div>
+
+            <span className="hidden xl:inline text-[11px] font-medium text-[#6B86AB] tabular-nums">
+              Seeded {lastRefreshed.toLocaleTimeString("en-IN")}
+            </span>
 
             {isHROrAdmin && (
               <Button
@@ -480,7 +542,7 @@ export const LiveTrackingDashboardPage: React.FC = () => {
               <span className="text-[13px] font-extrabold text-[#0B2B57] dark:text-foreground">
                 Field Roster
               </span>
-              <span className="text-[11px] font-bold text-[#1B6BFF] bg-[#EAF1FF] rounded-md px-1.5 py-0.5 dark:bg-blue-500/15 dark:text-blue-300">
+              <span className="text-[11px] font-bold text-[#1B6BFF] bg-[#EAF1FF] rounded-md px-1.5 py-0.5">
                 {employees.length}
               </span>
             </div>
@@ -498,13 +560,13 @@ export const LiveTrackingDashboardPage: React.FC = () => {
           <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
             {employees.length === 0 && !loading && (
               <div className="px-3 py-8 text-center">
-                <div className="w-10 h-10 mx-auto rounded-full bg-[#EAF1FF] flex items-center justify-center mb-2 dark:bg-primary/15">
+              <div className="w-10 h-10 mx-auto rounded-full bg-[#EAF1FF] flex items-center justify-center mb-2 dark:bg-primary/15">
                   <MapPin className="w-4 h-4 text-[#1B6BFF]" />
                 </div>
                 <p className="text-[12px] font-semibold text-[#0B2B57] dark:text-foreground">
                   Nobody checked in
                 </p>
-                <p className="text-[11px] text-[#6B86AB] mt-1 dark:text-muted-foreground">
+                <p className="text-[11px] text-[#6B86AB] mt-1">
                   Field staff appear here as soon as they punch attendance.
                 </p>
               </div>
@@ -532,7 +594,7 @@ export const LiveTrackingDashboardPage: React.FC = () => {
                   }}
                   className={`group cursor-pointer rounded-xl border px-3 py-2.5 transition-colors ${
                     active
-                      ? "bg-[#EAF1FF] border-[#B9D2FF] dark:border-blue-500/50 dark:bg-blue-500/15"
+                      ? "bg-[#EAF1FF] border-[#B9D2FF]"
                       : "bg-white border-transparent hover:bg-[#F5F9FF] hover:border-[#E3EDFA] dark:bg-card dark:hover:bg-muted dark:hover:border-border"
                   }`}
                 >
@@ -542,13 +604,13 @@ export const LiveTrackingDashboardPage: React.FC = () => {
                         className={`w-9 h-9 rounded-xl flex items-center justify-center text-[11.5px] font-extrabold ${
                           active
                             ? "bg-[#1B6BFF] text-white"
-                            : "bg-[#EEF4FC] text-[#3E6390] dark:bg-muted dark:text-muted-foreground"
+                            : "bg-[#EEF4FC] text-[#3E6390]"
                         }`}
                       >
                         {initialsOf(emp.name)}
                       </div>
                       <span
-                        className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white dark:border-card ${
+                        className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white ${
                           stale
                             ? "bg-[#D64550]"
                             : online
@@ -562,7 +624,7 @@ export const LiveTrackingDashboardPage: React.FC = () => {
                       <p className="text-[12.5px] font-bold text-[#0B2B57] truncate dark:text-foreground">
                         {emp.name}
                       </p>
-                      <p className="text-[11px] text-[#6B86AB] font-medium truncate dark:text-muted-foreground">
+                      <p className="text-[11px] text-[#6B86AB] font-medium truncate">
                         {emp.designation || "Field staff"}
                       </p>
                     </div>
@@ -576,7 +638,7 @@ export const LiveTrackingDashboardPage: React.FC = () => {
                         setHistoryEmployee(emp);
                       }}
                       title="Route playback"
-                      className="shrink-0 w-7 h-7 rounded-lg border border-[#DCE7F7] bg-white flex items-center justify-center text-[#3E6390] hover:text-[#1B6BFF] hover:border-[#B9D2FF] transition-colors dark:border-border dark:bg-background dark:text-muted-foreground dark:hover:border-blue-500/60 dark:hover:bg-blue-500/10 dark:hover:text-blue-300"
+                      className="shrink-0 w-7 h-7 rounded-lg border border-[#DCE7F7] bg-white flex items-center justify-center text-[#3E6390] hover:text-[#1B6BFF] hover:border-[#B9D2FF] transition-colors"
                     >
                       <History className="w-3.5 h-3.5" />
                     </button>
@@ -589,7 +651,7 @@ export const LiveTrackingDashboardPage: React.FC = () => {
                     <Tag tone={gpsOff ? "amber" : "blue"}>
                       {gpsOff ? "GPS off" : "GPS on"}
                     </Tag>
-                    <span className="text-[10.5px] font-semibold text-[#8AA0BC] ml-auto tabular-nums dark:text-muted-foreground">
+                    <span className="text-[10.5px] font-semibold text-[#8AA0BC] ml-auto tabular-nums">
                       {pingLabel(emp.last_ping_at as any)}
                     </span>
                   </div>
@@ -600,7 +662,7 @@ export const LiveTrackingDashboardPage: React.FC = () => {
 
           <div className="px-4 py-2.5 border-t border-[#EDF3FC] text-[10.5px] font-medium text-[#8AA0BC] flex items-center gap-1.5 dark:border-border dark:text-muted-foreground">
             <Crosshair className="w-3 h-3" />
-            Select a name to focus the map on one person.
+            Select a name to highlight their route and follow them.
           </div>
         </aside>
 
@@ -619,10 +681,10 @@ export const LiveTrackingDashboardPage: React.FC = () => {
           )}
 
           {!loading && employees.length === 0 && (
-            <div className="absolute left-1/2 top-4 z-20 flex w-[calc(100%-2rem)] max-w-md -translate-x-1/2 items-start gap-2.5 rounded-xl border border-blue-100 bg-white px-4 py-3 shadow-sm dark:border-border dark:bg-card">
+            <div className="absolute left-1/2 top-4 z-20 flex w-[calc(100%-2rem)] max-w-md -translate-x-1/2 items-start gap-2.5 rounded-xl border border-blue-100 bg-white px-4 py-3 shadow-sm">
               <AlertTriangle className="w-4 h-4 text-[#1B6BFF] mt-0.5 shrink-0" />
               <div>
-                <p className="text-sm font-medium text-[#0B2545] dark:text-foreground">
+                <p className="text-sm font-medium text-[#0B2545]">
                   No employees have punched attendance today (
                   {new Date().toLocaleDateString("en-IN", {
                     day: "numeric",
@@ -646,15 +708,27 @@ export const LiveTrackingDashboardPage: React.FC = () => {
 
           {/* Focus indicator overlay */}
           {selectedEmployee && (
-            <div className="absolute left-3 top-3 z-20 flex items-center gap-2 rounded-xl border border-blue-100 bg-white/95 py-1.5 pl-2.5 pr-1.5 shadow-sm dark:border-border dark:bg-card/95">
+            <div className="absolute left-3 top-3 z-20 flex items-center gap-2 rounded-xl border border-blue-100 bg-white/95 py-1.5 pl-2.5 pr-1.5 shadow-sm">
               <Crosshair className="w-3.5 h-3.5 text-[#1B6BFF]" />
-              <span className="text-[11.5px] font-bold text-[#0B2B57] max-w-[180px] truncate dark:text-foreground">
+              <span className="text-[11.5px] font-bold text-[#0B2B57] max-w-[180px] truncate">
                 Focused · {selectedEmployee.name}
               </span>
               <button
                 type="button"
+                aria-pressed={follow}
+                onClick={() => setFollow((f) => !f)}
+                className={`text-[11px] font-bold rounded-lg px-2 py-0.5 transition-colors ${
+                  follow
+                    ? "bg-[#1B6BFF] text-white"
+                    : "text-[#1B6BFF] hover:bg-[#EAF1FF]"
+                }`}
+              >
+                Follow: {follow ? "ON" : "OFF"}
+              </button>
+              <button
+                type="button"
                 onClick={() => setSelectedEmployee(null)}
-                className="text-[11px] font-bold text-[#1B6BFF] hover:bg-[#EAF1FF] rounded-lg px-2 py-0.5 transition-colors dark:text-blue-300 dark:hover:bg-blue-500/15"
+                className="text-[11px] font-bold text-[#1B6BFF] hover:bg-[#EAF1FF] rounded-lg px-2 py-0.5 transition-colors"
               >
                 Clear
               </button>
@@ -662,8 +736,10 @@ export const LiveTrackingDashboardPage: React.FC = () => {
           )}
 
           <LiveTrackingMap
-            employees={mapEmployees}
+            employees={employees}
             selectedEmployee={selectedEmployee}
+            follow={follow}
+            onFollowChange={setFollow}
             onSelectEmployee={(emp) => setSelectedEmployee(emp)}
             onViewHistory={(emp) => {
               setSelectedEmployee(emp);
@@ -688,30 +764,12 @@ export const LiveTrackingDashboardPage: React.FC = () => {
 /* ── Presentational subcomponents (UI only) ─────────────── */
 
 const toneMap = {
-  navy: {
-    chip: "bg-[#EEF4FC] text-[#3E6390] dark:bg-slate-700/60 dark:text-slate-200",
-    value: "text-[#0B2B57]",
-  },
-  blue: {
-    chip: "bg-[#EAF1FF] text-[#1B6BFF] dark:bg-blue-500/15 dark:text-blue-300",
-    value: "text-[#1B6BFF]",
-  },
-  green: {
-    chip: "bg-[#EAF6F0] text-[#12795A] dark:bg-emerald-500/15 dark:text-emerald-300",
-    value: "text-[#12795A]",
-  },
-  red: {
-    chip: "bg-[#FDEDEE] text-[#B3272F] dark:bg-rose-500/15 dark:text-rose-300",
-    value: "text-[#B3272F]",
-  },
-  amber: {
-    chip: "bg-[#FDF3E4] text-[#9A6410] dark:bg-amber-500/15 dark:text-amber-300",
-    value: "text-[#9A6410]",
-  },
-  muted: {
-    chip: "bg-[#F1F5FA] text-[#8AA0BC] dark:bg-muted dark:text-muted-foreground",
-    value: "text-[#8AA0BC]",
-  },
+  navy: { chip: "bg-[#EEF4FC] text-[#3E6390]", value: "text-[#0B2B57]" },
+  blue: { chip: "bg-[#EAF1FF] text-[#1B6BFF]", value: "text-[#1B6BFF]" },
+  green: { chip: "bg-[#EAF6F0] text-[#12795A]", value: "text-[#12795A]" },
+  red: { chip: "bg-[#FDEDEE] text-[#B3272F]", value: "text-[#B3272F]" },
+  amber: { chip: "bg-[#FDF3E4] text-[#9A6410]", value: "text-[#9A6410]" },
+  muted: { chip: "bg-[#F1F5FA] text-[#8AA0BC]", value: "text-[#8AA0BC]" },
 } as const;
 
 const StatCard: React.FC<{
