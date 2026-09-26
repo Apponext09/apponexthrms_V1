@@ -148,9 +148,6 @@ export function ProtectedRoute({
 
   // 1. Check if user is authenticated
   if (!isAuthenticated || !user) {
-    if (hasToken) {
-      return null;
-    }
     console.warn('[ProtectedRoute] Access denied: User not authenticated', {
       pathname: typeof window !== 'undefined' ? window.location.pathname : 'unknown',
       timestamp: new Date().toISOString(),

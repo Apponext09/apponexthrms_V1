@@ -14,7 +14,7 @@ import type { LocationPingPayload, LocationStatusChangePayload } from '../types/
 import type { TenantContext } from '../../../db/types';
 import { calculateSessionMetrics } from '../utils/sessionCalculator';
 import { snapToRoad } from '../utils/roadSnapper';
-import { generateRoutedTrail, getRoutePolyline } from '../utils/routeGenerator';
+import { generateRoutedTrail } from '../utils/routeGenerator';
 
 /** Resolve employee_id and role from the users table */
 async function resolveSocketUser(
@@ -100,9 +100,13 @@ interface KalmanAxis {
 function kalmanUpdate(
   state: KalmanAxis,
   measurement: number,
-  Q = 0.0001, // process noise
-  R = 3        // measurement noise
+  measurementAccuracy: number | null | undefined,
+  Q = 0.0001 // process noise
 ): KalmanAxis {
+  // Weight measurement noise by the GPS-reported accuracy (metres) — a coarse
+  // fix was previously blended with the same trust as a precise GPS lock,
+  // which could visibly drag an accurate fix off target.
+  const R = Math.max(1, (measurementAccuracy ?? 15) / 5);
   const predictedErr = state.errorCovariance + Q;
   const K = predictedErr / (predictedErr + R); // Kalman gain
   return {
@@ -155,6 +159,18 @@ function haversineDistance(lat1: number, lng1: number, lat2: number, lng2: numbe
     Math.sin(dLat / 2) ** 2 +
     Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+/** ~8 km/h — below this we treat movement as on-foot/stationary, not a vehicle */
+const VEHICLE_SPEED_THRESHOLD_MPS = 2.2;
+
+/** Estimate instantaneous speed (m/s) from the socket's last known point when the
+ * browser didn't report GeolocationCoordinates.speed (common indoors / low accuracy). */
+function estimateSpeedMps(state: SocketState, lat: number, lng: number, nowMs: number): number | null {
+  if (state.lastLat == null || state.lastLng == null || !state.lastBreadcrumbAt) return null;
+  const dtSec = (nowMs - state.lastBreadcrumbAt) / 1000;
+  if (dtSec <= 0) return null;
+  return haversineDistance(state.lastLat, state.lastLng, lat, lng) / dtSec;
 }
 
 export class LiveTrackingSocket {
@@ -235,6 +251,33 @@ export class LiveTrackingSocket {
         socket.join(`employee:${orgId}:${employeeId}`);
       }
 
+      const ctx: TenantContext = {
+        organizationId: orgId,
+        userId,
+        sessionUuid: socket.id,
+      };
+
+      // ── Rehydrate today's trail from DB so a socket reconnect (network drop,
+      // phone lock/unlock, app backgrounded while stopped, etc.) NEVER resets the
+      // in-memory trail to empty. Without this, every reconnect started a fresh
+      // empty routedTrail, so the next broadcast would replace the client's full
+      // day's line with just the post-reconnect segment — visually "breaking" the
+      // line right where the employee had paused. ─────────────────────────────
+      let seedTrail: Array<{ latitude: number; longitude: number; recorded_at: string }> = [];
+      if (employeeId) {
+        try {
+          const today = new Date().toISOString().slice(0, 10);
+          const history = await repo.getLocationHistory(ctx, employeeId, today);
+          seedTrail = (history || []).map((h: any) => ({
+            latitude: Number(h.latitude),
+            longitude: Number(h.longitude),
+            recorded_at: h.recorded_at || h.recordedAt || new Date().toISOString(),
+          }));
+        } catch (err) {
+          logger.warn(`[LiveTracking] Could not rehydrate trail for employee ${employeeId}:`, err as any);
+        }
+      }
+
       // Store per-socket state for throttling (with Kalman state initialized)
       socketState.set(socket.id, {
         employeeId,
@@ -246,15 +289,9 @@ export class LiveTrackingSocket {
         lastBreadcrumbAt: 0,
         kalmanLat: null,
         kalmanLng: null,
-        routedTrail: [],
+        routedTrail: seedTrail,
         lastRoutedPolyline: null,
       });
-
-      const ctx: TenantContext = {
-        organizationId: orgId,
-        userId,
-        sessionUuid: socket.id,
-      };
 
       // Ensure the live_location row exists and mark employee ONLINE
       if (employeeId) {
@@ -283,24 +320,37 @@ export class LiveTrackingSocket {
             state.kalmanLat = { estimate: latitude, errorCovariance: 1 };
             state.kalmanLng = { estimate: longitude, errorCovariance: 1 };
           } else {
-            state.kalmanLat = kalmanUpdate(state.kalmanLat, latitude);
-            state.kalmanLng = kalmanUpdate(state.kalmanLng, longitude);
+            state.kalmanLat = kalmanUpdate(state.kalmanLat, latitude, payload.accuracy);
+            state.kalmanLng = kalmanUpdate(state.kalmanLng, longitude, payload.accuracy);
           }
           smoothLat = state.kalmanLat.estimate;
           smoothLng = state.kalmanLng.estimate;
 
-          // ── OSRM Road Snap (non-blocking, max 3s timeout, 60s cache) ──────────
+          // ── Smart OSRM Road Snap (non-blocking, max 3s timeout, 60s cache) ─────
+          // Only snap onto the nearest DRIVING road when the employee looks like
+          // they're actually in a vehicle — snapping every fix unconditionally
+          // used to drag on-foot movement (walking into a building, a market,
+          // a pedestrian area) up to 50m onto the nearest road, making field
+          // visits look inaccurate. Below vehicle speed, use the raw Kalman-
+          // smoothed GPS fix as-is.
           let broadcastLat = smoothLat;
           let broadcastLng = smoothLng;
           let wasSnapped = false;
 
-          try {
-            const snapped = await snapToRoad(smoothLat, smoothLng);
-            broadcastLat = snapped.latitude;
-            broadcastLng = snapped.longitude;
-            wasSnapped = snapped.snapped;
-          } catch {
-            // OSRM unavailable — use Kalman-smoothed coords
+          const reportedSpeed =
+            typeof payload.speed === 'number' && Number.isFinite(payload.speed) ? payload.speed : null;
+          const impliedSpeed = reportedSpeed ?? estimateSpeedMps(state, smoothLat, smoothLng, now);
+          const looksLikeVehicle = impliedSpeed != null && impliedSpeed >= VEHICLE_SPEED_THRESHOLD_MPS;
+
+          if (looksLikeVehicle) {
+            try {
+              const snapped = await snapToRoad(smoothLat, smoothLng);
+              broadcastLat = snapped.latitude;
+              broadcastLng = snapped.longitude;
+              wasSnapped = snapped.snapped;
+            } catch {
+              // OSRM unavailable — use Kalman-smoothed coords
+            }
           }
 
           // Always update the live snapshot with road-snapped coordinates
@@ -337,41 +387,28 @@ export class LiveTrackingSocket {
             state.lastLng = longitude;
             state.lastBreadcrumbAt = now;
 
-            // ✅ FIXED: Generate route for the last segment (real-time!)
-            // This creates smooth road-following trails like Swiggy delivery
+            // ✅ Broadcast the growing trail on EVERY breadcrumb (not just every 10th)
+            // so the live line follows continuously and never appears to "stop" or
+            // disconnect after a pause — it always reflects the full trail so far,
+            // in step with what was just persisted to the DB. Each point here was
+            // already individually road-snapped via snapToRoad() above, so the line
+            // is road-following without needing to wait for a full OSRM re-fit.
+            const routedEvent = {
+              employee_id: employeeId,
+              routedTrail: state.routedTrail,
+            };
+            nsp.to(`org:${orgId}`).emit('tracking:routed_trail_updated', routedEvent);
+            this._broadcastToManagerRooms(nsp, orgId, routedEvent, 'tracking:routed_trail_updated');
+
             (async () => {
               try {
-                if (state.routedTrail.length >= 2) {
-                  const lastIdx = state.routedTrail.length - 1;
-                  const prevPoint = state.routedTrail[lastIdx - 1];
-                  const currPoint = state.routedTrail[lastIdx];
-
-                  const segmentRoute = await getRoutePolyline(
-                    prevPoint.latitude,
-                    prevPoint.longitude,
-                    currPoint.latitude,
-                    currPoint.longitude,
-                    3000
-                  );
-
-                  if (segmentRoute && segmentRoute.length > 0) {
-                    // Generate full routed trail from scratch periodically (every 10 points)
-                    if (state.routedTrail.length % 10 === 0) {
-                      const fullRoute = await generateRoutedTrail(state.routedTrail, { employeeId });
-                      if (fullRoute && fullRoute.length > 0) {
-                        state.lastRoutedPolyline = fullRoute;
-
-                        // Broadcast routed trail to viewers
-                        const routedEvent = {
-                          employee_id: employeeId,
-                          routedTrail: state.routedTrail,
-                          polyline: fullRoute,
-                        };
-
-                        nsp.to(`org:${orgId}`).emit('tracking:routed_trail_updated', routedEvent);
-                        this._broadcastToManagerRooms(nsp, orgId, routedEvent);
-                      }
-                    }
+                // Periodically refresh a smoothed multi-segment road-fit in the
+                // background (not required for the live line above, which already
+                // renders from individually-snapped points).
+                if (state.routedTrail.length >= 2 && state.routedTrail.length % 10 === 0) {
+                  const fullRoute = await generateRoutedTrail(state.routedTrail, { employeeId });
+                  if (fullRoute && fullRoute.length > 0) {
+                    state.lastRoutedPolyline = fullRoute;
                   }
                 }
 
@@ -427,7 +464,7 @@ export class LiveTrackingSocket {
 
           // Broadcast real-time alert to HR/Admin and Managers
           nsp.to(`org:${orgId}`).emit('tracking:location_status_changed', event);
-          this._broadcastToManagerRooms(nsp, orgId, event);
+          this._broadcastToManagerRooms(nsp, orgId, event, 'tracking:location_status_changed');
 
           logger.info(`[LiveTracking] Employee ${employeeId} location status changed to ${status}`);
         } catch (err) {
@@ -453,7 +490,7 @@ export class LiveTrackingSocket {
           };
 
           nsp.to(`org:${orgId}`).emit('tracking:status_changed', event);
-          this._broadcastToManagerRooms(nsp, orgId, event);
+          this._broadcastToManagerRooms(nsp, orgId, event, 'tracking:status_changed');
         } catch (err) {
           logger.error('[LiveTracking] disconnect cleanup error:', err);
         }
@@ -461,14 +498,26 @@ export class LiveTrackingSocket {
     });
   }
 
-  /** Emit event to all online manager rooms for this org */
-  private _broadcastToManagerRooms(nsp: any, orgId: number, event: object): void {
+  /**
+   * Emit event to all online manager rooms for this org.
+   * NOTE: eventName must match the event actually being broadcast — this used to
+   * be hardcoded to 'tracking:location_updated' for every call site, which meant
+   * manager-scoped clients received routedTrail/status-change payloads mislabeled
+   * as location updates (their client-side handler expects {latitude, longitude, ...}
+   * for that event, so it would corrupt the marker position with NaN coordinates).
+   */
+  private _broadcastToManagerRooms(
+    nsp: any,
+    orgId: number,
+    event: object,
+    eventName: string = 'tracking:location_updated'
+  ): void {
     // Manager rooms are named `team:{orgId}:{managerEmployeeId}`
     // We emit to a wildcard pattern by iterating connected rooms
     const roomPattern = `team:${orgId}:`;
     for (const [roomName] of nsp.adapter.rooms ?? []) {
       if (typeof roomName === 'string' && roomName.startsWith(roomPattern)) {
-        nsp.to(roomName).emit('tracking:location_updated', event);
+        nsp.to(roomName).emit(eventName, event);
       }
     }
   }

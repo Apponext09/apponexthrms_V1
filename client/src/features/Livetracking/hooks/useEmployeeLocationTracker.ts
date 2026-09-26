@@ -11,11 +11,15 @@
 // ============================================================
 import { useEffect, useRef, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
+import { pingLocationHttp } from '../api/livetrackingApi';
 
-const SOCKET_URL = (import.meta as any).env.VITE_SOCKET_URL || 'http://localhost:5000';
+const SOCKET_URL = (import.meta as any).env.VITE_SOCKET_URL || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5001');
 const MIN_DISTANCE_METERS = 0; // 0 meters — emit on every 2.5s tick for continuous live streaming
 const FORCE_PING_INTERVAL_MS = 2_500; // 2.5 seconds automatic high-frequency emission
-const MAX_ACCEPTABLE_ACCURACY_METERS = 10000; // Support laptop Wi-Fi/IP geolocation
+// Reject fixes worse than this radius — 10km previously let wildly inaccurate
+// cell-tower/IP-only fixes through as if they were the employee's real position.
+// 500m still comfortably covers laptop Wi-Fi/IP geolocation (usually well under 300m).
+const MAX_ACCEPTABLE_ACCURACY_METERS = 500;
 const WAKE_LOCK_HEARTBEAT_MS = 30_000; // Re-acquire Wake Lock every 30s
 
 // ── Haversine distance ────────────────────────────────────────────────────────
@@ -40,9 +44,13 @@ interface KalmanState {
 function kalmanUpdate(
   state: KalmanState,
   measurement: number,
-  Q = 0.0001,
-  R = 3
+  measurementAccuracy: number | null | undefined,
+  Q = 0.0001
 ): KalmanState {
+  // Weight measurement noise by the GPS-reported accuracy (metres) — a coarse
+  // WiFi/cell fix was previously blended with the same trust as a precise GPS
+  // lock, which could visibly drag an accurate fix off target.
+  const R = Math.max(1, (measurementAccuracy ?? 15) / 5);
   const predicted = state.estimate;
   const predictedErr = state.errorCovariance + Q;
   const K = predictedErr / (predictedErr + R);
@@ -133,8 +141,8 @@ export function useEmployeeLocationTracker({ token, enabled }: TrackerOptions): 
       kalmanLatRef.current = { estimate: latitude, errorCovariance: 1 };
       kalmanLngRef.current = { estimate: longitude, errorCovariance: 1 };
     } else {
-      kalmanLatRef.current = kalmanUpdate(kalmanLatRef.current, latitude);
-      kalmanLngRef.current = kalmanUpdate(kalmanLngRef.current, longitude);
+      kalmanLatRef.current = kalmanUpdate(kalmanLatRef.current, latitude, accuracy);
+      kalmanLngRef.current = kalmanUpdate(kalmanLngRef.current, longitude, accuracy);
     }
 
     const smoothLat = kalmanLatRef.current.estimate;
@@ -145,16 +153,25 @@ export function useEmployeeLocationTracker({ token, enabled }: TrackerOptions): 
       now - last.time >= FORCE_PING_INTERVAL_MS ||
       haversineDistance(last.lat, last.lng, smoothLat, smoothLng) >= MIN_DISTANCE_METERS;
 
-    if (shouldEmit && socketRef.current?.connected) {
-      socketRef.current.emit('employee:ping_location', {
-        latitude: smoothLat,
-        longitude: smoothLng,
-        accuracy: accuracy ?? undefined,
-        speed: speed ?? undefined,
-        heading: heading ?? undefined,
-      });
-      lastPositionRef.current = { lat: smoothLat, lng: smoothLng, time: now };
+    if (!shouldEmit) return;
+
+    const payload = {
+      latitude: smoothLat,
+      longitude: smoothLng,
+      accuracy: accuracy ?? undefined,
+      speed: speed ?? undefined,
+      heading: heading ?? undefined,
+    };
+
+    if (socketRef.current?.connected) {
+      socketRef.current.emit('employee:ping_location', payload);
+    } else {
+      // Socket is down (reconnecting, network drop, etc.) — fall back to HTTP so
+      // the fix still gets saved instead of being silently dropped.
+      pingLocationHttp(payload).catch(() => {});
     }
+
+    lastPositionRef.current = { lat: smoothLat, lng: smoothLng, time: now };
   }, []);
 
   // Primary watchPosition setup
@@ -179,9 +196,12 @@ export function useEmployeeLocationTracker({ token, enabled }: TrackerOptions): 
         }
       },
       {
-        enableHighAccuracy: false, // Use fast Wi-Fi/IP location on laptops & desktops
+        // High accuracy requests the real GPS chip on mobile instead of coarse
+        // Wi-Fi/cell-tower positioning — devices without GPS (laptops) just fall
+        // back to their best available source anyway, so this is safe everywhere.
+        enableHighAccuracy: true,
         maximumAge: 3000,
-        timeout: 6000,
+        timeout: 10000,
       }
     );
   }, [emitLocationStatus, processFix]);
@@ -266,35 +286,35 @@ export function useEmployeeLocationTracker({ token, enabled }: TrackerOptions): 
     };
   }, [enabled, token, startTracking, stopTracking, watchPermission, handleVisibilityChange, emitLocationStatus]);
 
-  // ── DEDICATED 2.5-SECOND BACKGROUND LOCATION TRIGGER ENGINE ────────────────
-  // Forces a fresh getCurrentPosition query every 2.5s in the background
+  // ── 2.5-SECOND KEEP-ALIVE HEARTBEAT ─────────────────────────────────────────
+  // watchPosition (above) is the sole source of fresh, high-accuracy GPS fixes —
+  // it fires on its own whenever the OS reports movement. This heartbeat exists
+  // only so a STATIONARY employee still pings roughly every 2.5s (so "last seen"
+  // stays fresh and the socket/DB path stays exercised even without movement).
+  // It deliberately asks for a CACHED position (maximumAge: 10s, no high-accuracy)
+  // instead of forcing a second independent fresh GPS acquisition — running two
+  // concurrent high-accuracy GPS requests every 2.5s doubled battery drain and
+  // had them competing for the same GPS hardware for no benefit.
   useEffect(() => {
     const activeToken = token || localStorage.getItem('accessToken');
     if (!enabled || !activeToken) return;
 
-    const backgroundTrigger = setInterval(() => {
-      if (!navigator.geolocation || !socketRef.current?.connected) return;
+    const heartbeat = setInterval(() => {
+      if (!navigator.geolocation) return;
 
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           emitLocationStatus('ON');
           processFix(pos.coords);
         },
-        () => {
-          // Fallback: request cached fix if fresh fix times out
-          navigator.geolocation.getCurrentPosition(
-            (pos) => {
-              emitLocationStatus('ON');
-              processFix(pos.coords);
-            },
-            () => {},
-            { enableHighAccuracy: false, maximumAge: 60000, timeout: 2000 }
-          );
-        },
-        { enableHighAccuracy: false, maximumAge: 0, timeout: 3000 }
+        () => {},
+        { enableHighAccuracy: false, maximumAge: 10000, timeout: 5000 }
       );
+      // Note: no socket-connected gate here — processFix() falls back to the
+      // HTTP ping endpoint on its own when the socket is down, so the heartbeat
+      // should keep running through outages too, not go silent.
     }, FORCE_PING_INTERVAL_MS);
 
-    return () => clearInterval(backgroundTrigger);
+    return () => clearInterval(heartbeat);
   }, [enabled, token, emitLocationStatus, processFix]);
 }

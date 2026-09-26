@@ -340,9 +340,7 @@ export function HRLayout() {
 
           <div className="flex items-center gap-2">
             <span className="hidden truncate text-base font-extrabold tracking-tight text-foreground md:inline">APPONEXTHRMS</span>
-            <span className="hidden md:inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full border border-primary/20 bg-primary/10 text-primary">
-              {roleInfo.roleTitle} · {roleInfo.departmentName}
-            </span>
+           
           </div>
 
           <div className="flex-1" />

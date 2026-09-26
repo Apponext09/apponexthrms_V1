@@ -1,10 +1,13 @@
 import axios from 'axios';
 
-const rawApiUrl = (import.meta as any).env.VITE_API_URL || 'http://localhost:5000/api/v1';
+const rawApiUrl = (import.meta as any).env.VITE_API_URL || '/api/v1';
 const API_BASE_URL = rawApiUrl.endsWith('/v1') ? rawApiUrl : `${rawApiUrl}/v1`;
 
 export const getApiBaseUrl = (): string => {
-  return rawApiUrl.replace('/api/v1', '');
+  if (rawApiUrl.includes('/api/v1')) {
+    return rawApiUrl.replace('/api/v1', '');
+  }
+  return '';
 };
 
 export const apiClient = axios.create({
