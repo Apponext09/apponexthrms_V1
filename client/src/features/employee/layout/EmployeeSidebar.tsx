@@ -109,7 +109,7 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
 
   const navSections: NavSection[] = [
     {
-      label: 'EMPLOYEE CORE',
+      label: 'CoreHR',
       subscriptionModule: 'Core HR & Directory',
       items: [
         {
@@ -133,7 +133,7 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
       ],
     },
     {
-      label: 'ATTENDANCE',
+      label: 'Attendance',
       subscriptionModule: 'Attendance & Time Tracking',
       items: [
         {
@@ -164,7 +164,7 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
       ],
     },
     {
-      label: 'LEAVES',
+      label: 'Leaves',
       subscriptionModule: 'Leave Management & Approvals',
       items: [
         {
@@ -182,7 +182,7 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
       ],
     },
     {
-      label: 'PAYROLL',
+      label: 'Payroll',
       subscriptionModule: 'Automated Payroll Processing',
       items: [
         {
@@ -206,7 +206,7 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
       ],
     },
     {
-      label: 'LOAN MANAGEMENT',
+      label: 'Loans',
       subscriptionModule: 'Automated Payroll Processing',
       items: [
         {
@@ -218,7 +218,7 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
       ],
     },
     {
-      label: 'EXPENSE MANAGEMENT',
+      label: 'Expenses',
       subscriptionModule: 'Expense Management',
       items: [
         {
@@ -248,7 +248,7 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
       ],
     },
     {
-      label: 'LEARNING & ACADEMY (LMS)',
+      label: 'LMS',
       subscriptionModule: 'Learning Management System',
       items: [
         {
@@ -272,7 +272,7 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
       ],
     },
     {
-      label: 'DEVELOPMENT & ENGAGEMENT',
+      label: 'Performance',
       subscriptionModule: 'Performance & OKRs',
       items: [
         {
@@ -338,7 +338,7 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
       ],
     },
     {
-      label: 'CAREER & OPENINGS',
+      label: 'Careers',
       subscriptionModule: 'Recruitment & ATS',
       items: [
         {
@@ -356,7 +356,7 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
       ],
     },
     {
-      label: 'TOOLS & SUPPORT',
+      label: 'Support',
       subscriptionModule: null,
       items: [
         {
@@ -400,51 +400,41 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
   return (
     <aside
       className={cn(
-        'portal-sidebar h-dvh flex flex-col justify-between border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-all duration-300 select-none overflow-hidden',
-        open ? 'w-72 md:w-28' : 'w-20'
+        'portal-sidebar flex h-dvh flex-col justify-between overflow-hidden border-r border-sidebar-border bg-white text-sidebar-foreground transition-all duration-300 select-none dark:bg-slate-950',
+        open ? 'w-[calc(100vw-1.5rem)] max-w-72 md:w-28' : 'w-20'
       )}
     >
       <div className="flex flex-col flex-1 min-h-0">
         {/* Brand Header */}
-        <PortalSidebarBrand open={false} portalLabel="Employee Self Service" />
+        <PortalSidebarBrand open={false} portalLabel="Employee Portal" />
 
         {/* Navigation List */}
           <SectionRail id="employee" groups={[{ label: 'Dashboard', icon: LayoutDashboard, items: [{ name: 'Dashboard', href: '/employee/dashboard', icon: LayoutDashboard }] }, ...visibleNavSections.map(section => ({ ...section, icon: section.items[0]?.icon }))]} open={open} onNavigate={() => { if (window.innerWidth < 768) onOpenChange(false); }} />
       </div>
 
       {/* Employee User Card Footer */}
-      <div className="flex-shrink-0 border-t border-border bg-card p-3">
+      <div className="flex-shrink-0 border-t border-border bg-white p-2 dark:bg-slate-950">
         <SidebarProfileMenu profilePath="/employee/profile" onLogout={handleLogout} onProfileNavigate={() => { if (window.innerWidth < 768) onOpenChange(false); }}>
-        <div
-          className={cn(
-            'flex min-h-14 cursor-pointer items-center justify-center rounded-xl border border-border bg-card p-2.5 hover:bg-muted transition-colors'
-          )}
-          title="View Profile"
-        >
-          <div className="flex min-w-0 items-center gap-2.5 overflow-hidden">
-            <Avatar className="size-9 flex-shrink-0 border border-primary/30 shadow-soft-xs">
-              <AvatarImage src={employeeAvatar} />
-              <AvatarFallback className="bg-primary text-xs font-bold text-primary-foreground">
-                {getInitials()}
-              </AvatarFallback>
-            </Avatar>
-            <AnimatePresence>
-              {open && (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.2 }}
-                  className="hidden overflow-hidden text-left"
-                >
-                  <p className="text-xs font-bold text-foreground truncate">{employeeName}</p>
-                  <p className="text-[10px] text-muted-foreground truncate">{user?.email || 'employee@apponext.com'}</p>
-                </motion.div>
+          <div className="flex flex-col items-center justify-center cursor-pointer group">
+            <div
+              className={cn(
+                'mx-auto flex size-11 items-center justify-center rounded-xl border border-border bg-white p-0.5 transition-colors hover:bg-muted dark:bg-slate-950'
               )}
-            </AnimatePresence>
+              title="View Employee Profile"
+            >
+              <div className="flex min-w-0 items-center gap-2.5 overflow-hidden">
+                <Avatar className="size-10 flex-shrink-0 border border-primary/30 shadow-soft-xs">
+                  <AvatarImage src={employeeAvatar || user?.avatarUrl || (user as any)?.avatar || (user as any)?.profile_picture} alt="Profile" />
+                  <AvatarFallback className="bg-primary text-xs font-bold text-primary-foreground">
+                    {getInitials()}
+                  </AvatarFallback>
+                </Avatar>
+              </div>
+            </div>
+            <span className="text-[8.5px] font-bold tracking-tight text-primary text-center leading-tight truncate max-w-[68px] mt-1">
+              Employee Portal
+            </span>
           </div>
-
-        </div>
         </SidebarProfileMenu>
       </div>
     </aside>

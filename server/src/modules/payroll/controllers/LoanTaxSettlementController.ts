@@ -73,6 +73,7 @@ export class LoanTaxSettlementController {
   async getLoan(req: Request, res: Response) {
     const { id } = req.params;
     const loan = await this.loanService.getLoan(req.ctx, parseInt(id));
+    if (!loan) { res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Loan not found' } }); return; }
     res.json({ success: true, data: loan });
   }
 
@@ -275,6 +276,7 @@ export class LoanTaxSettlementController {
   async getTaxDeclaration(req: Request, res: Response) {
     const { id } = req.params;
     const declaration = await this.taxService.getDeclaration(req.ctx, parseInt(id));
+    if (!declaration) { res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Tax declaration not found' } }); return; }
     res.json({ success: true, data: declaration });
   }
 
@@ -282,6 +284,23 @@ export class LoanTaxSettlementController {
     const { id } = req.params;
     const declaration = await this.taxService.finalizeDeclaration(req.ctx, parseInt(id));
     res.json({ success: true, data: declaration });
+  }
+
+  async addTaxInvestment(req: Request, res: Response) {
+    const { id } = req.params;
+    const b = req.body || {};
+    const investment = await this.taxService.addInvestment(req.ctx, parseInt(id), {
+      investmentType: b.investmentType ?? b.investment_type ?? b.type ?? b.section,
+      investmentAmount: Number(b.investmentAmount ?? b.investment_amount ?? b.amount),
+      proofUrl: b.proofUrl ?? b.investmentProofUrl ?? b.investment_proof_url,
+    });
+    res.status(201).json({ success: true, data: investment });
+  }
+
+  async getTaxInvestments(req: Request, res: Response) {
+    const { id } = req.params;
+    const investments = await this.taxService.getInvestments(req.ctx, parseInt(id));
+    res.json({ success: true, data: investments });
   }
 
   async calculateTDS(req: Request, res: Response) {

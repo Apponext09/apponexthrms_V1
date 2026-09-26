@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { AVAILABLE_ROLES } from '../types/policy';
 import type { TargetAssignment } from '../types/policy';
-import { apiClient } from '@/config/api';
+import { policiesApi } from '../api/policiesApi';
 import {
   Shield,
   Building2,
   Users,
+  Briefcase,
   MapPin,
   Check,
   Bell,
@@ -16,19 +16,33 @@ import {
   ArrowLeft,
   ArrowRight,
   Save,
+  RotateCw,
+  AlertCircle,
+  Search,
+  Clock,
+  UserCheck,
+  Tag,
 } from 'lucide-react';
 
-interface DepartmentOption {
-  id: number | string;
+interface TargetOptionItem {
+  id: string | number;
   name: string;
+  code?: string;
+  description?: string;
+  email?: string;
+  city?: string;
+  [key: string]: any;
 }
 
-interface EmployeeOption {
-  id: number | string;
-  first_name: string;
-  last_name: string;
-  email: string;
-  department_name?: string;
+interface TargetOptionsState {
+  roles: TargetOptionItem[];
+  departments: TargetOptionItem[];
+  employees: TargetOptionItem[];
+  designations: TargetOptionItem[];
+  locations: TargetOptionItem[];
+  employeeTypes: TargetOptionItem[];
+  shifts: TargetOptionItem[];
+  reportingManagers: TargetOptionItem[];
 }
 
 interface PolicyAssignmentStepProps {
@@ -60,112 +74,122 @@ export const PolicyAssignmentStep: React.FC<PolicyAssignmentStepProps> = ({
   onSaveDraft,
   isSubmitting = false,
 }) => {
-  const [activeTab, setActiveTab] = useState<'roles' | 'departments' | 'employees' | 'custom'>('roles');
-  const [departments, setDepartments] = useState<DepartmentOption[]>([]);
-  const [employees, setEmployees] = useState<EmployeeOption[]>([]);
-  const [loadingLists, setLoadingLists] = useState(false);
+  const [activeTab, setActiveTab] = useState<'roles' | 'departments' | 'employees' | 'designations' | 'custom'>('roles');
+  
+  const [targetData, setTargetData] = useState<TargetOptionsState>({
+    roles: [],
+    departments: [],
+    employees: [],
+    designations: [],
+    locations: [],
+    employeeTypes: [],
+    shifts: [],
+    reportingManagers: [],
+  });
+
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Search states for tabs
+  const [roleSearch, setRoleSearch] = useState('');
+  const [deptSearch, setDeptSearch] = useState('');
   const [employeeSearch, setEmployeeSearch] = useState('');
+  const [desigSearch, setDesigSearch] = useState('');
 
-  // Fetch departments & employees for selection
+  const loadTargetOptions = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await policiesApi.getTargetOptions();
+      setTargetData({
+        roles: Array.isArray(data?.roles) ? data.roles : [],
+        departments: Array.isArray(data?.departments) ? data.departments : [],
+        employees: Array.isArray(data?.employees) ? data.employees : [],
+        designations: Array.isArray(data?.designations) ? data.designations : [],
+        locations: Array.isArray(data?.locations) ? data.locations : [],
+        employeeTypes: Array.isArray(data?.employeeTypes) ? data.employeeTypes : [],
+        shifts: Array.isArray(data?.shifts) ? data.shifts : [],
+        reportingManagers: Array.isArray(data?.reportingManagers) ? data.reportingManagers : [],
+      });
+    } catch (err: any) {
+      console.error('Failed to load target options:', err);
+      setError(err?.message || 'Failed to load organizational target options. Please retry.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const loadOptions = async () => {
-      try {
-        setLoadingLists(true);
-        const [deptRes, empRes] = await Promise.all([
-          apiClient.get('/reports/options').catch(() => ({ data: { data: { departments: [] } } })),
-          apiClient.get('/employees').catch(() => ({ data: { data: [] } })),
-        ]);
-
-        const depts = deptRes.data?.data?.departments || [];
-        setDepartments(Array.isArray(depts) ? depts : []);
-
-        const emps = empRes.data?.data || empRes.data?.employees || empRes.data || [];
-        setEmployees(Array.isArray(emps) ? emps : []);
-      } catch (err) {
-        console.warn('Could not load departments/employees for policy assignment selector:', err);
-      } finally {
-        setLoadingLists(false);
-      }
-    };
-    loadOptions();
+    loadTargetOptions();
   }, []);
 
-  // Helpers to check & toggle assignments
-  const isRoleAssigned = (roleCode: string) => {
-    return assignments.some((a) => a.targetType === 'role' && a.targetId === roleCode);
+  // Generic check for target assignment
+  const isTargetAssigned = (targetType: string, targetId: string | number) => {
+    const idStr = String(targetId);
+    return assignments.some((a) => a.targetType === targetType && String(a.targetId) === idStr);
   };
 
-  const toggleRole = (roleCode: string) => {
-    if (isRoleAssigned(roleCode)) {
-      onChangeAssignments(assignments.filter((a) => !(a.targetType === 'role' && a.targetId === roleCode)));
-    } else {
-      onChangeAssignments([...assignments, { targetType: 'role', targetId: roleCode }]);
-    }
-  };
+  // Toggle single item target
+  const toggleTarget = (targetType: string, targetId: string | number) => {
+    const idStr = String(targetId);
+    const exists = isTargetAssigned(targetType, idStr);
 
-  const isDepartmentAssigned = (deptId: string) => {
-    return assignments.some((a) => a.targetType === 'department' && a.targetId === deptId);
-  };
-
-  const toggleDepartment = (deptId: string) => {
-    if (deptId === 'all') {
-      const withoutDepts = assignments.filter((a) => a.targetType !== 'department');
-      if (isDepartmentAssigned('all')) {
-        onChangeAssignments(withoutDepts);
+    if (idStr === 'all') {
+      const withoutType = assignments.filter((a) => a.targetType !== targetType);
+      if (exists) {
+        onChangeAssignments(withoutType);
       } else {
-        onChangeAssignments([...withoutDepts, { targetType: 'department', targetId: 'all' }]);
+        onChangeAssignments([...withoutType, { targetType: targetType as any, targetId: 'all' }]);
       }
     } else {
-      const withoutAllDept = assignments.filter((a) => !(a.targetType === 'department' && a.targetId === 'all'));
-      if (isDepartmentAssigned(deptId)) {
-        onChangeAssignments(withoutAllDept.filter((a) => !(a.targetType === 'department' && a.targetId === deptId)));
+      const withoutAll = assignments.filter((a) => !(a.targetType === targetType && String(a.targetId) === 'all'));
+      if (exists) {
+        onChangeAssignments(withoutAll.filter((a) => !(a.targetType === targetType && String(a.targetId) === idStr)));
       } else {
-        onChangeAssignments([...withoutAllDept, { targetType: 'department', targetId: deptId }]);
+        onChangeAssignments([...withoutAll, { targetType: targetType as any, targetId: idStr }]);
       }
     }
   };
 
-  const isEmployeeAssigned = (empId: string) => {
-    return assignments.some((a) => a.targetType === 'employee' && a.targetId === empId);
-  };
+  // Filtered lists
+  const filteredRoles = targetData.roles.filter((r) => {
+    const name = (r.name || '').toLowerCase();
+    const code = (r.code || '').toLowerCase();
+    const q = roleSearch.toLowerCase().trim();
+    return name.includes(q) || code.includes(q);
+  });
 
-  const toggleEmployee = (empId: string) => {
-    if (empId === 'all') {
-      const withoutEmps = assignments.filter((a) => a.targetType !== 'employee');
-      if (isEmployeeAssigned('all')) {
-        onChangeAssignments(withoutEmps);
-      } else {
-        onChangeAssignments([...withoutEmps, { targetType: 'employee', targetId: 'all' }]);
-      }
-    } else {
-      const withoutAllEmp = assignments.filter((a) => !(a.targetType === 'employee' && a.targetId === 'all'));
-      if (isEmployeeAssigned(empId)) {
-        onChangeAssignments(withoutAllEmp.filter((a) => !(a.targetType === 'employee' && a.targetId === empId)));
-      } else {
-        onChangeAssignments([...withoutAllEmp, { targetType: 'employee', targetId: empId }]);
-      }
-    }
-  };
+  const filteredDepts = targetData.departments.filter((d) => {
+    const name = (d.name || '').toLowerCase();
+    const q = deptSearch.toLowerCase().trim();
+    return name.includes(q);
+  });
 
-  const filteredEmployees = employees.filter((e) => {
-    const fullName = `${e.first_name || ''} ${e.last_name || ''}`.toLowerCase();
+  const filteredEmployees = targetData.employees.filter((e) => {
+    const name = (e.name || `${e.first_name || ''} ${e.last_name || ''}`).toLowerCase();
     const email = (e.email || '').toLowerCase();
-    const query = employeeSearch.toLowerCase();
-    return fullName.includes(query) || email.includes(query);
+    const q = employeeSearch.toLowerCase().trim();
+    return name.includes(q) || email.includes(q);
+  });
+
+  const filteredDesignations = targetData.designations.filter((des) => {
+    const name = (des.name || '').toLowerCase();
+    const q = desigSearch.toLowerCase().trim();
+    return name.includes(q);
   });
 
   return (
     <div className="space-y-6">
       <div className="bg-card border border-border rounded-xl p-6 shadow-2xs space-y-6">
         <div>
-          <h3 className="text-base font-bold text-foreground">Step 3: Role-Wise Policy Assignment ⭐</h3>
+          <h3 className="text-base font-bold text-foreground">Step 3: Target Assignment ⭐</h3>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Configure authorization rules. A policy can be assigned to multiple roles, departments, and specific employees simultaneously.
+            Configure dynamic targeting rules. Assign policy by Roles, Departments, Employees, Designations, or Custom Scope (Location, Shift, Employee Type).
           </p>
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex items-center gap-2 border-b border-border pb-2">
+        <div className="flex flex-wrap items-center gap-2 border-b border-border pb-2">
           <Button
             type="button"
             variant={activeTab === 'roles' ? 'default' : 'ghost'}
@@ -195,6 +219,15 @@ export const PolicyAssignmentStep: React.FC<PolicyAssignmentStepProps> = ({
           </Button>
           <Button
             type="button"
+            variant={activeTab === 'designations' ? 'default' : 'ghost'}
+            size="sm"
+            onClick={() => setActiveTab('designations')}
+            className="h-8 text-xs font-bold gap-1.5"
+          >
+            <Briefcase className="w-3.5 h-3.5" /> Designations
+          </Button>
+          <Button
+            type="button"
             variant={activeTab === 'custom' ? 'default' : 'ghost'}
             size="sm"
             onClick={() => setActiveTab('custom')}
@@ -204,159 +237,359 @@ export const PolicyAssignmentStep: React.FC<PolicyAssignmentStepProps> = ({
           </Button>
         </div>
 
-        {/* Tab 1: Roles */}
-        {activeTab === 'roles' && (
-          <div className="space-y-3">
-            <div className="text-xs font-bold text-foreground">Select Target Roles (Check all that apply):</div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-              {AVAILABLE_ROLES.map((r) => {
-                const checked = isRoleAssigned(r.code);
-                return (
+        {/* Global Loading / Error States */}
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-12 space-y-3 bg-muted/10 border border-border/60 rounded-xl">
+            <div className="h-8 w-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+            <p className="text-xs font-medium text-muted-foreground">Loading master organizational targeting data...</p>
+          </div>
+        ) : error ? (
+          <div className="p-4 bg-rose-500/10 border border-rose-500/30 rounded-xl space-y-3 text-xs text-rose-600">
+            <div className="flex items-center gap-2 font-bold">
+              <AlertCircle className="w-4 h-4" /> Failed to Load Master Target Options
+            </div>
+            <p className="text-muted-foreground">{error}</p>
+            <Button type="button" variant="outline" size="sm" onClick={loadTargetOptions} className="h-8 text-xs font-bold gap-1.5">
+              <RotateCw className="w-3.5 h-3.5" /> Retry Loading Options
+            </Button>
+          </div>
+        ) : (
+          <>
+            {/* Tab 1: Roles */}
+            {activeTab === 'roles' && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-xs font-bold text-foreground">Select Target Roles (Check all that apply):</div>
+                  <Input
+                    placeholder="Search roles..."
+                    value={roleSearch}
+                    onChange={(e) => setRoleSearch(e.target.value)}
+                    className="h-8 text-xs max-w-xs bg-background"
+                  />
+                </div>
+
+                {filteredRoles.length === 0 ? (
+                  <div className="p-6 text-center border border-dashed border-border rounded-xl text-xs text-muted-foreground">
+                    No roles found matching criteria.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                    {filteredRoles.map((r) => {
+                      const roleIdentifier = r.code || String(r.id);
+                      const checked = isTargetAssigned('role', roleIdentifier);
+                      return (
+                        <div
+                          key={r.id || r.code}
+                          onClick={() => toggleTarget('role', roleIdentifier)}
+                          className={`border rounded-xl p-3.5 cursor-pointer transition-all flex items-center justify-between select-none ${
+                            checked
+                              ? 'border-primary bg-primary/5 ring-1 ring-primary/30'
+                              : 'border-border/80 bg-background hover:border-primary/40'
+                          }`}
+                        >
+                          <div className="space-y-0.5 truncate pr-2">
+                            <div className="text-xs font-bold text-foreground truncate">{r.name}</div>
+                            <div className="text-[10px] text-muted-foreground font-mono truncate">{r.code || `ID: ${r.id}`}</div>
+                          </div>
+                          <div
+                            className={`h-5 w-5 rounded-md border flex items-center justify-center shrink-0 ${
+                              checked ? 'bg-primary border-primary text-primary-foreground' : 'border-input bg-card'
+                            }`}
+                          >
+                            {checked && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Tab 2: Departments */}
+            {activeTab === 'departments' && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-xs font-bold text-foreground">Assign to Departments:</div>
+                  <Input
+                    placeholder="Search departments..."
+                    value={deptSearch}
+                    onChange={(e) => setDeptSearch(e.target.value)}
+                    className="h-8 text-xs max-w-xs bg-background"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div
-                    key={r.code}
-                    onClick={() => toggleRole(r.code)}
-                    className={`border rounded-xl p-3.5 cursor-pointer transition-all flex items-center justify-between select-none ${
-                      checked
+                    onClick={() => toggleTarget('department', 'all')}
+                    className={`border rounded-xl p-4 cursor-pointer transition-all flex items-center justify-between select-none ${
+                      isTargetAssigned('department', 'all')
                         ? 'border-primary bg-primary/5 ring-1 ring-primary/30'
                         : 'border-border/80 bg-background hover:border-primary/40'
-                    }`}
-                  >
-                    <div className="space-y-0.5">
-                      <div className="text-xs font-bold text-foreground">{r.label}</div>
-                      <div className="text-[10px] text-muted-foreground font-mono">{r.code}</div>
-                    </div>
-                    <div
-                      className={`h-5 w-5 rounded-md border flex items-center justify-center ${
-                        checked ? 'bg-primary border-primary text-primary-foreground' : 'border-input bg-card'
-                      }`}
-                    >
-                      {checked && <Check className="w-3.5 h-3.5 stroke-[3]" />}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* Tab 2: Departments */}
-        {activeTab === 'departments' && (
-          <div className="space-y-3">
-            <div className="text-xs font-bold text-foreground">Assign to Departments:</div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div
-                onClick={() => toggleDepartment('all')}
-                className={`border rounded-xl p-4 cursor-pointer transition-all flex items-center justify-between select-none ${
-                  isDepartmentAssigned('all')
-                    ? 'border-primary bg-primary/5 ring-1 ring-primary/30'
-                    : 'border-border/80 bg-background hover:border-primary/40'
-                }`}
-              >
-                <div>
-                  <div className="text-xs font-bold text-foreground">All Departments</div>
-                  <div className="text-[10px] text-muted-foreground">Applies policy across the entire organization</div>
-                </div>
-                <div
-                  className={`h-5 w-5 rounded-md border flex items-center justify-center ${
-                    isDepartmentAssigned('all') ? 'bg-primary border-primary text-primary-foreground' : 'border-input bg-card'
-                  }`}
-                >
-                  {isDepartmentAssigned('all') && <Check className="w-3.5 h-3.5 stroke-[3]" />}
-                </div>
-              </div>
-
-              {departments.map((d) => {
-                const checked = isDepartmentAssigned(String(d.id));
-                return (
-                  <div
-                    key={d.id}
-                    onClick={() => toggleDepartment(String(d.id))}
-                    className={`border rounded-xl p-3.5 cursor-pointer transition-all flex items-center justify-between select-none ${
-                      checked
-                        ? 'border-primary bg-primary/5 ring-1 ring-primary/30'
-                        : 'border-border/80 bg-background hover:border-primary/40'
-                    }`}
-                  >
-                    <div className="text-xs font-bold text-foreground">{d.name}</div>
-                    <div
-                      className={`h-5 w-5 rounded-md border flex items-center justify-center ${
-                        checked ? 'bg-primary border-primary text-primary-foreground' : 'border-input bg-card'
-                      }`}
-                    >
-                      {checked && <Check className="w-3.5 h-3.5 stroke-[3]" />}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* Tab 3: Employees */}
-        {activeTab === 'employees' && (
-          <div className="space-y-3">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-              <div className="text-xs font-bold text-foreground">Assign to Specific Employees:</div>
-              <Input
-                placeholder="Search employee by name or email..."
-                value={employeeSearch}
-                onChange={(e) => setEmployeeSearch(e.target.value)}
-                className="h-8 text-xs max-w-xs bg-background"
-              />
-            </div>
-
-            <div className="max-h-60 overflow-y-auto border border-border rounded-xl p-3 space-y-2 bg-background">
-              <div
-                onClick={() => toggleEmployee('all')}
-                className={`border rounded-lg p-3 cursor-pointer flex items-center justify-between text-xs font-bold ${
-                  isEmployeeAssigned('all') ? 'border-primary bg-primary/5' : 'border-border/60 hover:border-primary/40'
-                }`}
-              >
-                <span>Assign to All Employees</span>
-                <div className={`h-4 w-4 rounded border flex items-center justify-center ${isEmployeeAssigned('all') ? 'bg-primary border-primary text-white' : 'border-input'}`}>
-                  {isEmployeeAssigned('all') && <Check className="w-3 h-3" />}
-                </div>
-              </div>
-
-              {filteredEmployees.map((emp) => {
-                const checked = isEmployeeAssigned(String(emp.id));
-                return (
-                  <div
-                    key={emp.id}
-                    onClick={() => toggleEmployee(String(emp.id))}
-                    className={`border rounded-lg p-2.5 cursor-pointer flex items-center justify-between text-xs ${
-                      checked ? 'border-primary bg-primary/5' : 'border-border/60 hover:border-primary/40'
                     }`}
                   >
                     <div>
-                      <span className="font-bold text-foreground">{emp.first_name} {emp.last_name}</span>
-                      <span className="text-[10px] text-muted-foreground ml-2">({emp.email})</span>
+                      <div className="text-xs font-bold text-foreground">All Departments</div>
+                      <div className="text-[10px] text-muted-foreground">Applies policy across the entire organization</div>
                     </div>
-                    <div className={`h-4 w-4 rounded border flex items-center justify-center ${checked ? 'bg-primary border-primary text-white' : 'border-input'}`}>
-                      {checked && <Check className="w-3 h-3" />}
+                    <div
+                      className={`h-5 w-5 rounded-md border flex items-center justify-center ${
+                        isTargetAssigned('department', 'all') ? 'bg-primary border-primary text-primary-foreground' : 'border-input bg-card'
+                      }`}
+                    >
+                      {isTargetAssigned('department', 'all') && <Check className="w-3.5 h-3.5 stroke-[3]" />}
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          </div>
+
+                  {filteredDepts.map((d) => {
+                    const checked = isTargetAssigned('department', d.id);
+                    return (
+                      <div
+                        key={d.id}
+                        onClick={() => toggleTarget('department', d.id)}
+                        className={`border rounded-xl p-3.5 cursor-pointer transition-all flex items-center justify-between select-none ${
+                          checked
+                            ? 'border-primary bg-primary/5 ring-1 ring-primary/30'
+                            : 'border-border/80 bg-background hover:border-primary/40'
+                        }`}
+                      >
+                        <div className="text-xs font-bold text-foreground truncate pr-2">{d.name}</div>
+                        <div
+                          className={`h-5 w-5 rounded-md border flex items-center justify-center shrink-0 ${
+                            checked ? 'bg-primary border-primary text-primary-foreground' : 'border-input bg-card'
+                          }`}
+                        >
+                          {checked && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Tab 3: Employees */}
+            {activeTab === 'employees' && (
+              <div className="space-y-3">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                  <div className="text-xs font-bold text-foreground">Assign to Specific Employees:</div>
+                  <Input
+                    placeholder="Search employee by name or email..."
+                    value={employeeSearch}
+                    onChange={(e) => setEmployeeSearch(e.target.value)}
+                    className="h-8 text-xs max-w-xs bg-background"
+                  />
+                </div>
+
+                <div className="max-h-72 overflow-y-auto border border-border rounded-xl p-3 space-y-2 bg-background">
+                  <div
+                    onClick={() => toggleTarget('employee', 'all')}
+                    className={`border rounded-lg p-3 cursor-pointer flex items-center justify-between text-xs font-bold ${
+                      isTargetAssigned('employee', 'all') ? 'border-primary bg-primary/5' : 'border-border/60 hover:border-primary/40'
+                    }`}
+                  >
+                    <span>Assign to All Employees</span>
+                    <div className={`h-4 w-4 rounded border flex items-center justify-center ${isTargetAssigned('employee', 'all') ? 'bg-primary border-primary text-white' : 'border-input'}`}>
+                      {isTargetAssigned('employee', 'all') && <Check className="w-3 h-3" />}
+                    </div>
+                  </div>
+
+                  {filteredEmployees.length === 0 ? (
+                    <div className="p-4 text-center text-xs text-muted-foreground">No employees found.</div>
+                  ) : (
+                    filteredEmployees.map((emp) => {
+                      const checked = isTargetAssigned('employee', emp.id);
+                      return (
+                        <div
+                          key={emp.id}
+                          onClick={() => toggleTarget('employee', emp.id)}
+                          className={`border rounded-lg p-2.5 cursor-pointer flex items-center justify-between text-xs transition-all ${
+                            checked ? 'border-primary bg-primary/5' : 'border-border/60 hover:border-primary/40'
+                          }`}
+                        >
+                          <div>
+                            <span className="font-bold text-foreground">{emp.name}</span>
+                            {emp.email && <span className="text-[10px] text-muted-foreground ml-2">({emp.email})</span>}
+                          </div>
+                          <div className={`h-4 w-4 rounded border flex items-center justify-center ${checked ? 'bg-primary border-primary text-white' : 'border-input'}`}>
+                            {checked && <Check className="w-3 h-3" />}
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Tab 4: Designations */}
+            {activeTab === 'designations' && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-xs font-bold text-foreground">Assign to Designations:</div>
+                  <Input
+                    placeholder="Search designations..."
+                    value={desigSearch}
+                    onChange={(e) => setDesigSearch(e.target.value)}
+                    className="h-8 text-xs max-w-xs bg-background"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                  <div
+                    onClick={() => toggleTarget('designation', 'all')}
+                    className={`border rounded-xl p-3.5 cursor-pointer transition-all flex items-center justify-between select-none ${
+                      isTargetAssigned('designation', 'all')
+                        ? 'border-primary bg-primary/5 ring-1 ring-primary/30'
+                        : 'border-border/80 bg-background hover:border-primary/40'
+                    }`}
+                  >
+                    <div>
+                      <div className="text-xs font-bold text-foreground">All Designations</div>
+                      <div className="text-[10px] text-muted-foreground">Applies policy across all designations</div>
+                    </div>
+                    <div
+                      className={`h-5 w-5 rounded-md border flex items-center justify-center shrink-0 ${
+                        isTargetAssigned('designation', 'all') ? 'bg-primary border-primary text-primary-foreground' : 'border-input bg-card'
+                      }`}
+                    >
+                      {isTargetAssigned('designation', 'all') && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                    </div>
+                  </div>
+
+                  {filteredDesignations.map((des) => {
+                    const checked = isTargetAssigned('designation', des.id);
+                    return (
+                      <div
+                        key={des.id}
+                        onClick={() => toggleTarget('designation', des.id)}
+                        className={`border rounded-xl p-3.5 cursor-pointer transition-all flex items-center justify-between select-none ${
+                          checked
+                            ? 'border-primary bg-primary/5 ring-1 ring-primary/30'
+                            : 'border-border/80 bg-background hover:border-primary/40'
+                        }`}
+                      >
+                        <div className="text-xs font-bold text-foreground truncate pr-2">{des.name}</div>
+                        <div
+                          className={`h-5 w-5 rounded-md border flex items-center justify-center shrink-0 ${
+                            checked ? 'bg-primary border-primary text-primary-foreground' : 'border-input bg-card'
+                          }`}
+                        >
+                          {checked && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Tab 5: Custom / Scope */}
+            {activeTab === 'custom' && (
+              <div className="space-y-5">
+                <div className="p-3.5 bg-muted/20 border border-border rounded-xl text-xs space-y-1">
+                  <div className="font-bold text-foreground flex items-center gap-1.5">
+                    <Tag className="w-3.5 h-3.5 text-primary" /> Dynamic Organizational Custom Scope Filters
+                  </div>
+                  <p className="text-muted-foreground text-[11px]">
+                    Select organizational attributes below to restrict policy visibility dynamically based on user location, shift, or employment type.
+                  </p>
+                </div>
+
+                {/* Locations Section */}
+                <div className="space-y-2">
+                  <div className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                    <MapPin className="w-3.5 h-3.5 text-primary" /> Office Locations:
+                  </div>
+                  {targetData.locations.length === 0 ? (
+                    <p className="text-[11px] text-muted-foreground italic">No location master data configured.</p>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                      {targetData.locations.map((loc) => {
+                        const checked = isTargetAssigned('location', loc.id);
+                        return (
+                          <div
+                            key={loc.id}
+                            onClick={() => toggleTarget('location', loc.id)}
+                            className={`border rounded-lg p-2.5 cursor-pointer text-xs flex items-center justify-between select-none ${
+                              checked ? 'border-primary bg-primary/5 font-bold' : 'border-border/60 hover:border-primary/40'
+                            }`}
+                          >
+                            <span>{loc.name || loc.city}</span>
+                            <div className={`h-4 w-4 rounded border flex items-center justify-center ${checked ? 'bg-primary border-primary text-white' : 'border-input'}`}>
+                              {checked && <Check className="w-3 h-3" />}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Employee Types Section */}
+                {targetData.employeeTypes.length > 0 && (
+                  <div className="space-y-2 pt-2 border-t border-border">
+                    <div className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                      <UserCheck className="w-3.5 h-3.5 text-primary" /> Employment Types:
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                      {targetData.employeeTypes.map((et) => {
+                        const checked = isTargetAssigned('custom', `emp_type_${et.id}`);
+                        return (
+                          <div
+                            key={et.id}
+                            onClick={() => toggleTarget('custom', `emp_type_${et.id}`)}
+                            className={`border rounded-lg p-2.5 cursor-pointer text-xs flex items-center justify-between select-none ${
+                              checked ? 'border-primary bg-primary/5 font-bold' : 'border-border/60 hover:border-primary/40'
+                            }`}
+                          >
+                            <span>{et.name}</span>
+                            <div className={`h-4 w-4 rounded border flex items-center justify-center ${checked ? 'bg-primary border-primary text-white' : 'border-input'}`}>
+                              {checked && <Check className="w-3 h-3" />}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Shifts Section */}
+                {targetData.shifts.length > 0 && (
+                  <div className="space-y-2 pt-2 border-t border-border">
+                    <div className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5 text-primary" /> Work Shifts:
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                      {targetData.shifts.map((s) => {
+                        const checked = isTargetAssigned('custom', `shift_${s.id}`);
+                        return (
+                          <div
+                            key={s.id}
+                            onClick={() => toggleTarget('custom', `shift_${s.id}`)}
+                            className={`border rounded-lg p-2.5 cursor-pointer text-xs flex items-center justify-between select-none ${
+                              checked ? 'border-primary bg-primary/5 font-bold' : 'border-border/60 hover:border-primary/40'
+                            }`}
+                          >
+                            <span>{s.name}</span>
+                            <div className={`h-4 w-4 rounded border flex items-center justify-center ${checked ? 'bg-primary border-primary text-white' : 'border-input'}`}>
+                              {checked && <Check className="w-3 h-3" />}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </>
         )}
 
-        {/* Tab 4: Custom Options */}
-        {activeTab === 'custom' && (
-          <div className="space-y-3 p-4 bg-muted/20 border border-border rounded-xl text-xs">
-            <div className="font-bold text-foreground">Custom Scope & Location Filters</div>
-            <p className="text-muted-foreground">
-              By default, target policies are filtered dynamically based on user context. You can attach additional location tags or custom group tags.
-            </p>
-          </div>
-        )}
-
-        {/* Additional Options */}
+        {/* Additional Distribution & Control Options */}
         <div className="border-t border-border pt-4 space-y-3">
           <div className="text-xs font-bold text-foreground uppercase tracking-wider">Additional Distribution & Control Options</div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs font-medium">
-            
             <label className="flex items-center gap-2 border border-border rounded-xl p-3 bg-background cursor-pointer select-none">
               <input
                 type="checkbox"
@@ -401,7 +634,6 @@ export const PolicyAssignmentStep: React.FC<PolicyAssignmentStepProps> = ({
                 <div className="text-[10px] text-muted-foreground">Permit PDF document downloads</div>
               </div>
             </label>
-
           </div>
         </div>
       </div>

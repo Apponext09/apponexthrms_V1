@@ -31,10 +31,17 @@ import reportRoutes from '../modules/reports/reports.routes';
 import { jobReferenceController } from '../modules/recruitment/controllers/JobReferenceController';
 import { recruitmentController } from '../modules/recruitment/controllers/RecruitmentController';
 import policyRoutes from '../modules/policy/policy.routes';
+import { policyController } from '../modules/policy/controllers/PolicyController';
 import masterBuilderRoutes from '../modules/master-builder/masterBuilder.routes';
 import lmsRoutes from '../modules/lms/lms.routes';
 
 const router = Router();
+
+/**
+ * Public E-Signature Webhook (no JWT auth required, authenticated via provider headers/HMAC)
+ */
+router.post('/integrations/esign/webhook', policyController.handleWebhook);
+
 
 /**
  * Health check endpoint

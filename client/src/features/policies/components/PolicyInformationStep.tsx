@@ -13,6 +13,7 @@ interface PolicyInfoData {
   reviewDate: string;
   expiryDate: string;
   status: 'draft' | 'published' | string;
+  signatureMode?: string;
   applicableTo?: string;
   selectedGenders?: string[];
 }
@@ -165,6 +166,21 @@ export const PolicyInformationStep: React.FC<PolicyInformationStepProps> = ({
               <option value="published">Publish Immediately</option>
             </select>
           </div>
+
+          <div className="space-y-1">
+            <label className="block text-foreground font-bold">Signature / Sign-Off Mode</label>
+            <select
+              value={(formData as any).signatureMode || 'ACKNOWLEDGEMENT'}
+              onChange={(e) => onChange({ signatureMode: e.target.value as any })}
+              className="w-full h-10 rounded-md border border-input bg-background px-3 text-xs font-medium focus:ring-1 focus:ring-primary font-bold"
+            >
+              <option value="ACKNOWLEDGEMENT">Checkbox Acknowledgement Only</option>
+              <option value="E_SIGNATURE">E-Signature Required (DocuSign/Adobe/Leegality)</option>
+              <option value="BOTH">Both Checkbox Acknowledgement + E-Signature</option>
+              <option value="NONE">None (Informational Policy)</option>
+            </select>
+          </div>
+
 
           {/* Applicable To Scope & Gender Selector */}
           <div className="md:col-span-2 space-y-3 pt-3 border-t border-border">

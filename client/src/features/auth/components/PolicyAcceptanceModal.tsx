@@ -2,8 +2,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAuthStore } from '../store/authStore';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { ShieldCheck, LogOut, Lock, CheckCircle2, ChevronDown, FileText, AlertCircle, Sparkles } from 'lucide-react';
+import { ShieldCheck, LogOut, Lock, CheckCircle2, ChevronDown, FileText, AlertCircle, Sparkles, Paperclip, Download } from 'lucide-react';
 import { toast } from 'sonner';
+import { PolicyPdfViewer } from '@/features/policies/components/PolicyPdfViewer';
+import { PolicySignaturePad } from '@/features/policies/components/PolicySignaturePad';
+import { policiesApi } from '@/features/policies/api/policiesApi';
 
 export const PolicyAcceptanceModal: React.FC = () => {
   const { user, isAuthenticated, pendingPolicies, acceptPendingPolicy, fetchPendingPolicies, logout } = useAuthStore();
@@ -11,6 +14,8 @@ export const PolicyAcceptanceModal: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const [hasScrolledToBottom, setHasScrolledToBottom] = useState(false);
   const [hasAgreed, setHasAgreed] = useState(false);
+  const [signatureData, setSignatureData] = useState<string | null>(null);
+  const [signatureType, setSignatureType] = useState<'drawn' | 'typed' | 'uploaded'>('drawn');
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
 
   // Re-fetch pending policies when component mounts or user becomes authenticated
@@ -22,18 +27,34 @@ export const PolicyAcceptanceModal: React.FC = () => {
 
   const currentPolicy = pendingPolicies && pendingPolicies.length > 0 ? pendingPolicies[currentIndex] || pendingPolicies[0] : null;
 
-  // Reset scroll and checkbox state whenever current policy changes
+  const hasValidPdfUrl = Boolean(
+    currentPolicy?.fileUrl &&
+      typeof currentPolicy.fileUrl === 'string' &&
+      !currentPolicy.fileUrl.startsWith('[') &&
+      !currentPolicy.fileUrl.startsWith('{') &&
+      (currentPolicy.fileUrl.startsWith('/uploads/') ||
+        currentPolicy.fileUrl.startsWith('http://') ||
+        currentPolicy.fileUrl.startsWith('https://') ||
+        currentPolicy.fileUrl.startsWith('data:') ||
+        currentPolicy.fileUrl.startsWith('blob:') ||
+        /\.(pdf|png|jpg|jpeg|webp)$/i.test(currentPolicy.fileUrl.split('?')[0]))
+  );
+
+  // Reset scroll, signature, and checkbox state whenever current policy changes
   useEffect(() => {
     setHasScrolledToBottom(false);
     setHasAgreed(false);
+    setSignatureData(null);
 
     if (scrollContainerRef.current) {
       scrollContainerRef.current.scrollTop = 0;
     }
 
-    // Check if the policy content fits inside the container without scrolling
+    // Check if policy has valid PDF URL or content fits inside container
     const timer = setTimeout(() => {
-      if (scrollContainerRef.current) {
+      if (hasValidPdfUrl) {
+        setHasScrolledToBottom(true);
+      } else if (scrollContainerRef.current) {
         const { clientHeight, scrollHeight } = scrollContainerRef.current;
         if (scrollHeight <= clientHeight + 15) {
           setHasScrolledToBottom(true);
@@ -42,7 +63,7 @@ export const PolicyAcceptanceModal: React.FC = () => {
     }, 150);
 
     return () => clearTimeout(timer);
-  }, [currentPolicy?.id, currentIndex]);
+  }, [currentPolicy?.id, currentIndex, hasValidPdfUrl]);
 
   if (!isAuthenticated || !user || !pendingPolicies || pendingPolicies.length === 0 || !currentPolicy) {
     return null;
@@ -53,6 +74,10 @@ export const PolicyAcceptanceModal: React.FC = () => {
 
   // Handle Scroll Event to detect reaching the bottom
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    if (hasValidPdfUrl) {
+      if (!hasScrolledToBottom) setHasScrolledToBottom(true);
+      return;
+    }
     const { scrollTop, clientHeight, scrollHeight } = e.currentTarget;
     if (Math.ceil(scrollTop + clientHeight) >= scrollHeight - 12) {
       if (!hasScrolledToBottom) {
@@ -62,7 +87,7 @@ export const PolicyAcceptanceModal: React.FC = () => {
   };
 
   const handleAccept = async () => {
-    if (!hasScrolledToBottom) {
+    if (!hasScrolledToBottom && !hasValidPdfUrl) {
       toast.error('Please scroll to the very bottom of the policy content before accepting.');
       return;
     }
@@ -100,8 +125,9 @@ export const PolicyAcceptanceModal: React.FC = () => {
 
   // Format sections if string or object
   let sections: Array<{ id?: string; title: string; content: string }> = [];
-  if (currentPolicy.sections) {
-    let raw: any = currentPolicy.sections;
+  const rawSectionsSource = currentPolicy.sections || (typeof currentPolicy.fileUrl === 'string' && currentPolicy.fileUrl.startsWith('[') ? currentPolicy.fileUrl : null);
+  if (rawSectionsSource) {
+    let raw: any = rawSectionsSource;
     try {
       while (typeof raw === 'string') {
         raw = JSON.parse(raw);
@@ -187,13 +213,13 @@ export const PolicyAcceptanceModal: React.FC = () => {
           </span>
         </div>
 
-        {/* Scrollable Fixed-Height Policy Content Container */}
+        {/* Scrollable Main Policy Content Container & Signature Verification */}
         <div
           ref={scrollContainerRef}
           onScroll={handleScroll}
-          className="p-4 sm:p-8 overflow-y-auto flex-1 bg-slate-950/60 max-h-[52vh] min-h-[300px] space-y-6 scroll-smooth border-b border-slate-800"
+          className="p-4 sm:p-6 overflow-y-auto flex-1 bg-slate-950/60 max-h-[calc(94vh-160px)] space-y-6 scroll-smooth border-b border-slate-800"
         >
-          <div className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-800 shadow-xl rounded-xl p-6 sm:p-10 max-w-3xl mx-auto space-y-6 font-sans">
+          <div className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-800 shadow-xl rounded-xl p-6 sm:p-8 max-w-3xl mx-auto space-y-6 font-sans">
             
             {/* Document Header Title */}
             <div className="text-center space-y-2 border-b-2 border-slate-900 dark:border-slate-100 pb-5">
@@ -235,9 +261,19 @@ export const PolicyAcceptanceModal: React.FC = () => {
               </div>
             )}
 
-            {/* Content Sections */}
+            {/* Content Sections / Uploaded PDF Source of Truth */}
             <div className="space-y-6 pt-2">
-              {sections && sections.length > 0 ? (
+              {hasValidPdfUrl ? (
+                <PolicyPdfViewer
+                  fileUrl={currentPolicy.fileUrl}
+                  fileName={currentPolicy.fileName}
+                  fileSize={currentPolicy.fileSize}
+                  title={currentPolicy.title}
+                  version={currentPolicy.version}
+                  height="h-[480px]"
+                  hideHeader={true}
+                />
+              ) : sections && sections.length > 0 ? (
                 sections.map((sec, idx) => (
                   <div key={sec.id || idx} className="space-y-2">
                     <h3 className="text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-900 dark:text-slate-100 flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-1">
@@ -265,10 +301,6 @@ export const PolicyAcceptanceModal: React.FC = () => {
                     </div>
                   </div>
                 ))
-              ) : currentPolicy.fileUrl && !currentPolicy.fileUrl.startsWith('http') ? (
-                <div className="text-xs leading-relaxed text-slate-700 dark:text-slate-300 whitespace-pre-line space-y-2">
-                  {currentPolicy.fileUrl}
-                </div>
               ) : (
                 <div className="space-y-4 text-xs leading-relaxed text-slate-700 dark:text-slate-300">
                   <p>
@@ -281,6 +313,47 @@ export const PolicyAcceptanceModal: React.FC = () => {
               )}
             </div>
 
+            {/* Supporting Attachments Section if present (filtering out duplicate main document) */}
+            {(() => {
+              const extraAttachments = (currentPolicy.attachments || []).filter((att: any) => {
+                if (att.isMainDocument) return false;
+                if (att.fileName && currentPolicy.fileName && att.fileName === currentPolicy.fileName) return false;
+                if (att.storagePath && currentPolicy.fileUrl && att.storagePath === currentPolicy.fileUrl) return false;
+                return true;
+              });
+              if (extraAttachments.length === 0) return null;
+              return (
+                <div className="pt-4 border-t border-slate-200 dark:border-slate-800 space-y-3">
+                  <div className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                    <Paperclip className="w-4 h-4 text-primary" /> Supporting Attachments & Documents ({extraAttachments.length})
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                    {extraAttachments.map((att: any, attIdx: number) => {
+                      const downloadUrl = att.id
+                        ? policiesApi.getAttachmentDownloadUrl(currentPolicy.id, att.id)
+                        : att.storagePath;
+                      return (
+                        <div key={att.id || attIdx} className="p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 flex items-center justify-between gap-2">
+                          <div className="truncate">
+                            <span className="font-bold text-slate-800 dark:text-slate-200 truncate block text-xs">{att.fileName}</span>
+                            <span className="text-[10px] text-slate-500 uppercase font-mono">{att.fileType ? att.fileType.split('/')[1] || att.fileType : 'File'}</span>
+                          </div>
+                          <a
+                            href={downloadUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-primary bg-primary/10 rounded-md hover:bg-primary/20 shrink-0 border border-primary/20"
+                          >
+                            <Download className="w-3 h-3" /> Download
+                          </a>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* End of Document Footer Notice */}
             <div className="border-t border-slate-300 dark:border-slate-700 pt-4 flex items-center justify-between text-[11px] font-medium text-slate-500 dark:text-slate-400">
               <span className="truncate max-w-[280px]">{currentPolicy.title}</span>
@@ -288,79 +361,87 @@ export const PolicyAcceptanceModal: React.FC = () => {
             </div>
 
           </div>
+
+          {/* Verification & Signature Section */}
+          <div className="max-w-3xl mx-auto space-y-4">
+            {!hasScrolledToBottom ? (
+              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between text-xs text-amber-300 animate-pulse">
+                <div className="flex items-center gap-2 font-medium">
+                  <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+                  <span>Please scroll through the entire policy to the bottom to unlock acceptance.</span>
+                </div>
+                <div className="flex items-center gap-1 text-[11px] font-bold text-amber-400">
+                  <span>Continue scrolling</span>
+                  <ChevronDown className="w-4 h-4 animate-bounce" />
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4 animate-in fade-in duration-300">
+                <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 text-xs font-bold text-emerald-400">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <span>✓ You have reached the end of this policy.</span>
+                  </div>
+
+                  {/* Accept Checkbox */}
+                  <div className="flex items-center space-x-2.5">
+                    <Checkbox
+                      id="accept-policy-checkbox"
+                      checked={hasAgreed}
+                      onCheckedChange={(checked) => setHasAgreed(Boolean(checked))}
+                      className="h-4 w-4 rounded text-primary border-emerald-500/60 focus:ring-primary shrink-0 bg-slate-900"
+                    />
+                    <label
+                      htmlFor="accept-policy-checkbox"
+                      className="text-xs font-bold text-slate-100 cursor-pointer select-none leading-tight"
+                    >
+                      I have read and understood this policy.
+                    </label>
+                  </div>
+                </div>
+
+                {/* Digital Signature Pad Component (Draw, Type, Upload Signature) */}
+                <PolicySignaturePad
+                  onSignatureChange={(data, type) => {
+                    setSignatureData(data);
+                    setSignatureType(type);
+                  }}
+                  defaultSignerName={`${user.firstName || ''} ${user.lastName || ''}`.trim()}
+                />
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Dynamic Bottom Control Bar & Verification */}
-        <div className="px-6 py-4 bg-slate-950 border-t border-slate-800 flex flex-col space-y-3">
-          
-          {/* Scroll Status Notice & Checkbox State */}
-          {!hasScrolledToBottom ? (
-            <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between text-xs text-amber-300 animate-pulse">
-              <div className="flex items-center gap-2 font-medium">
-                <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
-                <span>Please scroll through the entire policy to the bottom to unlock acceptance.</span>
-              </div>
-              <div className="flex items-center gap-1 text-[11px] font-bold text-amber-400">
-                <span>Continue scrolling</span>
-                <ChevronDown className="w-4 h-4 animate-bounce" />
-              </div>
-            </div>
-          ) : (
-            <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in duration-300">
-              <div className="flex items-center gap-2 text-xs font-bold text-emerald-400">
-                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                <span>✓ You have reached the end of this policy.</span>
-              </div>
+        {/* Fixed Bottom Action Controls Bar */}
+        <div className="px-6 py-3.5 bg-slate-950 border-t border-slate-800 flex items-center justify-between gap-4 shrink-0">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleDecline}
+            disabled={submitting}
+            className="text-xs font-semibold text-rose-400 border-rose-900/50 bg-rose-950/20 hover:bg-rose-950/50 gap-1.5 h-9 px-4 shrink-0"
+          >
+            <LogOut className="w-3.5 h-3.5" /> Decline & Logout
+          </Button>
 
-              {/* Accept Checkbox — ONLY VISIBLE AFTER SCROLLING TO BOTTOM ⭐ */}
-              <div className="flex items-center space-x-2.5">
-                <Checkbox
-                  id="accept-policy-checkbox"
-                  checked={hasAgreed}
-                  onCheckedChange={(checked) => setHasAgreed(Boolean(checked))}
-                  className="h-4 w-4 rounded text-primary border-emerald-500/60 focus:ring-primary shrink-0 bg-slate-900"
-                />
-                <label
-                  htmlFor="accept-policy-checkbox"
-                  className="text-xs font-bold text-slate-100 cursor-pointer select-none leading-tight"
-                >
-                  I have read and understood this policy.
-                </label>
-              </div>
-            </div>
-          )}
-
-          {/* Action Buttons */}
-          <div className="flex items-center justify-between gap-4 pt-1">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleDecline}
-              disabled={submitting}
-              className="text-xs font-semibold text-rose-400 border-rose-900/50 bg-rose-950/20 hover:bg-rose-950/50 gap-1.5 h-9 px-4 shrink-0"
-            >
-              <LogOut className="w-3.5 h-3.5" /> Decline & Logout
-            </Button>
-
-            <Button
-              size="sm"
-              onClick={handleAccept}
-              disabled={!hasScrolledToBottom || !hasAgreed || submitting}
-              className="text-xs font-bold bg-primary hover:bg-primary/90 text-primary-foreground gap-2 h-9 px-6 shadow-md transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              {submitting ? (
-                <>
-                  <div className="h-3.5 w-3.5 rounded-full border-2 border-primary-foreground border-t-transparent animate-spin" />
-                  Recording Acceptance...
-                </>
-              ) : (
-                <>
-                  <ShieldCheck className="w-4 h-4" /> Accept Policy {totalPolicies > 1 ? `(${policyNumber}/${totalPolicies})` : ''}
-                </>
-              )}
-            </Button>
-          </div>
-
+          <Button
+            size="sm"
+            onClick={handleAccept}
+            disabled={!hasScrolledToBottom || !hasAgreed || submitting}
+            className="text-xs font-bold bg-primary hover:bg-primary/90 text-primary-foreground gap-2 h-9 px-6 shadow-md transition-all disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+          >
+            {submitting ? (
+              <>
+                <div className="h-3.5 w-3.5 rounded-full border-2 border-primary-foreground border-t-transparent animate-spin" />
+                Recording Acceptance...
+              </>
+            ) : (
+              <>
+                <ShieldCheck className="w-4 h-4" /> Accept Policy {totalPolicies > 1 ? `(${policyNumber}/${totalPolicies})` : ''}
+              </>
+            )}
+          </Button>
         </div>
 
       </div>

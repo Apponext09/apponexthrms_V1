@@ -6,7 +6,6 @@ import { createApp } from './app';
 import { getEnv } from './config/env';
 import { getLogger, logger } from '@/common/lib/logger';
 import { initializeKnex, closeKnex, getKnex } from './db/knex';
-
 import { initializeNotificationSocket } from './realtime/notification.socket';
 import { initializeLiveTrackingSocket } from './modules/Livetracking/sockets/livetracking.socket';
 import { LeaveExpiryJobService } from './modules/leaves/services/LeaveExpiryJobService';
@@ -106,8 +105,17 @@ async function start() {
     // Initialize live tracking socket
     initializeLiveTrackingSocket(io);
 
+    server.on('error', (err: any) => {
+      if (err.code === 'EADDRINUSE') {
+        logger.error(`[SERVER ERROR] Port ${env.PORT} is already in use (EADDRINUSE). Please terminate zombie process on port ${env.PORT}.`);
+        process.exit(1);
+      } else {
+        logger.error('[SERVER ERROR]', err);
+      }
+    });
+
     // Start listening on 0.0.0.0 (all network interfaces for mobile & LAN access)
-      server.listen(env.PORT, '0.0.0.0', () => {
+    server.listen(env.PORT, '0.0.0.0', () => {
       logger.info(`Server started on port ${env.PORT} (host: 0.0.0.0) [READY]`);
       // Run background repairs
       repairSuperAdminHashIfNeeded().catch(() => {});

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuthStore, useAuthHydrated, hasStoredAccessToken } from '../features/auth/store/authStore';
 import type { Role } from '@/config/roles';
@@ -26,7 +26,10 @@ export function ProtectedRoute({
   const { isAuthenticated, user } = useAuthStore();
   const authHydrated = useAuthHydrated();
   const [sessionValid, setSessionValid] = useState(true);
-  const [lastUserId, setLastUserId] = useState<number | null>(null);
+  const lastUserIdRef = useRef<number | null>(user?.id ?? null);
+
+  const allowedRolesKey = allowedRoles ? allowedRoles.slice().sort().join(',') : '';
+  const requiredPermissionsKey = requiredPermissions ? requiredPermissions.slice().sort().join(',') : '';
 
   useEffect(() => {
     if (!authHydrated) return;
@@ -34,7 +37,7 @@ export function ProtectedRoute({
     const currentUserId = user?.id;
 
     // Check if user changed (logout + login with different user)
-    if (currentUserId && lastUserId && currentUserId !== lastUserId) {
+    if (currentUserId && lastUserIdRef.current && currentUserId !== lastUserIdRef.current) {
       // User changed - invalidate session
       setSessionValid(false);
       window.location.href = '/login?' + new Date().getTime();
@@ -43,27 +46,32 @@ export function ProtectedRoute({
 
     // Store current user ID for comparison
     if (currentUserId) {
-      setLastUserId(currentUserId);
+      lastUserIdRef.current = currentUserId;
     }
 
-    // 1. Set strict cache-control headers
-    const meta1 = document.createElement('meta');
-    meta1.httpEquiv = 'Cache-Control';
-    meta1.content = 'no-cache, no-store, must-revalidate, max-age=0';
-    document.head.appendChild(meta1);
+    // 1. Set strict cache-control headers (prevent duplicate tags on every render)
+    if (!document.querySelector('meta[http-equiv="Cache-Control"]')) {
+      const meta1 = document.createElement('meta');
+      meta1.httpEquiv = 'Cache-Control';
+      meta1.content = 'no-cache, no-store, must-revalidate, max-age=0';
+      document.head.appendChild(meta1);
+    }
 
-    const meta2 = document.createElement('meta');
-    meta2.httpEquiv = 'Pragma';
-    meta2.content = 'no-cache';
-    document.head.appendChild(meta2);
+    if (!document.querySelector('meta[http-equiv="Pragma"]')) {
+      const meta2 = document.createElement('meta');
+      meta2.httpEquiv = 'Pragma';
+      meta2.content = 'no-cache';
+      document.head.appendChild(meta2);
+    }
 
-    const meta3 = document.createElement('meta');
-    meta3.httpEquiv = 'Expires';
-    meta3.content = '-1';
-    document.head.appendChild(meta3);
+    if (!document.querySelector('meta[http-equiv="Expires"]')) {
+      const meta3 = document.createElement('meta');
+      meta3.httpEquiv = 'Expires';
+      meta3.content = '-1';
+      document.head.appendChild(meta3);
+    }
 
     // 2. Prevent back button by clearing history
-    window.history.pushState(null, '', window.location.href);
     const popstateHandler = (e: PopStateEvent) => {
       window.history.pushState(null, '', window.location.href);
     };
@@ -83,7 +91,7 @@ export function ProtectedRoute({
         }
 
         // Check if user ID changed (different user logged in)
-        if (lastUserId && currentUser.id !== lastUserId) {
+        if (lastUserIdRef.current && currentUser.id !== lastUserIdRef.current) {
           // Different user - force redirect
           window.location.href = '/login?' + new Date().getTime();
           return;
@@ -91,8 +99,7 @@ export function ProtectedRoute({
 
         // If current page requires specific roles, verify user still has them
         if (allowedRoles && allowedRoles.length > 0) {
-          const userRoles = currentUser.roles || [];
-          if (!hasAnyRole(userRoles, allowedRoles)) {
+          if (!hasAnyRole(getEffectiveRoles(currentUser), allowedRoles)) {
             window.location.href = '/unauthorized?' + new Date().getTime();
           }
         }
@@ -112,14 +119,13 @@ export function ProtectedRoute({
         return;
       }
 
-      if (lastUserId && currentUser.id !== lastUserId) {
+      if (lastUserIdRef.current && currentUser.id !== lastUserIdRef.current) {
         window.location.href = '/login?' + new Date().getTime();
         return;
       }
 
       if (allowedRoles && allowedRoles.length > 0) {
-        const userRoles = currentUser.roles || [];
-        if (!hasAnyRole(userRoles, allowedRoles)) {
+        if (!hasAnyRole(getEffectiveRoles(currentUser), allowedRoles)) {
           window.location.href = '/unauthorized?' + new Date().getTime();
         }
       }
@@ -132,7 +138,7 @@ export function ProtectedRoute({
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('focus', handleFocus);
     };
-  }, [allowedRoles, lastUserId, user?.id, authHydrated]);
+  }, [allowedRolesKey, requiredPermissionsKey, user?.id, authHydrated]);
 
   if (!authHydrated) {
     return null;

@@ -9,6 +9,8 @@ import { AuditService } from '../../audit/audit.service';
 import { NotFoundError } from '../../../common/errors/index';
 import type { TenantContext } from '../../../db/types';
 import { withSnakeAliases } from '../utils/payroll.utils';
+import { assertCanAccessEmployeePayroll } from '../utils/payroll.access';
+import { resolvePeriodContext } from '../utils/payroll.period';
 import { SalaryCalculationService } from './SalaryCalculationService';
 
 export class PayslipService {
@@ -264,7 +266,14 @@ export class PayslipService {
   }
 
   async getPayslip(ctx: TenantContext, payslipId: number) {
-    return this.payslipRepo.getById(ctx, payslipId);
+    const payslip = await this.payslipRepo.getById(ctx, payslipId);
+    if (payslip) {
+      await assertCanAccessEmployeePayroll(
+        ctx,
+        (payslip as any).employeeId ?? (payslip as any).employee_id
+      );
+    }
+    return payslip;
   }
 
   async getEmployeePayslips(ctx: TenantContext, employeeId: number, limit = 12) {
@@ -471,52 +480,32 @@ export class PayslipService {
       } catch { /* silent */ }
     }
 
-    let paidDaysCalc = totalDaysInMonth;
-    let unpaidDaysCalc = unpaidLeaveDays;
-
-    // ── Effective Date, Date of Joining (DOJ) & Exit Date calculation ───────
-    let activeStartDay = 1;
-    let activeEndDay = totalDaysInMonth;
-
-    if (employee?.dateOfJoining || employee?.date_of_joining || employee?.doj) {
-      const dojRaw = employee.dateOfJoining || employee.date_of_joining || employee.doj;
-      const dojDate = new Date(dojRaw);
-      if (!isNaN(dojDate.getTime())) {
-        const dojY = dojDate.getFullYear();
-        const dojM = dojDate.getMonth() + 1;
-        if (dojY === tYear && dojM === tMon) {
-          activeStartDay = Math.max(1, dojDate.getDate());
-        } else if (dojY > tYear || (dojY === tYear && dojM > tMon)) {
-          activeStartDay = totalDaysInMonth + 1; // Future joiner
+    // ── Pay period / proration — SAME engine as PayrollService.processPayroll ──
+    // so the payslip's attendance summary always matches what was actually paid.
+    let cycleRowForPayslip: any = null;
+    let policyRowForPayslip: any = null;
+    try {
+      if (payrollRunId) {
+        const runRow = await db('payroll_runs').where('id', payrollRunId).first().catch(() => null);
+        if (runRow?.payroll_cycle_id) {
+          cycleRowForPayslip = await db('payroll_cycles').where('id', runRow.payroll_cycle_id).first().catch(() => null);
         }
       }
-    }
-
-    if (employee?.relieving_date || employee?.exit_date || employee?.resignation_date) {
-      const exitRaw = employee.relieving_date || employee.exit_date || employee.resignation_date;
-      const exitDate = new Date(exitRaw);
-      if (!isNaN(exitDate.getTime())) {
-        const exitY = exitDate.getFullYear();
-        const exitM = exitDate.getMonth() + 1;
-        if (exitY === tYear && exitM === tMon) {
-          activeEndDay = Math.min(totalDaysInMonth, exitDate.getDate());
-        } else if (exitY < tYear || (exitY === tYear && exitM < tMon)) {
-          activeEndDay = 0; // Exited in past
-        }
-      }
-    }
-
-    const maxEligibleDays = Math.max(0, activeEndDay - activeStartDay + 1);
+      policyRowForPayslip = await db('payroll_policies')
+        .where('organization_id', ctx.organizationId).whereNull('deleted_at').first().catch(() => null);
+    } catch { /* fall back to calendar month */ }
 
     const hasAttRecords = (presentDays + halfDayCount + absentDays + weeklyOffDays + holidayDays + paidLeaveDays) > 0;
-    if (hasAttRecords) {
-      paidDaysCalc = Math.round(presentDays + (halfDayCount * 0.5) + weeklyOffDays + holidayDays + paidLeaveDays);
-      paidDaysCalc = Math.max(0, Math.min(maxEligibleDays, paidDaysCalc - unpaidLeaveDays));
-      unpaidDaysCalc = Math.max(0, totalDaysInMonth - paidDaysCalc);
-    } else {
-      paidDaysCalc = Math.max(0, maxEligibleDays - unpaidLeaveDays);
-      unpaidDaysCalc = Math.max(0, totalDaysInMonth - paidDaysCalc);
-    }
+    const period = resolvePeriodContext({
+      runMonthStr: targetMonthStr,
+      cycleRow: cycleRowForPayslip,
+      empRow: employee || {},
+      policyRow: policyRowForPayslip,
+      unpaidLeaveDays,
+      attendance: { recordCount: hasAttRecords ? (presentDays + halfDayCount + absentDays + weeklyOffDays + holidayDays + paidLeaveDays) : 0, absentDays, halfDays: halfDayCount },
+    });
+    const paidDaysCalc = period.payableDays;
+    const unpaidDaysCalc = Number((period.lopDays + period.nonEmployedDays).toFixed(2));
 
     // Dynamic Leave Balance from leave_balances
     let totalLeaveBalance = 0;
@@ -592,12 +581,15 @@ export class PayslipService {
       earnings,
       deductions,
       attendance: {
-        salaryDays: totalDaysInMonth,
+        salaryDays: period.totalDays,
         paidDays: paidDaysCalc,
         unpaidDays: unpaidDaysCalc,
         presentDays,
         paidLeave: paidLeaveDays,
         leaveBalance: totalLeaveBalance,
+        lopDays: period.lopDays,
+        joinedMidMonth: period.isNewJoiner,
+        exitingMidMonth: period.isExiting,
       },
       company: companyInfo,
       settings: payslipSetting

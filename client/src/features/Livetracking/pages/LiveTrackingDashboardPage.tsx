@@ -326,7 +326,7 @@ export const LiveTrackingDashboardPage: React.FC = () => {
 
   return (
     <div
-      className="-m-4 flex min-h-[calc(100dvh-10rem)] flex-col gap-4 bg-[#F2F7FD] p-4 text-[#0B2545] sm:-m-6 sm:p-6 lg:h-[calc(100dvh-9rem)] lg:min-h-[44rem] lg:overflow-hidden dark:bg-background dark:text-foreground"
+      className="live-tracking-root -m-4 flex min-h-[calc(100dvh-10rem)] flex-col gap-4 bg-[#F2F7FD] p-4 text-[#0B2545] sm:-m-6 sm:p-6 lg:h-[calc(100dvh-9rem)] lg:min-h-[44rem] lg:overflow-hidden dark:bg-background dark:text-foreground"
       style={{
         fontFamily: "'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif",
       }}
@@ -367,7 +367,7 @@ export const LiveTrackingDashboardPage: React.FC = () => {
                     if (found) setSelectedEmployee(found);
                   }
                 }}
-                className="appearance-none bg-[#F5F9FF] border border-[#DCE7F7] rounded-xl h-9 pl-9 pr-8 text-xs font-semibold text-[#0B2B57] focus:outline-none focus:ring-2 focus:ring-[#1B6BFF]/25 focus:border-[#1B6BFF] cursor-pointer max-w-[230px] truncate"
+                className="appearance-none bg-[#F5F9FF] border border-[#DCE7F7] rounded-xl h-9 pl-9 pr-8 text-xs font-semibold text-[#0B2B57] focus:outline-none focus:ring-2 focus:ring-[#1B6BFF]/25 focus:border-[#1B6BFF] cursor-pointer max-w-[230px] truncate dark:border-border dark:bg-muted dark:text-foreground"
               >
                 {employees.length === 0 ? (
                   <option value="">No staff checked in today</option>
@@ -470,11 +470,11 @@ export const LiveTrackingDashboardPage: React.FC = () => {
       {/* ── Workspace: roster rail + map ───────────────────── */}
       <div className="flex min-h-[32rem] flex-1 gap-3">
         {/* Roster rail (desktop) */}
-        <aside className="hidden lg:flex w-[286px] shrink-0 flex-col bg-white border border-[#DCE7F7] rounded-2xl overflow-hidden shadow-[0_1px_2px_rgba(11,43,87,0.05)]">
-          <div className="px-4 py-3 border-b border-[#EDF3FC] flex items-center justify-between">
+        <aside className="hidden lg:flex w-[286px] shrink-0 flex-col bg-white border border-[#DCE7F7] rounded-2xl overflow-hidden shadow-[0_1px_2px_rgba(11,43,87,0.05)] dark:border-border dark:bg-card">
+          <div className="px-4 py-3 border-b border-[#EDF3FC] flex items-center justify-between dark:border-border">
             <div className="flex items-center gap-2">
               <Users className="w-4 h-4 text-[#1B6BFF]" />
-              <span className="text-[13px] font-extrabold text-[#0B2B57]">
+              <span className="text-[13px] font-extrabold text-[#0B2B57] dark:text-foreground">
                 Field Roster
               </span>
               <span className="text-[11px] font-bold text-[#1B6BFF] bg-[#EAF1FF] rounded-md px-1.5 py-0.5">
@@ -495,10 +495,10 @@ export const LiveTrackingDashboardPage: React.FC = () => {
           <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
             {employees.length === 0 && !loading && (
               <div className="px-3 py-8 text-center">
-                <div className="w-10 h-10 mx-auto rounded-full bg-[#EAF1FF] flex items-center justify-center mb-2">
+              <div className="w-10 h-10 mx-auto rounded-full bg-[#EAF1FF] flex items-center justify-center mb-2 dark:bg-primary/15">
                   <MapPin className="w-4 h-4 text-[#1B6BFF]" />
                 </div>
-                <p className="text-[12px] font-semibold text-[#0B2B57]">
+                <p className="text-[12px] font-semibold text-[#0B2B57] dark:text-foreground">
                   Nobody checked in
                 </p>
                 <p className="text-[11px] text-[#6B86AB] mt-1">
@@ -530,7 +530,7 @@ export const LiveTrackingDashboardPage: React.FC = () => {
                   className={`group cursor-pointer rounded-xl border px-3 py-2.5 transition-colors ${
                     active
                       ? "bg-[#EAF1FF] border-[#B9D2FF]"
-                      : "bg-white border-transparent hover:bg-[#F5F9FF] hover:border-[#E3EDFA]"
+                      : "bg-white border-transparent hover:bg-[#F5F9FF] hover:border-[#E3EDFA] dark:bg-card dark:hover:bg-muted dark:hover:border-border"
                   }`}
                 >
                   <div className="flex items-center gap-2.5">
@@ -556,7 +556,7 @@ export const LiveTrackingDashboardPage: React.FC = () => {
                     </div>
 
                     <div className="min-w-0 flex-1">
-                      <p className="text-[12.5px] font-bold text-[#0B2B57] truncate">
+                      <p className="text-[12.5px] font-bold text-[#0B2B57] truncate dark:text-foreground">
                         {emp.name}
                       </p>
                       <p className="text-[11px] text-[#6B86AB] font-medium truncate">
@@ -595,7 +595,7 @@ export const LiveTrackingDashboardPage: React.FC = () => {
             })}
           </div>
 
-          <div className="px-4 py-2.5 border-t border-[#EDF3FC] text-[10.5px] font-medium text-[#8AA0BC] flex items-center gap-1.5">
+          <div className="px-4 py-2.5 border-t border-[#EDF3FC] text-[10.5px] font-medium text-[#8AA0BC] flex items-center gap-1.5 dark:border-border dark:text-muted-foreground">
             <Crosshair className="w-3 h-3" />
             Select a name to focus the map on one person.
           </div>
@@ -607,8 +607,8 @@ export const LiveTrackingDashboardPage: React.FC = () => {
           className="relative z-0 flex min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-blue-100 bg-white shadow-sm dark:border-border dark:bg-card"
         >
           {loading && (
-            <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/75">
-              <div className="flex items-center gap-2 text-[13px] font-bold text-[#0B2B57] bg-white border border-[#DCE7F7] rounded-xl px-4 py-2.5 shadow-sm">
+            <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/75 dark:bg-background/75">
+              <div className="flex items-center gap-2 text-[13px] font-bold text-[#0B2B57] bg-white border border-[#DCE7F7] rounded-xl px-4 py-2.5 shadow-sm dark:border-border dark:bg-card dark:text-foreground">
                 <RefreshCw className="w-4 h-4 animate-spin text-[#1B6BFF]" />
                 Loading live map data…
               </div>

@@ -53,7 +53,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
   // ── 2. Core HR ────────────────────────────────────────────────────────────
   {
     id: 'core_hr',
-    label: 'CORE HR',
+    label: 'Core HR',
     icon: 'Users',
     minRoles: ['organization_admin', 'hr', 'hr_manager', 'department_head'],
     subscriptionModule: 'Core HR & Directory',
@@ -69,7 +69,13 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         name: 'My Lifecycle',
         href: '/employee/lifecycle',
         icon: 'GitBranch',
-        minRoles: ['hr', 'hr_manager'],
+        minRoles: ['hr', 'hr_admin', 'hr_manager'],
+      },
+      {
+        name: 'Digital ID Card',
+        href: '/employee/id-card',
+        icon: 'Shield',
+        minRoles: ['hr', 'hr_admin', 'hr_manager'],
       },
       { name: 'Org. Structure', href: '/org-structure', icon: 'GitBranch' },
     ],
@@ -78,7 +84,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
   // ── 3. Recruitment ────────────────────────────────────────────────────────
   {
     id: 'recruitment',
-    label: 'RECRUITMENT',
+    label: 'Recruitment',
     icon: 'Briefcase',
     subscriptionModule: 'Recruitment & ATS',
     items: [
@@ -135,7 +141,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
   // ── 4. Attendance ─────────────────────────────────────────────────────────
   {
     id: 'attendance',
-    label: 'ATTENDANCE',
+    label: 'Attendance',
     icon: 'Clock',
     subscriptionModule: 'Attendance & Time Tracking',
     items: [
@@ -207,7 +213,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
   // ── 5. Shift Management ───────────────────────────────────────────────────
   {
     id: 'shift_management',
-    label: 'SHIFT MANAGEMENT',
+    label: 'Shift Management',
     icon: 'CalendarClock',
     minRoles: ['organization_admin', 'hr', 'hr_manager', 'department_head'],
     subscriptionModule: 'Attendance & Time Tracking',
@@ -220,7 +226,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
   // ── 6. Leave Management ───────────────────────────────────────────────────
   {
     id: 'leave',
-    label: 'LEAVE MANAGEMENT',
+    label: 'Leave Management',
     icon: 'Calendar',
     subscriptionModule: 'Leave Management & Approvals',
     items: [
@@ -249,7 +255,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
   // ── 7. Payroll ────────────────────────────────────────────────────────────
   {
     id: 'payroll',
-    label: 'PAYROLL',
+    label: 'Payroll',
     icon: 'IndianRupee',
     subscriptionModule: 'Automated Payroll Processing',
     items: [
@@ -269,7 +275,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
   // Standalone Settlement Management Module
   {
     id: 'settlement_management',
-    label: 'SETTLEMENT MANAGEMENT',
+    label: 'Settlements',
     icon: 'UserX',
     subscriptionModule: 'Automated Payroll Processing',
     items: [
@@ -289,7 +295,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
   // ── 8. Loan Management ────────────────────────────────────────────────────
   {
     id: 'loan_management',
-    label: 'LOAN MANAGEMENT',
+    label: 'Loan Management',
     icon: 'Percent',
     subscriptionModule: 'Automated Payroll Processing',
     items: [
@@ -306,7 +312,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
   // ── 9. Expense Management ─────────────────────────────────────────────────
   {
     id: 'expense_management',
-    label: 'EXPENSE MANAGEMENT',
+    label: 'Expense Management',
     icon: 'ReceiptIndianRupee',
     subscriptionModule: 'Expense Management',
     items: [
@@ -328,7 +334,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
   // ── 11. PMS (Performance Management System) ───────────────────────────────
   {
     id: 'pms',
-    label: 'PMS',
+    label: 'Performance',
     icon: 'Target',
     minRoles: ['support'],
     subscriptionModule: 'Performance & OKRs',
@@ -348,7 +354,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
   // ── 12. Asset Management ──────────────────────────────────────────────────
   {
     id: 'assets',
-    label: 'ASSET MANAGEMENT',
+    label: 'Assets',
     icon: 'Package',
     minRoles: ['support'],
     subscriptionModule: 'Asset Lifecycle Management',
@@ -393,7 +399,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
   // ── 13. Reports & Analytics ───────────────────────────────────────────────
   {
     id: 'analytics',
-    label: 'REPORTS & ANALYTICS',
+    label: 'Reports & Analytics',
     icon: 'BarChart3',
     minRoles: ['organization_admin', 'hr', 'hr_manager', 'department_head'],
     subscriptionModule: null, // Always visible (core reporting)
@@ -419,7 +425,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
   // ── 14. HR Operations ─────────────────────────────────────────────────────
   {
     id: 'hr_operations',
-    label: 'HR OPERATIONS',
+    label: 'HR Operations',
     icon: 'ClipboardList',
     minRoles: ['organization_admin', 'hr', 'hr_manager'],
     subscriptionModule: 'Core HR & Directory',
@@ -432,7 +438,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
   // ── 14b. Policy Governance ────────────────────────────────────────────────
   {
     id: 'policy_management',
-    label: 'POLICY GOVERNANCE',
+    label: 'Policy Governance',
     icon: 'ShieldCheck',
     minRoles: ['organization_admin', 'hr', 'hr_manager', 'super_admin'],
     subscriptionModule: 'Core HR & Directory',
@@ -446,7 +452,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
   // ── 15. Masters ───────────────────────────────────────────────────────────
   {
     id: 'masters',
-    label: 'MASTERS',
+    label: 'Masters',
     icon: 'Database',
     minRoles: ['organization_admin', 'hr', 'hr_manager', 'super_admin'],
     collapsible: true,
@@ -466,7 +472,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
   // ── 15b. Operational Masters ──────────────────────────────────────────────
   {
     id: 'operational_masters',
-    label: 'OPERATIONAL MASTERS',
+    label: 'Master Operations',
     icon: 'Layers',
     minRoles: ['organization_admin', 'hr', 'hr_manager', 'super_admin'],
     collapsible: true,
@@ -488,7 +494,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
   // ── 16. Module Management ─────────────────────────────────────────────────
   {
     id: 'module_management',
-    label: 'MODULE MANAGEMENT',
+    label: 'Modules',
     icon: 'Boxes',
     minRoles: ['organization_admin', 'hr', 'hr_manager', 'super_admin'],
     collapsible: true,
@@ -507,7 +513,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
   // ── 17. Settings ──────────────────────────────────────────────────────────
   {
     id: 'settings',
-    label: 'SETTINGS',
+    label: 'Settings',
     icon: 'Settings',
     minRoles: ['organization_admin', 'hr', 'hr_manager', 'super_admin'],
     collapsible: true,
@@ -542,6 +548,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
     ],
   },
 ];
+
 
 
 function matchesRole(userRoles: string[], targetRoles: Role[]): boolean {

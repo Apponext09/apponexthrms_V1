@@ -13,8 +13,8 @@ from face_engine import (
     MODEL_VERSION,
     FaceProcessingError,
     face_engine,
-)
 
+)
 
 app = FastAPI(
     title="Apponext HRMS Biometric Service",

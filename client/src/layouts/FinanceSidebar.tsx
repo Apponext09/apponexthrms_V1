@@ -51,56 +51,56 @@ const C = {
 // -- Nav definitions ------------------------------------------------------------
 const FINANCE_NAV = [
   {
-    label: "OVERVIEW",
+    label: "Overview",
     items: [
       { name: "Dashboard", href: "/finance/dashboard", icon: LayoutDashboard },
     ],
   },
   {
-    label: "EXPENSE & DISBURSAL",
+    label: "Expenses",
     items: [
-      { name: "Finance Verification",     href: "/finance/expenses/verification",   icon: FileCheck2 },
-      { name: "Payment Cycle Reports",   href: "/finance/expenses/reimbursements", icon: CreditCard },
-      { name: "Travel Advances",          href: "/finance/expenses/travel-advances", icon: IndianRupee },
-      { name: "Expense Approvals",        href: "/finance/expenses/approvals",      icon: CheckCircle2 },
-      { name: "Expense Reports",          href: "/finance/expenses/reports",        icon: LineChart },
+      { name: "Verification",     href: "/finance/expenses/verification",   icon: FileCheck2 },
+      { name: "Reimbursements",   href: "/finance/expenses/reimbursements", icon: CreditCard },
+      { name: "Advances",          href: "/finance/expenses/travel-advances", icon: IndianRupee },
+      { name: "Approvals",        href: "/finance/expenses/approvals",      icon: CheckCircle2 },
+      { name: "Reports",          href: "/finance/expenses/reports",        icon: LineChart },
     ],
   },
   {
-    label: "EMPLOYEE CORE",
+    label: "CoreHR",
     items: [
-      { name: "My Lifecycle", href: "/finance/lifecycle", icon: GitBranch },
-      { name: "Org Structure", href: "/finance/org-chart", icon: Building2 },
-      { name: "ID Card", href: "/finance/id-card", icon: ShieldCheck },
+      { name: "Lifecycle", href: "/finance/lifecycle", icon: GitBranch },
+      { name: "Structure", href: "/finance/org-chart", icon: Building2 },
+      { name: "Identity", href: "/finance/id-card", icon: ShieldCheck },
     ],
   },
   {
-    label: "ATTENDANCE",
+    label: "Attendance",
     items: [
-      { name: "Face Punch", href: "/finance/face-punch", icon: Scan },
-      { name: "My Attendance Log", href: "/finance/attendance", icon: Clock },
-      { name: "My Shifts", href: "/finance/shift-roster", icon: Calendar },
-      { name: "Attendance Correction", href: "/finance/attendance-regularization", icon: RefreshCw },
+      { name: "FacePunch", href: "/finance/face-punch", icon: Scan },
+      { name: "Logs", href: "/finance/attendance", icon: Clock },
+      { name: "Shifts", href: "/finance/shift-roster", icon: Calendar },
+      { name: "Correction", href: "/finance/attendance-regularization", icon: RefreshCw },
     ],
   },
   {
-    label: "FINANCE & AUDIT",
+    label: "Finance",
     items: [
-      { name: "Financial Reports", href: "/finance/reports",   icon: FileBarChart },
-      { name: "Approval Inbox",    href: "/finance/approvals", icon: CheckSquare },
+      { name: "Reports", href: "/finance/reports",   icon: FileBarChart },
+      { name: "Approvals", href: "/finance/approvals", icon: CheckSquare },
     ],
   },
   {
-    label: "MY SELF SERVICE",
+    label: "SelfService",
     items: [
-      { name: "My Leaves",        href: "/finance/leaves",           icon: Palmtree },
-      { name: "My Payslips",      href: "/finance/payslips",         icon: DollarSign },
-      { name: "Holiday Calendar", href: "/finance/holiday-calendar", icon: Calendar },
-      { name: "My Documents",     href: "/finance/documents",        icon: FileBarChart },
+      { name: "Leaves",        href: "/finance/leaves",           icon: Palmtree },
+      { name: "Payslips",      href: "/finance/payslips",         icon: DollarSign },
+      { name: "Holidays", href: "/finance/holiday-calendar", icon: Calendar },
+      { name: "Documents",     href: "/finance/documents",        icon: FileBarChart },
     ],
   },
   {
-    label: "ORGANISATION",
+    label: "Company",
     items: [
       { name: "Announcements", href: "/finance/announcements", icon: Megaphone },
     ],
@@ -131,8 +131,8 @@ export function FinanceSidebar({ open, onOpenChange }: FinanceSidebarProps) {
   return (
     <div
       className={cn(
-        "flex h-full flex-col border-r border-border bg-card transition-all duration-300 ease-in-out",
-        open ? "w-72 md:w-28" : "w-[72px]"
+        "flex h-full flex-col border-r border-border bg-white transition-all duration-300 ease-in-out dark:bg-slate-950",
+        open ? "w-[calc(100vw-1.5rem)] max-w-72 md:w-28" : "w-[72px]"
       )}
     >
       {/* -- Brand -- */}
@@ -142,42 +142,24 @@ export function FinanceSidebar({ open, onOpenChange }: FinanceSidebarProps) {
       <SectionRail id="finance" groups={FINANCE_NAV} open={open} onNavigate={() => { if (window.innerWidth < 768) onOpenChange(false); }} />
 
       {/* -- User Footer -- */}
-      <div className="border-t border-border p-3">
+      <div className="border-t border-border bg-white p-2 dark:bg-slate-950">
         <SidebarProfileMenu profilePath="/finance/profile" onLogout={handleLogout} onProfileNavigate={() => { if (window.innerWidth < 768) onOpenChange(false); }}>
-        <div
-          className="flex cursor-pointer items-center justify-center rounded-xl border border-border bg-card p-2.5 transition-colors hover:bg-muted"
-          title="View Profile"
-        >
-          <Avatar className={cn('h-8 w-8 flex-shrink-0 border-2', C.avatarBorder)}>
-            <AvatarImage src={user?.avatarUrl} />
-            <AvatarFallback className={cn('text-xs font-bold text-white', C.avatarBg)}>
-              {initials}
-            </AvatarFallback>
-          </Avatar>
-          <AnimatePresence>
-            {open && (
-              <motion.div
-                initial={{ opacity: 0, width: 0 }}
-                animate={{ opacity: 1, width: 'auto' }}
-                exit={{ opacity: 0, width: 0 }}
-                className="hidden flex-1 items-center justify-between overflow-hidden"
-              >
-                <div className="min-w-0">
-                  <p className="truncate text-xs font-semibold text-foreground">
-                    {(() => {
-                      const fName = (user?.firstName || (user as any)?.first_name || '').trim();
-                      let lName  = (user?.lastName  || (user as any)?.last_name  || '').trim();
-                      if (lName.toLowerCase() === 'user') lName = '';
-                      const full = `${fName} ${lName}`.trim();
-                      return full || fName || 'User';
-                    })()}
-                  </p>
-                  <p className="truncate text-[10px] text-muted-foreground">Finance</p>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
+          <div className="flex flex-col items-center justify-center cursor-pointer group">
+            <div
+              className="mx-auto flex size-11 items-center justify-center rounded-xl border border-border bg-white p-0.5 transition-colors hover:bg-muted dark:bg-slate-950"
+              title="View Finance Profile"
+            >
+              <Avatar className={cn("size-10 flex-shrink-0 border-2", C.avatarBorder)}>
+                <AvatarImage src={user?.avatarUrl || (user as any)?.avatar || (user as any)?.profile_picture} alt="Profile" />
+                <AvatarFallback className={cn("text-xs font-bold text-white", C.avatarBg)}>
+                  {initials}
+                </AvatarFallback>
+              </Avatar>
+            </div>
+            <span className="text-[8.5px] font-bold tracking-tight text-primary text-center leading-tight truncate max-w-[68px] mt-1">
+              Finance Portal
+            </span>
+          </div>
         </SidebarProfileMenu>
       </div>
     </div>

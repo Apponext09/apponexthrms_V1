@@ -90,8 +90,11 @@ venv/
 **/.venv/
 **/venv_app/
 **/myenv/
+**/venv_new/
 biometric/venv_new/
 biometric/venv/
+# Biometric Python environment (each developer creates this locally)
+biometric/.venv/
 
 # Server Uploads & Candidate Resumes
 server/public/uploads/*
@@ -108,3 +111,7 @@ server/test_*.js
 # Vite transient config-load artifacts
 *.timestamp-*.mjs
 *.zip
+
+.kilo
+.claude
+.agents

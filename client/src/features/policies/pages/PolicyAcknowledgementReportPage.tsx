@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { policiesApi } from '../api/policiesApi';
 import type { PolicyAcknowledgementReportItem, PolicyAcknowledgementReportSummary } from '../types/policy';
-import { AVAILABLE_ROLES } from '../types/policy';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -24,6 +23,16 @@ import { toast } from 'sonner';
 
 export const PolicyAcknowledgementReportPage: React.FC = () => {
   const navigate = useNavigate();
+
+  const [dynamicRoles, setDynamicRoles] = useState<Array<{ id: string | number; name: string; code: string }>>([]);
+
+  useEffect(() => {
+    policiesApi.getTargetOptions().then((res) => {
+      if (res && Array.isArray(res.roles)) {
+        setDynamicRoles(res.roles);
+      }
+    }).catch(() => {});
+  }, []);
 
   const [summary, setSummary] = useState<PolicyAcknowledgementReportSummary>({
     totalEmployees: 0,
@@ -204,16 +213,24 @@ export const PolicyAcknowledgementReportPage: React.FC = () => {
         <div className="flex flex-col md:flex-row items-center justify-between gap-3">
           <div className="flex items-center gap-2 w-full md:w-auto flex-wrap">
             {/* Status Filter */}
-            {['all', 'acknowledged', 'pending'].map((st) => (
+            {[
+              { id: 'all', label: 'All Status' },
+              { id: 'acknowledged', label: '✓ Signed / Acknowledged Only' },
+              { id: 'pending', label: '⏳ Pending Only' },
+            ].map((st) => (
               <Button
-                key={st}
+                key={st.id}
                 type="button"
-                variant={statusFilter === st ? 'default' : 'outline'}
+                variant={statusFilter === st.id ? 'default' : 'outline'}
                 size="sm"
-                onClick={() => setStatusFilter(st)}
-                className="h-8 rounded-lg text-xs font-bold capitalize"
+                onClick={() => setStatusFilter(st.id)}
+                className={`h-8 rounded-lg text-xs font-bold ${
+                  statusFilter === st.id && st.id === 'acknowledged'
+                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                    : ''
+                }`}
               >
-                {st}
+                {st.label}
               </Button>
             ))}
 
@@ -224,9 +241,9 @@ export const PolicyAcknowledgementReportPage: React.FC = () => {
               className="h-8 rounded-lg border border-input bg-background px-2.5 text-xs font-medium"
             >
               <option value="all">All Roles</option>
-              {AVAILABLE_ROLES.map((r) => (
-                <option key={r.code} value={r.code}>
-                  {r.label}
+              {dynamicRoles.map((r) => (
+                <option key={r.code || r.id} value={r.code}>
+                  {r.name}
                 </option>
               ))}
             </select>
@@ -266,14 +283,16 @@ export const PolicyAcknowledgementReportPage: React.FC = () => {
                 <th className="p-3.5">Department</th>
                 <th className="p-3.5">Policy Name</th>
                 <th className="p-3.5">Effective Date</th>
-                <th className="p-3.5">Status</th>
-                <th className="p-3.5">Acknowledged Date</th>
-                <th className="p-3.5 text-right">Action</th>
+                <th className="p-3.5">Sign-Off Status</th>
+                <th className="p-3.5">Signature Provider</th>
+                <th className="p-3.5">Signed Timestamp</th>
+                <th className="p-3.5 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border/60">
               {filteredRows.map((r, idx) => {
                 const isAck = r.status.toLowerCase() === 'acknowledged';
+                const isSigned = r.signatureStatus === 'SIGNED';
 
                 return (
                   <tr key={`${r.employeeId}_${r.policyId}_${idx}`} className="hover:bg-muted/30 transition-colors">
@@ -296,32 +315,70 @@ export const PolicyAcknowledgementReportPage: React.FC = () => {
                     </td>
 
                     <td className="p-3.5 whitespace-nowrap">
-                      {isAck ? (
-                        <Badge className="bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 font-bold gap-1">
-                          <CheckCircle2 className="w-3 h-3 text-emerald-500" /> Acknowledged
+                      {isSigned ? (
+                        <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 font-bold gap-1 px-2 py-1">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" /> Digitally Signed
+                        </Badge>
+                      ) : isAck ? (
+                        <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 font-bold gap-1 px-2 py-1">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" /> Signed & Acknowledged
                         </Badge>
                       ) : (
-                        <Badge className="bg-amber-500/10 text-amber-600 border border-amber-500/20 font-bold gap-1">
-                          <Clock className="w-3 h-3 text-amber-500" /> Pending
+                        <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30 font-bold gap-1 px-2 py-1">
+                          <Clock className="w-3.5 h-3.5 text-amber-500" /> Pending Sign-Off
                         </Badge>
                       )}
                     </td>
 
-                    <td className="p-3.5 whitespace-nowrap text-muted-foreground">
-                      {r.acknowledgedDate ? new Date(r.acknowledgedDate).toLocaleString() : '—'}
+                    <td className="p-3.5 whitespace-nowrap">
+                      {r.signatureProvider ? (
+                        <Badge variant="outline" className="font-mono text-[10px] uppercase font-bold text-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800">
+                          {r.signatureProvider}
+                        </Badge>
+                      ) : (
+                        <span className="text-muted-foreground italic">—</span>
+                      )}
+                    </td>
+
+                    <td className="p-3.5 whitespace-nowrap text-muted-foreground font-mono text-[11px]">
+                      {r.signedAt ? new Date(r.signedAt).toLocaleString() : r.acknowledgedDate ? new Date(r.acknowledgedDate).toLocaleString() : '—'}
                     </td>
 
                     <td className="p-3.5 text-right whitespace-nowrap">
-                      {!isAck && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleSendReminder(r)}
-                          className="h-7 text-[11px] font-bold gap-1"
-                        >
-                          <Bell className="w-3 h-3 text-amber-500" /> Send Reminder
-                        </Button>
-                      )}
+                      <div className="flex items-center justify-end gap-1.5">
+                        {r.signatureId && (
+                          <>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => window.open(policiesApi.getSignedDocumentUrl(r.signatureId!), '_blank')}
+                              className="h-7 text-[10px] font-bold gap-1"
+                              title="Download Signed PDF"
+                            >
+                              <FileText className="w-3 h-3 text-emerald-600" /> PDF
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => window.open(policiesApi.getSignedEvidenceUrl(r.signatureId!), '_blank')}
+                              className="h-7 text-[10px] font-bold gap-1"
+                              title="Download Evidence Certificate"
+                            >
+                              <Download className="w-3 h-3" /> Evidence
+                            </Button>
+                          </>
+                        )}
+                        {!isAck && !isSigned && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleSendReminder(r)}
+                            className="h-7 text-[11px] font-bold gap-1"
+                          >
+                            <Bell className="w-3 h-3 text-amber-500" /> Remind
+                          </Button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -329,6 +386,7 @@ export const PolicyAcknowledgementReportPage: React.FC = () => {
             </tbody>
           </table>
         </div>
+
       )}
     </div>
   );

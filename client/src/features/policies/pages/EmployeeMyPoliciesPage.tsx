@@ -3,7 +3,9 @@ import { policiesApi } from '../api/policiesApi';
 import type { RolePolicyRecord } from '../types/policy';
 import { PolicyStatusBadge } from '../components/PolicyStatusBadge';
 import { PolicyReader } from '../components/PolicyReader';
+import { MyQueriesList } from '../components/MyQueriesList';
 import { PolicyAcknowledgementModal } from '../components/PolicyAcknowledgementModal';
+import { AskQueryModal } from '../components/AskQueryModal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,18 +21,21 @@ import {
   FileText,
   RefreshCw,
   ShieldCheck,
+  HelpCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
 export const EmployeeMyPoliciesPage: React.FC = () => {
   const [policies, setPolicies] = useState<RolePolicyRecord[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'active' | 'archived'>('active');
+  const [activeTab, setActiveTab] = useState<'active' | 'archived' | 'queries'>('active');
   const [searchQuery, setSearchQuery] = useState('');
 
   // Reader & Modal states
   const [readerPolicy, setReaderPolicy] = useState<RolePolicyRecord | null>(null);
   const [acknowledgePolicy, setAcknowledgePolicy] = useState<RolePolicyRecord | null>(null);
+  const [eSignPolicy, setESignPolicy] = useState<RolePolicyRecord | null>(null);
+  const [askQueryPolicy, setAskQueryPolicy] = useState<RolePolicyRecord | null>(null);
 
   const fetchMyPolicies = async () => {
     try {
@@ -113,18 +118,31 @@ export const EmployeeMyPoliciesPage: React.FC = () => {
           >
             Archived Policies ({policies.filter((p) => (p.status || '').toLowerCase() === 'archived').length})
           </Button>
+          <Button
+            type="button"
+            variant={activeTab === 'queries' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setActiveTab('queries')}
+            className="h-8 rounded-lg text-xs font-bold"
+          >
+            My Queries
+          </Button>
         </div>
 
-        <Input
-          placeholder="Search policy name, ref, or keyword..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="h-8 text-xs max-w-xs bg-background"
-        />
+        {activeTab !== 'queries' && (
+          <Input
+            placeholder="Search policy name, ref, or keyword..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="h-8 text-xs max-w-xs bg-background"
+          />
+        )}
       </div>
 
       {/* Main View */}
-      {loading ? (
+      {activeTab === 'queries' ? (
+        <MyQueriesList />
+      ) : loading ? (
         <div className="flex flex-col items-center justify-center py-20 bg-card border border-border rounded-xl space-y-3">
           <div className="h-9 w-9 rounded-full border-2 border-primary border-t-transparent animate-spin" />
           <p className="text-xs font-medium text-muted-foreground">Loading your assigned policies...</p>
@@ -143,6 +161,8 @@ export const EmployeeMyPoliciesPage: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredPolicies.map((p) => {
             const isAck = p.policyAccepted;
+            const isSigned = p.signatureStatus === 'SIGNED';
+            const mode = p.signatureMode || 'ACKNOWLEDGEMENT';
 
             return (
               <Card
@@ -156,7 +176,7 @@ export const EmployeeMyPoliciesPage: React.FC = () => {
                         {p.documentRef || `POL-${String(p.id).padStart(3, '0')}`}
                       </span>
                       <Badge variant="secondary" className="text-[9px] font-bold uppercase">
-                        {(p.applicableGender || 'all') === 'all' ? 'Common Policy' : 'Gender-wise Policy'}
+                        {mode === 'BOTH' ? 'Check + E-Sign' : mode === 'E_SIGNATURE' ? 'E-Signature Required' : 'Standard Policy'}
                       </Badge>
                     </div>
                     <Badge variant="outline" className="text-[10px] font-bold">
@@ -180,14 +200,18 @@ export const EmployeeMyPoliciesPage: React.FC = () => {
                     </div>
 
                     <div className="flex items-center justify-between pt-1">
-                      <span className="text-muted-foreground font-bold">Sign-Off Status:</span>
-                      {isAck ? (
+                      <span className="text-muted-foreground font-bold">Status:</span>
+                      {isSigned ? (
                         <span className="flex items-center gap-1 font-bold text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                          <CheckCircle2 className="w-3 h-3" /> Digitally Signed
+                        </span>
+                      ) : isAck ? (
+                        <span className="flex items-center gap-1 font-bold text-blue-500 bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20">
                           <CheckCircle2 className="w-3 h-3" /> Acknowledged
                         </span>
                       ) : (
                         <span className="flex items-center gap-1 font-bold text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
-                          <Clock className="w-3 h-3" /> Action Required
+                          <Clock className="w-3 h-3" /> Signature Pending
                         </span>
                       )}
                     </div>
@@ -201,10 +225,20 @@ export const EmployeeMyPoliciesPage: React.FC = () => {
                       onClick={() => setReaderPolicy(p)}
                       className="w-full text-xs font-bold h-8 gap-1"
                     >
-                      <Eye className="w-3.5 h-3.5 text-primary" /> Read Document
+                      <Eye className="w-3.5 h-3.5 text-primary" /> View Policy
                     </Button>
 
-                    {!isAck && (
+                    {mode === 'E_SIGNATURE' && !isSigned && (
+                      <Button
+                        size="sm"
+                        onClick={() => setReaderPolicy(p)}
+                        className="w-full text-xs font-bold h-8 gap-1 bg-emerald-600 hover:bg-emerald-700 text-white"
+                      >
+                        <ShieldCheck className="w-3.5 h-3.5" /> Sign Policy
+                      </Button>
+                    )}
+
+                    {mode !== 'E_SIGNATURE' && !isAck && (
                       <Button
                         size="sm"
                         onClick={() => setAcknowledgePolicy(p)}
@@ -213,6 +247,15 @@ export const EmployeeMyPoliciesPage: React.FC = () => {
                         <ShieldCheck className="w-3.5 h-3.5" /> Acknowledge
                       </Button>
                     )}
+
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setAskQueryPolicy(p)}
+                      className="w-full text-xs font-bold h-8 gap-1 text-muted-foreground border border-transparent hover:border-border"
+                    >
+                      <HelpCircle className="w-3.5 h-3.5" /> Ask HR
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
@@ -246,6 +289,15 @@ export const EmployeeMyPoliciesPage: React.FC = () => {
           onClose={() => setAcknowledgePolicy(null)}
         />
       )}
+
+      {/* Ask Query Modal */}
+      {askQueryPolicy && (
+        <AskQueryModal
+          policy={askQueryPolicy}
+          onClose={() => setAskQueryPolicy(null)}
+        />
+      )}
     </div>
   );
 };
+

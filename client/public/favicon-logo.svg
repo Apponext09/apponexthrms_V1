@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <rect width="64" height="64" rx="14" fill="#ffffff" />
+  <rect width="64" height="64" rx="14" fill="none" stroke="#e2e8f0" stroke-width="2" />
+  <image href="/src/assests/hrms.png" x="4" y="4" width="56" height="56" preserveAspectRatio="xMidYMid meet" />
+</svg>

@@ -821,17 +821,23 @@ export class LeaveController {
         const fallbackCal = await knex('holiday_calendars')
           .where('organization_id', ctx.organizationId)
           .whereNull('deleted_at')
-          .orderByRaw("CASE WHEN status = 'Published' THEN 1 WHEN status = 'Draft' THEN 2 ELSE 3 END")
+          .orderByRaw("CASE WHEN status IN ('Published', 'Active', 'active') THEN 1 WHEN status IN ('Draft', 'draft') THEN 2 ELSE 3 END")
           .first();
 
         if (fallbackCal) {
           const holidays = await knex('holidays')
-            .where('holiday_calendar_id', fallbackCal.id)
+            .where('organization_id', ctx.organizationId)
+            .where((builder: any) => {
+              builder.where('calendar_id', fallbackCal.id).orWhere('holiday_calendar_id', fallbackCal.id);
+            })
             .whereNull('deleted_at')
             .orderBy('holiday_date', 'asc');
 
           const weeklyOffRules = await knex('weekly_off_rules')
-            .where('holiday_calendar_id', fallbackCal.id)
+            .where('calendar_id', fallbackCal.id)
+            .where((builder: any) => {
+              builder.where('organization_id', ctx.organizationId).orWhereNull('organization_id');
+            })
             .whereNull('deleted_at');
 
           data = {

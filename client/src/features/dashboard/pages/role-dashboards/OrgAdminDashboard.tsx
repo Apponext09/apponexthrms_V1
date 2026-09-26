@@ -52,6 +52,7 @@ import {
   CartesianGrid,
   Tooltip,
   Legend,
+  LabelList,
   ResponsiveContainer,
 } from 'recharts';
 import { useAuthStore } from '@/features/auth/store/authStore';
@@ -246,9 +247,7 @@ export function OrgAdminDashboard() {
             <h1 className="text-balance text-xl font-extrabold tracking-tight text-foreground sm:text-2xl">
               {companyName} Dashboard
             </h1>
-            <Badge variant="secondary" className="bg-primary/10 text-primary border-primary/20 text-xs font-semibold">
-              Real-Time Live Data
-            </Badge>
+            
           </div>
           <p className="flex items-center gap-2 text-pretty text-xs text-muted-foreground">
             <MapPin className="size-3.5 flex-shrink-0 text-primary" />
@@ -665,7 +664,7 @@ export function OrgAdminDashboard() {
               </CardContent>
             </Card>
 
-            {/* 6-Month Expense Spending Trend */}
+            {/* 6-Month Expense Reimbursement Trend */}
             <Card className={panelClass}>
               <CardHeader className="p-5 pb-2">
                 <div className="flex items-center justify-between">
@@ -674,7 +673,7 @@ export function OrgAdminDashboard() {
                       <ReceiptIndianRupee className="size-4 text-primary" /> Expense Spending & Approvals
                     </CardTitle>
                     <CardDescription className="text-xs mt-0.5">
-                      Monthly claimed reimbursement vs approved amount (₹)
+                      Month-wise expense reimbursements (₹)
                     </CardDescription>
                   </div>
                   <Button
@@ -688,7 +687,7 @@ export function OrgAdminDashboard() {
                 </div>
               </CardHeader>
               <CardContent className="p-5 pt-0">
-                {(!expenseAnalytics?.monthlyTrend || !expenseAnalytics.monthlyTrend.some((d) => d.claimedAmount > 0 || d.approvedAmount > 0)) ? (
+                {(!expenseAnalytics?.monthlyTrend || !expenseAnalytics.monthlyTrend.some((d) => d.claimedAmount > 0)) ? (
                   <div className="flex flex-col items-center justify-center h-56 text-muted-foreground text-xs">
                     <ReceiptIndianRupee className="size-8 mb-2 opacity-40 text-primary" />
                     <span className="font-semibold text-foreground">No Reimbursement Claims Submitted</span>
@@ -697,17 +696,7 @@ export function OrgAdminDashboard() {
                 ) : (
                   <div className="h-56 w-full pt-2 min-h-[220px]">
                     <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={expenseAnalytics.monthlyTrend} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
-                        <defs>
-                          <linearGradient id="colorClaimed" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
-                            <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.0} />
-                          </linearGradient>
-                          <linearGradient id="colorApproved" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
-                            <stop offset="95%" stopColor="#10b981" stopOpacity={0.0} />
-                          </linearGradient>
-                        </defs>
+                      <BarChart data={expenseAnalytics.monthlyTrend} margin={{ top: 16, right: 10, left: -10, bottom: 0 }}>
                         <CartesianGrid stroke="hsl(var(--border))" strokeDasharray="3 3" vertical={false} />
                         <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} />
                         <YAxis
@@ -725,10 +714,8 @@ export function OrgAdminDashboard() {
                             fontSize: '12px',
                           }}
                         />
-                        <Legend iconType="circle" wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }} />
-                        <Area type="monotone" dataKey="claimedAmount" name="Claimed (₹)" stroke="#3b82f6" strokeWidth={2} fill="url(#colorClaimed)" />
-                        <Area type="monotone" dataKey="approvedAmount" name="Approved (₹)" stroke="#10b981" strokeWidth={2} fill="url(#colorApproved)" />
-                      </AreaChart>
+                        <Bar dataKey="claimedAmount" name="Reimbursements (₹)" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                      </BarChart>
                     </ResponsiveContainer>
                   </div>
                 )}
@@ -825,24 +812,13 @@ export function OrgAdminDashboard() {
                     <span>No departments created yet</span>
                   </div>
                 ) : (
-                  <div className="space-y-3 pt-2 max-h-56 overflow-y-auto pr-1">
+                  <div className="divide-y divide-border/60 pt-2 max-h-56 overflow-y-auto pr-1">
                     {departmentBreakdown.map((dept, idx) => (
-                      <div key={dept.id || idx} className="space-y-1">
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="font-semibold text-foreground truncate max-w-[150px]">{dept.name}</span>
-                          <span className="font-bold text-foreground tabular-nums">
-                            {dept.count} <span className="text-muted-foreground font-normal">({dept.percentage}%)</span>
-                          </span>
-                        </div>
-                        <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
-                          <div
-                            className="h-full rounded-full transition-all duration-500"
-                            style={{
-                              width: `${Math.max(dept.percentage, 5)}%`,
-                              backgroundColor: DEPT_COLORS[idx % DEPT_COLORS.length],
-                            }}
-                          />
-                        </div>
+                      <div key={dept.id || idx} className="flex items-center justify-between gap-3 py-3 text-xs first:pt-1 last:pb-1">
+                        <span className="font-semibold text-foreground truncate">{dept.name}</span>
+                        <span className="shrink-0 font-bold text-foreground tabular-nums">
+                          {Number(dept.count ?? 0)} <span className="font-normal text-muted-foreground">employees</span>
+                        </span>
                       </div>
                     ))}
                   </div>
@@ -851,61 +827,41 @@ export function OrgAdminDashboard() {
             </Card>
           </div>
 
-          {/* Employment Type & Status Grid */}
-          <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
-            {/* Employment Types */}
+          {/* Gender Distribution */}
+          <div>
             <Card className={panelClass}>
               <CardHeader className="p-5 pb-2">
-                <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Employment Types</CardTitle>
+                <CardTitle className="text-sm font-bold">Gender Diversity</CardTitle>
+                <CardDescription className="text-xs">Employee distribution by gender</CardDescription>
               </CardHeader>
-              <CardContent className="p-5 pt-0 space-y-2 text-xs">
-                {(!workforceAnalytics?.byEmploymentType || workforceAnalytics.byEmploymentType.length === 0) ? (
-                  <p className="text-muted-foreground py-2">No employee data</p>
-                ) : (
-                  workforceAnalytics.byEmploymentType.map((item, i) => (
-                    <div key={i} className="flex items-center justify-between p-2 rounded-lg bg-muted/40">
-                      <span className="font-medium text-foreground capitalize">{item.type}</span>
-                      <Badge variant="secondary" className="font-bold">{item.count}</Badge>
-                    </div>
-                  ))
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Employment Status */}
-            <Card className={panelClass}>
-              <CardHeader className="p-5 pb-2">
-                <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Employee Statuses</CardTitle>
-              </CardHeader>
-              <CardContent className="p-5 pt-0 space-y-2 text-xs">
-                {(!workforceAnalytics?.byStatus || workforceAnalytics.byStatus.length === 0) ? (
-                  <p className="text-muted-foreground py-2">No employee data</p>
-                ) : (
-                  workforceAnalytics.byStatus.map((item, i) => (
-                    <div key={i} className="flex items-center justify-between p-2 rounded-lg bg-muted/40">
-                      <span className="font-medium text-foreground capitalize">{item.status}</span>
-                      <Badge variant="outline" className="font-bold capitalize">{item.count}</Badge>
-                    </div>
-                  ))
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Gender Distribution */}
-            <Card className={panelClass}>
-              <CardHeader className="p-5 pb-2">
-                <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Gender Diversity</CardTitle>
-              </CardHeader>
-              <CardContent className="p-5 pt-0 space-y-2 text-xs">
+              <CardContent className="p-5 pt-1">
                 {(!workforceAnalytics?.byGender || workforceAnalytics.byGender.length === 0) ? (
-                  <p className="text-muted-foreground py-2">No gender data</p>
+                  <p className="text-xs text-muted-foreground py-2">No gender data</p>
                 ) : (
-                  workforceAnalytics.byGender.map((item, i) => (
-                    <div key={i} className="flex items-center justify-between p-2 rounded-lg bg-muted/40">
-                      <span className="font-medium text-foreground capitalize">{item.gender}</span>
-                      <Badge variant="secondary" className="font-bold">{item.count}</Badge>
-                    </div>
-                  ))
+                  <div className="h-64 w-full pt-2 min-h-[240px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={workforceAnalytics.byGender} margin={{ top: 20, right: 10, left: -20, bottom: 0 }}>
+                        <CartesianGrid stroke="hsl(var(--border))" strokeDasharray="3 3" vertical={false} />
+                        <XAxis dataKey="gender" axisLine={false} tickLine={false} tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} />
+                        <YAxis axisLine={false} tickLine={false} tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} allowDecimals={false} />
+                        <Tooltip
+                          formatter={(value: number) => [value, 'Employees']}
+                          contentStyle={{
+                            background: 'hsl(var(--popover))',
+                            borderColor: 'hsl(var(--border))',
+                            borderRadius: '8px',
+                            fontSize: '12px',
+                          }}
+                        />
+                        <Bar dataKey="count" name="Employees" radius={[4, 4, 0, 0]}>
+                          <LabelList dataKey="count" position="top" fill="hsl(var(--foreground))" fontSize={11} fontWeight={700} />
+                          {workforceAnalytics.byGender.map((_, index) => (
+                            <Cell key={`gender-bar-${index}`} fill={DEPT_COLORS[index % DEPT_COLORS.length]} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
                 )}
               </CardContent>
             </Card>
@@ -1129,4 +1085,3 @@ export function OrgAdminDashboard() {
     </div>
   );
 }
-

@@ -296,8 +296,8 @@ export function Sidebar({ open, onOpenChange, onNavigate }: SidebarProps) {
     <>
       <div
         className={cn(
-          'app-dashboard-sidebar flex h-dvh flex-col overflow-hidden border-r border-border bg-card select-none',
-          open ? 'w-72 md:w-28' : 'w-[72px]'
+          'app-dashboard-sidebar flex h-dvh flex-col overflow-hidden border-r border-border bg-white text-foreground dark:bg-slate-950 select-none',
+          open ? 'w-[calc(100vw-1.5rem)] max-w-72 md:w-28' : 'w-[72px]'
         )}
       >
         {/* Brand Header */}
@@ -307,14 +307,14 @@ export function Sidebar({ open, onOpenChange, onNavigate }: SidebarProps) {
         <SectionRail id="admin" groups={finalSections.map(section => ({ label: section.label, icon: ICON_REGISTRY[section.icon || section.items[0]?.icon] || LayoutDashboard, items: section.items.map(item => ({ ...item, icon: ICON_REGISTRY[item.icon] || LayoutDashboard, children: item.children?.map(child => ({ name: child.name, href: child.href, icon: ICON_REGISTRY[child.icon] || LayoutDashboard, isLocked: (child as any).isLocked })) })) }))} open={open} onNavigate={onNavigate} />
 
         {/* User Card & Platform Admin Footer */}
-        <div className="flex-shrink-0 space-y-2 border-t border-border bg-card p-3">
+        <div className="flex-shrink-0 space-y-1.5 border-t border-border bg-white p-2 dark:bg-slate-950">
           {roles.includes('super_admin') && (
             <>
               <button
                 onClick={() => navigate('/platform-admin')}
                 title={!open ? 'Platform Administration' : ''}
                 className={cn(
-                  'flex min-h-9 w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-[12px] font-semibold transition-colors',
+                  'flex min-h-8 w-full items-center gap-2 rounded-lg px-2 py-1.5 text-[11px] font-semibold transition-colors',
                   location.pathname.startsWith('/platform-admin')
                     ? 'bg-primary/10 text-primary font-semibold'
                     : 'text-muted-foreground hover:bg-muted hover:text-foreground'
@@ -332,50 +332,31 @@ export function Sidebar({ open, onOpenChange, onNavigate }: SidebarProps) {
             onLogout={handleLogout}
             onProfileNavigate={onNavigate}
           >
-          <div
-            className={cn(
-              'group flex min-h-14 cursor-pointer items-center justify-center rounded-xl border p-2.5 transition-colors',
-              location.pathname.startsWith('/settings/company-profile') || location.pathname.startsWith('/superadmin/profile')
-                ? 'bg-primary/10 border-primary/30 text-primary shadow-2xs'
-                : 'bg-card hover:bg-muted/80 border-border/60'
-            )}
-            title="Click to view Admin Profile"
-          >
-            {(() => {
-              const roleInfo = getUserRoleAndDept(user);
-              return (
-                <>
-                  <div className="flex min-w-0 items-center gap-2.5 overflow-hidden">
-                    <Avatar className="size-9 flex-shrink-0 border border-primary/30 shadow-soft-xs">
-                      <AvatarImage src={user?.avatarUrl} />
-                      <AvatarFallback className="bg-primary text-primary-foreground font-bold text-[10px]">
-                        {getInitials()}
-                      </AvatarFallback>
-                    </Avatar>
-                    {open && (
-                      <div className="hidden overflow-hidden text-left leading-tight min-w-0">
-                        <p className="text-[12px] font-bold text-foreground truncate group-hover:text-primary transition-colors">
-                          {getFullName()}
-                        </p>
-                        <p className="text-[10px] font-semibold text-primary truncate">
-                          {roleInfo.roleTitle}
-                        </p>
-                        {roleInfo.departmentName && (
-                          <p className="text-[9px] text-muted-foreground truncate">
-                            {roleInfo.departmentName}
-                          </p>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </>
-              );
-            })()}
-
-          </div>
+            <div className="flex flex-col items-center justify-center cursor-pointer group">
+              <div
+                className={cn(
+                  'mx-auto flex size-11 items-center justify-center rounded-xl border p-0.5 transition-colors',
+                  location.pathname.startsWith('/settings/company-profile') || location.pathname.startsWith('/superadmin/profile')
+                    ? 'bg-primary/10 border-primary/30 text-primary shadow-2xs'
+                    : 'bg-card hover:bg-muted/80 border-border/60'
+                )}
+                title={`Click to view ${portalLabel} Profile`}
+              >
+                <Avatar className="size-10 flex-shrink-0 border border-primary/30 shadow-soft-xs">
+                  <AvatarImage src={user?.avatarUrl || (user as any)?.avatar || (user as any)?.profile_picture || (user as any)?.profilePicture} alt="Profile" />
+                  <AvatarFallback className="bg-primary text-primary-foreground font-bold text-xs">
+                    {getInitials()}
+                  </AvatarFallback>
+                </Avatar>
+              </div>
+              <span className="text-[8.5px] font-bold tracking-tight text-primary text-center leading-tight truncate max-w-[68px] mt-1">
+                {portalLabel}
+              </span>
+            </div>
           </SidebarProfileMenu>
         </div>
       </div>
+
 
       {/* Locked Feature Dialog */}
       <Dialog open={lockedItemDialogOpen} onOpenChange={setLockedItemDialogOpen}>

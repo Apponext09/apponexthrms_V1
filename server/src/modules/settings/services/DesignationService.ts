@@ -3,6 +3,7 @@ import { AuditService } from '../../audit/audit.service';
 import { DesignationRepository } from '../repositories/DesignationRepository';
 import type { TenantContext } from '../../../db/types';
 import { ConflictError, NotFoundError } from '../../../common/errors/index';
+import { assertMasterNotInUse } from '../utils/masterUsage';
 
 export interface DesignationCreate {
   name: string;
@@ -154,6 +155,9 @@ export class DesignationService {
 
   async deleteDesignation(ctx: TenantContext, id: number | string) {
     const designation = await this.getDesignation(ctx, id);
+    await assertMasterNotInUse(ctx.organizationId, id, 'designation', [
+      { table: 'employees', column: 'current_designation_id', label: 'employee(s)' },
+    ]);
     await this.designationRepo.delete(ctx, id);
     await this.auditService.log(ctx, {
       action: 'DELETE',
