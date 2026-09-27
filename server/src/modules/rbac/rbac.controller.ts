@@ -6,13 +6,19 @@ import { z } from 'zod';
 const roleCreateSchema = z.object({
   name: z.string().trim().min(2).max(100),
   code: z.string().trim().toLowerCase().regex(/^[a-z][a-z0-9_]{1,49}$/),
+  portal: z.enum(['admin', 'hr', 'manager', 'team_lead', 'employee', 'intern', 'consultant', 'finance']).default('employee'),
   description: z.string().trim().max(500).optional(),
 });
 const roleUpdateSchema = z.object({
   name: z.string().trim().min(2).max(100).optional(),
+  portal: z.enum(['admin', 'hr', 'manager', 'team_lead', 'employee', 'intern', 'consultant', 'finance']).optional(),
   description: z.string().trim().max(500).optional(),
 });
-const menuSelectionSchema = z.object({ menuIds: z.array(z.number().int().positive()).max(2000) });
+const menuSelectionSchema = z.object({
+  menuIds: z.array(z.number().int().positive()).max(2000),
+  moduleOrder: z.array(z.string().trim().min(1).max(100)).max(150)
+    .refine((items) => new Set(items).size === items.length, 'Module positions must be unique').optional(),
+});
 
 export class RbacController {
   private rbacService: RbacService;
@@ -75,8 +81,8 @@ export class RbacController {
   }
 
   async setRoleMenus(req: Request, res: Response): Promise<void> {
-    const { menuIds } = menuSelectionSchema.parse(req.body);
-    const data = await this.rbacService.setRoleMenus(req.ctx!, Number(req.params.roleId), menuIds);
+    const { menuIds, moduleOrder } = menuSelectionSchema.parse(req.body);
+    const data = await this.rbacService.setRoleMenus(req.ctx!, Number(req.params.roleId), menuIds, moduleOrder);
     res.json({ success: true, data });
   }
 
@@ -87,7 +93,7 @@ export class RbacController {
 
   async createRole(req: Request, res: Response): Promise<void> {
     const input = roleCreateSchema.parse(req.body);
-    const role = await this.rbacService.createRole(req.ctx!, { name: input.name!, code: input.code!, description: input.description });
+    const role = await this.rbacService.createRole(req.ctx!, { name: input.name!, code: input.code!, portal: input.portal, description: input.description });
     res.status(201).json({ success: true, data: role });
   }
 

@@ -17,6 +17,7 @@ import { showToast } from "@/components/ui/toast";
 import { useAccessRoles } from "../hooks/useAccessRoles";
 import { RoleAccessManager } from "./RoleAccessManager";
 import { useAuthStore } from "@/features/auth/store/authStore";
+import { ACCESS_PORTALS, defaultPortalForRole, type AccessPortal } from "./roleAccessTabs";
 
 const ADMIN_MANAGED_ROLE_CODES = new Set([
   "organization_admin",
@@ -47,6 +48,7 @@ export function AccessRolesMasterForm({ onCancel }: { onCancel?: () => void }) {
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
   const [description, setDescription] = useState("");
+  const [portal, setPortal] = useState<AccessPortal | "">("");
   const [saving, setSaving] = useState(false);
   const [manageAccess, setManageAccess] = useState(false);
   const [query, setQuery] = useState("");
@@ -71,6 +73,7 @@ export function AccessRolesMasterForm({ onCancel }: { onCancel?: () => void }) {
     setName("");
     setCode("");
     setDescription("");
+    setPortal("");
   };
 
   /** openAccess = true -> "Edit modules" (module/page access manager).
@@ -80,6 +83,7 @@ export function AccessRolesMasterForm({ onCancel }: { onCancel?: () => void }) {
     setName(role.name);
     setCode(role.code);
     setDescription(role.description ?? "");
+    setPortal(role.portal ?? defaultPortalForRole(role.code));
     setManageAccess(openAccess);
   };
 
@@ -90,7 +94,7 @@ export function AccessRolesMasterForm({ onCancel }: { onCancel?: () => void }) {
     event.preventDefault();
     const normalizedCode = code.trim().toLowerCase();
     if (
-      !name.trim() ||
+      !name.trim() || !portal ||
       (!selectedId && !/^[a-z][a-z0-9_]{1,49}$/.test(normalizedCode))
     ) {
       showToast.error(
@@ -104,12 +108,14 @@ export function AccessRolesMasterForm({ onCancel }: { onCancel?: () => void }) {
         await apiClient.patch(`/rbac/roles/${selectedId}`, {
           name: name.trim(),
           description: description.trim(),
+          portal,
         });
       } else {
         await apiClient.post("/rbac/roles", {
           name: name.trim(),
           code: normalizedCode,
           description: description.trim(),
+          portal,
         });
       }
       await refresh();
@@ -348,6 +354,13 @@ export function AccessRolesMasterForm({ onCancel }: { onCancel?: () => void }) {
               maxLength={500}
               disabled={!!selectedRole?.isSystem}
             />
+          </div>
+          <div>
+            <label htmlFor="access-role-portal" className="text-sm font-medium">Portal</label>
+            <select id="access-role-portal" className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={portal} onChange={(event) => setPortal(event.target.value as AccessPortal)} required disabled={!!selectedRole?.isSystem}>
+              <option value="" disabled>Choose a portal</option>
+              {ACCESS_PORTALS.map((item) => <option key={item.code} value={item.code}>{item.label}</option>)}
+            </select>
           </div>
 
           <div className="flex gap-2 pt-1">

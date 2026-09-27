@@ -3,6 +3,7 @@ import { z } from 'zod';
 export const createRoleSchema = z.object({
   name: z.string().min(2).max(100),
   code: z.string().min(2).max(50).regex(/^[a-z_]+$/),
+  portal: z.enum(['admin', 'hr', 'manager', 'team_lead', 'employee', 'intern', 'consultant', 'finance']).optional(),
   description: z.string().max(500).optional().nullable(),
 });
 
@@ -10,6 +11,7 @@ export type CreateRoleInput = z.infer<typeof createRoleSchema>;
 
 export const updateRoleSchema = z.object({
   name: z.string().min(2).max(100).optional(),
+  portal: z.enum(['admin', 'hr', 'manager', 'team_lead', 'employee', 'intern', 'consultant', 'finance']).optional(),
   description: z.string().max(500).optional().nullable(),
 });
 
