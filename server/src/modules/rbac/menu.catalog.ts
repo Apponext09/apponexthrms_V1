@@ -17,6 +17,9 @@ PORTAL_ROUTES.employee.push('/employee/lifecycle/*');
 
 export function moduleForRoute(path: string): string {
   const value = path.toLowerCase();
+  if (/^\/(hr\/)?operational-masters(?:[/?]|$)/.test(value)) return 'master_operations';
+  if (/^\/(hr\/)?masters(?:[/?]|$)/.test(value)) return 'masters';
+  if (/(^|\/)(shifts|roster-shifts|shift-roster|my-shifts|my-shift)(\/|$)/.test(value)) return 'shift_management';
   if (/(attendance|shift|live-tracking|face-punch|timelog|break-log|overtime)/.test(value)) return 'attendance';
   if (/(leave|holiday|comp-off)/.test(value)) return 'leaves';
   if (/(payroll|salary|payslip|loan|gratuity|settlement|tax-declaration)/.test(value)) return 'payroll';
@@ -34,6 +37,8 @@ export function moduleForRoute(path: string): string {
 
 export const SUBSCRIPTION_MODULES: Record<string, string | null> = {
   attendance: 'Attendance & Time Tracking', leaves: 'Leave Management & Approvals',
+  shift_management: 'Attendance & Time Tracking',
+  masters: 'Settings & RBAC', master_operations: 'Settings & RBAC',
   payroll: 'Automated Payroll Processing', expenses: 'Expense Management',
   people: 'Core HR & Directory', recruitment: 'Recruitment & ATS',
   performance: 'Performance & OKRs', learning: 'Learning Management System',

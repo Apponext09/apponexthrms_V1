@@ -39,7 +39,13 @@ async function permittedLandingPath(user: AuthUser): Promise<string> {
     const response = await apiClient.get('/rbac/me/menus');
     const data = response.data?.data ?? response.data;
     const paths = (Array.isArray(data?.paths) ? data.paths : []) as string[];
-    return paths.includes(preferred) ? preferred : firstGrantedPage(paths) ?? '/unauthorized';
+    const portal = typeof data?.primaryPortal === 'string' ? data.primaryPortal : '';
+    const portalPrefix: Record<string, string> = { admin: '/', hr: '/hr/', manager: '/manager/', team_lead: '/team-lead/', employee: '/employee/', intern: '/intern/', consultant: '/consultant/', finance: '/finance/' };
+    const portalPaths = portal === 'admin' ? paths.filter((path) => !/^\/(hr|manager|team-lead|employee|intern|consultant|finance)\//.test(path))
+      : paths.filter((path) => path.startsWith(portalPrefix[portal] || '/employee/'));
+    const portalHome = portal === 'admin' ? '/dashboard' : `${portalPrefix[portal]?.slice(0, -1) || '/employee'}/dashboard`;
+    return paths.includes(preferred) && portalPaths.includes(preferred) ? preferred
+      : portalPaths.includes(portalHome) ? portalHome : firstGrantedPage(portalPaths) ?? '/unauthorized';
   } catch {
     return preferred;
   }

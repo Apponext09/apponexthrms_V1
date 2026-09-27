@@ -1,25 +1,29 @@
+import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LayoutDashboard } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuthStore } from '@/features/auth/store/authStore';
-import { useRbac } from '@/lib/rbac';
-import { useLicensedFeatures } from '@/features/licensing/api/useLicensing';
-import { useAttendanceModuleSettings } from '@/features/attendance/hooks/useAttendanceModuleSettings';
-import { useSubscriptionStore } from '@/features/subscriptions/store/subscriptionStore';
-import { getVisibleSections } from '@/config/navigation';
+import { useMenuAccess } from '@/features/access/useMenuAccess';
 import { SectionRail, type SectionGroup } from './SectionNavigation';
-import { Sidebar, ICON_REGISTRY } from './Sidebar';
-import { mapToHRHref } from './HRLayout';
-import { MANAGER_NAV } from './ManagerLayout';
-import { TEAM_LEAD_NAV } from './TeamLeadLayout';
-import { FINANCE_NAV } from './FinanceSidebar';
-import { INTERN_NAV } from './InternSidebar';
-import { CONSULTANT_NAV } from './ConsultantSidebar';
+import { Sidebar } from './Sidebar';
 import { EmployeeSidebar } from '@/features/employee/layout/EmployeeSidebar';
+import { buildCommonAccessModules, orderAccessModules } from '@/features/settings/components/roleAccessTabs';
+import type { RoleMenuItem } from '@/features/settings/components/roleMenuSelection';
 import { PortalSidebarBrand } from './PortalSidebarBrand';
 import { SidebarProfileMenu } from './SidebarProfileMenu';
 
 export type OrganizationPortal = 'admin' | 'hr' | 'manager' | 'team_lead' | 'employee' | 'intern' | 'consultant' | 'finance';
+
+export function buildGrantedNavigationGroups(items: RoleMenuItem[], paths: string[], portal: OrganizationPortal, moduleOrder: string[] = []): SectionGroup[] {
+  const allowed = new Set(paths);
+  return orderAccessModules(buildCommonAccessModules(items).modules, moduleOrder).map((module) => ({
+    label: module.label, icon: module.icon,
+    items: module.tabs.flatMap((tab) => {
+      const granted = tab.menus.filter((item) => item.route && allowed.has(item.route));
+      const menu = granted.find((item) => item.portal === portal) ?? granted[0];
+      return menu ? [{ name: tab.label, href: menu.route!, icon: tab.icon }] : [];
+    }),
+  })).filter((module) => module.items.length > 0);
+}
 
 const PORTAL_META: Record<OrganizationPortal, { label: string; profile: string }> = {
   admin: { label: 'Admin Portal', profile: '/settings/company-profile' },
@@ -32,30 +36,11 @@ const PORTAL_META: Record<OrganizationPortal, { label: string; profile: string }
   finance: { label: 'Finance Portal', profile: '/finance/profile' },
 };
 
-function OriginalNavigation({ portal, open, onNavigate }: { portal: OrganizationPortal; open: boolean; onNavigate: () => void }) {
-  const { roles } = useRbac();
-  const { data: licensedFeatures } = useLicensedFeatures();
-  const { attendanceMode, liveTrackingEnabled } = useAttendanceModuleSettings();
-  const { enabledModules } = useSubscriptionStore();
-  const sections = getVisibleSections([...roles, 'organization_admin', 'hr'], licensedFeatures, attendanceMode, liveTrackingEnabled, enabledModules);
-  const hrGroups: SectionGroup[] = sections.map((section) => ({
-    label: section.label,
-    icon: ICON_REGISTRY[section.icon || section.items[0]?.icon] || LayoutDashboard,
-    items: section.items.map((item) => ({
-      name: item.name, href: mapToHRHref(item.href), icon: ICON_REGISTRY[item.icon] || LayoutDashboard,
-      children: item.children?.map((child) => ({ name: child.name, href: mapToHRHref(child.href), icon: ICON_REGISTRY[child.icon] || LayoutDashboard })),
-    })),
-  }));
-  const groups: SectionGroup[] = portal === 'hr' ? hrGroups
-    : portal === 'manager' ? MANAGER_NAV as SectionGroup[]
-    : portal === 'team_lead' ? TEAM_LEAD_NAV as SectionGroup[]
-    : portal === 'finance' ? FINANCE_NAV as SectionGroup[]
-    : portal === 'intern' ? INTERN_NAV as SectionGroup[]
-    : CONSULTANT_NAV as SectionGroup[];
-  return <SectionRail id={portal} groups={groups} open={open} onNavigate={onNavigate} />;
+function OriginalNavigation({ portal, open, onNavigate, navigationGroups }: { portal: OrganizationPortal; open: boolean; onNavigate: () => void; navigationGroups: SectionGroup[] }) {
+  return <SectionRail id={portal} groups={navigationGroups} open={open} onNavigate={onNavigate} />;
 }
 
-function OtherPortalSidebar({ portal, open, onNavigate }: { portal: OrganizationPortal; open: boolean; onNavigate: () => void }) {
+function OtherPortalSidebar({ portal, open, onNavigate, navigationGroups }: { portal: OrganizationPortal; open: boolean; onNavigate: () => void; navigationGroups: SectionGroup[] }) {
   const navigate = useNavigate();
   const { user, logout } = useAuthStore();
   const meta = PORTAL_META[portal];
@@ -63,7 +48,7 @@ function OtherPortalSidebar({ portal, open, onNavigate }: { portal: Organization
   const profileImage = user as (typeof user & { avatar?: string; profile_picture?: string }) | null;
   return <div className="role-portal-sidebar flex h-full flex-col overflow-hidden border-r border-border bg-white text-foreground dark:bg-slate-950">
     <PortalSidebarBrand open={false} portalLabel={meta.label} />
-    <OriginalNavigation portal={portal} open={open} onNavigate={onNavigate} />
+    <OriginalNavigation portal={portal} open={open} onNavigate={onNavigate} navigationGroups={navigationGroups} />
     <div className="border-t border-border bg-white p-2 dark:bg-slate-950">
       <SidebarProfileMenu profilePath={meta.profile} onLogout={() => { logout(); navigate('/login'); }} onProfileNavigate={onNavigate}>
         <div className="flex cursor-pointer flex-col items-center justify-center" title={`View ${meta.label} profile`}>
@@ -79,7 +64,11 @@ function OtherPortalSidebar({ portal, open, onNavigate }: { portal: Organization
 }
 
 export function SharedPortalSidebar({ portal, open, onNavigate }: { portal: OrganizationPortal; open: boolean; onNavigate: () => void }) {
-  if (portal === 'admin') return <Sidebar open={open} onOpenChange={() => undefined} onNavigate={onNavigate} />;
-  if (portal === 'employee') return <EmployeeSidebar open={open} onOpenChange={onNavigate} />;
-  return <OtherPortalSidebar portal={portal} open={open} onNavigate={onNavigate} />;
+  const { catalog, access } = useMenuAccess();
+  const navigationGroups = useMemo<SectionGroup[]>(() => buildGrantedNavigationGroups(catalog.map((item) => ({
+    id: item.id, code: item.code, label: item.label, parentId: item.parentId, portal: item.portal, route: item.path ?? item.route,
+  })), access?.paths ?? [], (access?.primaryPortal as OrganizationPortal | undefined) ?? portal, access?.moduleOrder ?? []), [catalog, access?.primaryPortal, access?.paths, access?.moduleOrder, portal]);
+  if (portal === 'admin') return <Sidebar open={open} onOpenChange={() => undefined} onNavigate={onNavigate} navigationGroups={navigationGroups} />;
+  if (portal === 'employee') return <EmployeeSidebar open={open} onOpenChange={onNavigate} navigationGroups={navigationGroups} />;
+  return <OtherPortalSidebar portal={portal} open={open} onNavigate={onNavigate} navigationGroups={navigationGroups} />;
 }

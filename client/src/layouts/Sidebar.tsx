@@ -1,6 +1,6 @@
 import { PortalSidebarBrand } from './PortalSidebarBrand';
 import { SidebarProfileMenu } from './SidebarProfileMenu';
-import { SectionRail } from '@/layouts/SectionNavigation';
+import { SectionRail, type SectionGroup } from '@/layouts/SectionNavigation';
 import { useState, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
@@ -84,9 +84,10 @@ interface SidebarProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onNavigate?: () => void;
+  navigationGroups?: SectionGroup[];
 }
 
-export function Sidebar({ open, onOpenChange, onNavigate }: SidebarProps) {
+export function Sidebar({ open, onOpenChange, onNavigate, navigationGroups }: SidebarProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuthStore();
@@ -306,7 +307,7 @@ export function Sidebar({ open, onOpenChange, onNavigate }: SidebarProps) {
         <PortalSidebarBrand open={false} portalLabel={portalLabel} />
 
         {/* Navigation List */}
-        <SectionRail id="admin" groups={finalSections.map(section => ({ label: section.label, icon: ICON_REGISTRY[section.icon || section.items[0]?.icon] || LayoutDashboard, items: section.items.map(item => ({ ...item, icon: ICON_REGISTRY[item.icon] || LayoutDashboard, children: item.children?.map(child => ({ name: child.name, href: child.href, icon: ICON_REGISTRY[child.icon] || LayoutDashboard, isLocked: (child as any).isLocked })) })) }))} open={open} onNavigate={onNavigate} />
+        <SectionRail id="admin" groups={navigationGroups ?? finalSections.map(section => ({ label: section.label, icon: ICON_REGISTRY[section.icon || section.items[0]?.icon] || LayoutDashboard, items: section.items.map(item => ({ ...item, icon: ICON_REGISTRY[item.icon] || LayoutDashboard, children: item.children?.map(child => ({ name: child.name, href: child.href, icon: ICON_REGISTRY[child.icon] || LayoutDashboard, isLocked: (child as any).isLocked })) })) }))} open={open} onNavigate={onNavigate} />
 
         {/* User Card & Platform Admin Footer */}
         <div className="flex-shrink-0 space-y-1.5 border-t border-border bg-white p-2 dark:bg-slate-950">

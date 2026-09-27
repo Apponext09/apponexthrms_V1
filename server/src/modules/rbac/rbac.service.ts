@@ -138,16 +138,27 @@ export class RbacService {
     const role = await this.organizationRole(ctx, roleId);
     await this.initializeLegacyRole(role);
     const rows = await this.db('role_menu_access').where('role_id', roleId).pluck('menu_id');
-    return { menuIds: rows.map(Number) };
+    return { menuIds: rows.map(Number), moduleOrder: this.parseModuleOrder(role.moduleOrder ?? role.module_order) };
   }
 
-  async setRoleMenus(ctx: TenantContext, roleId: number, requestedIds: number[]) {
+  private parseModuleOrder(value: unknown): string[] {
+    try {
+      const parsed = typeof value === 'string' ? JSON.parse(value) : value;
+      return Array.isArray(parsed) ? parsed.filter((entry): entry is string => typeof entry === 'string') : [];
+    } catch { return []; }
+  }
+
+  async setRoleMenus(ctx: TenantContext, roleId: number, requestedIds: number[], moduleOrder?: string[]) {
     const role = await this.organizationRole(ctx, roleId);
     const ids = [...new Set(requestedIds)];
     if (ids.some((id) => !Number.isSafeInteger(id) || id <= 0)) throw new ForbiddenError('Invalid menu selection');
+    if (moduleOrder && (moduleOrder.length > 150 || new Set(moduleOrder).size !== moduleOrder.length || moduleOrder.some((label) => !label || label.length > 100))) {
+      throw new ForbiddenError('Invalid module order');
+    }
     const menus = ids.length ? await this.db('menu_items').whereIn('id', ids).where('is_active', true)
-      .select('id', 'code', 'parent_id') : [];
+      .select('id', 'code', 'parent_id', 'portal') : [];
     if (menus.length !== ids.length) throw new ForbiddenError('One or more menu items are invalid');
+    const before = await this.getRoleMenus(ctx, roleId);
     const actorAccess = await this.getMyMenus(ctx);
     if (!canManageRoleMenu(actorAccess.roleCodes, role.code)) {
       throw new ForbiddenError('This role cannot be managed from your account');
@@ -162,10 +173,9 @@ export class RbacService {
       }
     }
     const effectiveIds = expandMenuSelection(ids, menus);
-    const before = await this.getRoleMenus(ctx, roleId);
     await this.db.transaction(async (trx) => {
       await trx('role_menu_access').where('role_id', roleId).delete();
-      await trx('roles').where('id', roleId).update({ menu_access_initialized: true });
+      await trx('roles').where('id', roleId).update({ menu_access_initialized: true, ...(moduleOrder ? { module_order: JSON.stringify(moduleOrder) } : {}) });
       for (let index = 0; index < effectiveIds.length; index += 100) {
         await trx('role_menu_access').insert(effectiveIds.slice(index, index + 100).map((menuId) => ({ role_id: roleId, menu_id: menuId })));
       }
@@ -173,10 +183,10 @@ export class RbacService {
     invalidateOrgPermissions(ctx.organizationId);
     await this.auditService.log(ctx, {
       action: 'UPDATE', entityType: 'ROLE_MENU_ACCESS', entityId: roleId,
-      beforeState: before, afterState: { menuIds: effectiveIds, roleCode: role.code },
+      beforeState: before, afterState: { menuIds: effectiveIds, moduleOrder: moduleOrder ?? before.moduleOrder, roleCode: role.code },
     });
     publishEvent('permission.assigned', { organizationId: ctx.organizationId, roleId, menuIds: effectiveIds });
-    return { menuIds: effectiveIds };
+    return { menuIds: effectiveIds, moduleOrder: moduleOrder ?? before.moduleOrder };
   }
 
   /** Union of non-expired role grants. No role-code fallback: unknown/new roles start with no access. */
@@ -186,7 +196,7 @@ export class RbacService {
       .where('ur.user_id', ctx.userId)
       .where('r.organization_id', ctx.organizationId).whereNull('r.deleted_at')
       .where((query) => query.whereNull('ur.expires_at').orWhere('ur.expires_at', '>', this.db.fn.now()))
-      .select('r.id', 'r.code', 'r.is_system', 'r.menu_access_initialized');
+      .select('r.id', 'r.code', 'r.portal', 'r.module_order', 'r.is_system', 'r.menu_access_initialized');
     for (const role of roleRows) await this.initializeLegacyRole(role);
     const roleIds = roleRows.map((row) => Number(row.id));
     const menus = roleIds.length ? await this.db('role_menu_access as rma')
@@ -208,8 +218,11 @@ export class RbacService {
       const names = [module, ...(SUBSCRIPTION_ALIASES[module] || [])].map((name) => name.toLowerCase());
       return names.some((name) => enabledModules!.includes(name));
     });
+    const primaryRole = roleRows.find((row) => row.code === ctx.role) || roleRows.find((row) => !(row.isSystem ?? row.is_system)) || roleRows[0];
     return {
       configured: true,
+      primaryPortal: primaryRole?.portal || 'employee',
+      moduleOrder: this.parseModuleOrder(primaryRole?.moduleOrder ?? primaryRole?.module_order),
       roleCodes: roleRows.map((row) => row.code),
       menuCodes: licensed.map((menu) => menu.code),
       paths: licensed.filter((menu) => menu.route).map((menu) => menu.route),
@@ -363,7 +376,7 @@ export class RbacService {
   /**
    * Create custom role
    */
-  async createRole(ctx: TenantContext, input: { name: string; code: string; description?: string }) {
+  async createRole(ctx: TenantContext, input: { name: string; code: string; description?: string; portal?: string }) {
     // Only the true platform-root codes are permanently reserved.
     // Org-level system roles (hr, employee, manager etc.) are NOT reserved.
     const reservedCodes = ['super_admin', 'superadmin'];
@@ -390,6 +403,7 @@ export class RbacService {
       name: input.name,
       code: input.code,
       description: input.description,
+      portal: input.portal || 'employee',
       is_system: false,
       is_platform_role: false,
       is_default: false,
@@ -417,7 +431,7 @@ export class RbacService {
   async updateRole(
     ctx: TenantContext,
     roleId: number,
-    input: { name?: string; description?: string }
+    input: { name?: string; description?: string; portal?: string }
   ) {
     const role = await this.roleRepo.getById(ctx, roleId);
     if (!role) {
@@ -435,6 +449,7 @@ export class RbacService {
     const updated = await this.roleRepo.update(ctx, roleId, {
       name: input.name,
       description: input.description,
+      portal: input.portal,
     } as any);
 
     // Invalidate org permissions cache

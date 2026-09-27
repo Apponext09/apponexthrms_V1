@@ -16,6 +16,13 @@ describe('existing page catalog', () => {
     expect(moduleForRoute('/employee/face-attendance')).toBe('attendance');
     expect(moduleForRoute('/attendance/live-tracking')).toBe('attendance');
     expect(moduleForRoute('/employee/attendance')).toBe('attendance');
+    expect(moduleForRoute('/attendance/shifts')).toBe('shift_management');
+    expect(moduleForRoute('/hr/my-shifts')).toBe('shift_management');
+    expect(moduleForRoute('/employee/shift-roster')).toBe('shift_management');
+    expect(moduleForRoute('/masters?tab=company')).toBe('masters');
+    expect(moduleForRoute('/hr/masters/company')).toBe('masters');
+    expect(moduleForRoute('/operational-masters?tab=ot-rule')).toBe('master_operations');
+    expect(moduleForRoute('/hr/operational-masters/access-roles')).toBe('master_operations');
   });
 
   it('selecting a child adds its parent, but selecting a parent never adds children', () => {

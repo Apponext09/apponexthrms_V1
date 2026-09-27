@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildAccessTabs, defaultPortalForRole } from './roleAccessTabs';
+import { buildAccessTabs, buildCommonAccessModules, defaultPortalForRole, orderAccessModules } from './roleAccessTabs';
 import type { RoleMenuItem } from './roleMenuSelection';
 
 const menus: RoleMenuItem[] = [
@@ -36,5 +36,63 @@ describe('access role navigation tabs', () => {
     ];
     expect(buildAccessTabs(portalMenus, 'hr').groups.flatMap((group) => group.tabs).map((tab) => tab.label)).toContain('Access Roles');
     expect(buildAccessTabs(portalMenus, 'employee').groups.slice(0, 2).map((group) => group.label)).toEqual(['Dashboard', 'Attendance']);
+  });
+
+  it('shows one common module list with dashboard then all attendance portal tabs', () => {
+    const sharedMenus: RoleMenuItem[] = [...menus,
+      { id: 30, code: 'page:employee:/employee/attendance', label: 'Attendance', parentId: 3, portal: 'employee', route: '/employee/attendance' },
+    ];
+    const view = buildCommonAccessModules(sharedMenus);
+    expect(view.modules.slice(0, 2).map((module) => module.label)).toEqual(['Dashboard', 'Attendance']);
+    expect(view.modules[1].tabs.map((tab) => tab.label)).toEqual([
+      'Attendance Dashboard', 'Face Punch', 'Attendance Logs',
+    ]);
+    expect(view.otherPages.flatMap((page) => page.menus.map((menu) => menu.route))).toContain('/employees/:id');
+    expect(view.modules[0].tabs).toHaveLength(1);
+  });
+
+  it('keeps portal menu IDs behind a single checkbox for equivalent pages', () => {
+    const view = buildCommonAccessModules([
+      { id: 1, code: 'admin-dashboard', label: 'Dashboard', parentId: 10, portal: 'admin', route: '/dashboard' },
+      { id: 2, code: 'hr-dashboard', label: 'Dashboard', parentId: 10, portal: 'hr', route: '/hr/dashboard' },
+      { id: 3, code: 'employee-dashboard', label: 'Dashboard', parentId: 10, portal: 'employee', route: '/employee/dashboard' },
+    ]);
+    expect(view.modules[0].tabs).toHaveLength(1);
+    expect(view.modules[0].tabs[0].menus.map((menu) => menu.id)).toEqual([1, 2, 3]);
+  });
+
+  it('keeps Shift Management separate with both General and Roster Shift tabs', () => {
+    const view = buildCommonAccessModules([
+      { id: 40, code: 'general-shift', label: 'General Shift', parentId: 3, portal: 'admin', route: '/attendance/shifts' },
+      { id: 41, code: 'roster-shift', label: 'Roster Shift', parentId: 3, portal: 'admin', route: '/attendance/roster-shifts' },
+      { id: 42, code: 'my-shifts', label: 'My Shifts', parentId: 3, portal: 'hr', route: '/hr/my-shifts' },
+    ]);
+    expect(view.modules.find((module) => module.label === 'Shift Management')?.tabs.map((tab) => tab.label)).toEqual(['General Shift', 'Roster Shift', 'My Shifts']);
+  });
+
+  it('places concrete catalog pages missing from static navigation in their module', () => {
+    const view = buildCommonAccessModules([
+      { id: 3, code: 'module:attendance', label: 'Attendance', parentId: null },
+      { id: 50, code: 'unlisted', label: 'Special Attendance Report', parentId: 3, portal: 'admin', route: '/attendance/special-report' },
+      { id: 51, code: 'detail', label: 'Attendance Detail', parentId: 3, portal: 'admin', route: '/attendance/:id' },
+    ]);
+    expect(view.modules.find((module) => module.label === 'Attendance')?.tabs.map((tab) => tab.label)).toContain('Special Attendance Report');
+    expect(view.otherPages.flatMap((page) => page.menus.map((menu) => menu.id))).toContain(51);
+  });
+
+  it('keeps Masters and Master Operations as separate modules', () => {
+    const view = buildCommonAccessModules([
+      { id: 11, code: 'module:settings', label: 'Settings', parentId: null },
+      { id: 60, code: 'company-master', label: 'Company', parentId: 11, portal: 'admin', route: '/masters?tab=company' },
+      { id: 61, code: 'ot-rule', label: 'OT Rule', parentId: 11, portal: 'admin', route: '/operational-masters?tab=ot-rule' },
+      { id: 62, code: 'hr-access-roles', label: 'Access Roles', parentId: 11, portal: 'hr', route: '/hr/operational-masters/access-roles' },
+    ]);
+    expect(view.modules.find((module) => module.label === 'Masters')?.tabs.map((tab) => tab.label)).toContain('Company');
+    expect(view.modules.find((module) => module.label === 'Master Operations')?.tabs.map((tab) => tab.label)).toEqual(['OT Rule', 'Access Roles']);
+  });
+
+  it('uses saved module positions and keeps newly added modules in default order', () => {
+    const modules = [{ label: 'Dashboard' }, { label: 'Attendance' }, { label: 'Masters' }];
+    expect(orderAccessModules(modules, ['Masters', 'Dashboard']).map((module) => module.label)).toEqual(['Masters', 'Dashboard', 'Attendance']);
   });
 });

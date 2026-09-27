@@ -21,6 +21,8 @@ interface MyMenuAccess {
   paths: string[];
   roleCodes: string[];
   configured: boolean;
+  primaryPortal?: string;
+  moduleOrder?: string[];
 }
 
 const EMPTY_CATALOG: MenuCatalogItem[] = [];

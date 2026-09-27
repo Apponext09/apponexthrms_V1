@@ -97,6 +97,7 @@ export interface Role {
   organizationId: number | null;
   name: string;
   code: string;
+  portal?: 'admin' | 'hr' | 'manager' | 'team_lead' | 'employee' | 'intern' | 'consultant' | 'finance';
   description: string | null;
   isSystem: boolean;
   isPlatformRole: boolean;

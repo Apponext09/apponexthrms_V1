@@ -24,14 +24,21 @@ type NavLink = { name: string; href: string; icon?: Icon | string; children?: Na
 type NavGroup = { label: string; icon?: Icon | string; items: NavLink[] };
 export type AccessTab = { menu: RoleMenuItem; label: string; icon: Icon };
 export type AccessTabGroup = { label: string; icon: Icon; tabs: AccessTab[] };
+export type CommonAccessTab = { label: string; icon: Icon; menus: RoleMenuItem[] };
+export type CommonAccessModule = { label: string; icon: Icon; tabs: CommonAccessTab[] };
+
+export function orderAccessModules<T extends { label: string }>(modules: T[], order: string[]): T[] {
+  const positions = new Map(order.map((label, index) => [label, index]));
+  return [...modules].sort((a, b) => (positions.get(a.label) ?? Number.MAX_SAFE_INTEGER) - (positions.get(b.label) ?? Number.MAX_SAFE_INTEGER));
+}
 
 function icon(value: Icon | string | undefined): Icon {
   return typeof value === 'string' ? ICON_REGISTRY[value] || LayoutDashboard : value || LayoutDashboard;
 }
 
 function leafLinks(items: NavLink[]): NavLink[] {
-  return items.flatMap((item) => item.children?.length ? leafLinks(item.children)
-    : item.subItems?.length ? leafLinks(item.subItems) : [item]);
+  // A navigation item can be a working page and a container at the same time.
+  return items.flatMap((item) => [item, ...leafLinks(item.children ?? []), ...leafLinks(item.subItems ?? [])]);
 }
 
 function navigation(portal: AccessPortal): NavGroup[] {
@@ -83,4 +90,104 @@ export function buildAccessTabs(items: RoleMenuItem[], portal: AccessPortal): { 
     return rank(a.label) - rank(b.label);
   });
   return { groups, otherPages: pages.filter((page) => !used.has(page.id)) };
+}
+
+function commonModuleName(label: string): string {
+  if (/^(overview|dashboard)$/i.test(label)) return 'Dashboard';
+  if (/^attendance$/i.test(label)) return 'Attendance';
+  if (/^core\s?hr$/i.test(label)) return 'Core HR';
+  if (/^(leave management|leaves)$/i.test(label)) return 'Leaves';
+  if (/^(expense management|expenses)$/i.test(label)) return 'Expenses';
+  if (/^(master operations|operational masters)$/i.test(label)) return 'Master Operations';
+  return label;
+}
+
+function commonTabName(module: string, label: string): string {
+  if (module === 'Dashboard') return 'Dashboard';
+  if (module === 'Attendance') {
+    if (/face.?punch|face attendance/i.test(label)) return 'Face Punch';
+    if (/^(my )?attendance (log|logs)$|^logs$|^my attendance$/i.test(label)) return 'Attendance Logs';
+    if (/^my shifts?$/i.test(label)) return 'My Shifts';
+    if (/^general shift$/i.test(label)) return 'General Shift';
+    if (/^roster shift$/i.test(label)) return 'Roster Shift';
+    if (/^shift management$/i.test(label)) return 'Shift Management';
+    if (/correction|regularization/i.test(label)) return 'Attendance Correction';
+    if (/^dashboard$/i.test(label)) return 'Attendance Dashboard';
+  }
+  if (module === 'Core HR') {
+    if (/^(org )?structure$|^org chart$/i.test(label)) return 'Org Structure';
+    if (/^(digital )?id card$|^identity$/i.test(label)) return 'ID Card';
+  }
+  return label.trim();
+}
+
+function commonRoute(route: string): string {
+  return route.replace(/^\/(hr|manager|team-lead|employee|intern|consultant|finance)(?=\/)/, '');
+}
+
+function moduleForPage(page: RoleMenuItem, byId: Map<number, RoleMenuItem>): string {
+  const route = commonRoute(page.route || '').toLowerCase();
+  if (/\/(shifts|roster-shifts|shift-roster|my-shifts)(\/|$)/.test(route)) return 'Shift Management';
+  if (route.startsWith('/operational-masters')) return 'Master Operations';
+  if (route.startsWith('/masters')) return 'Masters';
+  if (route.startsWith('/settings')) return 'Settings';
+  const parent = page.parentId == null ? undefined : byId.get(page.parentId);
+  const label = parent?.label || 'General';
+  if (label === 'People') return 'Core HR';
+  if (label === 'General') {
+    if (/^\/(dashboard|overview)$/.test(route)) return 'Dashboard';
+    if (route.startsWith('/workflow')) return 'Workflow';
+    return 'General';
+  }
+  return commonModuleName(label);
+}
+
+/** One visible tab for equivalent portal routes, retaining each actual menu ID. */
+export function buildCommonAccessModules(items: RoleMenuItem[]): { modules: CommonAccessModule[]; otherPages: CommonAccessTab[] } {
+  const byName = new Map<string, CommonAccessModule>();
+  const otherByRoute = new Map<string, CommonAccessTab>();
+  const byId = new Map(items.map((item) => [item.id, item]));
+  for (const { code: portal } of ACCESS_PORTALS) {
+    const view = buildAccessTabs(items, portal);
+    for (const page of view.otherPages) {
+      if (page.route && !/[:*]/.test(page.route) && !/^\/(hr|manager|team-lead|employee|intern|consultant|finance)$/.test(page.route)) {
+        const label = moduleForPage(page, byId);
+        let module = byName.get(label);
+        if (!module) {
+          module = { label, icon: LayoutDashboard, tabs: [] };
+          byName.set(label, module);
+        }
+        const tabLabel = commonTabName(label, page.label);
+        const existing = module.tabs.find((tab) => tab.menus.some((menu) => commonRoute(menu.route || '') === commonRoute(page.route!)) && !tab.menus.some((menu) => menu.portal === page.portal));
+        if (existing) existing.menus.push(page);
+        else module.tabs.push({ label: tabLabel, icon: LayoutDashboard, menus: [page] });
+        continue;
+      }
+      const key = commonRoute(page.route!);
+      const existing = otherByRoute.get(key);
+      if (existing) existing.menus.push(page);
+      else otherByRoute.set(key, { label: page.label, icon: LayoutDashboard, menus: [page] });
+    }
+    for (const group of view.groups) {
+      for (const tab of group.tabs) {
+        const label = moduleForPage(tab.menu, byId) === 'Shift Management' ? 'Shift Management' : commonModuleName(group.label);
+        let module = byName.get(label);
+        if (!module) {
+          module = { label, icon: group.icon, tabs: [] };
+          byName.set(label, module);
+        } else module.icon = group.icon;
+        const commonLabel = commonTabName(label, tab.label);
+        const existing = module.tabs.find((entry) => entry.label.toLowerCase() === commonLabel.toLowerCase());
+        if (existing && !existing.menus.some((menu) => menu.portal === tab.menu.portal)) {
+          existing.menus.push(tab.menu);
+        } else if (!existing) module.tabs.push({ label: commonLabel, icon: tab.icon, menus: [tab.menu] });
+        else module.tabs.push({ label: tab.label, icon: tab.icon, menus: [tab.menu] });
+      }
+    }
+  }
+  const modules = [...byName.values()];
+  const rank = (label: string) => label === 'Dashboard' ? 0 : label === 'Attendance' ? 1 : label === 'Shift Management' ? 2
+    : label === 'Masters' ? 3 : label === 'Master Operations' ? 4 : 5;
+  modules.sort((a, b) => rank(a.label) - rank(b.label));
+  return { modules, otherPages: [...otherByRoute.values()] };
 }
