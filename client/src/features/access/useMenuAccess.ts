@@ -43,9 +43,11 @@ export function firstGrantedPage(paths: string[]): string | undefined {
 export function isPathGranted(pathname: string, catalog: MenuCatalogItem[], allowedPaths: string[]): boolean {
   // A URL tab with its own catalog entry must not inherit access from the hub page.
   const [base, query] = pathname.split('?', 2);
-  const tab = new URLSearchParams(query || '').get('tab');
-  if (tab && catalog.some((item) => (item.path ?? item.route) === `${base}?tab=${tab}`)) {
-    return allowedPaths.includes(`${base}?tab=${tab}`);
+  const params = new URLSearchParams(query || '');
+  const exactTab = ['tab', 'module'].map((key) => params.get(key) ? `${base}?${key}=${params.get(key)}` : null)
+    .find((route) => route && catalog.some((item) => (item.path ?? item.route) === route));
+  if (exactTab) {
+    return allowedPaths.includes(exactTab);
   }
   const candidates = catalog.filter((item) => (item.path ?? item.route) && matchesMenuPath((item.path ?? item.route)!, pathname));
   if (!candidates.length) return false;

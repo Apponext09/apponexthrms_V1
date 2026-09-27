@@ -15,6 +15,13 @@ PORTAL_ROUTES.admin.push('/employee-lifecycle/*', '/masters/*', '/operational-ma
 PORTAL_ROUTES.hr.push('/hr/lifecycle/*', '/hr/employee-lifecycle/*', '/hr/masters/*', '/hr/operational-masters/*');
 PORTAL_ROUTES.employee.push('/employee/lifecycle/*');
 
+// Working navigation tabs on the existing module-management and HR settings pages.
+for (const module of ['ceo', 'hr', 'manager', 'team-lead', 'employee', 'intern', 'consultant']) {
+  PORTAL_ROUTES.admin.push(`/modules?module=${module}`);
+  PORTAL_ROUTES.hr.push(`/hr/modules?module=${module}`);
+}
+PORTAL_ROUTES.hr.push('/hr/settings/leave-policies', '/hr/settings/general', '/hr/settings/id-card-designer', '/hr/settings/career-customization');
+
 export function moduleForRoute(path: string): string {
   const value = path.toLowerCase();
   if (/^\/(hr\/)?operational-masters(?:[/?]|$)/.test(value)) return 'master_operations';

@@ -48,7 +48,7 @@ export function RoleAccessManager({ role, onBack }: { role: AccessRole; onBack: 
 
   const items = useMemo(() => flattenMenus(menuQuery.data ?? []), [menuQuery.data]);
   const rolePortal = role.portal ?? defaultPortalForRole(role.code);
-  const { modules, otherPages } = useMemo(() => buildCommonAccessModules(items), [items]);
+  const { modules } = useMemo(() => buildCommonAccessModules(items), [items]);
   const orderedModules = useMemo(() => orderAccessModules(modules, moduleOrder), [modules, moduleOrder]);
   const selectedSet = useMemo(() => new Set(selected), [selected]);
   const selectedPages = items.filter((item) => item.route && selectedSet.has(item.id));
@@ -141,14 +141,6 @@ export function RoleAccessManager({ role, onBack }: { role: AccessRole; onBack: 
           </section>;
         })}
         {modules.length === 0 && <p className="text-sm text-muted-foreground">No navigation tabs are registered.</p>}
-        {otherPages.length > 0 && <details className="rounded-xl border border-border px-4 py-3">
-          <summary className="cursor-pointer font-medium">Additional working pages ({otherPages.length})</summary>
-          <p className="mt-1 text-xs text-muted-foreground">Detail and sub-pages that are routable but are not standalone sidebar tabs.</p>
-          <div className="mt-2 grid gap-1 sm:grid-cols-2 xl:grid-cols-3">{otherPages.map((page) => { const menu = resolveMenu(page); return <label key={`${page.label}:${menu.route}`} className="flex min-w-0 cursor-pointer items-center gap-2 rounded-lg px-2 py-2 hover:bg-muted/60">
-            <input type="checkbox" className="h-4 w-4 accent-primary" checked={Boolean(menu && selectedSet.has(menu.id))} disabled={!menu || (!selectedSet.has(menu.id) && !mayGrant(menu))} onChange={(event) => { if (menu) change(menu.id, event.target.checked); }} aria-label={`Allow ${page.label}`} />
-            <span className="min-w-0 truncate text-sm" title={menu.route || ''}>{page.label}</span>
-          </label>; })}</div>
-        </details>}
       </div>
       <div className="rounded-xl bg-muted/50 p-4 text-sm"><span className="font-medium">Selected access: {selectedPages.length} page{selectedPages.length === 1 ? '' : 's'}</span><span className="ml-2 text-muted-foreground">across all modules</span></div>
       {dirty && <p className="text-xs text-amber-600">You have unsaved access changes.</p>}

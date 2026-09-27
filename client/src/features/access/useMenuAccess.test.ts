@@ -40,4 +40,13 @@ describe('role menu route access', () => {
     expect(isPathGranted('/operational-masters?tab=access-roles', tabs, ['/operational-masters'])).toBe(false);
     expect(isPathGranted('/operational-masters?tab=access-roles', tabs, ['/operational-masters?tab=access-roles'])).toBe(true);
   });
+
+  it('requires the selected Module Management tab, not just its hub', () => {
+    const modules: MenuCatalogItem[] = [
+      { id: 7, code: 'page:admin:/modules', label: 'Modules', parentId: 1, path: '/modules', portal: 'admin', sortOrder: 7 },
+      { id: 8, code: 'page:admin:/modules?module=hr', label: 'HR', parentId: 1, path: '/modules?module=hr', portal: 'admin', sortOrder: 8 },
+    ];
+    expect(isPathGranted('/modules?module=hr', modules, ['/modules'])).toBe(false);
+    expect(isPathGranted('/modules?module=hr', modules, ['/modules?module=hr'])).toBe(true);
+  });
 });

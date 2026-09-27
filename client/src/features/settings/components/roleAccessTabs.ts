@@ -20,7 +20,7 @@ export const ACCESS_PORTALS: { code: AccessPortal; label: string }[] = [
 ];
 
 type Icon = ComponentType<{ className?: string }>;
-type NavLink = { name: string; href: string; icon?: Icon | string; children?: NavLink[]; subItems?: NavLink[] };
+type NavLink = { name: string; href: string; icon?: Icon | string; minRoles?: string[]; excludeRoles?: string[]; children?: NavLink[]; subItems?: NavLink[] };
 type NavGroup = { label: string; icon?: Icon | string; items: NavLink[] };
 export type AccessTab = { menu: RoleMenuItem; label: string; icon: Icon };
 export type AccessTabGroup = { label: string; icon: Icon; tabs: AccessTab[] };
@@ -41,15 +41,26 @@ function leafLinks(items: NavLink[]): NavLink[] {
   return items.flatMap((item) => [item, ...leafLinks(item.children ?? []), ...leafLinks(item.subItems ?? [])]);
 }
 
+function roleNavigation(portal: 'admin' | 'hr'): NavGroup[] {
+  const roleCodes = portal === 'admin' ? new Set(['organization_admin', 'org_admin', 'admin', 'owner', 'ceo'])
+    : new Set(['hr', 'hr_admin', 'hr_manager']);
+  const allowed = (item: { minRoles?: string[]; excludeRoles?: string[] }) =>
+    (!item.minRoles?.length || item.minRoles.some((role) => roleCodes.has(role))) &&
+    (!item.excludeRoles?.length || !item.excludeRoles.some((role) => roleCodes.has(role)));
+  const filterLinks = (items: NavLink[]): NavLink[] => items.filter((item) => allowed(item)).map((item) => ({
+    ...item,
+    href: portal === 'hr' ? mapToHRHref(item.href) : item.href,
+    children: item.children ? filterLinks(item.children) : undefined,
+    subItems: item.subItems ? filterLinks(item.subItems) : undefined,
+  }));
+  return NAVIGATION_SECTIONS.filter((section) => allowed(section)).map((section) => ({
+    label: section.label, icon: section.icon || section.items[0]?.icon, items: filterLinks(section.items),
+  })).filter((group) => group.items.length > 0);
+}
+
 function navigation(portal: AccessPortal): NavGroup[] {
   if (portal === 'admin' || portal === 'hr') {
-    return NAVIGATION_SECTIONS.map((section) => ({
-      label: section.label, icon: section.icon || section.items[0]?.icon,
-      items: section.items.map((item) => ({ ...item,
-        href: portal === 'hr' ? mapToHRHref(item.href) : item.href,
-        children: item.children?.map((child) => ({ ...child, href: portal === 'hr' ? mapToHRHref(child.href) : child.href })),
-      })),
-    }));
+    return roleNavigation(portal);
   }
   if (portal === 'employee') return [
     { label: 'Dashboard', icon: LayoutDashboard, items: [{ name: 'Dashboard', href: '/employee/dashboard', icon: LayoutDashboard }] },
@@ -98,71 +109,22 @@ function commonModuleName(label: string): string {
   if (/^core\s?hr$/i.test(label)) return 'Core HR';
   if (/^(leave management|leaves)$/i.test(label)) return 'Leaves';
   if (/^(expense management|expenses)$/i.test(label)) return 'Expenses';
+  if (/^careers$/i.test(label)) return 'Recruitment';
   if (/^(master operations|operational masters)$/i.test(label)) return 'Master Operations';
   return label;
-}
-
-function commonTabName(module: string, label: string): string {
-  if (module === 'Dashboard') return 'Dashboard';
-  if (module === 'Attendance') {
-    if (/face.?punch|face attendance/i.test(label)) return 'Face Punch';
-    if (/^(my )?attendance (log|logs)$|^logs$|^my attendance$/i.test(label)) return 'Attendance Logs';
-    if (/^my shifts?$/i.test(label)) return 'My Shifts';
-    if (/^general shift$/i.test(label)) return 'General Shift';
-    if (/^roster shift$/i.test(label)) return 'Roster Shift';
-    if (/^shift management$/i.test(label)) return 'Shift Management';
-    if (/correction|regularization/i.test(label)) return 'Attendance Correction';
-    if (/^dashboard$/i.test(label)) return 'Attendance Dashboard';
-  }
-  if (module === 'Core HR') {
-    if (/^(org )?structure$|^org chart$/i.test(label)) return 'Org Structure';
-    if (/^(digital )?id card$|^identity$/i.test(label)) return 'ID Card';
-  }
-  return label.trim();
 }
 
 function commonRoute(route: string): string {
   return route.replace(/^\/(hr|manager|team-lead|employee|intern|consultant|finance)(?=\/)/, '');
 }
 
-function moduleForPage(page: RoleMenuItem, byId: Map<number, RoleMenuItem>): string {
-  const route = commonRoute(page.route || '').toLowerCase();
-  if (/\/(shifts|roster-shifts|shift-roster|my-shifts)(\/|$)/.test(route)) return 'Shift Management';
-  if (route.startsWith('/operational-masters')) return 'Master Operations';
-  if (route.startsWith('/masters')) return 'Masters';
-  if (route.startsWith('/settings')) return 'Settings';
-  const parent = page.parentId == null ? undefined : byId.get(page.parentId);
-  const label = parent?.label || 'General';
-  if (label === 'People') return 'Core HR';
-  if (label === 'General') {
-    if (/^\/(dashboard|overview)$/.test(route)) return 'Dashboard';
-    if (route.startsWith('/workflow')) return 'Workflow';
-    return 'General';
-  }
-  return commonModuleName(label);
-}
-
 /** One visible tab for equivalent portal routes, retaining each actual menu ID. */
 export function buildCommonAccessModules(items: RoleMenuItem[]): { modules: CommonAccessModule[]; otherPages: CommonAccessTab[] } {
   const byName = new Map<string, CommonAccessModule>();
   const otherByRoute = new Map<string, CommonAccessTab>();
-  const byId = new Map(items.map((item) => [item.id, item]));
   for (const { code: portal } of ACCESS_PORTALS) {
     const view = buildAccessTabs(items, portal);
     for (const page of view.otherPages) {
-      if (page.route && !/[:*]/.test(page.route) && !/^\/(hr|manager|team-lead|employee|intern|consultant|finance)$/.test(page.route)) {
-        const label = moduleForPage(page, byId);
-        let module = byName.get(label);
-        if (!module) {
-          module = { label, icon: LayoutDashboard, tabs: [] };
-          byName.set(label, module);
-        }
-        const tabLabel = commonTabName(label, page.label);
-        const existing = module.tabs.find((tab) => tab.menus.some((menu) => commonRoute(menu.route || '') === commonRoute(page.route!)) && !tab.menus.some((menu) => menu.portal === page.portal));
-        if (existing) existing.menus.push(page);
-        else module.tabs.push({ label: tabLabel, icon: LayoutDashboard, menus: [page] });
-        continue;
-      }
       const key = commonRoute(page.route!);
       const existing = otherByRoute.get(key);
       if (existing) existing.menus.push(page);
@@ -170,17 +132,16 @@ export function buildCommonAccessModules(items: RoleMenuItem[]): { modules: Comm
     }
     for (const group of view.groups) {
       for (const tab of group.tabs) {
-        const label = moduleForPage(tab.menu, byId) === 'Shift Management' ? 'Shift Management' : commonModuleName(group.label);
+        const label = tab.label === 'Holiday Calendar' ? 'Leaves' : commonModuleName(group.label);
         let module = byName.get(label);
         if (!module) {
           module = { label, icon: group.icon, tabs: [] };
           byName.set(label, module);
-        } else module.icon = group.icon;
-        const commonLabel = commonTabName(label, tab.label);
-        const existing = module.tabs.find((entry) => entry.label.toLowerCase() === commonLabel.toLowerCase());
+        }
+        const existing = module.tabs.find((entry) => entry.label.toLowerCase() === tab.label.trim().toLowerCase());
         if (existing && !existing.menus.some((menu) => menu.portal === tab.menu.portal)) {
           existing.menus.push(tab.menu);
-        } else if (!existing) module.tabs.push({ label: commonLabel, icon: tab.icon, menus: [tab.menu] });
+        } else if (!existing) module.tabs.push({ label: tab.label.trim(), icon: tab.icon, menus: [tab.menu] });
         else module.tabs.push({ label: tab.label, icon: tab.icon, menus: [tab.menu] });
       }
     }

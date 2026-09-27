@@ -14,6 +14,7 @@ import {
   NotFoundError,
   ValidationError,
   ConflictError,
+  ForbiddenError,
 } from "../../../common/errors/index";
 import { withTransaction } from "../../../db/knex";
 import type { Knex } from "knex";
@@ -987,11 +988,22 @@ export class ShiftService {
   }
 
   /**
-   * Approve shift swap (admin)
+   * Approve a shift swap. Only the employee selected as the swap partner may
+   * make this decision; HR and administrators can view the request but cannot
+   * approve it on the employee's behalf.
    */
-  async approveShiftSwap(ctx: TenantContext, swapId: number): Promise<any> {
+  async approveShiftSwap(
+    ctx: TenantContext,
+    swapId: number,
+    approverEmployeeId: number,
+  ): Promise<any> {
     const swap = await this.swapRepo.getById(ctx, swapId);
     if (!swap) throw new NotFoundError("Shift swap request not found");
+    if (Number((swap as any).swapWithEmployeeId) !== approverEmployeeId) {
+      throw new ForbiddenError(
+        "Only the employee selected for this shift swap can approve it",
+      );
+    }
     if (swap.status !== "pending")
       throw new ValidationError("Only pending swap requests can be approved");
 
@@ -1092,15 +1104,22 @@ export class ShiftService {
   }
 
   /**
-   * Reject shift swap (admin)
+   * Reject a shift swap. This is restricted to the employee selected as the
+   * swap partner for the same reason as approval.
    */
   async rejectShiftSwap(
     ctx: TenantContext,
     swapId: number,
+    approverEmployeeId: number,
     reason?: string,
   ): Promise<any> {
     const swap = await this.swapRepo.getById(ctx, swapId);
     if (!swap) throw new NotFoundError("Shift swap request not found");
+    if (Number((swap as any).swapWithEmployeeId) !== approverEmployeeId) {
+      throw new ForbiddenError(
+        "Only the employee selected for this shift swap can reject it",
+      );
+    }
     if (swap.status !== "pending")
       throw new ValidationError("Only pending swap requests can be rejected");
 

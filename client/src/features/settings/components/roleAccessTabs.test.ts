@@ -45,7 +45,7 @@ describe('access role navigation tabs', () => {
     const view = buildCommonAccessModules(sharedMenus);
     expect(view.modules.slice(0, 2).map((module) => module.label)).toEqual(['Dashboard', 'Attendance']);
     expect(view.modules[1].tabs.map((tab) => tab.label)).toEqual([
-      'Attendance Dashboard', 'Face Punch', 'Attendance Logs',
+      'Dashboard', 'CEO Face Punch', 'Attendance Logs',
     ]);
     expect(view.otherPages.flatMap((page) => page.menus.map((menu) => menu.route))).toContain('/employees/:id');
     expect(view.modules[0].tabs).toHaveLength(1);
@@ -67,17 +67,39 @@ describe('access role navigation tabs', () => {
       { id: 41, code: 'roster-shift', label: 'Roster Shift', parentId: 3, portal: 'admin', route: '/attendance/roster-shifts' },
       { id: 42, code: 'my-shifts', label: 'My Shifts', parentId: 3, portal: 'hr', route: '/hr/my-shifts' },
     ]);
-    expect(view.modules.find((module) => module.label === 'Shift Management')?.tabs.map((tab) => tab.label)).toEqual(['General Shift', 'Roster Shift', 'My Shifts']);
+    expect(view.modules.find((module) => module.label === 'Shift Management')?.tabs.map((tab) => tab.label)).toEqual(['General Shift', 'Roster Shift']);
+    expect(view.modules.find((module) => module.label === 'Attendance')?.tabs.map((tab) => tab.label)).toContain('My Shifts');
   });
 
-  it('places concrete catalog pages missing from static navigation in their module', () => {
+  it('groups Holiday Calendar with Leaves and employee Careers with Recruitment', () => {
+    const view = buildCommonAccessModules([
+      { id: 90, code: 'admin-leaves', label: 'My Leaves', parentId: 1, portal: 'admin', route: '/leaves/my-leaves' },
+      { id: 91, code: 'admin-holiday', label: 'Holiday Calendar', parentId: 1, portal: 'admin', route: '/holidays' },
+      { id: 92, code: 'employee-holiday', label: 'Holiday Calendar', parentId: 1, portal: 'employee', route: '/employee/holiday-calendar' },
+      { id: 93, code: 'admin-mrf', label: 'MRF Request', parentId: 1, portal: 'admin', route: '/recruitment/mrf-request' },
+      { id: 94, code: 'employee-jobs', label: 'Internal Job Openings', parentId: 1, portal: 'employee', route: '/employee/job-openings' },
+    ]);
+    expect(view.modules.find((module) => module.label === 'Leaves')?.tabs.map((tab) => tab.label)).toEqual(['My Leaves', 'Holiday Calendar']);
+    expect(view.modules.find((module) => module.label === 'Recruitment')?.tabs.map((tab) => tab.label)).toEqual(['MRF Request', 'Internal Job Openings']);
+    expect(view.modules.find((module) => module.label === 'HR Operations')).toBeUndefined();
+  });
+
+  it('shows matching LMS tabs once even when portal routes differ', () => {
+    const view = buildCommonAccessModules([
+      { id: 95, code: 'admin-learning', label: 'My Learning Hub', parentId: 1, portal: 'admin', route: '/lms/my-learning' },
+      { id: 96, code: 'employee-learning', label: 'My Learning Hub', parentId: 1, portal: 'employee', route: '/employee/lms/my-learning' },
+    ]);
+    expect(view.modules.find((module) => module.label === 'LMS')?.tabs).toHaveLength(1);
+  });
+
+  it('does not turn arbitrary catalog routes into visible navigation tabs', () => {
     const view = buildCommonAccessModules([
       { id: 3, code: 'module:attendance', label: 'Attendance', parentId: null },
       { id: 50, code: 'unlisted', label: 'Special Attendance Report', parentId: 3, portal: 'admin', route: '/attendance/special-report' },
       { id: 51, code: 'detail', label: 'Attendance Detail', parentId: 3, portal: 'admin', route: '/attendance/:id' },
     ]);
-    expect(view.modules.find((module) => module.label === 'Attendance')?.tabs.map((tab) => tab.label)).toContain('Special Attendance Report');
-    expect(view.otherPages.flatMap((page) => page.menus.map((menu) => menu.id))).toContain(51);
+    expect(view.modules.flatMap((module) => module.tabs.map((tab) => tab.label))).not.toContain('Special Attendance Report');
+    expect(view.otherPages.flatMap((page) => page.menus.map((menu) => menu.id))).toEqual([50, 51]);
   });
 
   it('keeps Masters and Master Operations as separate modules', () => {
@@ -94,5 +116,27 @@ describe('access role navigation tabs', () => {
   it('uses saved module positions and keeps newly added modules in default order', () => {
     const modules = [{ label: 'Dashboard' }, { label: 'Attendance' }, { label: 'Masters' }];
     expect(orderAccessModules(modules, ['Masters', 'Dashboard']).map((module) => module.label)).toEqual(['Masters', 'Dashboard', 'Attendance']);
+  });
+
+  it('restores the original Module Management tabs when catalog entries exist', () => {
+    const view = buildCommonAccessModules([
+      { id: 70, code: 'admin-module-ceo', label: 'CEO / Admin', parentId: 11, portal: 'admin', route: '/modules?module=ceo' },
+      { id: 71, code: 'admin-module-hr', label: 'HR', parentId: 11, portal: 'admin', route: '/modules?module=hr' },
+      { id: 72, code: 'hr-module-ceo', label: 'CEO / Admin', parentId: 11, portal: 'hr', route: '/hr/modules?module=ceo' },
+      { id: 73, code: 'hr-settings-general', label: 'General Settings', parentId: 11, portal: 'hr', route: '/hr/settings/general' },
+    ]);
+    expect(view.modules.find((module) => module.label === 'Modules')?.tabs.map((tab) => tab.label)).toEqual(['CEO / Admin', 'HR']);
+    expect(view.modules.find((module) => module.label === 'Settings')?.tabs.map((tab) => tab.label)).toContain('General Settings');
+  });
+
+  it('excludes role-only links that were never visible in that portal', () => {
+    const admin = buildAccessTabs([
+      { id: 80, code: 'hr-only-admin-route', label: 'My Lifecycle', parentId: 2, portal: 'admin', route: '/employee/lifecycle' },
+    ], 'admin');
+    expect(admin.groups).toEqual([]);
+    const hr = buildAccessTabs([
+      { id: 81, code: 'ceo-only-hr-route', label: 'CEO Attendance Report', parentId: 7, portal: 'hr', route: '/hr/analytics/ceo-attendance' },
+    ], 'hr');
+    expect(hr.groups).toEqual([]);
   });
 });

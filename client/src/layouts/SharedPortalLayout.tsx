@@ -62,7 +62,7 @@ function MenuPageGuard() {
   if (isRoleEditor && !access?.roleCodes.some((code) => ['organization_admin', 'ceo', 'hr', 'hr_admin', 'hr_manager'].includes(code))) {
     return <Navigate to="/unauthorized" replace />;
   }
-  if (!canAccessPath(search.includes('tab=') ? `${pathname}${search}` : pathname)) return <Navigate to="/unauthorized" replace />;
+  if (!canAccessPath(search.includes('tab=') || search.includes('module=') ? `${pathname}${search}` : pathname)) return <Navigate to="/unauthorized" replace />;
   return <Outlet />;
 }
 
