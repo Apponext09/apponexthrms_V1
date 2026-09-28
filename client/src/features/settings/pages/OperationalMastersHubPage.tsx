@@ -110,7 +110,7 @@ export function OperationalMastersHubPage() {
   };
 
   return (
-    <div className="w-full min-h-screen bg-background p-3 sm:p-5 lg:p-6">
+    <div className="w-full min-h-screen  p-3 sm:p-5 lg:p-6">
       <Suspense fallback={<MasterTabLoader />}>
         {selectedMasterId === 'general-shift' ? (
           <GeneralShiftMasterForm onCancel={handleBack} />
