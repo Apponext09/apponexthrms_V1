@@ -49,9 +49,25 @@ describe('full tab access', () => {
     expect(visibleTabs[0].menus.map((menu) => menu.route)).toEqual([owner, ...children]);
   });
 
+  it.each([
+    ['admin', '/settings/leave-policies', ['/settings/org-leave-settings', '/settings-group/org-leave-settings']],
+    ['hr', '/hr/settings/leave-policies', ['/hr/settings/org-leave-settings']],
+    ['admin', '/leaves/my-leaves', ['/leaves/balance', '/leaves/encashment']],
+    ['hr', '/hr/leaves/my-leaves', ['/hr/leaves/balance', '/hr/leaves/encashment']],
+    ['admin', '/notifications', ['/notifications/preferences']],
+    ['admin', '/policies/manage', ['/policies/queries']],
+  ] as const)('bundles embedded %s workflow pages under %s', (portal, owner, children) => {
+    const catalog = [owner, ...children].map((route, index) => ({ id: index + 300, route, portal }));
+    expect(tabSelectionMenus(catalog).map((menu) => menu.route)).toEqual([owner]);
+    expect(expandTabAccessIds([300], catalog)).toEqual(catalog.map((menu) => menu.id));
+  });
+
   it('registers every create, edit, details and embedded history route under a parent tab', () => {
     const childRoutes = new Set(TAB_ACCESS_FLOWS.flatMap((flow) => flow.pages.map((route) => `${flow.portal}:${route.toLowerCase()}`)));
-    const embeddedComponents = new Set(['TrackingHistoryPage']);
+    const embeddedComponents = new Set([
+      'TrackingHistoryPage', 'OrgLeaveSettings', 'NotificationPreferencesPage',
+      'AdminPolicyQueriesPage', 'LeaveBalancePage', 'LeaveEncashmentPage',
+    ]);
     const unowned = Object.entries(WORKING_PAGE_GROUPS).flatMap(([portal, groups]) => groups.flatMap((group) => {
       if (!['create', 'edit', 'details'].includes(group.mode) && !embeddedComponents.has(group.component)) return [];
       return group.routes.filter((route) => !childRoutes.has(`${portal}:${route.toLowerCase()}`));

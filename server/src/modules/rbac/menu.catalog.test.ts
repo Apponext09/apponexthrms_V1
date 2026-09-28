@@ -22,6 +22,8 @@ describe('existing page catalog', () => {
     expect(pageAllowsPermission('attendance.shift_write', '/attendance/locations')).toBe(false);
     expect(pageAllowsPermission('leave.approve', '/leaves/approvals')).toBe(true);
     expect(pageAllowsPermission('leave.approve', '/leaves/my-leaves')).toBe(false);
+    expect(pageAllowsPermission('leave.policy.manage', '/settings/org-leave-settings')).toBe(true);
+    expect(pageAllowsPermission('leave.policy.manage', '/hr/settings/org-leave-settings')).toBe(true);
     expect(pageAllowsPermission('expense.claim.approve', '/expenses/approvals')).toBe(true);
     expect(pageAllowsPermission('expense.category.delete', '/expenses/categories')).toBe(true);
     expect(pageAllowsPermission('expense.category.delete', '/expenses/my-expenses')).toBe(false);

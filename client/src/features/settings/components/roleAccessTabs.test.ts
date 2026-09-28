@@ -120,8 +120,8 @@ describe('access role navigation tabs', () => {
       { id: 104, code: 'encashment', label: 'Encashment', parentId: 1, portal: 'admin', route: '/leaves/encashment' },
     ]);
     const leaves = view.find((module) => module.label === 'Leaves')!;
-    expect(leaves.tabs.map((tab) => tab.label)).toEqual(['My Leaves', 'Leave Encashment']);
-    expect(menusForAccessRole(leaves.tabs[0], 'admin').map((menu) => menu.id)).toEqual([101, 102]);
+    expect(leaves.tabs.map((tab) => tab.label)).toEqual(['My Leaves']);
+    expect(menusForAccessRole(leaves.tabs[0], 'admin').map((menu) => menu.id)).toEqual([101, 102, 104]);
     expect(menusForAccessRole(leaves.tabs[0], 'employee').map((menu) => menu.id)).toEqual([103]);
   });
 

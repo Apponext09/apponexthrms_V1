@@ -38,6 +38,41 @@ TAB_ACCESS_FLOWS.push(
     pages: ['/team-lead/live-tracking/history'],
   },
 );
+
+// Pages opened from inside a feature inherit that feature's access. These are
+// workflows, not separately assignable sidebar capabilities.
+TAB_ACCESS_FLOWS.push(
+  {
+    portal: 'admin',
+    owners: ['/leaves', '/leaves/my-leaves'],
+    pages: ['/leaves/history', '/leaves/apply', '/leaves/balance', '/leaves/balances', '/leaves/encashment'],
+  },
+  {
+    portal: 'hr',
+    owners: ['/hr/leaves', '/hr/leaves/my-leaves'],
+    pages: ['/hr/leaves/apply', '/hr/leaves/balance', '/hr/leaves/encashment'],
+  },
+  {
+    portal: 'admin',
+    owners: ['/settings/leave-policies'],
+    pages: ['/settings/org-leave-settings', '/settings-group/org-leave-settings'],
+  },
+  {
+    portal: 'hr',
+    owners: ['/hr/settings/leave-policies'],
+    pages: ['/hr/settings/org-leave-settings'],
+  },
+  {
+    portal: 'admin',
+    owners: ['/notifications'],
+    pages: ['/notifications/preferences'],
+  },
+  {
+    portal: 'admin',
+    owners: ['/policies/manage'],
+    pages: ['/policies/queries'],
+  },
+);
 TAB_ACCESS_FLOWS.push({ portal: 'employee', owners: ['/employee/lms/catalog', '/employee/lms/my-learning'],
   pages: ['/employee/lms/catalog/:id', '/employee/lms/course/:id', '/employee/lms/assessment/:id', '/employee/lms/assessment/:courseId'] });
 

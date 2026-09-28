@@ -11,7 +11,7 @@ describe('complete working page catalog', () => {
       [...new Set(groups.flatMap((group) => group.routes.map((route) => route.toLowerCase())))].map((route) => ({ portal, route })));
     const menus = entries.map((entry, index) => ({ ...entry, id: index + 1, code: `${entry.portal}:${entry.route}`, label: entry.route, parentId: null }));
     const modules = buildCompleteAccessModules(menus);
-    expect(modules.map((module) => module.label)).toEqual(expect.arrayContaining(['Leaves', 'Recruitment', 'LMS', 'Expenses', 'Assets', 'Performance', 'Workflows', 'Policies', 'Settings']));
+    expect(modules.map((module) => module.label)).toEqual(expect.arrayContaining(['Leaves', 'Recruitment', 'LMS', 'Expenses', 'Assets', 'Performance', 'Workflows', 'Policy Governance', 'Settings']));
     for (const module of modules) expect(new Set(module.tabs.map((tab) => tab.label)).size, module.label).toBe(module.tabs.length);
   });
   for (const [portal, groups] of Object.entries(WORKING_PAGE_GROUPS)) {

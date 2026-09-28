@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import {
   Plus, Trash2, Edit2, CheckCircle2, XCircle, ShieldCheck,
   HelpCircle, Calendar, Settings, Search, Database, Info,
@@ -264,6 +264,10 @@ const getCategoryIconEmoji = (iconName?: string) => {
 };
 
 export function LeavePoliciesPage() {
+  const location = useLocation();
+  const orgLeaveSettingsPath = location.pathname.startsWith('/hr/')
+    ? '/hr/settings/org-leave-settings'
+    : '/settings/org-leave-settings';
   // Navigation tabs
   const [activeTab, setActiveTab] = useState<'leave' | 'policy' | 'late_deduction_policy' | 'late_auto_deduction' | 'encashment'>('leave');
   const [configureTab, setConfigureTab] = useState<'allocation' | 'application' | 'encashment'>('allocation');
@@ -3520,7 +3524,7 @@ export function LeavePoliciesPage() {
             </div>
 
             <div className="flex items-center flex-wrap gap-3">
-              <Link to="/settings/org-leave-settings">
+              <Link to={orgLeaveSettingsPath}>
                 <Button variant="outline" className="border-indigo-200 text-indigo-700 hover:bg-indigo-50 hover:text-indigo-850 font-extrabold text-xs h-9 rounded-xl gap-1.5 shadow-sm">
                   <Settings className="w-4 h-4" /> Org Leave Settings
                 </Button>

@@ -140,7 +140,7 @@ export function pageAllowsPermission(permission: string, route: string): boolean
     if (/^(read|write)$/.test(action)) return /attendance|face-punch|timelog|break-log/.test(path);
   }
   if (/^leave\./.test(permission)) {
-    if (permission === 'leave.policy.manage') return /leave-polic|policies/.test(path);
+    if (permission === 'leave.policy.manage') return /leave-polic|policies|org-leave-settings/.test(path);
     if (permission === 'leave.balance.manage') return /leave.*balance|balances/.test(path);
     if (permission === 'leave.analytics') return /leave.*report|burnout|analytics/.test(path);
     if (permission === 'leave.approve') return /leave.*approval|approvals/.test(path);
