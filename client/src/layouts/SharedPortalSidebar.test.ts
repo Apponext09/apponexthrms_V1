@@ -10,7 +10,7 @@ const catalog: RoleMenuItem[] = [
 ];
 
 describe('granted sidebar navigation', () => {
-  it('shows saved Finance grants from other portals instead of only fixed Finance tabs', () => {
+  it('shows granted working modules even when they have no role-portal variant', () => {
     const groups = buildGrantedNavigationGroups(catalog, ['/finance/dashboard', '/recruitment/jobs', '/manager/ijp-approvals'], 'finance');
     const routes = groups.flatMap((group) => group.items.map((item) => item.href));
     expect(routes).toContain('/finance/dashboard');
@@ -21,6 +21,16 @@ describe('granted sidebar navigation', () => {
   it('does not show tabs without a saved page grant', () => {
     const groups = buildGrantedNavigationGroups(catalog, ['/finance/dashboard'], 'finance');
     expect(groups.flatMap((group) => group.items.map((item) => item.href))).toEqual(['/finance/dashboard']);
+  });
+
+  it('shows newly catalogued static pages but never unresolved details URLs', () => {
+    const pages = [...catalog,
+      { id: 5, code: 'encashment', label: 'Encashment', parentId: 1, portal: 'admin', route: '/leaves/encashment' },
+      { id: 6, code: 'employee-details', label: 'Details', parentId: 1, portal: 'admin', route: '/employees/:id' },
+    ];
+    const routes = buildGrantedNavigationGroups(pages, ['/leaves/encashment', '/employees/:id'], 'admin').flatMap((group) => group.items.map((item) => item.href));
+    expect(routes).toContain('/leaves/encashment');
+    expect(routes).not.toContain('/employees/:id');
   });
 
   it('applies the saved role-specific module priority', () => {

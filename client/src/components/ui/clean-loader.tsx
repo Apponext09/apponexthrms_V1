@@ -13,7 +13,7 @@ export function CleanLoader({ label = 'Loading details...', className, fullPage 
     <div className={cn('flex flex-col items-center justify-center p-8 gap-3 select-none text-center', className)}>
       <div className="relative flex items-center justify-center">
         {/* Animated Gradient Outer Pulse */}
-        <div className="absolute h-12 w-12 rounded-full bg-gradient-to-tr from-primary/30 via-indigo-500/20 to-purple-500/30 animate-ping opacity-75" />
+        <div className="absolute h-12 w-12 rounded-full bg-gradient-to-tr from-primary/30 via-blue-500/20 to-sky-500/30 animate-ping opacity-75" />
         
         {/* Spinning Ring */}
         <div className="relative h-10 w-10 rounded-full border-2 border-primary/20 border-t-primary animate-spin" />

@@ -14,8 +14,8 @@ function links(items: Link[]): Link[] { return items.flatMap((item) => [item, ..
 
 it('registers every original portal navigation route in the menu catalog', () => {
   const sources: Record<string, Link[]> = {
-    admin: links(getVisibleSections(['organization_admin']).flatMap((section) => section.items)),
-    hr: links(getVisibleSections(['hr']).flatMap((section) => section.items)).map((item) => ({ ...item, href: mapToHRHref(item.href) })),
+    admin: ['organization_admin', 'ceo', 'admin', 'owner'].flatMap((role) => links(getVisibleSections([role]).flatMap((section) => section.items))),
+    hr: ['hr', 'hr_admin', 'hr_manager'].flatMap((role) => links(getVisibleSections([role]).flatMap((section) => section.items))).map((item) => ({ ...item, href: mapToHRHref(item.href) })),
     manager: links(MANAGER_NAV.flatMap((group) => group.items)),
     teamlead: links(TEAM_LEAD_NAV.flatMap((group) => group.items)),
     finance: links(FINANCE_NAV.flatMap((group) => group.items)),

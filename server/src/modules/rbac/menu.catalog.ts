@@ -22,6 +22,13 @@ for (const module of ['ceo', 'hr', 'manager', 'team-lead', 'employee', 'intern',
 }
 PORTAL_ROUTES.hr.push('/hr/settings/leave-policies', '/hr/settings/general', '/hr/settings/id-card-designer', '/hr/settings/career-customization');
 
+// Nested settings pages have real URLs even though their Route path is relative.
+PORTAL_ROUTES.admin.push(...['general', 'company-profile', 'branches', 'locations', 'branding', 'leave-policies',
+  'org-leave-settings', 'career-customization', 'lms-integrations', 'workflows', 'id-card-designer', 'modules']
+  .map((page) => `/settings-group/${page}`));
+PORTAL_ROUTES.hr.push(...['admin-config', 'hr-config', 'company-profile', 'branches', 'locations', 'branding',
+  'org-leave-settings', 'modules'].map((page) => `/hr/settings/${page}`));
+
 export function moduleForRoute(path: string): string {
   const value = path.toLowerCase();
   if (/^\/(hr\/)?operational-masters(?:[/?]|$)/.test(value)) return 'master_operations';

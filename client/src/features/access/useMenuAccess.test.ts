@@ -16,6 +16,7 @@ describe('role menu route access', () => {
   it('grants only the selected child page', () => {
     expect(isPathGranted('/employee/attendance', catalog, ['/employee/attendance'])).toBe(true);
     expect(isPathGranted('/employee/face-attendance', catalog, ['/employee/attendance'])).toBe(false);
+    expect(isPathGranted('/EMPLOYEE/attendance/', catalog, ['/employee/attendance'])).toBe(true);
   });
 
   it('rejects an unknown direct URL', () => {
@@ -26,6 +27,13 @@ describe('role menu route access', () => {
     expect(matchesMenuPath('/employees/:id', '/employees/42')).toBe(true);
     expect(isPathGranted('/employees/42', catalog, ['/employees/:id'])).toBe(true);
     expect(isPathGranted('/employees/42/edit', catalog, ['/employees/:id'])).toBe(false);
+  });
+
+  it('does not let a dynamic employee grant unlock a separate static page', () => {
+    const pages = [...catalog, { id: 9, code: 'onboarding', label: 'Onboarding', parentId: 1, path: '/employees/onboarding', portal: 'admin', sortOrder: 9 }];
+    expect(isPathGranted('/employees/onboarding', pages, ['/employees/:id'])).toBe(false);
+    expect(isPathGranted('/employees/onboarding', pages, ['/employees/onboarding'])).toBe(true);
+    expect(isPathGranted('/employees/42?view=summary', pages, ['/employees/:id'])).toBe(true);
   });
 
   it('chooses a usable landing page for a newly granted role', () => {

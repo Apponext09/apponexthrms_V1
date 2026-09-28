@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { buildAccessTabs, buildCommonAccessModules, defaultPortalForRole, orderAccessModules } from './roleAccessTabs';
+import { buildAccessTabs, buildCommonAccessModules, buildCompleteAccessModules, defaultPortalForRole, menuForRolePortal, menusForAccessRole, modulesForRolePortal, orderAccessModules } from './roleAccessTabs';
 import type { RoleMenuItem } from './roleMenuSelection';
+import { PORTAL_ROUTES } from '../../../../../server/src/modules/rbac/menu.catalog';
 
 const menus: RoleMenuItem[] = [
   { id: 1, code: 'module:general', label: 'General', parentId: null },
@@ -59,6 +60,41 @@ describe('access role navigation tabs', () => {
     ]);
     expect(view.modules[0].tabs).toHaveLength(1);
     expect(view.modules[0].tabs[0].menus.map((menu) => menu.id)).toEqual([1, 2, 3]);
+    expect(menuForRolePortal(view.modules[0].tabs[0], 'finance')).toBeUndefined();
+    expect(menuForRolePortal(view.modules[0].tabs[0], 'employee')?.id).toBe(3);
+    expect(modulesForRolePortal(view.modules, 'finance')).toEqual([]);
+    expect(modulesForRolePortal(view.modules, 'employee')[0].tabs).toHaveLength(1);
+    expect(menusForAccessRole(view.modules[0].tabs[0], 'employee').map((menu) => menu.id)).toEqual([3]);
+    expect(menusForAccessRole(view.modules[0].tabs[0], 'finance').map((menu) => menu.id)).toEqual([1]);
+  });
+
+  it('lists the requested working tabs under clean common modules', () => {
+    const catalog = Object.entries(PORTAL_ROUTES).flatMap(([portal, routes]) => routes.map((route, index) => ({
+      id: `${portal}:${index}`, portal, route,
+    }))).map((row, index) => ({ id: index + 1000, code: row.id, label: row.route, parentId: null, portal: row.portal, route: row.route }));
+    const modules = buildCommonAccessModules(catalog).modules;
+    const labels = (name: string) => modules.find((module) => module.label === name)?.tabs.map((tab) => tab.label) ?? [];
+    expect(labels('Leaves')).toEqual(expect.arrayContaining(['My Leaves', 'Leave Approvals', 'Leave Settings', 'Approvals Dashboard', 'Holiday Calendar']));
+    expect(labels('Shift Management')).toEqual(expect.arrayContaining(['General Shift', 'Roster Shift']));
+    expect(labels('Recruitment')).toEqual(expect.arrayContaining(['MRF Request', 'IJP Approvals', 'Interview Schedule', 'Internal Job Openings', 'Employee Referrals']));
+    expect(labels('LMS')).toEqual(expect.arrayContaining(['Dashboard', 'Course Management', 'Categories', 'Batches & Live Classes', 'Learner Enrollments', 'Compliance Training', 'Training Reports', 'Course Catalog', 'My Learning Hub', 'My Certificates', 'Integration Settings']));
+    expect(labels('Expenses')).toEqual(expect.arrayContaining(['Expense Management Dashboard', 'My Expenses', 'Expense Approvals', 'Finance Verification', 'Payment Cycle Reports', 'Travel Requests', 'Travel Advances', 'Mileage Claims', 'Expense Categories', 'Expense Policies', 'Reports & Analytics', 'Settings']));
+    for (const name of ['Course Catalog', 'My Learning Hub', 'My Certificates']) {
+      expect(labels('LMS').filter((label) => label === name)).toHaveLength(1);
+    }
+  });
+
+  it('adds non-sidebar working pages and groups aliases without granting another portal version', () => {
+    const view = buildCompleteAccessModules([
+      { id: 101, code: 'admin-leaves', label: 'My Leaves', parentId: 1, portal: 'admin', route: '/leaves/my-leaves' },
+      { id: 102, code: 'admin-leave-history', label: 'History', parentId: 1, portal: 'admin', route: '/leaves/history' },
+      { id: 103, code: 'employee-leaves', label: 'My Leaves', parentId: 1, portal: 'employee', route: '/employee/leaves' },
+      { id: 104, code: 'encashment', label: 'Encashment', parentId: 1, portal: 'admin', route: '/leaves/encashment' },
+    ]);
+    const leaves = view.find((module) => module.label === 'Leaves')!;
+    expect(leaves.tabs.map((tab) => tab.label)).toEqual(['My Leaves', 'Leave Encashment']);
+    expect(menusForAccessRole(leaves.tabs[0], 'admin').map((menu) => menu.id)).toEqual([101, 102]);
+    expect(menusForAccessRole(leaves.tabs[0], 'employee').map((menu) => menu.id)).toEqual([103]);
   });
 
   it('keeps Shift Management separate with both General and Roster Shift tabs', () => {
