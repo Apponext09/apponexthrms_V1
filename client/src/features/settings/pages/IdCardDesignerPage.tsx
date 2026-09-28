@@ -296,7 +296,7 @@ export const IdCardDesignerPage: React.FC = () => {
         localStorage.setItem('apponext_saved_id_card_config', JSON.stringify(configSnapshot));
       } catch (e) {}
 
-      let templateIdToSave = selectedTemplateId || templates[0]?.id;
+      const templateIdToSave = selectedTemplateId || templates[0]?.id;
 
       if (templateIdToSave) {
         const saved = await updateMutation.mutateAsync({

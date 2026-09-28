@@ -1,6 +1,16 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/config/api';
 
+export const useTemplate = (id?: number) =>
+  useQuery({
+    queryKey: ['template', id],
+    queryFn: async () => {
+      const response = await apiClient.get(`/templates/${id}`);
+      return response.data;
+    },
+    enabled: !!id,
+  });
+
 export const useTemplates = () => {
   const queryClient = useQueryClient();
 
@@ -51,15 +61,7 @@ export const useTemplates = () => {
     },
   });
 
-  const getTemplateQuery = (id?: number) =>
-    useQuery({
-      queryKey: ['template', id],
-      queryFn: async () => {
-        const response = await apiClient.get(`/templates/${id}`);
-        return response.data;
-      },
-      enabled: !!id,
-    });
+  const getTemplateQuery = useTemplate;
 
   return {
     createTemplate: createTemplateMutation.mutate,

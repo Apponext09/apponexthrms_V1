@@ -125,7 +125,7 @@ export const AiAnalysisModal: React.FC<AiAnalysisModalProps> = ({
     if (!name) return 'Candidate Profile';
     return name
       .replace(/^resume[_\s-]*(\d+pct|\d+%)?[_\s-]*(match)?[_\s-]*/i, '')
-      .replace(/[_\-]+/g, ' ')
+      .replace(/[_-]+/g, ' ')
       .trim() || name;
   };
 

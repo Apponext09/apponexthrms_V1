@@ -307,8 +307,8 @@ export default function AttendancePage() {
     }
 
     // 2. Raw ISO / MySQL timestamps check
-    let inTimeStr = itemOrLog.check_in_time || itemOrLog.checkInTime;
-    let outTimeStr = itemOrLog.check_out_time || itemOrLog.checkOutTime;
+    const inTimeStr = itemOrLog.check_in_time || itemOrLog.checkInTime;
+    const outTimeStr = itemOrLog.check_out_time || itemOrLog.checkOutTime;
 
     if (inTimeStr && inTimeStr !== '--') {
       const inIso = typeof inTimeStr === 'string' ? inTimeStr.replace(' ', 'T') : inTimeStr;

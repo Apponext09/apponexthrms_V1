@@ -879,7 +879,7 @@ export function MasterBuilderDetailPage() {
                     <div>
                       <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1">Behaviour</span>
                       <div className="flex flex-wrap gap-1.5">
-                        {Boolean((selectedField as any).isRequired ?? (selectedField as any).is_required) ? (
+                        {((selectedField as any).isRequired ?? (selectedField as any).is_required) ? (
                           <Badge variant="outline" className="text-xs bg-primary/10 text-primary border-primary/20">
                             Required
                           </Badge>

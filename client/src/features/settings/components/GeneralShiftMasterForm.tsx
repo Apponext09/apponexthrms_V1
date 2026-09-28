@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Plus, X, Info, Clock, Search, CheckCircle2, XCircle, ChevronDown, ChevronUp,
   Loader2, Sun, Moon, Sparkles, Shield, Palette, Tag, Timer, CalendarDays, Zap, AlertTriangle, Check
@@ -276,7 +276,7 @@ export function GeneralShiftMasterForm({ onCancel, onSave }: GeneralShiftMasterF
 
     setSubmitting(true);
     try {
-      let finalShiftName = shiftName.trim();
+      const finalShiftName = shiftName.trim();
       const rawCode = finalShiftName
         .toUpperCase()
         .replace(/\s+/g, '-')
