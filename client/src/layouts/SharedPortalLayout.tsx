@@ -15,6 +15,7 @@ import { CompanySelector } from './CompanySelector';
 import { SectionTabs } from './SectionNavigation';
 import { SharedPortalSidebar, type OrganizationPortal } from './SharedPortalSidebar';
 import { useMenuAccess } from '@/features/access/useMenuAccess';
+import { grantedLandingPath, portalRoot, sessionPortal } from '@/features/access/portalNavigation';
 
 function isCheckedInRecord(record: unknown) {
   const value = record as { check_in_time?: string; checkInTime?: string; check_out_time?: string; checkOutTime?: string } | null;
@@ -56,6 +57,12 @@ function MenuPageGuard() {
   const { ready, error, retry, access, canAccessPath } = useMenuAccess();
   if (error) return <div role="alert" className="p-6 text-sm text-destructive">Access rules could not be loaded. <Button variant="outline" size="sm" className="ml-2" onClick={retry}>Retry</Button></div>;
   if (!ready) return <div className="p-6 text-sm text-muted-foreground">Loading access rules...</div>;
+  if (access?.primaryPortal) {
+    const primary = sessionPortal(access.primaryPortal, 'employee');
+    if (portalRoot(primary) && pathname.replace(/\/$/, '') === portalRoot(primary)) {
+      return <Navigate to={grantedLandingPath(access.paths, primary, `${portalRoot(primary)}/dashboard`)} replace />;
+    }
+  }
   const roleTab = new URLSearchParams(search).get('tab');
   const isRoleEditor = ['access-roles', 'roles-responsibility', 'roles-responsibilities'].includes(roleTab ?? '') ||
     /\/(access-roles|roles-responsibility|roles-responsibilities)(?:\/|$)/.test(pathname);
@@ -66,7 +73,10 @@ function MenuPageGuard() {
   return <Outlet />;
 }
 
-export function SharedPortalLayout({ portal }: { portal: OrganizationPortal }) {
+export function SharedPortalLayout({ portal: routePortal }: { portal: OrganizationPortal }) {
+  const { access, ready, error } = useMenuAccess();
+  // Page routes identify content, not a change of the authenticated user's portal.
+  const portal = sessionPortal(access?.primaryPortal, routePortal);
   useNotificationSocket();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -74,6 +84,8 @@ export function SharedPortalLayout({ portal }: { portal: OrganizationPortal }) {
   const currentTheme = theme === 'system'
     ? (typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
     : theme;
+
+  if (!ready && !error) return <div role="status" className="p-6 text-sm text-muted-foreground">Loading your portal...</div>;
 
   return <div className="app-shell-reference flex h-dvh overflow-hidden bg-background font-sans text-foreground">
     {portal === 'employee' && <EmployeeTrackingEffects />}
