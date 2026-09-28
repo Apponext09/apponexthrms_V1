@@ -41,11 +41,77 @@ export class EmployeeService {
   private professionalInfoRepo: EmployeeProfessionalInfoRepository;
   private auditService: AuditService;
 
+  private static readonly EMPLOYEE_CODE_PREFIX = "EMP";
+  private static readonly EMPLOYEE_CODE_WIDTH = 3;
+
   constructor() {
     this.employeeRepo = new EmployeeRepository();
     this.personalInfoRepo = new EmployeePersonalInfoRepository();
     this.professionalInfoRepo = new EmployeeProfessionalInfoRepository();
     this.auditService = new AuditService();
+  }
+
+  /**
+   * The ONE place that derives the next available employee-code number for
+   * an organization. Both the create-employee flow, the /employees/next-code
+   * preview endpoint, and the bulk import fallback call this — there is
+   * intentionally no second copy of this logic anywhere else.
+   *
+   * Looks at the LAST employee row for this org (ordered by the numeric,
+   * auto-increment `id` — i.e. the most recently created row), reads the
+   * number already encoded in ITS employee_code, and returns that + 1. No
+   * row for this org yet → 0 → returns 1. Scoped by organization_id, so each
+   * organization gets its own EMP001, EMP002, ... sequence rather than
+   * sharing one running number across tenants.
+   *
+   * Deliberately not `employees.id` itself: `id` is one AUTO_INCREMENT
+   * counter shared by the whole table across every organization, so a
+   * second organization's first employee would not start at EMP001 if it
+   * were used directly. Reading the last row's own employee_code keeps the
+   * per-organization sequence intact.
+   *
+   * Includes soft-deleted rows: deleteEmployee() scrambles a deleted
+   * employee's code to `<code>_del_<timestamp>` (not a plain numeric
+   * suffix), so the regex below explicitly tolerates that optional suffix to
+   * recover the original number — a deleted employee's number must still
+   * count as used and never be reissued to someone else.
+   */
+  private async getNextEmployeeCodeNumber(ctx: TenantContext): Promise<number> {
+    const db = getKnex();
+    const prefix = EmployeeService.EMPLOYEE_CODE_PREFIX;
+    const escapedPrefix = prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const pattern = new RegExp(`^${escapedPrefix}(\\d+)(?:_del_\\d+)?$`);
+
+    const lastEmployee = await db("employees")
+      .where("organization_id", ctx.organizationId)
+      .orderBy("id", "desc")
+      .first("employee_code");
+
+    if (!lastEmployee) return 1;
+
+    // getKnex() auto-converts DB response columns to camelCase, so the
+    // selected `employee_code` column comes back as `employeeCode` — read
+    // both so this doesn't silently fall through to 1 for every call.
+    const rawCode = (lastEmployee as any).employeeCode ?? (lastEmployee as any).employee_code;
+    const match = String(rawCode || "").match(pattern);
+    return match ? Number(match[1]) + 1 : 1;
+  }
+
+  private formatEmployeeCode(num: number): string {
+    return `${EmployeeService.EMPLOYEE_CODE_PREFIX}${String(num).padStart(
+      EmployeeService.EMPLOYEE_CODE_WIDTH,
+      "0",
+    )}`;
+  }
+
+  /**
+   * Preview-only: the exact code createEmployee() would assign right now.
+   * Not a reservation — a concurrent create can still take this number first,
+   * which is why createEmployee() re-derives and retries on conflict rather
+   * than trusting a previously-fetched preview.
+   */
+  async previewNextEmployeeCode(ctx: TenantContext): Promise<string> {
+    return this.formatEmployeeCode(await this.getNextEmployeeCodeNumber(ctx));
   }
 
   /** Disable credentials and revoke sessions for a terminal employment status. */
@@ -306,30 +372,16 @@ export class EmployeeService {
       }
     }
 
-    // Generate the sequence on the server as well as displaying it in the UI.
-    // The submitted code contributes only its configured prefix and digit width;
-    // clients cannot select an arbitrary sequence number.
-    const requestedCode = String(input.employeeCode || "EMP001").trim();
-    const requestedParts = requestedCode.match(/^(.*?)(\d+)$/);
-    const codePrefix = requestedParts?.[1] || "EMP";
-    const codeWidth = Math.max(3, requestedParts?.[2].length || 3);
-    const existingCodes = await db("employees")
-      .where("organization_id", ctx.organizationId)
-      .select("employee_code");
-    const nextNum =
-      Math.max(
-        0,
-        ...existingCodes.map((row: any) => {
-          const code = String(row.employee_code || "");
-          if (!code.startsWith(codePrefix)) return 0;
-          const suffix = code.slice(codePrefix.length);
-          return /^\d+$/.test(suffix) ? Number(suffix) : 0;
-        }),
-      ) + 1;
-    const finalEmpCode = `${codePrefix}${String(nextNum).padStart(codeWidth, "0")}`;
+    // The employee code is always server-generated via getNextEmployeeCodeNumber()
+    // — the single shared generator also used by previewNextEmployeeCode() (the
+    // /employees/next-code preview the create form displays) and by the bulk
+    // import fallback. Any employeeCode the client submits is ignored here;
+    // trusting it would let a stale frontend-held value collide with a code
+    // another request already created since the preview was fetched.
+    let finalEmpCode = await this.previewNextEmployeeCode(ctx);
 
-    // Check after automatic generation so both supplied and generated codes are
-    // protected by the same organization-scoped uniqueness rule.
+    // Check after automatic generation so the generated code is protected by
+    // the same organization-scoped uniqueness rule enforced at the DB level.
     const isUnique = await this.employeeRepo.isCodeUnique(ctx, finalEmpCode);
     if (!isUnique) {
       throw new ValidationError(
@@ -377,47 +429,75 @@ export class EmployeeService {
       initialAccountIsActive = !configuredTerminalStatus;
     }
 
-    // Create employee
-    const employee = await this.employeeRepo.create(ctx, {
-      uuid: uuidv4(),
-      organization_id: ctx.organizationId,
-      company_id: effectiveCompanyId,
-      employee_code: finalEmpCode,
-      first_name: input.firstName,
-      last_name: input.lastName,
-      middle_name: input.middleName || null,
-      email: input.email,
-      phone: input.phone || null,
-      mobile: input.mobile || null,
-      date_of_birth: input.dateOfBirth || null,
-      gender: input.gender || null,
-      marital_status: input.maritalStatus || null,
-      date_of_joining: input.dateOfJoining,
-      employment_type: input.employmentType,
-      current_designation_id: currentDesignationId,
-      current_department_id: input.departmentId || null,
-      current_branch_id: input.branchId || null,
-      current_location_id: input.locationId || null,
-      current_grade_id: input.currentGradeId || null,
-      reporting_manager_id: finalReportingManagerId,
-      cost_center_id: input.costCenterId || null,
-      avatar_url: input.avatarUrl || null,
-      status: initialAccountIsActive
-        ? "active"
-        : ['inactive', 'exit', 'alumni'].includes(initialEmployeeStatus)
-          ? initialEmployeeStatus
-          : "exit",
-      employee_status:
-        input.employeeStatus ||
-        input.employee_status ||
-        ((input.status || "").toLowerCase() === "inactive"
-          ? "Inactive"
-          : (input.status || "").toLowerCase() === "active"
-            ? "Active"
-            : input.status || "Active"),
-      created_by: ctx.userId,
-      updated_by: ctx.userId,
-    } as any);
+    // Create employee. Two admins submitting at the same instant can both read
+    // the same "next number" above before either insert lands, so the
+    // organization+employee_code UNIQUE constraint (not the SELECT) is the
+    // actual source of truth for uniqueness — on a collision, recompute the
+    // next code from the now-current DB state and retry a bounded number of
+    // times rather than surfacing a raw duplicate-key SQL error.
+    const MAX_CODE_GENERATION_ATTEMPTS = 5;
+    let employee: Employee | undefined;
+    for (let attempt = 1; attempt <= MAX_CODE_GENERATION_ATTEMPTS; attempt++) {
+      try {
+        employee = await this.employeeRepo.create(ctx, {
+          uuid: uuidv4(),
+          organization_id: ctx.organizationId,
+          company_id: effectiveCompanyId,
+          employee_code: finalEmpCode,
+          first_name: input.firstName,
+          last_name: input.lastName,
+          middle_name: input.middleName || null,
+          email: input.email,
+          phone: input.phone || null,
+          mobile: input.mobile || null,
+          date_of_birth: input.dateOfBirth || null,
+          gender: input.gender || null,
+          marital_status: input.maritalStatus || null,
+          date_of_joining: input.dateOfJoining,
+          employment_type: input.employmentType,
+          current_designation_id: currentDesignationId,
+          current_department_id: input.departmentId || null,
+          current_branch_id: input.branchId || null,
+          current_location_id: input.locationId || null,
+          current_grade_id: input.currentGradeId || null,
+          reporting_manager_id: finalReportingManagerId,
+          cost_center_id: input.costCenterId || null,
+          avatar_url: input.avatarUrl || null,
+          status: initialAccountIsActive
+            ? "active"
+            : ['inactive', 'exit', 'alumni'].includes(initialEmployeeStatus)
+              ? initialEmployeeStatus
+              : "exit",
+          employee_status:
+            input.employeeStatus ||
+            input.employee_status ||
+            ((input.status || "").toLowerCase() === "inactive"
+              ? "Inactive"
+              : (input.status || "").toLowerCase() === "active"
+                ? "Active"
+                : input.status || "Active"),
+          created_by: ctx.userId,
+          updated_by: ctx.userId,
+        } as any);
+        break;
+      } catch (err: any) {
+        const isDuplicateCode =
+          err?.code === "ER_DUP_ENTRY" &&
+          String(err?.sqlMessage || "").includes("employee_code");
+        if (!isDuplicateCode) {
+          throw err;
+        }
+        if (attempt === MAX_CODE_GENERATION_ATTEMPTS) {
+          throw new ValidationError(
+            `Employee code '${finalEmpCode}' already exists`,
+          );
+        }
+        finalEmpCode = await this.previewNextEmployeeCode(ctx);
+      }
+    }
+    if (!employee) {
+      throw new ValidationError("Failed to generate a unique employee code");
+    }
 
     // Create user login credentials
     const plainPassword =
@@ -1916,17 +1996,10 @@ export class EmployeeService {
       if (r.code) roleCache.set(r.code.trim().toLowerCase(), r.id);
     }
 
-    const codeRows = await db("employees")
-      .where("organization_id", ctx.organizationId)
-      .select("employee_code");
-    let nextEmployeeCode =
-      Math.max(
-        0,
-        ...codeRows.map((row: any) => {
-          const match = String(row.employee_code || "").match(/^EMP(\d+)$/i);
-          return match ? Number(match[1]) : 0;
-        }),
-      ) + 1;
+    // Seeded from the same shared generator createEmployee()/previewNextEmployeeCode()
+    // use, then incremented locally per row so a batch of CSV rows lacking an
+    // explicit code gets a sequential run without re-scanning the table each row.
+    let nextEmployeeCode = await this.getNextEmployeeCodeNumber(ctx);
 
     // Helper to get or create a department (uses cache to prevent duplicate inserts)
     const getOrCreateDept = async (name: string): Promise<number> => {
@@ -2095,7 +2168,7 @@ export class EmployeeService {
           // Duplicate checks
           const employeeCode =
             input.employeeCode?.trim() ||
-            `EMP${String(nextEmployeeCode++).padStart(3, "0")}`;
+            this.formatEmployeeCode(nextEmployeeCode++);
           const codeExists = await trx("employees")
             .where({
               employee_code: employeeCode,

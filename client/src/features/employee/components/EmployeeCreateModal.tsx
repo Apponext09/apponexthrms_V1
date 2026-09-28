@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -43,9 +43,6 @@ import { useCompanyStore } from '@/features/settings/store/companyStore';
 import { usePolicies } from '@/features/policy/api/usePolicies';
 import { useEmployeeLinkedMasters } from '@/features/master-builder/hooks/useEmployeeCustomMasters';
 import { useAccessRoles } from '@/features/settings/hooks/useAccessRoles';
-
-export const createEmployeeCode = (nextNum: number = 1) =>
-  `EMP${String(nextNum).padStart(3, '0')}`;
 
 interface EmployeeCreateModalProps {
   open: boolean;
@@ -271,19 +268,32 @@ export function EmployeeCreateModal({
 }: EmployeeCreateModalProps) {
   const queryClient = useQueryClient();
   const { selectedCompanyId } = useCompanyStore();
-  const { config: customConfig, generateEmployeeCode, generatePassword } = useEmployeeCustomizationStore();
+  const { config: customConfig, generatePassword } = useEmployeeCustomizationStore();
   const { employees: allEmployees } = useEmployees({ pageSize: 500 });
   const { employeeTypes } = useEmployeeTypes();
   const { data: accessRoles = [] } = useAccessRoles();
   const { employeeStatuses } = useEmployeeStatuses();
   const { data: allOrgPolicies = [] } = usePolicies();
-  const nextCodeNum = Math.max(0, ...(allEmployees || []).map((employee: { employeeCode?: string; employee_code?: string }) => {
-    const match = String(employee.employeeCode || employee.employee_code || '').match(/(\d+)$/);
-    return match ? Number(match[1]) : 0;
-  })) + 1;
+
+  // The Employee Code field is read-only and its value is never computed on
+  // the client — employees.length / a cached list's max suffix / a local
+  // "EMP001" default can all drift from what the backend will actually
+  // assign (different pagination window, different scoping, a create by
+  // another admin since the list was fetched). GET /employees/next-code runs
+  // the exact same server-side generator createEmployee() uses, so this is
+  // only ever a preview: the POST itself re-derives and safely retries the
+  // real code regardless of what was last shown here.
+  const fetchNextEmployeeCode = useCallback(async (): Promise<string> => {
+    try {
+      const res = await apiClient.get('/employees/next-code');
+      return res.data?.data?.employeeCode || res.data?.employeeCode || '';
+    } catch {
+      return '';
+    }
+  }, []);
 
   const [formData, setFormData] = useState({
-    employeeCode: generateEmployeeCode(nextCodeNum),
+    employeeCode: '',
     firstName: '',
     lastName: '',
     email: '',
@@ -320,17 +330,20 @@ export function EmployeeCreateModal({
 
   React.useEffect(() => {
     if (open) {
-      const initialCode = generateEmployeeCode(nextCodeNum);
       const initialPwd = customConfig.enableCustomPasswordFormat ? generatePassword() : '';
       setFormData(prev => ({
         ...prev,
-        employeeCode: initialCode,
+        employeeCode: '',
         status: prev.status || 'active',
         ...(initialPwd ? { password: initialPwd, confirmPassword: initialPwd } : {})
       }));
       setFieldErrors({});
       setValidationError(null);
       setActiveInfoId(null);
+
+      fetchNextEmployeeCode().then((code) => {
+        if (code) setFormData(prev => ({ ...prev, employeeCode: code }));
+      });
 
       apiClient.get('/payroll/slabs').then((res: any) => {
         const list = res.data?.data || res.data || [];
@@ -650,8 +663,14 @@ export function EmployeeCreateModal({
       queryClient.invalidateQueries({ queryKey: ['admin-dashboard-stats'] });
       onSuccess?.();
 
+      // The dialog can stay open for another create without a reopen (this is
+      // exactly the "Create Another Employee" path) — re-sending an already-
+      // used code here was exactly what caused "Employee code 'EMP001'
+      // already exists" on the very next submit. Never compute the next code
+      // locally: ask the backend again, the same as on open. Until it
+      // resolves, the field shows blank rather than a stale/guessed value.
       setFormData({
-        employeeCode: createEmployeeCode(),
+        employeeCode: '',
         firstName: '',
         lastName: '',
         email: '',
@@ -673,6 +692,9 @@ export function EmployeeCreateModal({
         password: '',
         confirmPassword: '',
         salarySlabId: '',
+      });
+      fetchNextEmployeeCode().then((code) => {
+        if (code) setFormData(prev => ({ ...prev, employeeCode: code }));
       });
       setFieldErrors({});
     } catch (err: any) {
@@ -700,6 +722,16 @@ export function EmployeeCreateModal({
       }
       setValidationError(errMsg);
       toast.error(errMsg);
+
+      // The backend already retries a concurrent duplicate-code collision
+      // internally, so this only surfaces on the rare case that exhausts
+      // those retries. Refresh the previewed code so the displayed value
+      // isn't the stale/taken one the failed request just tried.
+      if (/employee code .* already exists/i.test(errMsg)) {
+        fetchNextEmployeeCode().then((code) => {
+          if (code) setFormData(prev => ({ ...prev, employeeCode: code }));
+        });
+      }
     } finally {
       setIsSubmitting(false);
     }

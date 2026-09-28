@@ -48,6 +48,13 @@ router.get('/me', controller.getMeEmployee);
 router.put('/me', controller.updateMeEmployee);
 
 /**
+ * GET /employees/next-code - Preview the employee code that would be
+ * assigned by the next POST /employees call (same generator, not a
+ * reservation). Must stay registered before GET /:id.
+ */
+router.get('/next-code', controller.getNextEmployeeCode);
+
+/**
  * GET /employees - List all employees
  */
 router.get('/', controller.listEmployees);

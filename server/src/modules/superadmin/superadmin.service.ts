@@ -288,11 +288,13 @@ export class SuperAdminService {
         }
 
         // Ensure organization_admin system role exists for this new organization
+        // (scoped strictly to this org's id — must never reuse a role belonging to
+        // another tenant or a platform-level role, which would leak menu/permission
+        // grants across organizations)
         let adminRole = await knex('roles')
           .where('code', 'organization_admin')
-          .where(function () {
-            this.where('organization_id', id).orWhereNull('organization_id').orWhere('is_platform_role', true);
-          })
+          .where('organization_id', id)
+          .where('is_platform_role', false)
           .first();
 
         if (!adminRole) {
