@@ -26,11 +26,13 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiClient } from '@/config/api';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { HelpHint } from '../components/HelpHint';
 
 export function GeneralSettingsPage() {
   const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const lmsSettingsHref = pathname.startsWith('/hr/') ? '/hr/settings/lms-integrations' : '/settings/lms-integrations';
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -535,7 +537,7 @@ export function GeneralSettingsPage() {
             </p>
           </div>
 
-          <Link to="/settings/lms-integrations">
+          <Link to={lmsSettingsHref}>
             <Button
               variant="outline"
               size="sm"
@@ -563,7 +565,7 @@ export function GeneralSettingsPage() {
               </div>
             </div>
 
-            <Link to="/settings/lms-integrations" className="shrink-0">
+            <Link to={lmsSettingsHref} className="shrink-0">
               <Button
                 size="sm"
                 className="gap-2 text-xs font-bold bg-violet-600 hover:bg-violet-700 text-white rounded-xl h-9 px-4 shadow-sm cursor-pointer"

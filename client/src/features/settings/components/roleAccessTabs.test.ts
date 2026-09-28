@@ -97,6 +97,21 @@ describe('access role navigation tabs', () => {
     expect(menusForAccessRole(leaves.tabs[0], 'employee').map((menu) => menu.id)).toEqual([103]);
   });
 
+  it('shows LMS Settings once under Settings with all working URL variants', () => {
+    const routes = [
+      ['admin', '/lms/settings/integrations'], ['admin', '/settings/lms-integrations'],
+      ['admin', '/settings-group/lms-integrations'], ['hr', '/hr/lms/settings/integrations'],
+      ['hr', '/hr/settings/lms-integrations'],
+    ];
+    const view = buildCompleteAccessModules(routes.map(([portal, route], index) => ({ id: index + 200, code: route, label: 'Integrations', parentId: null, portal, route })));
+    const all = view.flatMap((module) => module.tabs);
+    expect(all).toHaveLength(1);
+    const tab = view.find((module) => module.label === 'Settings')?.tabs[0];
+    expect(tab?.label).toBe('LMS Settings');
+    expect(tab?.menus).toHaveLength(5);
+    expect(menusForAccessRole(tab!, 'hr').map((menu) => menu.portal)).toEqual(['hr', 'hr']);
+  });
+
   it('keeps Shift Management separate with both General and Roster Shift tabs', () => {
     const view = buildCommonAccessModules([
       { id: 40, code: 'general-shift', label: 'General Shift', parentId: 3, portal: 'admin', route: '/attendance/shifts' },

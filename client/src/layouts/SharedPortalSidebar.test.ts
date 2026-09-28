@@ -33,6 +33,26 @@ describe('granted sidebar navigation', () => {
     expect(routes).not.toContain('/employees/:id');
   });
 
+  it('shows a granted LMS Settings link under Settings in the role portal', () => {
+    const pages = [
+      { id: 7, code: 'admin-lms-settings', label: 'Integrations', parentId: null, portal: 'admin', route: '/settings/lms-integrations' },
+      { id: 8, code: 'hr-lms-settings', label: 'Integrations', parentId: null, portal: 'hr', route: '/hr/settings/lms-integrations' },
+    ];
+    const groups = buildGrantedNavigationGroups(pages, ['/hr/settings/lms-integrations'], 'hr');
+    expect(groups).toHaveLength(1);
+    expect(groups[0].label).toBe('Settings');
+    expect(groups[0].items.map((item) => [item.name, item.href])).toEqual([['LMS Settings', '/hr/settings/lms-integrations']]);
+  });
+
+  it('links a profile-only Intern to its own Profile page', () => {
+    const pages = [
+      { id: 9, code: 'employee-profile', label: 'Profile', parentId: null, portal: 'employee', route: '/employee/profile' },
+      { id: 10, code: 'intern-profile', label: 'Profile', parentId: null, portal: 'intern', route: '/intern/profile' },
+    ];
+    const routes = buildGrantedNavigationGroups(pages, ['/intern/profile'], 'intern').flatMap((group) => group.items.map((item) => item.href));
+    expect(routes).toEqual(['/intern/profile']);
+  });
+
   it('applies the saved role-specific module priority', () => {
     const groups = buildGrantedNavigationGroups(catalog, ['/finance/dashboard', '/recruitment/jobs'], 'finance', ['Recruitment', 'Dashboard']);
     expect(groups.map((group) => group.label)).toEqual(['Recruitment', 'Dashboard']);
