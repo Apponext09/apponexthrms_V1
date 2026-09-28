@@ -84,10 +84,9 @@ async function permissionCheckAsync(
   );
 
   if (!hasAllPerms) {
-    // A page grant permits loading that page's read data, never mutation or approval.
-    // The lookup is DB-backed and subscription-filtered, not inferred from a role name.
-    if (['GET', 'HEAD'].includes(req.method) &&
-      (await Promise.all(requiredPermissions.map((permission) => rbacService.hasMenuReadPermission(req.ctx!, permission))))
+    // Full tab access includes supported actions for that tab only. Tenant,
+    // subscription and controller-level business rules continue to apply.
+    if ((await Promise.all(requiredPermissions.map((permission) => rbacService.hasMenuPermission(req.ctx!, permission))))
         .every(Boolean)) {
       next();
       return;

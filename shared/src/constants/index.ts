@@ -178,3 +178,4 @@ export const ERROR_CODE = {
   IP_RESTRICTED: 'ip_restricted',
 } as const;
 export * from './settings-access.js';
+export * from './tab-access.js';

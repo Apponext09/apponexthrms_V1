@@ -121,3 +121,33 @@ export function pageAllowsReadPermission(permission: string, route: string): boo
   }
   return false;
 }
+
+/** A tab grant owns its supported actions, not unrelated tabs or RBAC administration. */
+export function pageAllowsPermission(permission: string, route: string): boolean {
+  if (pageAllowsReadPermission(permission, route)) return true;
+  const path = route.toLowerCase().replace(/^\/(hr|manager|team-lead|employee|intern|consultant|finance)(?=\/)/, '');
+  if (/^employee\.profile\.(read|create|update|delete)$/.test(permission)) return /^\/employees(?:\/:id(?:\/edit)?)?$/.test(path);
+  if (/^recruitment\.(mrf|job|candidate|application|interview|assessment|offer)\.(read|write)$/.test(permission)) {
+    return pageAllowsReadPermission(permission.replace(/\.write$/, '.read'), route);
+  }
+  if (/^performance\.[a-z_]+_(read|write|approve|submit|manage|review|redeem|360)$/.test(permission)) {
+    const read = permission.replace(/_(write|approve|submit|manage|review|redeem|360)$/, '_read');
+    return pageAllowsReadPermission(read, route);
+  }
+  const payrollActions: Record<string, RegExp> = {
+    'payroll:generate': /^\/(payroll(?:\/(settings|master-settings|policies|processing))?|payroll-processing)$/,
+    'payroll:process': /^\/(payroll\/processing|payroll-processing)$/,
+    'payroll:lock': /^\/(payroll\/processing|payroll-processing)$/,
+    'payroll:unlock': /^\/(payroll\/processing|payroll-processing)$/,
+    'payroll:approve': /^\/(payroll\/processing|payroll-processing)$/,
+    'payroll:publish': /^\/(payroll\/processing|payroll-processing)$/,
+  };
+  if (payrollActions[permission]) return !/^\/(employee|intern|consultant)\//.test(route.toLowerCase()) && payrollActions[permission].test(path);
+  if (/^structure:(view|create|edit|assign)$/.test(permission)) return /^\/(payroll\/salary-structure|salary-structures?|payroll\/mass-salary-upload|mass-salary-upload)$/.test(path);
+  if (/^loan:(view|create)$/.test(permission)) return !/^\/(employee|intern|consultant)\//.test(route.toLowerCase()) && /^\/(payroll\/)?(loans|loan-types)$/.test(path);
+  if (/^payslip:(send|lock)$/.test(permission)) return /^\/(payroll\/payslips|payroll\/payslip-requests)$/.test(path);
+  if (/^settlement:(view|create|calculate|submit|approve|process)$/.test(permission)) return !/^\/(employee|intern|consultant)\//.test(route.toLowerCase()) && /^\/(payroll\/)?(settlements?|gratuity)$/.test(path);
+  if (/^workflow:(read|create|update|delete|publish|execute|manage_templates)$/.test(permission)) return /^\/(workflows\/list|settings\/workflows|settings-group\/workflows)$/.test(path);
+  if (/^workflow:(read|approve|delegate|escalate)$/.test(permission)) return /^\/(workflow\/approvals|approvals|leaves\/approvals?)$/.test(path);
+  return false;
+}
