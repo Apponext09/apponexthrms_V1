@@ -800,58 +800,63 @@ export class EmployeeService {
         throw new ValidationError('Selected reporting manager does not exist.');
       }
 
-      const isAlreadyAssignedManager = Number(payload.reporting_manager_id) === Number(employee.reporting_manager_id || (employee as any).reportingManagerId);
+      const existingEmp = await db('employees').where('id', employeeId).where('organization_id', ctx.organizationId).first();
+      const isAlreadyAssignedManager = Boolean(existingEmp && existingEmp.reporting_manager_id && Number(existingEmp.reporting_manager_id) === Number(payload.reporting_manager_id));
 
-      const isDeptHead = await db('departments')
-        .where('department_head_id', targetMgr.id)
-        .where('organization_id', ctx.organizationId)
-        .first();
+      if (!isAlreadyAssignedManager) {
+        let isManagerRole = false;
 
-      const isReportingMgrForOthers = await db('employees')
-        .where('reporting_manager_id', targetMgr.id)
-        .where('organization_id', ctx.organizationId)
-        .whereNull('deleted_at')
-        .first();
-
-      let isManagerRole = Boolean(isAlreadyAssignedManager || isDeptHead || isReportingMgrForOthers);
-
-      if (!isManagerRole) {
-        let mgrUser = await db('users')
-          .where('employee_id', targetMgr.id)
+        const isDeptHead = await db('departments')
+          .where('department_head_id', targetMgr.id)
           .where('organization_id', ctx.organizationId)
           .first();
 
-        if (!mgrUser && targetMgr.email) {
-          mgrUser = await db('users')
-            .whereRaw('LOWER(email) = ?', [targetMgr.email.toLowerCase()])
+        const isReportingMgrForOthers = await db('employees')
+          .where('reporting_manager_id', targetMgr.id)
+          .where('organization_id', ctx.organizationId)
+          .whereNull('deleted_at')
+          .first();
+
+        isManagerRole = Boolean(isDeptHead || isReportingMgrForOthers);
+
+        if (!isManagerRole) {
+          let mgrUser = await db('users')
+            .where('employee_id', targetMgr.id)
+            .where('organization_id', ctx.organizationId)
             .first();
+
+          if (!mgrUser && targetMgr.email) {
+            mgrUser = await db('users')
+              .whereRaw('LOWER(email) = ?', [targetMgr.email.toLowerCase()])
+              .first();
+          }
+
+          if (mgrUser) {
+            const mgrRoles = await db('user_roles')
+              .join('roles', 'user_roles.role_id', 'roles.id')
+              .where('user_roles.user_id', mgrUser.id)
+              .select('roles.code');
+            const validCodes = new Set(['team_lead', 'department_head', 'hr', 'organization_admin', 'super_admin', 'cto', 'cfo', 'coo', 'cxo', 'manager', 'admin', 'hr_admin', 'hr_manager', 'executive', 'finance', 'finance_manager']);
+            isManagerRole = mgrRoles.some((r: any) => validCodes.has(r.code)) || validCodes.has(mgrUser.role);
+          }
         }
 
-        if (mgrUser) {
-          const mgrRoles = await db('user_roles')
-            .join('roles', 'user_roles.role_id', 'roles.id')
-            .where('user_roles.user_id', mgrUser.id)
-            .select('roles.code');
-          const validCodes = new Set(['team_lead', 'department_head', 'hr', 'organization_admin', 'super_admin', 'cto', 'cfo', 'coo', 'cxo', 'manager', 'admin', 'hr_admin', 'hr_manager', 'executive']);
-          isManagerRole = mgrRoles.some((r: any) => validCodes.has(r.code)) || validCodes.has(mgrUser.role);
+        if (!isManagerRole && targetMgr.job_title) {
+          if (/manager|lead|head|director|vp|chief|executive|supervisor|admin|president|officer|finance|accounts/i.test(targetMgr.job_title)) {
+            isManagerRole = true;
+          }
         }
-      }
 
-      if (!isManagerRole && targetMgr.job_title) {
-        if (/manager|lead|head|director|vp|chief|executive|supervisor|admin|president|officer/i.test(targetMgr.job_title)) {
-          isManagerRole = true;
+        if (!isManagerRole && targetMgr.current_designation_id) {
+          const desig = await db('designations').where('id', targetMgr.current_designation_id).first();
+          if (desig && /manager|lead|head|director|vp|chief|executive|supervisor|admin|president|officer|finance|accounts/i.test(desig.title || desig.name || '')) {
+            isManagerRole = true;
+          }
         }
-      }
 
-      if (!isManagerRole && targetMgr.current_designation_id) {
-        const desig = await db('designations').where('id', targetMgr.current_designation_id).first();
-        if (desig && /manager|lead|head|director|vp|chief|executive|supervisor|admin|president|officer/i.test(desig.title || desig.name || '')) {
-          isManagerRole = true;
+        if (!isManagerRole && !(targetMgr.employee_code || '').startsWith('CEO-') && !(targetMgr.is_ceo)) {
+          console.warn(`[EmployeeService] Target reporting manager #${targetMgr.id} (${targetMgr.first_name} ${targetMgr.last_name}) assigned to employee #${employeeId}`);
         }
-      }
-
-      if (!isManagerRole && !(targetMgr.employee_code || '').startsWith('CEO-') && !(targetMgr.is_ceo)) {
-        throw new ValidationError('Reporting manager must be a Team Lead, Department Manager, HR Manager, or Executive.');
       }
 
       let currentManagerId: number | null = Number(payload.reporting_manager_id);

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -14,6 +14,7 @@ import { useDesignations } from '../../settings/hooks/useDesignations';
 import { useEmployeeStatuses } from '../../settings/api/useEmployeeStatuses';
 import { ProfileEditRequestModal } from './ProfileEditRequestModal';
 import type { Employee } from '@/types';
+import { getEligibleReportingManagers, formatCandidateLabel } from '../utils/reportingHierarchy';
 
 interface EmployeeBasicInfoProps {
   employee: Employee;
@@ -127,6 +128,7 @@ export function EmployeeBasicInfo({
   useEffect(() => {
     setForm({
       ...(employee || {}),
+      currentDepartmentId: employee?.currentDepartmentId ?? (employee as any)?.current_department_id ?? (employee as any)?.departmentId ?? (employee as any)?.department_id,
       status: (employee as any)?.employeeStatus || (employee as any)?.employee_status || employee?.status || 'active',
       nationality: employee?.nationality || (employee as any)?.nationality || '',
       password: '',
@@ -230,9 +232,11 @@ export function EmployeeBasicInfo({
   };
 
   // Find department name for display
-  const departmentName = departmentsData?.data?.find(
-    (d: any) => d.id === employee.currentDepartmentId
-  )?.name || '-';
+  const activeDeptId = form.currentDepartmentId !== undefined ? form.currentDepartmentId : (employee?.currentDepartmentId ?? (employee as any)?.current_department_id ?? (employee as any)?.departmentId);
+  const departmentName = departmentsData?.data?.find((d: any) => Number(d.id) === Number(activeDeptId))?.name || (employee as any)?.department || '-';
+
+
+
 
   const accessRole = (employee as any).accessRole;
   const designation = (employee as any).designation || (employee as any).designationName || (employee as any).designation_name || (employee as any).currentDesignationName || (employee as any).current_designation_name || '-';
@@ -249,19 +253,37 @@ export function EmployeeBasicInfo({
         : ''));
 
   // Filter manager options: ONLY Team Lead, Department Manager, HR Manager, or Admin roles
-  const managerCandidates = (employees || []).filter((item: any) => {
-    if (item.id === employee.id) return false;
-    const role = (item.accessRole || item.access_role || item.role || '').toLowerCase();
-    const code = (item.employeeCode || item.employee_code || '');
-    const isCurrentlyAssigned = Number(item.id) === Number(form.reportingManagerId || employee.reportingManagerId || (employee as any).reporting_manager_id);
-    return (
-      isCurrentlyAssigned ||
-      ['team_lead', 'department_head', 'hr_manager', 'organization_admin', 'super_admin', 'cto', 'cfo', 'coo', 'cxo', 'manager'].includes(role) ||
-      code.startsWith('CEO-') ||
-      item.isCeo ||
-      item.is_ceo
-    );
-  });
+  const managerCandidates = useMemo(() => {
+    return getEligibleReportingManagers({
+      targetEmployee: {
+        ...employee,
+        ...form,
+        id: employee.id,
+        accessRole: form.accessRole || (employee as any).accessRole,
+        jobTitle: form.jobTitle || (employee as any).jobTitle || (employee as any).designation,
+        designation: (employee as any).designation,
+        currentDepartmentId: form.currentDepartmentId !== undefined ? form.currentDepartmentId : employee.currentDepartmentId,
+        department: departmentName,
+      },
+      selectedDepartmentId: form.currentDepartmentId,
+      selectedDepartmentName: departmentName,
+      allDepartments: departmentsData?.data || [],
+      allEmployees: employees || [],
+    });
+  }, [employees, employee, form.currentDepartmentId, departmentName, departmentsData?.data, form.accessRole, form.jobTitle]);
+  // Done computing managerCandidates
+
+
+
+
+
+
+
+
+
+
+
+
 
   return (
     <Card className="border border-border/80 shadow-2xs rounded-xl bg-card">
@@ -445,7 +467,7 @@ export function EmployeeBasicInfo({
                 >
                   <option value="">-- Select Reporting Manager / Team Lead --</option>
                   {managerCandidates.map((item: any) => (
-                    <option key={item.id} value={item.id}>{item.firstName} {item.lastName} ({item.employeeCode} - {item.jobTitle || item.accessRole || 'Lead'})</option>
+                    <option key={item.id} value={item.id}>{formatCandidateLabel(item)}</option>
                   ))}
                 </select>
               )}

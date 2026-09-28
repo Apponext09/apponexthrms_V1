@@ -19,8 +19,8 @@ export const DEFAULT_BACKEND_HIERARCHY_RULES: HierarchyRuleBackend[] = [
   { id: 'rule-it-head', designationOrRole: 'IT Head', allowedParentDesignations: ['CTO', 'CEO', 'COO', 'ORGANIZATION ADMIN'], hierarchyLevel: 3 },
   { id: 'rule-pm', designationOrRole: 'Project Manager', allowedParentDesignations: ['IT Head', 'Department Manager', 'Department Head', 'HR Manager', 'Finance Manager', 'CTO', 'COO', 'CFO', 'CEO', 'ORGANIZATION ADMIN'], hierarchyLevel: 4 },
   { id: 'rule-tl', designationOrRole: 'Team Leader', allowedParentDesignations: ['Project Manager', 'Department Manager', 'IT Head', 'Department Head', 'Manager', 'HR Manager', 'Finance Manager', 'Organization Manager', 'CTO', 'COO', 'CFO', 'CEO', 'ORGANIZATION ADMIN'], hierarchyLevel: 5 },
-  { id: 'rule-employee', designationOrRole: 'Employee', allowedParentDesignations: ['Team Leader'], hierarchyLevel: 6 },
-  { id: 'rule-intern', designationOrRole: 'Intern', allowedParentDesignations: ['Employee', 'HR Executive', 'Accountant'], hierarchyLevel: 7 },
+  { id: 'rule-employee', designationOrRole: 'Employee', allowedParentDesignations: ['Team Leader', 'Project Manager', 'Department Manager', 'Department Head', 'Manager', 'HR Manager', 'Finance Manager', 'IT Head', 'CTO', 'COO', 'CFO', 'CEO', 'ORGANIZATION ADMIN'], hierarchyLevel: 6 },
+  { id: 'rule-intern', designationOrRole: 'Intern', allowedParentDesignations: ['Team Leader', 'Employee', 'HR Executive', 'Accountant', 'Project Manager', 'Department Manager', 'Department Head', 'Manager', 'CTO', 'COO', 'CFO', 'CEO', 'ORGANIZATION ADMIN'], hierarchyLevel: 7 },
   { id: 'rule-dept-head', designationOrRole: 'Department Head', allowedParentDesignations: ['CTO', 'COO', 'CFO', 'CEO', 'ORGANIZATION ADMIN'], hierarchyLevel: 3 },
   { id: 'rule-dept-mgr', designationOrRole: 'Department Manager', allowedParentDesignations: ['Department Head', 'IT Head', 'HR Manager', 'Finance Manager', 'CTO', 'COO', 'CFO', 'CEO', 'ORGANIZATION ADMIN'], hierarchyLevel: 3 },
   { id: 'rule-mgr', designationOrRole: 'Manager', allowedParentDesignations: ['Department Head', 'IT Head', 'HR Manager', 'Finance Manager', 'CTO', 'COO', 'CFO', 'CEO', 'ORGANIZATION ADMIN'], hierarchyLevel: 3 },
@@ -138,20 +138,6 @@ export class OrgHierarchyService {
 
     // Target is Org Admin / Top Root / null
     if (!targetManagerId || targetManagerId === 999999) {
-      if (sourcePos === 'Employee') {
-        throw new ValidationError('This Employee cannot be assigned to the selected position. Employees can only report directly to a Team Leader.');
-      }
-      if (sourcePos === 'Intern') {
-        throw new ValidationError('This Intern cannot be assigned to the selected position. Interns can only report directly to an Employee.');
-      }
-      const rules = await this.getHierarchyRules(ctx);
-      const rule = rules.find((r) => r.designationOrRole.toLowerCase() === sourcePos.toLowerCase()) ||
-        DEFAULT_BACKEND_HIERARCHY_RULES.find((r) => r.designationOrRole.toLowerCase() === sourcePos.toLowerCase());
-      const allowedParents = rule?.allowedParentDesignations || [];
-      const allowsAdmin = allowedParents.some((p) => ['ceo', 'organization admin'].includes(p.toLowerCase()));
-      if (!allowsAdmin && sourcePos !== 'CEO') {
-        throw new ValidationError(`${sourcePos}s cannot report directly to Organization Admin. According to the organization hierarchy, please select the appropriate manager level.`);
-      }
       return;
     }
 
@@ -192,10 +178,15 @@ export class OrgHierarchyService {
     // Department Boundary Validation (Same Department Reporting Only for non-executives)
     const isExecutiveRole = (pos: string) => ['CEO', 'COO', 'CTO', 'CFO', 'ORGANIZATION ADMIN'].includes(pos.toUpperCase());
 
-    if (!isExecutiveRole(sourcePos) && !isExecutiveRole(targetPos)) {
-      const activeEmp = await db('employees').where('id', activeEmployeeId).first();
-      const targetMgr = await db('employees').where('id', targetManagerId).first();
+    const activeEmp = await db('employees').where('id', activeEmployeeId).first();
+    const targetMgr = await db('employees').where('id', targetManagerId).first();
 
+    // If reporting manager is unchanged from what is already saved in DB, do not block profile updates
+    if (activeEmp && activeEmp.reporting_manager_id && Number(activeEmp.reporting_manager_id) === Number(targetManagerId)) {
+      return;
+    }
+
+    if (!isExecutiveRole(sourcePos) && !isExecutiveRole(targetPos)) {
       if (activeEmp && targetMgr) {
         const srcDeptId = activeEmp.current_department_id;
         const tgtDeptId = targetMgr.current_department_id;
@@ -206,20 +197,6 @@ export class OrgHierarchyService {
       }
     }
 
-    if (sourcePos === 'Employee') {
-      if (targetPos === 'Team Leader') {
-        return;
-      }
-      throw new ValidationError('This Employee cannot be assigned to the selected position. Employees can only report directly to a Team Leader.');
-    }
-
-    if (sourcePos === 'Intern') {
-      if (['Employee', 'HR Executive', 'Accountant'].includes(targetPos)) {
-        return;
-      }
-      throw new ValidationError('This Intern cannot be assigned to the selected position. Interns can only report directly to an Employee.');
-    }
-
     const rules = await this.getHierarchyRules(ctx);
     const rule = rules.find((r) => r.designationOrRole.toLowerCase() === sourcePos.toLowerCase()) ||
       DEFAULT_BACKEND_HIERARCHY_RULES.find((r) => r.designationOrRole.toLowerCase() === sourcePos.toLowerCase());
@@ -227,7 +204,7 @@ export class OrgHierarchyService {
     const allowedParents = rule?.allowedParentDesignations || [];
     const isAllowed = allowedParents.some((p) => p.toLowerCase() === targetPos.toLowerCase());
 
-    if (!isAllowed) {
+    if (!isAllowed && !isExecutiveRole(targetPos) && targetPos !== 'Employee') {
       const expectedStr = allowedParents.join(' or ') || 'its immediate manager';
       throw new ValidationError(`${sourcePos}s can report only to ${expectedStr}. Assigned position (${targetPos}) is not valid under the configured organization hierarchy.`);
     }

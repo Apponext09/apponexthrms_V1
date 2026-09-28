@@ -42,6 +42,7 @@ import { useEmployeeCustomizationStore } from '../store/employeeCustomizationSto
 import { useCompanyStore } from '@/features/settings/store/companyStore';
 import { usePolicies } from '@/features/policy/api/usePolicies';
 import { useEmployeeLinkedMasters } from '@/features/master-builder/hooks/useEmployeeCustomMasters';
+import { getEligibleReportingManagers, formatCandidateLabel } from '../utils/reportingHierarchy';
 
 export const createEmployeeCode = (nextNum: number = 1) =>
   `EMP${String(nextNum % 1000).padStart(3, '0')}`;
@@ -1415,60 +1416,30 @@ export function EmployeeCreateModal({
                               value={formData.reportingManagerId}
                               onChange={(e) => setFormData({ ...formData, reportingManagerId: e.target.value })}
                             >
-                              <option value="">-- Select Reporting Manager (Defaults to CEO / Dept Head) --</option>
                               {(() => {
-                                const getCat = (m: any) => {
-                                  const r = (m.accessRole || '').toLowerCase();
-                                  const d = (m.designation || '').toLowerCase();
-                                  if (['cfo', 'coo', 'cto'].includes(r) || d.includes('chief')) return 'cxo';
-                                  if (['department_head', 'hr_manager', 'manager'].includes(r) || d.includes('manager') || d.includes('head')) return 'manager';
-                                  if (r === 'team_lead' || d.includes('lead')) return 'lead';
-                                  return 'other';
-                                };
-
-                                const cxos = departmentManagers.filter((m: any) => getCat(m) === 'cxo');
-                                const mgrs = departmentManagers.filter((m: any) => getCat(m) === 'manager');
-                                const leads = departmentManagers.filter((m: any) => getCat(m) === 'lead');
-                                const others = departmentManagers.filter((m: any) => getCat(m) === 'other');
+                                const eligibleManagers = getEligibleReportingManagers({
+                                  targetEmployee: {
+                                    accessRole: formData.accessRole,
+                                    jobTitle: formData.jobTitle,
+                                    currentDepartmentId: formData.departmentId,
+                                  },
+                                  selectedDepartmentId: formData.departmentId,
+                                  allDepartments: departmentsData?.data || [],
+                                  allEmployees: allEmployees || [],
+                                });
 
                                 return (
                                   <>
-                                    {cxos.length > 0 && (
-                                      <optgroup label="⚡ C-Suite Executives (CTO, COO, CFO)">
-                                        {cxos.map((mgr: any) => (
-                                          <option key={mgr.id} value={String(mgr.id)}>
-                                            {mgr.name} {mgr.employeeCode ? `(${mgr.employeeCode})` : ''} · {mgr.designation} ({mgr.department})
-                                          </option>
-                                        ))}
-                                      </optgroup>
-                                    )}
-                                    {mgrs.length > 0 && (
-                                      <optgroup label="👔 Department Heads & Managers">
-                                        {mgrs.map((mgr: any) => (
-                                          <option key={mgr.id} value={String(mgr.id)}>
-                                            {mgr.name} {mgr.employeeCode ? `(${mgr.employeeCode})` : ''} · {mgr.designation} ({mgr.department})
-                                          </option>
-                                        ))}
-                                      </optgroup>
-                                    )}
-                                    {leads.length > 0 && (
-                                      <optgroup label="🎖️ Team Leads">
-                                        {leads.map((mgr: any) => (
-                                          <option key={mgr.id} value={String(mgr.id)}>
-                                            {mgr.name} {mgr.employeeCode ? `(${mgr.employeeCode})` : ''} · {mgr.designation} ({mgr.department})
-                                          </option>
-                                        ))}
-                                      </optgroup>
-                                    )}
-                                    {others.length > 0 && (
-                                      <optgroup label="👥 Other Department Members">
-                                        {others.map((mgr: any) => (
-                                          <option key={mgr.id} value={String(mgr.id)}>
-                                            {mgr.name} {mgr.employeeCode ? `(${mgr.employeeCode})` : ''} · {mgr.designation} ({mgr.department})
-                                          </option>
-                                        ))}
-                                      </optgroup>
-                                    )}
+                                    <option value="">
+                                      {eligibleManagers.length > 0
+                                        ? '-- Select Reporting Manager / Team Lead --'
+                                        : '-- No eligible reporting manager in this department --'}
+                                    </option>
+                                    {eligibleManagers.map((mgr: any) => (
+                                      <option key={mgr.id} value={String(mgr.id)}>
+                                        {formatCandidateLabel(mgr)}
+                                      </option>
+                                    ))}
                                   </>
                                 );
                               })()}

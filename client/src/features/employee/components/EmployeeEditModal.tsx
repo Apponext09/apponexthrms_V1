@@ -15,6 +15,7 @@ import { useEmployeeTypes } from '../../settings/hooks/useEmployeeTypes';
 import { useEmployeeLinkedMasters, useEmployeeMasterValues, useSaveEmployeeMasterValues } from '../../master-builder/hooks/useEmployeeCustomMasters';
 import { AlertCircle, Edit2, Copy, Check, Eye, EyeOff, Layers } from 'lucide-react';
 import { toast } from 'sonner';
+import { getEligibleReportingManagers, formatCandidateLabel } from '../utils/reportingHierarchy';
 
 const updateEmployeeCode = () =>
   `EMP${Date.now().toString().slice(-8)}${Math.floor(100 + Math.random() * 900)}`;
@@ -494,14 +495,37 @@ export function EmployeeEditModal({
                           onChange={(e) => setFormData({ ...formData, reportingManagerId: e.target.value })}
                           disabled={!formData.departmentId}
                         >
-                          <option value="">{formData.departmentId ? '-- No reporting manager yet --' : '-- Select a department first --'}</option>
-                          {departmentEmployees.map((emp: any) => (
-                            <option key={emp.id} value={emp.id}>
-                              {emp.firstName} {emp.lastName} ({emp.employeeCode})
-                            </option>
-                          ))}
-                        </select>
-                        <p className="text-xs text-muted-foreground mt-1">Only people already assigned to this department are listed.</p>
+                          {(() => {
+                            const eligibleManagers = getEligibleReportingManagers({
+                              targetEmployee: {
+                                ...employee,
+                                id: employee?.id,
+                                accessRole: formData.accessRole,
+                                jobTitle: formData.jobTitle,
+                                currentDepartmentId: formData.departmentId,
+                              },
+                              selectedDepartmentId: formData.departmentId,
+                              allDepartments: departmentsData?.data || [],
+                              allEmployees: allEmployees || [],
+                            });
+
+                            return (
+                              <>
+                                <option value="">
+                                  {formData.departmentId
+                                    ? (eligibleManagers.length > 0
+                                        ? '-- Select Reporting Manager / Team Lead --'
+                                        : '-- No eligible reporting manager in this department --')
+                                    : '-- Select a department first --'}
+                                </option>
+                                {eligibleManagers.map((emp: any) => (
+                                  <option key={emp.id} value={emp.id}>
+                                    {formatCandidateLabel(emp)}
+                                  </option>
+                                ))}
+                              </>
+                            );
+                          })()}
                       </>
                     )}
                   </div>

@@ -53,13 +53,13 @@ export const DEFAULT_HIERARCHY_RULES: HierarchyRule[] = [
   {
     id: 'rule-employee',
     designationOrRole: 'Employee',
-    allowedParentDesignations: ['Team Leader'],
+    allowedParentDesignations: ['Team Leader', 'Department Manager', 'Department Head', 'Project Manager', 'Finance Manager', 'HR Manager', 'IT Head', 'Manager'],
     hierarchyLevel: 6,
   },
   {
     id: 'rule-intern',
     designationOrRole: 'Intern',
-    allowedParentDesignations: ['Employee', 'HR Executive', 'Accountant'],
+    allowedParentDesignations: ['Employee', 'Team Leader', 'HR Executive', 'Accountant', 'Department Manager', 'Manager'],
     hierarchyLevel: 7,
   },
   {
@@ -149,6 +149,20 @@ export function normalizePositionKey(designation?: string, accessRole?: string):
   if (role === 'intern' || desig.includes('intern') || desig.includes('trainee') || desig.includes('apprentice')) return 'Intern';
 
   return 'Employee';
+}
+
+/**
+ * Returns numeric hierarchy rank (1 = Highest authority CEO, 7 = Lowest authority Intern)
+ */
+export function getHierarchyLevel(positionKey: string): number {
+  const pos = positionKey.toUpperCase().trim();
+  if (['CEO', 'ORGANIZATION ADMIN'].includes(pos)) return 1;
+  if (['COO', 'CTO', 'CFO', 'CXO'].includes(pos)) return 2;
+  if (['DEPARTMENT HEAD', 'DEPARTMENT MANAGER', 'IT HEAD', 'HR MANAGER', 'FINANCE MANAGER', 'ORGANIZATION MANAGER', 'MANAGER'].includes(pos)) return 3;
+  if (['PROJECT MANAGER', 'PRODUCT MANAGER', 'HR EXECUTIVE', 'ACCOUNTANT'].includes(pos)) return 4;
+  if (['TEAM LEADER', 'TEAM LEAD', 'TECH LEAD'].includes(pos)) return 5;
+  if (['INTERN', 'TRAINEE', 'APPRENTICE'].includes(pos)) return 7;
+  return 6; // Default Employee
 }
 
 /**
@@ -271,7 +285,7 @@ export function validateDragAndDrop(
 
   const targetPos = normalizePositionKey(targetEmp?.designation || targetEmp?.jobTitle, targetEmp?.accessRole);
 
-  // 5. Department Boundary Validation (Same Department Reporting Only for non-executives)
+  // 5. Department Boundary Validation (Strict Same-Department Reporting for non-executives)
   const isExecutiveRole = (pos: string) => ['CEO', 'COO', 'CTO', 'CFO', 'ORGANIZATION ADMIN'].includes(pos.toUpperCase());
 
   if (!isExecutiveRole(sourcePos) && !isExecutiveRole(targetPos) && targetEmp) {
@@ -297,48 +311,51 @@ export function validateDragAndDrop(
       const tgtDeptDisp = targetEmp.department || 'another department';
       return {
         isValid: false,
-        errorTitle: 'Department Mismatch Error',
-        errorMessage: `Cannot assign ${sourceEmp.firstName || 'Employee'} (${srcDeptDisp}) under ${targetEmp.firstName || 'Manager'} (${tgtDeptDisp}). Drag-and-drop reporting is allowed only within the same department.`,
+        errorTitle: 'Cross-Department Reassignment Not Allowed',
+        errorMessage: `Cannot assign ${sourceEmp.firstName || 'Employee'} (${srcDeptDisp}) under ${targetEmp.firstName || 'Manager'} (${tgtDeptDisp}). Reporting line changes are allowed only within the same department.`,
       };
     }
   }
 
-  // Enforce explicit rules for Employee and Intern
-  if (sourcePos === 'Employee') {
-    if (targetPos === 'Team Leader') {
-      return { isValid: true };
-    }
+  // 6. Hierarchy Level Comparison (Target Manager must have higher authority than Source Subordinate)
+  const sourceLevel = getHierarchyLevel(sourcePos);
+  const targetLevel = getHierarchyLevel(targetPos);
+
+  if (!targetIsAdmin && sourceLevel <= targetLevel) {
     return {
       isValid: false,
-      errorTitle: 'Invalid Reporting Structure',
-      errorMessage: 'This Employee cannot be assigned to the selected position. Employees can only report directly to a Team Leader.',
+      errorTitle: 'Invalid Hierarchy Level',
+      errorMessage: `Cannot assign a ${sourcePos} (Level ${sourceLevel}) to report under a ${targetPos} (Level ${targetLevel}). A reporting manager must hold a higher position in the hierarchy.`,
     };
+  }
+
+  // 7. Explicit Rule Validation
+  if (sourcePos === 'Employee') {
+    // Employee can report to Team Leader, Department Manager, Department Head, Finance Manager, HR Manager, IT Head, Project Manager
+    if (targetLevel < 6) {
+      return { isValid: true };
+    }
   }
 
   if (sourcePos === 'Intern') {
-    if (['Employee', 'HR Executive', 'Accountant'].includes(targetPos)) {
+    // Intern can report to Employee, Team Leader, Department Manager, etc.
+    if (targetLevel < 7) {
       return { isValid: true };
     }
-    return {
-      isValid: false,
-      errorTitle: 'Invalid Reporting Structure',
-      errorMessage: 'This Intern cannot be assigned to the selected position. Interns can only report directly to an Employee.',
-    };
   }
 
-  // 6. Find Rule for Other Source Positions
   const rule = customRules.find((r) => r.designationOrRole.toLowerCase() === sourcePos.toLowerCase()) ||
     DEFAULT_HIERARCHY_RULES.find((r) => r.designationOrRole.toLowerCase() === sourcePos.toLowerCase());
 
   const allowedParents = rule?.allowedParentDesignations || [];
   const isMatch = allowedParents.some((p) => p.toLowerCase() === targetPos.toLowerCase());
 
-  if (!isMatch) {
+  if (!isMatch && !isExecutiveRole(targetPos) && sourceLevel <= targetLevel) {
     const expectedStr = allowedParents.join(' or ') || 'its immediate manager';
     return {
       isValid: false,
       errorTitle: 'Invalid Reporting Structure',
-      errorMessage: `${sourcePos}s can report only to ${expectedStr}. Assigned position (${targetPos}) is not valid under the configured hierarchy.`,
+      errorMessage: `${sourcePos}s can report only to higher level positions (${expectedStr}). Assigned position (${targetPos}) is not valid.`,
     };
   }
 
