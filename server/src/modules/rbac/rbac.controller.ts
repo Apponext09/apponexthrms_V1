@@ -16,6 +16,8 @@ const roleUpdateSchema = z.object({
 });
 const menuSelectionSchema = z.object({
   menuIds: z.array(z.number().int().positive()).max(2000),
+  permissionCodes: z.array(z.string().trim().min(1).max(100)).max(2000)
+    .refine((items) => new Set(items).size === items.length, 'Permission codes must be unique').optional(),
   moduleOrder: z.array(z.string().trim().min(1).max(100)).max(150)
     .refine((items) => new Set(items).size === items.length, 'Module positions must be unique').optional(),
 });
@@ -75,14 +77,19 @@ export class RbacController {
     res.json({ success: true, data: { items } });
   }
 
+  async listPermissions(_req: Request, res: Response): Promise<void> {
+    const items = await this.rbacService.listPermissions();
+    res.json({ success: true, data: { items } });
+  }
+
   async getRoleMenus(req: Request, res: Response): Promise<void> {
     const data = await this.rbacService.getRoleMenus(req.ctx!, Number(req.params.roleId));
     res.json({ success: true, data });
   }
 
   async setRoleMenus(req: Request, res: Response): Promise<void> {
-    const { menuIds, moduleOrder } = menuSelectionSchema.parse(req.body);
-    const data = await this.rbacService.setRoleMenus(req.ctx!, Number(req.params.roleId), menuIds, moduleOrder);
+    const { menuIds, moduleOrder, permissionCodes } = menuSelectionSchema.parse(req.body);
+    const data = await this.rbacService.setRoleMenus(req.ctx!, Number(req.params.roleId), menuIds, moduleOrder, permissionCodes);
     res.json({ success: true, data });
   }
 

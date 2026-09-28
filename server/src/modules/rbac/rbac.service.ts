@@ -109,6 +109,19 @@ export class RbacService {
     return rows.map((row) => ({ ...row, path: row.route, parentId: row.parentId ?? row.parent_id, sortOrder: row.sortOrder ?? row.sort_order, subscriptionModule: row.subscriptionModule ?? row.subscription_module }));
   }
 
+  /** Action catalog used by the role access editor. */
+  async listPermissions() {
+    const [permissions, menus] = await Promise.all([
+      this.db('permissions').orderBy(['module', 'resource', 'action', 'code'])
+        .select('id', 'code', 'module', 'resource', 'action', 'description'),
+      this.db('menu_items').where('is_active', true).whereNotNull('route').select('id', 'route'),
+    ]);
+    return permissions.map((permission) => ({
+      ...permission,
+      menuIds: menus.filter((menu) => pageAllowsPermission(permission.code, menu.route)).map((menu) => Number(menu.id)),
+    })).filter((permission) => permission.menuIds.length > 0);
+  }
+
   private async organizationRole(ctx: TenantContext, roleId: number) {
     if (!Number.isSafeInteger(roleId) || roleId <= 0) throw new NotFoundError('Role not found');
     const role = await this.db('roles').where({ id: roleId, organization_id: ctx.organizationId })
@@ -139,7 +152,10 @@ export class RbacService {
     const role = await this.organizationRole(ctx, roleId);
     await this.initializeLegacyRole(role);
     const rows = await this.db('role_menu_access').where('role_id', roleId).pluck('menu_id');
-    return { menuIds: rows.map(Number), moduleOrder: this.parseModuleOrder(role.moduleOrder ?? role.module_order) };
+    const permissionCodes = await this.db('role_permissions as rp')
+      .join('permissions as p', 'p.id', 'rp.permission_id')
+      .where('rp.role_id', roleId).orderBy('p.code').pluck('p.code');
+    return { menuIds: rows.map(Number), permissionCodes, moduleOrder: this.parseModuleOrder(role.moduleOrder ?? role.module_order) };
   }
 
   private parseModuleOrder(value: unknown): string[] {
@@ -149,7 +165,13 @@ export class RbacService {
     } catch { return []; }
   }
 
-  async setRoleMenus(ctx: TenantContext, roleId: number, requestedIds: number[], moduleOrder?: string[]) {
+  async setRoleMenus(
+    ctx: TenantContext,
+    roleId: number,
+    requestedIds: number[],
+    moduleOrder?: string[],
+    requestedPermissionCodes?: string[],
+  ) {
     const role = await this.organizationRole(ctx, roleId);
     const ids = [...new Set(requestedIds)];
     if (ids.some((id) => !Number.isSafeInteger(id) || id <= 0)) throw new ForbiddenError('Invalid menu selection');
@@ -175,20 +197,53 @@ export class RbacService {
       }
     }
     const effectiveIds = expandMenuSelection(expandedIds, menus);
+    let effectivePermissionCodes: string[] | undefined;
+    let permissionRows: Array<{ id: number; code: string }> = [];
+    if (requestedPermissionCodes) {
+      const uniqueCodes = [...new Set(requestedPermissionCodes)];
+      const allPermissionRows: Array<{ id: number; code: string }> = await this.db('permissions').select('id', 'code');
+      const requestedRows = allPermissionRows.filter((permission) => uniqueCodes.includes(permission.code));
+      if (requestedRows.length !== uniqueCodes.length) throw new ForbiddenError('One or more permissions are invalid');
+      const selectedRoutes = menus.map((menu) => menu.route).filter((route): route is string => Boolean(route));
+      if (uniqueCodes.some((code) => !selectedRoutes.some((route) => pageAllowsPermission(code, route)))) {
+        throw new ForbiddenError('One or more actions do not belong to the selected pages');
+      }
+      if (!actorIsAdmin) {
+        const actorPermissions = new Set((await this.getEffectivePermissions(ctx.organizationId, ctx.userId)).permissionCodes);
+        if (uniqueCodes.some((code) => !actorPermissions.has(code))) {
+          throw new ForbiddenError('Cannot grant actions that your own role does not have');
+        }
+      }
+      const allRoutes = catalog.map((menu) => menu.route).filter((route): route is string => Boolean(route));
+      const managedCodes = new Set(allPermissionRows.filter((permission) =>
+        allRoutes.some((route) => pageAllowsPermission(permission.code, route))).map((permission) => permission.code));
+      const existingRows: Array<{ id: number; code: string }> = await this.db('role_permissions as rp')
+        .join('permissions as p', 'p.id', 'rp.permission_id').where('rp.role_id', roleId).select('p.id', 'p.code');
+      const preservedRows = existingRows.filter((permission) => !managedCodes.has(permission.code));
+      permissionRows = [...requestedRows, ...preservedRows.filter((permission) => !uniqueCodes.includes(permission.code))];
+      effectivePermissionCodes = permissionRows.map((permission) => permission.code).sort();
+    }
     await this.db.transaction(async (trx) => {
       await trx('role_menu_access').where('role_id', roleId).delete();
       await trx('roles').where('id', roleId).update({ menu_access_initialized: true, ...(moduleOrder ? { module_order: JSON.stringify(moduleOrder) } : {}) });
       for (let index = 0; index < effectiveIds.length; index += 100) {
         await trx('role_menu_access').insert(effectiveIds.slice(index, index + 100).map((menuId) => ({ role_id: roleId, menu_id: menuId })));
       }
+      if (effectivePermissionCodes) {
+        await trx('role_permissions').where('role_id', roleId).delete();
+        for (let index = 0; index < permissionRows.length; index += 100) {
+          await trx('role_permissions').insert(permissionRows.slice(index, index + 100)
+            .map((permission) => ({ role_id: roleId, permission_id: permission.id })));
+        }
+      }
     });
     invalidateOrgPermissions(ctx.organizationId);
     await this.auditService.log(ctx, {
       action: 'UPDATE', entityType: 'ROLE_MENU_ACCESS', entityId: roleId,
-      beforeState: before, afterState: { menuIds: effectiveIds, moduleOrder: moduleOrder ?? before.moduleOrder, roleCode: role.code },
+      beforeState: before, afterState: { menuIds: effectiveIds, permissionCodes: effectivePermissionCodes ?? before.permissionCodes, moduleOrder: moduleOrder ?? before.moduleOrder, roleCode: role.code },
     });
-    publishEvent('permission.assigned', { organizationId: ctx.organizationId, roleId, menuIds: effectiveIds });
-    return { menuIds: effectiveIds, moduleOrder: moduleOrder ?? before.moduleOrder };
+    publishEvent('permission.assigned', { organizationId: ctx.organizationId, roleId, menuIds: effectiveIds, permissionCodes: effectivePermissionCodes ?? before.permissionCodes });
+    return { menuIds: effectiveIds, permissionCodes: effectivePermissionCodes ?? before.permissionCodes, moduleOrder: moduleOrder ?? before.moduleOrder };
   }
 
   /** Union of non-expired role grants. No role-code fallback: unknown/new roles start with no access. */

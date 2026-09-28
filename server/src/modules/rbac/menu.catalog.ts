@@ -126,7 +126,60 @@ export function pageAllowsReadPermission(permission: string, route: string): boo
 export function pageAllowsPermission(permission: string, route: string): boolean {
   if (pageAllowsReadPermission(permission, route)) return true;
   const path = route.toLowerCase().replace(/^\/(hr|manager|team-lead|employee|intern|consultant|finance)(?=\/)/, '');
-  if (/^employee\.profile\.(read|create|update|delete)$/.test(permission)) return /^\/employees(?:\/:id(?:\/edit)?)?$/.test(path);
+  if (/^employee\.profile\.(read|create|update|delete|export)$/.test(permission)) return /^\/employees(?:\/:id(?:\/edit)?)?$/.test(path);
+  if (permission === 'employee.org_hierarchy.update') return /^\/(org-structure|org-chart)$/.test(path);
+  if (/^attendance\./.test(permission)) {
+    const action = permission.slice('attendance.'.length);
+    if (/^shift_/.test(action)) return /shift|roster/.test(path);
+    if (/^location_/.test(action)) return /location|geo/.test(path);
+    if (/^regularization_/.test(action)) return /regularization/.test(path);
+    if (/^overtime_/.test(action)) return /overtime|attendance\/(reports|break-report)/.test(path);
+    if (/^timesheet_/.test(action)) return /timesheet|timelog/.test(path);
+    if (action === 'analytics_read') return /analytics|report|timelog/.test(path);
+    if (/^(check|break)_/.test(action)) return /attendance|face-punch/.test(path);
+    if (/^(read|write)$/.test(action)) return /attendance|face-punch|timelog|break-log/.test(path);
+  }
+  if (/^leave\./.test(permission)) {
+    if (permission === 'leave.policy.manage') return /leave-polic|policies/.test(path);
+    if (permission === 'leave.balance.manage') return /leave.*balance|balances/.test(path);
+    if (permission === 'leave.analytics') return /leave.*report|burnout|analytics/.test(path);
+    if (permission === 'leave.approve') return /leave.*approval|approvals/.test(path);
+    if (permission === 'leave.admin') return /^\/leaves$|encashment|leave.*setting/.test(path);
+    if (permission === 'leave.apply') return /leaves\/(apply|my-leaves|history)|encashment/.test(path);
+    if (permission === 'leave.read') return /^\/leaves$|leaves\/(apply|my-leaves|history)|holiday|encashment/.test(path);
+    return false;
+  }
+  if (/^asset\./.test(permission)) {
+    const resource = permission.split('.')[1];
+    if (['view', 'create', 'edit', 'delete', 'export', 'admin'].includes(resource)) return /^\/assets(?:\/list|\/:id)?$/.test(path);
+    const aliases: Record<string, RegExp> = {
+      category: /asset.*(categor|setting)/, assign: /asset.*assign/, assignment: /asset.*assign/,
+      transfer: /asset.*transfer/, return: /asset.*return/, maintenance: /asset.*maintenance/,
+      license: /asset.*license/, request: /asset.*request/, vendor: /asset.*vendor/,
+      report: /asset.*report/, analytics: /asset.*analytics/,
+    };
+    return Boolean(aliases[resource]?.test(path));
+  }
+  if (/^lms\./.test(permission)) {
+    const resource = permission.split('.')[1];
+    const aliases: Record<string, RegExp> = {
+      course: /lms\/(course|courses|catalog|my-courses|my-learning)/,
+      category: /lms\/categories/, module: /lms\/(course|courses)/,
+      batch: /lms\/batches/, enrollment: /lms\/(enrollments|my-learning)/,
+      assessment: /lms\/assessment/, compliance: /lms\/compliance/,
+      integration: /lms\/settings\/integrations|lms-integrations/,
+    };
+    return Boolean(aliases[resource]?.test(path));
+  }
+  if (/^expense\./.test(permission)) {
+    const resource = permission.split('.')[1];
+    const aliases: Record<string, RegExp> = {
+      category: /expense.*categor/, policy: /expense.*polic/, travel: /travel-request|travel$/, advance: /travel-advance/,
+      mileage: /mileage/, report: /expense.*report/, settings: /expense.*setting/,
+      workflow: /expense.*workflow/, claim: /expense|reimbursement|my-expenses|approval|verification/,
+    };
+    return Boolean(aliases[resource]?.test(path));
+  }
   if (/^recruitment\.(mrf|job|candidate|application|interview|assessment|offer)\.(read|write)$/.test(permission)) {
     return pageAllowsReadPermission(permission.replace(/\.write$/, '.read'), route);
   }
@@ -149,5 +202,11 @@ export function pageAllowsPermission(permission: string, route: string): boolean
   if (/^settlement:(view|create|calculate|submit|approve|process)$/.test(permission)) return !/^\/(employee|intern|consultant)\//.test(route.toLowerCase()) && /^\/(payroll\/)?(settlements?|gratuity)$/.test(path);
   if (/^workflow:(read|create|update|delete|publish|execute|manage_templates)$/.test(permission)) return /^\/(workflows\/list|settings\/workflows|settings-group\/workflows)$/.test(path);
   if (/^workflow:(read|approve|delegate|escalate)$/.test(permission)) return /^\/(workflow\/approvals|approvals|leaves\/approvals?)$/.test(path);
+  // Future modules can join the action system without changing the editor.
+  // A permission only attaches when its resource is explicitly visible in the route.
+  const tokens = permission.toLowerCase().split(/[.:]/).filter(Boolean);
+  const resource = tokens.length > 2 ? tokens[1] : tokens[0];
+  const normalizedResource = resource.replace(/_/g, '-').replace(/s$/, '');
+  if (normalizedResource.length >= 4 && path.split(/[/?-]/).some((part) => part.replace(/s$/, '') === normalizedResource)) return true;
   return false;
 }

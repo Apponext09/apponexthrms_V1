@@ -15,6 +15,18 @@ describe('existing page catalog', () => {
     expect(pageAllowsPermission('payroll:process', '/payroll/processing')).toBe(true);
     expect(pageAllowsPermission('payroll:process', '/employee/payslips')).toBe(false);
     expect(pageAllowsPermission('loan:create', '/employee/loans')).toBe(false);
+    expect(pageAllowsPermission('asset.delete', '/assets/list')).toBe(true);
+    expect(pageAllowsPermission('asset.transfer.approve', '/assets/transfer')).toBe(true);
+    expect(pageAllowsPermission('asset.transfer.approve', '/assets/list')).toBe(false);
+    expect(pageAllowsPermission('attendance.shift_write', '/attendance/shifts')).toBe(true);
+    expect(pageAllowsPermission('attendance.shift_write', '/attendance/locations')).toBe(false);
+    expect(pageAllowsPermission('leave.approve', '/leaves/approvals')).toBe(true);
+    expect(pageAllowsPermission('leave.approve', '/leaves/my-leaves')).toBe(false);
+    expect(pageAllowsPermission('expense.claim.approve', '/expenses/approvals')).toBe(true);
+    expect(pageAllowsPermission('expense.category.delete', '/expenses/categories')).toBe(true);
+    expect(pageAllowsPermission('expense.category.delete', '/expenses/my-expenses')).toBe(false);
+    expect(pageAllowsPermission('lms.course.update', '/lms/courses')).toBe(true);
+    expect(pageAllowsPermission('lms.course.update', '/lms/batches')).toBe(false);
     expect(pageAllowsPermission('rbac.roles.write', '/employees')).toBe(false);
   });
   it('includes every organization portal and known attendance detail paths', () => {

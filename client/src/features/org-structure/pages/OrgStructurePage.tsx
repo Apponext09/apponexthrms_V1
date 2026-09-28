@@ -1,9 +1,10 @@
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo, useRef, useEffect, useCallback, memo } from "react";
 import html2canvas from "html2canvas";
 import { toast } from "sonner";
 import {
   DndContext,
   PointerSensor,
+  KeyboardSensor,
   useSensor,
   useSensors,
   useDraggable,
@@ -13,8 +14,11 @@ import {
   DragOverlay,
 } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import { useEmployees } from "@/features/employee/hooks/useEmployees";
+import { useOrgHierarchy } from "../hooks/useOrgHierarchy";
+import { buildOrgTree, type OrgTreeNode } from "../utils/buildOrgTree";
 import { useDesignations } from "@/features/settings/hooks/useDesignations";
+import { useDepartments } from "@/features/settings/hooks/useDepartments";
+import { useLocations } from "@/features/settings/hooks/useLocations";
 import { EmployeeCreateModal } from "@/features/employee/components/EmployeeCreateModal";
 import { OrgHierarchyConfigModal } from "../components/OrgHierarchyConfigModal";
 import type { HierarchyRule } from "../types/orgHierarchy";
@@ -26,11 +30,14 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/ui/empty-state";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
 } from "@/components/ui/dropdown-menu";
 import {
   Dialog,
@@ -52,7 +59,6 @@ import {
   ZoomIn,
   ZoomOut,
   RotateCcw,
-  Grab,
   Plus,
   Minus,
   User,
@@ -66,6 +72,11 @@ import {
   Eye,
   Settings,
   Zap,
+  AlertCircle,
+  Filter,
+  ChevronsDownUp,
+  ChevronsUpDown,
+  AlertTriangle,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import type { Employee } from "@/types";
@@ -320,10 +331,14 @@ interface ReferenceNodeProps {
   onToggleExpand: () => void;
   onClick: () => void;
   isAdmin?: boolean;
+  isOrgRoot?: boolean;
+  isUnassignedGroup?: boolean;
+  directReportsCount?: number;
+  inReportingPath?: boolean;
   deptName?: string;
 }
 
-function ReferenceNode({
+const ReferenceNode = memo(function ReferenceNode({
   emp,
   highlight,
   isPulsing = false,
@@ -332,18 +347,28 @@ function ReferenceNode({
   onToggleExpand,
   onClick,
   isAdmin = false,
+  isOrgRoot = false,
+  isUnassignedGroup = false,
+  directReportsCount = 0,
+  inReportingPath = false,
   deptName,
 }: ReferenceNodeProps) {
-  const name = [emp.firstName, emp.lastName].filter(Boolean).join(" ");
+  const name = isOrgRoot || isUnassignedGroup ? emp.firstName : [emp.firstName, emp.lastName].filter(Boolean).join(" ");
   const initials =
     `${emp.firstName?.[0] || ""}${emp.lastName?.[0] || ""}`.toUpperCase();
   const tone = avatarTone(emp.id);
-  const designation = isAdmin ? "Admin" : resolveDesignation(emp);
+  const designation = isAdmin ? "Admin" : isOrgRoot || isUnassignedGroup ? emp.designation : resolveDesignation(emp);
 
   const isDeptHeadOrHR = ["department_head", "hr_manager"].includes(
     (emp as any).accessRole || "",
   );
-  const isDragDisabled = isAdmin || isDeptHeadOrHR;
+  // Synthetic nodes (the neutral org-root placeholder, the Unassigned
+  // grouping) don't correspond to a real employee, so they're never
+  // draggable. The org-root placeholder IS still a valid drop target — it
+  // plays the same "assign directly to the top of the org" role a single
+  // CEO card would.
+  const isDragDisabled = isAdmin || isOrgRoot || isUnassignedGroup || isDeptHeadOrHR;
+  const dropTargetIsAdmin = isAdmin || isOrgRoot;
 
   const {
     attributes,
@@ -354,12 +379,13 @@ function ReferenceNode({
   } = useDraggable({
     id: String(emp.id),
     disabled: isDragDisabled,
-    data: { emp, isAdmin },
+    data: { emp, isAdmin: dropTargetIsAdmin },
   });
 
   const { setNodeRef: setDroppableRef, isOver } = useDroppable({
     id: String(emp.id),
-    data: { emp, isAdmin },
+    disabled: isUnassignedGroup,
+    data: { emp, isAdmin: dropTargetIsAdmin },
   });
 
   const setCombinedRef = (element: HTMLDivElement | null) => {
@@ -384,11 +410,15 @@ function ReferenceNode({
       ? "opacity-40 border-dashed border-primary bg-primary/10"
       : isOver
         ? "border-primary bg-primary/10 ring-4 ring-primary/25 scale-105 shadow-lg z-40"
-        : highlight
-          ? "border-primary bg-muted/50 ring-2 ring-primary/30"
-          : isAdmin
-            ? "border-primary bg-primary/5"
-            : "border-border bg-card hover:border-primary hover:shadow-md";
+        : isUnassignedGroup
+          ? "border-dashed border-amber-500/50 bg-amber-500/5"
+          : highlight
+            ? "border-primary bg-muted/50 ring-2 ring-primary/30"
+            : isAdmin || isOrgRoot
+              ? "border-primary bg-primary/5"
+              : inReportingPath
+                ? "border-primary/60 bg-primary/5"
+                : "border-border bg-card hover:border-primary hover:shadow-md";
 
   return (
     <div className="relative flex flex-col items-center shrink-0">
@@ -419,12 +449,19 @@ function ReferenceNode({
         {...attributes}
         style={style}
         onClick={onClick}
+        role="treeitem"
+        aria-expanded={hasChildren ? !isCollapsed : undefined}
+        aria-label={isUnassignedGroup ? `Unassigned: ${designation}` : `${name}, ${designation}`}
         title={
-          isAdmin
-            ? "Organization Admin"
-            : isDeptHeadOrHR
-              ? "Department Heads and HR Managers report directly to Organization Admin."
-              : "Drag node onto a manager to reassign reporting manager"
+          isOrgRoot
+            ? "Organization root — employees with no assigned manager attach here"
+            : isUnassignedGroup
+              ? "Employees whose reporting manager reference is broken or circular"
+              : isAdmin
+                ? "Organization Admin"
+                : isDeptHeadOrHR
+                  ? "Department Heads and HR Managers report directly to Organization Admin."
+                  : "Drag node onto a manager to reassign reporting manager"
         }
         className={`group relative flex flex-col items-center border rounded-xl px-3 py-3
           w-[168px] min-h-[96px] transition-all duration-200 cursor-grab active:cursor-grabbing select-none
@@ -437,9 +474,15 @@ function ReferenceNode({
         >
           <AvatarImage src={(emp as any).avatarUrl || undefined} alt={name} />
           <AvatarFallback
-            className={`text-[11px] font-bold ${isAdmin ? "bg-primary text-primary-foreground" : tone}`}
+            className={`text-[11px] font-bold ${isAdmin || isOrgRoot ? "bg-primary text-primary-foreground" : isUnassignedGroup ? "bg-amber-500/15 text-amber-600" : tone}`}
           >
-            {initials || <User className="w-4 h-4" />}
+            {isOrgRoot ? (
+              <Building2 className="w-4 h-4" />
+            ) : isUnassignedGroup ? (
+              <AlertTriangle className="w-4 h-4" />
+            ) : (
+              initials || <User className="w-4 h-4" />
+            )}
           </AvatarFallback>
         </Avatar>
 
@@ -457,7 +500,14 @@ function ReferenceNode({
           {designation}
         </div>
 
-        {/* Expand / collapse toggle */}
+        {/* Direct reports count */}
+        {!isUnassignedGroup && directReportsCount > 0 && (
+          <div className="w-full text-[10px] font-medium text-center truncate mt-1 text-muted-foreground/80">
+            {directReportsCount} direct report{directReportsCount === 1 ? "" : "s"}
+          </div>
+        )}
+
+        {/* Expand / collapse toggle — 20px visible circle, ~40px tap target via invisible padding */}
         {hasChildren && (
           <button
             type="button"
@@ -465,36 +515,41 @@ function ReferenceNode({
               e.stopPropagation();
               onToggleExpand();
             }}
-            className="absolute -bottom-3 left-1/2 -translate-x-1/2 w-5 h-5 rounded-full bg-card border border-border flex items-center justify-center shadow-sm hover:border-primary hover:scale-110 transition-transform focus-visible:ring-2 focus-visible:ring-primary/60 outline-none"
+            className="absolute -bottom-3 left-1/2 -translate-x-1/2 outline-none"
             title={isCollapsed ? "Expand Children" : "Collapse Children"}
             aria-label={isCollapsed ? "Expand children" : "Collapse children"}
+            aria-expanded={!isCollapsed}
           >
-            {isCollapsed ? (
-              <Plus className="w-3 h-3 text-primary" />
-            ) : (
-              <Minus className="w-3 h-3 text-muted-foreground" />
-            )}
+            <span className="absolute -inset-2.5" aria-hidden="true" />
+            <span className="relative flex w-5 h-5 rounded-full bg-card border border-border items-center justify-center shadow-sm group-hover:border-primary hover:scale-110 transition-transform focus-visible:ring-2 focus-visible:ring-primary/60">
+              {isCollapsed ? (
+                <Plus className="w-3 h-3 text-primary" />
+              ) : (
+                <Minus className="w-3 h-3 text-muted-foreground" />
+              )}
+            </span>
           </button>
         )}
       </div>
     </div>
   );
-}
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Tree Branch Recursive Component
 // ─────────────────────────────────────────────────────────────────────────────
 interface TreeBranchProps {
-  node: any;
+  node: OrgTreeNode;
   highlight: Set<number>;
   pulsingEmpId?: number | null;
   collapsedMap: Record<number, boolean>;
   onToggleCollapse: (id: number) => void;
   onSelectEmp: (e: Employee) => void;
   isLevel1Manager?: boolean;
+  pathIds?: Set<number>;
 }
 
-function TreeBranch({
+const TreeBranch = memo(function TreeBranch({
   node,
   highlight,
   pulsingEmpId,
@@ -502,8 +557,9 @@ function TreeBranch({
   onToggleCollapse,
   onSelectEmp,
   isLevel1Manager = false,
+  pathIds,
 }: TreeBranchProps) {
-  const isCollapsed = collapsedMap[node.emp.id] ?? false;
+  const isCollapsed = collapsedMap[node.emp.id!] ?? false;
   const children = node.children || [];
   const hasChildren = children.length > 0;
   const deptName = node.isAdmin
@@ -518,24 +574,28 @@ function TreeBranch({
     <div className="flex flex-col items-center shrink-0">
       <ReferenceNode
         emp={node.emp}
-        highlight={highlight.has(node.emp.id)}
+        highlight={highlight.has(node.emp.id!)}
         isPulsing={pulsingEmpId === node.emp.id}
         hasChildren={hasChildren}
         isCollapsed={isCollapsed}
-        onToggleExpand={() => onToggleCollapse(node.emp.id)}
+        onToggleExpand={() => onToggleCollapse(node.emp.id!)}
         onClick={() => onSelectEmp(node.emp)}
         isAdmin={node.isAdmin}
+        isOrgRoot={node.isOrgRoot}
+        isUnassignedGroup={node.isUnassignedGroup}
+        directReportsCount={node.isUnassignedGroup ? 0 : children.length}
+        inReportingPath={pathIds ? pathIds.has(node.emp.id!) : false}
         deptName={deptName}
       />
 
       {/* Children with connector lines */}
       {hasChildren && !isCollapsed && (
-        <div className="flex flex-col items-center pt-3">
+        <div className="flex flex-col items-center pt-3" role="group">
           {/* Stem down from the parent */}
           <div className="w-px h-5 bg-border shrink-0" />
 
           <div className="flex items-start justify-center">
-            {children.map((childNode: any, index: number) => (
+            {children.map((childNode: OrgTreeNode, index: number) => (
               <div
                 key={childNode.emp.id}
                 className="flex flex-col items-center shrink-0"
@@ -559,6 +619,7 @@ function TreeBranch({
                     onToggleCollapse={onToggleCollapse}
                     onSelectEmp={onSelectEmp}
                     isLevel1Manager={node.isAdmin || node.isCxo}
+                    pathIds={pathIds}
                   />
                 </div>
               </div>
@@ -566,6 +627,115 @@ function TreeBranch({
           </div>
         </div>
       )}
+    </div>
+  );
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Mobile Org Summary — below sm breakpoint the interactive pan/zoom tree is
+// replaced with a department-grouped, tap-to-expand list. Forcing the same
+// dense canvas into a phone-width viewport is unusable (per-card min-width
+// alone exceeds a 360px screen); this reads the identical fetched roster,
+// just presented as a list instead of a spatial tree.
+// ─────────────────────────────────────────────────────────────────────────────
+interface MobileOrgSummaryProps {
+  employees: Employee[];
+  designations: any[];
+  onSelectEmployee: (e: Employee) => void;
+}
+
+function MobileOrgSummary({ employees, designations, onSelectEmployee }: MobileOrgSummaryProps) {
+  const [search, setSearch] = useState("");
+  const [expandedDepts, setExpandedDepts] = useState<Record<string, boolean>>({});
+
+  const filtered = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    if (!term) return employees;
+    return employees.filter((e) =>
+      [e.firstName, e.lastName, e.email, e.designation, e.department]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+        .includes(term),
+    );
+  }, [employees, search]);
+
+  const groups = useMemo(() => {
+    const map = new Map<string, Employee[]>();
+    filtered.forEach((e) => {
+      const dept = e.department || (e as any).departmentName || "General";
+      const list = map.get(dept);
+      if (list) list.push(e);
+      else map.set(dept, [e]);
+    });
+    return Array.from(map.entries()).sort((a, b) => b[1].length - a[1].length);
+  }, [filtered]);
+
+  const isDeptExpanded = (dept: string) => expandedDepts[dept] ?? Boolean(search.trim());
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          type="search"
+          placeholder="Search employee by name"
+          aria-label="Search employee"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="h-11 border-border bg-background pl-9 text-sm"
+        />
+      </div>
+
+      <div className="rounded-xl border border-border bg-card divide-y divide-border">
+        {groups.length === 0 && (
+          <p className="px-4 py-6 text-center text-xs text-muted-foreground">No employees match "{search}".</p>
+        )}
+        {groups.map(([dept, deptEmployees]) => {
+          const expanded = isDeptExpanded(dept);
+          return (
+            <div key={dept}>
+              <button
+                type="button"
+                onClick={() => setExpandedDepts((prev) => ({ ...prev, [dept]: !expanded }))}
+                className="flex w-full items-center justify-between gap-2 px-4 py-3.5 text-left active:bg-muted/50"
+                aria-expanded={expanded}
+              >
+                <span className="min-w-0">
+                  <span className="block text-sm font-bold text-foreground truncate">{dept}</span>
+                  <span className="block text-xs text-muted-foreground">
+                    {deptEmployees.length} employee{deptEmployees.length === 1 ? "" : "s"}
+                  </span>
+                </span>
+                <ChevronDown className={`w-5 h-5 shrink-0 text-muted-foreground transition-transform ${expanded ? "rotate-180" : ""}`} />
+              </button>
+              {expanded && (
+                <div className="divide-y divide-border/60 bg-muted/20">
+                  {deptEmployees.map((e) => (
+                    <button
+                      key={e.id}
+                      type="button"
+                      onClick={() => onSelectEmployee(e)}
+                      className="flex w-full items-center gap-3 px-4 py-3 text-left active:bg-muted/50"
+                    >
+                      <Avatar className="h-9 w-9 rounded-full border border-border shrink-0">
+                        <AvatarImage src={(e as any).avatarUrl || undefined} />
+                        <AvatarFallback className="text-[11px] font-bold bg-primary/10 text-primary">
+                          {`${e.firstName?.[0] || ""}${e.lastName?.[0] || ""}`.toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span className="min-w-0">
+                        <span className="block text-sm font-semibold text-foreground truncate">{e.firstName} {e.lastName}</span>
+                        <span className="block text-xs text-muted-foreground truncate">{resolveDesignation(e, designations)}</span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -576,12 +746,19 @@ function TreeBranch({
 export function OrgStructurePage() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
-  const { employees, isLoading, refetch } = useEmployees({ pageSize: 1000 });
+  const { employees, isLoading, isError, error: hierarchyError, refetch } = useOrgHierarchy();
   const { designations = [] } = useDesignations();
+  const { data: departmentsData } = useDepartments(1, 200);
+  const { data: locationsData } = useLocations(1, 200);
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const [filterDeptId, setFilterDeptId] = useState<string>("");
+  const [filterLocationId, setFilterLocationId] = useState<string>("");
+  const [filterDesignationId, setFilterDesignationId] = useState<string>("");
+  const [filterStatus, setFilterStatus] = useState<string>("");
   const [pulsingEmpId, setPulsingEmpId] = useState<number | null>(null);
   const [selectedEmp, setSelectedEmp] = useState<Employee | null>(null);
-  const [isUpdatingManager, setIsUpdatingManager] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isHierarchyRulesModalOpen, setIsHierarchyRulesModalOpen] = useState(false);
@@ -626,16 +803,12 @@ export function OrgStructurePage() {
     return () => { isActive = false; };
   }, [isAdminOrManager]);
 
+  // Debounce the live search query before it drives highlight/filter
+  // recomputation — keeps typing responsive on large rosters.
   useEffect(() => {
-    if (selectedEmp) {
-      const mgrId =
-        selectedEmp.reportingManagerId ||
-        (selectedEmp as any).reporting_manager_id ||
-        (selectedEmp as any).reportingManagerId ||
-        "";
-      // setManagerEditId(String(mgrId || ''));
-    }
-  }, [selectedEmp]);
+    const t = setTimeout(() => setDebouncedSearchTerm(searchTerm), 250);
+    return () => clearTimeout(t);
+  }, [searchTerm]);
 
   // Collapse State for nodes
   const [collapsedMap, setCollapsedMap] = useState<Record<number, boolean>>({});
@@ -665,14 +838,19 @@ export function OrgStructurePage() {
         distance: 4,
       },
     }),
+    // Keyboard alternative to pointer drag-and-drop: Tab to a card, Space to
+    // pick it up, Arrow keys to move focus between drop targets, Space again
+    // to drop, Escape to cancel. Uses @dnd-kit's default keyboard coordinate
+    // getter — this is additive and doesn't change PointerSensor behavior.
+    useSensor(KeyboardSensor),
   );
 
-  const toggleCollapse = (id: number) => {
+  const toggleCollapse = useCallback((id: number) => {
     setCollapsedMap((prev) => ({
       ...prev,
       [id]: prev[id] !== undefined ? !prev[id] : false,
     }));
-  };
+  }, []);
 
   const handleDragStart = (event: DragStartEvent) => {
     if (!isAdminOrManager) return;
@@ -706,359 +884,312 @@ export function OrgStructurePage() {
     setReassignConfirm({ activeEmp, targetEmp, targetIsAdmin });
   };
 
-  // Search Submit: Uncollapse ancestors, center zoom, & pulse card for 3 seconds
-  const handleSearchSubmit = (term: string) => {
-    if (!term.trim()) return;
-    const lower = term.toLowerCase().trim();
-    const activeList = localEmps || (employees as Employee[]) || [];
+  // ─── Flat data helpers shared by search, filters, tree-building & the
+  // ─── reporting-path breadcrumb
+  const activeList = useMemo(
+    () => localEmps || (employees as Employee[]) || [],
+    [localEmps, employees],
+  );
 
-    const matched = activeList.find((e) =>
-      [e.firstName, e.lastName, e.email, e.designation, e.department]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase()
-        .includes(lower),
-    );
-
-    if (!matched || !matched.id) {
-      toast.error(`No employee matching "${term}" found.`);
-      return;
-    }
-
-    // 1. Uncollapse ancestors up to root
-    const ancestors: number[] = [];
-    let currId: number | null | undefined = matched.reportingManagerId;
-    const empMap = new Map<number, Employee>();
+  const employeeById = useMemo(() => {
+    const map = new Map<number, Employee>();
     activeList.forEach((e) => {
-      if (e.id) empMap.set(e.id, e);
+      if (e.id !== undefined && e.id !== null) map.set(Number(e.id), e);
     });
+    return map;
+  }, [activeList]);
 
-    const visited = new Set<number>();
-    while (currId && empMap.has(currId) && !visited.has(currId)) {
-      visited.add(currId);
-      ancestors.push(currId);
-      const mgr = empMap.get(currId);
-      currId = mgr?.reportingManagerId;
-    }
-
-    // Always uncollapse Root Admin (999999)
-    ancestors.push(999999);
-
-    setCollapsedMap((prev) => {
-      const next = { ...prev };
-      ancestors.forEach((id) => {
-        next[id] = false;
-      });
-      return next;
-    });
-
-    // 2. Pulse card for 3 seconds
-    setPulsingEmpId(matched.id);
-    setTimeout(() => setPulsingEmpId(null), 3200);
-
-    // 3. Center Zoom onto target card
-    setTimeout(() => {
-      const el = document.getElementById(`node-card-${matched.id}`);
-      if (el && containerRef.current) {
-        const containerRect = containerRef.current.getBoundingClientRect();
-        const cardRect = el.getBoundingClientRect();
-
-        const targetScale = 1.15;
-        setScale(targetScale);
-
-        const cardCenterX = cardRect.left + cardRect.width / 2;
-        const cardCenterY = cardRect.top + cardRect.height / 2;
-        const containerCenterX = containerRect.left + containerRect.width / 2;
-        const containerCenterY = containerRect.top + containerRect.height / 2;
-
-        const deltaX = containerCenterX - cardCenterX;
-        const deltaY = containerCenterY - cardCenterY;
-
-        setPan((prevPan) => ({
-          x: prevPan.x + deltaX,
-          y: prevPan.y + deltaY,
-        }));
+  const getAncestorChain = useCallback(
+    (empId: number): number[] => {
+      const chain: number[] = [];
+      const visited = new Set<number>();
+      let currId: number | null =
+        employeeById.get(empId)?.reportingManagerId ?? null;
+      while (currId && employeeById.has(currId) && !visited.has(currId)) {
+        visited.add(currId);
+        chain.push(currId);
+        const mgr = employeeById.get(currId);
+        currId = mgr?.reportingManagerId ?? null;
       }
-    }, 150);
+      return chain;
+    },
+    [employeeById],
+  );
 
-    toast.success(`Zoomed to ${matched.firstName} ${matched.lastName}`);
-  };
+  // ─── Build Dynamic Hierarchy Tree Structure — O(n), see buildOrgTree.ts
+  const treeResult = useMemo(() => buildOrgTree(activeList), [activeList]);
+  const treeData = treeResult.root;
+
+  // Surface (once per data load) organization-hierarchy data problems the
+  // tree builder found — multiple CEO records, or reporting cycles — rather
+  // than silently dropping anyone. Read-only viewers aren't bothered by this;
+  // only the roles who could actually go fix the data are notified.
+  const dataWarningKeyRef = useRef<string>("");
+  useEffect(() => {
+    if (!isAdminOrManager) return;
+    const key = `${treeResult.ceoCount}:${treeResult.cyclicCount}`;
+    if (key === dataWarningKeyRef.current) return;
+    dataWarningKeyRef.current = key;
+    if (treeResult.ceoCount > 1) {
+      toast.warning(
+        `${treeResult.ceoCount} employees are flagged as CEO — please review which one should be the organization root.`,
+      );
+    }
+    if (treeResult.cyclicCount > 0) {
+      toast.warning(
+        `${treeResult.cyclicCount} employee${treeResult.cyclicCount === 1 ? "" : "s"} ${treeResult.cyclicCount === 1 ? "is" : "are"} in a circular reporting loop and shown under "Unassigned" for review.`,
+      );
+    }
+  }, [isAdminOrManager, treeResult.ceoCount, treeResult.cyclicCount]);
+
+  // ─── Focus/expand/pulse a specific employee — shared by explicit search
+  // submit, clicking a multi-result search hit, and the initial
+  // "view own position" focus for non-admin portals.
+  const focusOnEmployee = useCallback(
+    (matched: Employee) => {
+      if (!matched?.id) return;
+
+      const ancestors = getAncestorChain(matched.id);
+      if (treeData?.emp.id !== undefined && treeData.emp.id !== null) {
+        ancestors.push(Number(treeData.emp.id));
+      }
+
+      setCollapsedMap((prev) => {
+        const next = { ...prev };
+        ancestors.forEach((id) => {
+          next[id] = false;
+        });
+        return next;
+      });
+
+      setPulsingEmpId(matched.id);
+      setTimeout(() => setPulsingEmpId(null), 3200);
+
+      setTimeout(() => {
+        const el = document.getElementById(`node-card-${matched.id}`);
+        if (el && containerRef.current) {
+          const containerRect = containerRef.current.getBoundingClientRect();
+          const cardRect = el.getBoundingClientRect();
+
+          setScale(1.15);
+
+          const cardCenterX = cardRect.left + cardRect.width / 2;
+          const cardCenterY = cardRect.top + cardRect.height / 2;
+          const containerCenterX = containerRect.left + containerRect.width / 2;
+          const containerCenterY = containerRect.top + containerRect.height / 2;
+
+          setPan((prevPan) => ({
+            x: prevPan.x + (containerCenterX - cardCenterX),
+            y: prevPan.y + (containerCenterY - cardCenterY),
+          }));
+        }
+      }, 150);
+    },
+    [getAncestorChain, treeData],
+  );
+
+  // Explicit search submit (Enter / Find button): keeps the original
+  // single-shortcut behavior for when there's exactly one obvious match.
+  const handleSearchSubmit = useCallback(
+    (term: string) => {
+      if (!term.trim()) return;
+      const lower = term.toLowerCase().trim();
+      const matched = activeList.find((e) =>
+        [e.firstName, e.lastName, e.email, e.designation, e.department]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase()
+          .includes(lower),
+      );
+      if (!matched || !matched.id) {
+        toast.error(`No employee matching "${term}" found.`);
+        return;
+      }
+      focusOnEmployee(matched);
+      toast.success(`Zoomed to ${matched.firstName} ${matched.lastName}`);
+    },
+    [activeList, focusOnEmployee],
+  );
+
+  // Multi-result live search (Phase: Search UX) — every match, not just the
+  // first, so ambiguous names (e.g. two "Rahul"s) are disambiguated by the
+  // viewer instead of the app guessing.
+  const searchMatches = useMemo(() => {
+    const term = debouncedSearchTerm.trim().toLowerCase();
+    if (!term) return [] as Employee[];
+    return activeList
+      .filter((e) =>
+        [e.firstName, e.lastName, e.email, e.designation, e.department]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase()
+          .includes(term),
+      )
+      .slice(0, 20);
+  }, [debouncedSearchTerm, activeList]);
+
+  const handleSelectSearchResult = useCallback(
+    (emp: Employee) => {
+      focusOnEmployee(emp);
+      setIsSearchFocused(false);
+      toast.success(`Zoomed to ${emp.firstName} ${emp.lastName}`);
+    },
+    [focusOnEmployee],
+  );
+
+  // ─── Filters (Department / Location / Designation / Status) — computed
+  // client-side over the same fetched roster, same convention as the
+  // Employee Directory page.
+  const departmentOptions = departmentsData?.data || [];
+  const locationOptions = locationsData?.data || [];
+  const statusOptions = useMemo(
+    () => Array.from(new Set(activeList.map((e) => e.status).filter(Boolean))) as string[],
+    [activeList],
+  );
+  const hasActiveFilters = Boolean(
+    filterDeptId || filterLocationId || filterDesignationId || filterStatus,
+  );
+
+  const filterMatchIds = useMemo(() => {
+    if (!hasActiveFilters) return null;
+    return new Set<number>(
+      activeList
+        .filter((e: any) => {
+          if (filterDeptId && String(e.currentDepartmentId || "") !== filterDeptId) return false;
+          if (filterLocationId && String(e.currentLocationId || "") !== filterLocationId) return false;
+          if (filterDesignationId && String(e.currentDesignationId || "") !== filterDesignationId) return false;
+          if (filterStatus && e.status !== filterStatus) return false;
+          return true;
+        })
+        .map((e) => e.id!),
+    );
+  }, [activeList, hasActiveFilters, filterDeptId, filterLocationId, filterDesignationId, filterStatus]);
+
+  // Search highlight + filter highlight combine as an AND — narrowing, not
+  // two independent overlays — and both auto-expand ancestors so a match
+  // hidden in a collapsed branch is actually visible.
+  const highlightIds = useMemo(() => {
+    const term = debouncedSearchTerm.trim().toLowerCase();
+    const textMatches = term
+      ? new Set<number>(
+          activeList
+            .filter((e) =>
+              [e.firstName, e.lastName, e.email, e.designation, e.department]
+                .join(" ")
+                .toLowerCase()
+                .includes(term),
+            )
+            .map((e) => e.id!),
+        )
+      : null;
+
+    if (!textMatches && !filterMatchIds) return new Set<number>();
+    if (textMatches && filterMatchIds) {
+      return new Set<number>([...textMatches].filter((id) => filterMatchIds.has(id)));
+    }
+    return new Set<number>(textMatches || filterMatchIds || []);
+  }, [debouncedSearchTerm, activeList, filterMatchIds]);
+
+  useEffect(() => {
+    if (highlightIds.size === 0) return;
+    const ancestorsToOpen = new Set<number>();
+    highlightIds.forEach((id) => {
+      getAncestorChain(id).forEach((aid) => ancestorsToOpen.add(aid));
+    });
+    if (ancestorsToOpen.size === 0) return;
+    setCollapsedMap((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      ancestorsToOpen.forEach((id) => {
+        if (next[id] !== false) {
+          next[id] = false;
+          changed = true;
+        }
+      });
+      return changed ? next : prev;
+    });
+  }, [highlightIds, getAncestorChain]);
+
+  // Expand All / Collapse All — mirrors the boolean-map pattern used by the
+  // sidebar's navStore (expandAll/collapseAll), scoped locally to this page.
+  const collectNodeIdsWithChildren = useCallback((node: OrgTreeNode | null, out: number[]) => {
+    if (!node) return;
+    if (node.children && node.children.length > 0) {
+      out.push(Number(node.emp.id));
+      node.children.forEach((child) => collectNodeIdsWithChildren(child, out));
+    }
+  }, []);
+
+  const handleExpandAll = useCallback(() => {
+    setCollapsedMap({});
+  }, []);
+
+  const handleCollapseAll = useCallback(() => {
+    const ids: number[] = [];
+    collectNodeIdsWithChildren(treeData, ids);
+    const next: Record<number, boolean> = {};
+    ids.forEach((id) => {
+      next[id] = true;
+    });
+    setCollapsedMap(next);
+  }, [treeData, collectNodeIdsWithChildren]);
+
+  // ─── Reporting path breadcrumb (Phase: Reporting Path) — the ancestor
+  // chain of the currently selected employee, CEO/root first.
+  const reportingPathIds = useMemo(() => {
+    if (!selectedEmp?.id) return null;
+    const chain = getAncestorChain(selectedEmp.id).reverse();
+    if (treeData?.emp.id !== undefined && treeData.emp.id !== null && !chain.includes(Number(treeData.emp.id))) {
+      chain.unshift(Number(treeData.emp.id));
+    }
+    chain.push(selectedEmp.id);
+    return chain;
+  }, [selectedEmp, getAncestorChain, treeData]);
+
+  // Stable Set reference (only changes when the underlying path changes) so
+  // TreeBranch's React.memo isn't defeated by a fresh Set every render.
+  const reportingPathIdSet = useMemo(
+    () => (reportingPathIds ? new Set(reportingPathIds) : undefined),
+    [reportingPathIds],
+  );
+
+  const reportingPathEmployees = useMemo(() => {
+    if (!reportingPathIds) return [];
+    return reportingPathIds
+      .map((id) => (id === treeData?.emp.id ? treeData!.emp : employeeById.get(id)))
+      .filter((e): e is Employee => Boolean(e));
+  }, [reportingPathIds, employeeById, treeData]);
+
+  const handleSelectEmp = useCallback((e: Employee) => {
+    if (e.id !== undefined && e.id !== null && Number(e.id) < 0) return; // synthetic org-root / unassigned-group node
+    setSelectedEmp(e);
+  }, []);
+
+  const directReportsCountFor = useCallback(
+    (empId?: number | null) => {
+      if (!empId) return 0;
+      let count = 0;
+      activeList.forEach((e) => {
+        const mgrId = (e as any).reportingManagerId ?? (e as any).reporting_manager_id;
+        if (mgrId !== null && mgrId !== undefined && Number(mgrId) === Number(empId)) count += 1;
+      });
+      return count;
+    },
+    [activeList],
+  );
 
   // In view-only portals, open the shared chart around the signed-in employee.
   useEffect(() => {
-    if (
-      isAdminOrManager ||
-      !user?.employeeId ||
-      !(localEmps || employees)?.length
-    )
-      return;
-    const currentEmployee = (localEmps || employees || []).find(
+    if (isAdminOrManager || !user?.employeeId || activeList.length === 0) return;
+    const currentEmployee = activeList.find(
       (employee: any) => Number(employee.id) === Number(user.employeeId),
     );
     if (currentEmployee) {
-      handleSearchSubmit(
-        `${currentEmployee.firstName || ""} ${currentEmployee.lastName || ""}`.trim(),
-      );
+      focusOnEmployee(currentEmployee);
     }
     // This is intentionally an initial focus action, not a response to canvas pan/zoom.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAdminOrManager, user?.employeeId, localEmps, employees]);
-
-  // Build Dynamic Hierarchy Tree Structure from Database
-  const treeData = useMemo(() => {
-    const rawList = localEmps || (employees as Employee[]);
-    if (!rawList || rawList.length === 0) return null;
-
-    // Helper to get department name
-    const getDeptKey = (e: Employee): string =>
-      e.department ||
-      (e as any).departmentName ||
-      (e as any).department_name ||
-      "General";
-
-    // Helper to get department ID
-    const getDeptId = (e: Employee): number | null =>
-      e.currentDepartmentId ??
-      (e as any).departmentId ??
-      (e as any).current_department_id ??
-      null;
-
-    // Helper to get reporting manager ID safely from database record
-    const getMgrId = (e: Employee): number | null => {
-      const val = e.reportingManagerId ?? (e as any).reporting_manager_id;
-      return val !== null && val !== undefined && val !== ""
-        ? Number(val)
-        : null;
-    };
-
-    // Helper to categorize CXO type
-    const getCxoCategory = (
-      e: Employee,
-    ): "cfo" | "coo" | "cto" | "cxo" | null => {
-      const role = ((e.accessRole || (e as any).role || "") as string)
-        .toLowerCase()
-        .trim();
-      const desig = (
-        e.designation ||
-        e.jobTitle ||
-        (e as any).designationName ||
-        (e as any).designation_name ||
-        ""
-      )
-        .toLowerCase()
-        .trim();
-
-      if (
-        role === "cfo" ||
-        desig === "cfo" ||
-        desig.includes("chief financial") ||
-        desig.includes("finance head") ||
-        desig.includes("director of finance")
-      ) {
-        return "cfo";
-      }
-      if (
-        role === "coo" ||
-        desig === "coo" ||
-        desig.includes("chief operating") ||
-        desig.includes("chief operations") ||
-        desig.includes("operations head") ||
-        desig.includes("director of operations")
-      ) {
-        return "coo";
-      }
-      if (
-        role === "cto" ||
-        desig === "cto" ||
-        desig.includes("chief tech") ||
-        desig.includes("chief technology") ||
-        desig.includes("tech head") ||
-        desig.includes("head of engineering") ||
-        desig.includes("director of engineering")
-      ) {
-        return "cto";
-      }
-      if (
-        role === "cxo" ||
-        desig.startsWith("chief ") ||
-        desig.includes("c-level") ||
-        desig === "cmo" ||
-        desig === "cio" ||
-        desig === "cpo" ||
-        desig === "cro" ||
-        desig === "cso"
-      ) {
-        return "cxo";
-      }
-      return null;
-    };
-
-    // 1. Resolve Root CEO node
-    const ceoEmployee = rawList.find((e: any) => {
-      const isCeoFlag = Boolean(
-        e.isCeo || e.is_ceo || e.isCeo === 1 || e.is_ceo === 1,
-      );
-      const role = ((e.accessRole || e.role || "") as string)
-        .toLowerCase()
-        .trim();
-      const desig = (
-        e.designation ||
-        e.jobTitle ||
-        (e as any).designationName ||
-        ""
-      )
-        .toLowerCase()
-        .trim();
-      return (
-        isCeoFlag ||
-        role === "ceo" ||
-        desig === "ceo" ||
-        desig === "chief executive officer"
-      );
-    });
-
-    const ceoId = ceoEmployee?.id || 999999;
-    const adminName = ceoEmployee
-      ? `${ceoEmployee.firstName || ""} ${ceoEmployee.lastName || ""}`.trim() ||
-        "Chief Executive Officer"
-      : user
-        ? `${user.firstName} ${user.lastName}`.trim() || user.email
-        : "Chief Executive Officer";
-
-    const adminEmail = ceoEmployee?.email || user?.email || "ceo@apponext.com";
-
-    // Root CEO Node at Top of Tree
-    const rootCeoEmp: Employee = {
-      id: ceoId,
-      firstName: adminName,
-      lastName: "",
-      email: adminEmail,
-      employeeCode: ceoEmployee?.employeeCode || "CEO-01",
-      designation: "CHIEF EXECUTIVE OFFICER (CEO)",
-      department: ceoEmployee?.department || "Executive Leadership",
-      avatarUrl: (ceoEmployee as any)?.avatarUrl,
-    };
-
-    // Filter out root CEO profile from lower employee list so they don't appear twice
-    const activeList = rawList.filter((e: any) => {
-      if (ceoEmployee && e.id === ceoEmployee.id) return false;
-      const isCeo = Boolean(
-        e.isCeo || e.is_ceo || e.isCeo === 1 || e.is_ceo === 1,
-      );
-      return !isCeo;
-    });
-
-    // Track claimed employee IDs to guarantee ZERO duplicates across the entire tree
-    const claimedEmpIds = new Set<number>();
-    if (ceoEmployee?.id) claimedEmpIds.add(ceoEmployee.id);
-
-    // Recursive helper to find all direct reports of an employee from the database
-    const findDirectChildren = (
-      parentId: number,
-      parentDept?: string,
-      parentDeptId?: number | null,
-    ): Employee[] => {
-      const results: Employee[] = [];
-
-      // 1. Priority 1: Direct reporting_manager_id match in database
-      activeList.forEach((emp) => {
-        if (
-          emp.id &&
-          !claimedEmpIds.has(emp.id) &&
-          getMgrId(emp) === parentId
-        ) {
-          claimedEmpIds.add(emp.id);
-          results.push(emp);
-        }
-      });
-
-      // 2. Priority 2: Department match ONLY if employee has NO reporting manager assigned in database
-      activeList.forEach((emp) => {
-        if (emp.id && !claimedEmpIds.has(emp.id) && !getMgrId(emp)) {
-          const empDeptId = getDeptId(emp);
-          const empDept = getDeptKey(emp);
-          const isDeptIdMatch =
-            parentDeptId && empDeptId && parentDeptId === empDeptId;
-          const isDeptNameMatch =
-            parentDept && parentDept !== "General" && empDept === parentDept;
-          if (isDeptIdMatch || isDeptNameMatch) {
-            claimedEmpIds.add(emp.id);
-            results.push(emp);
-          }
-        }
-      });
-
-      return results;
-    };
-
-    // Helper to recursively nest subordinates
-    const buildSubTree = (emp: Employee): any => {
-      const cat = getCxoCategory(emp);
-      const isCxo = cat !== null;
-      const childEmps = emp.id
-        ? findDirectChildren(emp.id, getDeptKey(emp), getDeptId(emp))
-        : [];
-      return {
-        emp,
-        isCxo,
-        cxoType: cat,
-        children: childEmps.map(buildSubTree),
-      };
-    };
-
-    // Find direct reports under CEO:
-    // Any employee whose reporting_manager_id is null, empty, 0, or equals CEO id, OR root-level managers
-    const rootDirectEmps = activeList.filter((emp) => {
-      const mgrId = getMgrId(emp);
-      if (!mgrId || mgrId === ceoId || mgrId === 999999) return true;
-      // If their manager is not in the active list, treat them as direct report under CEO
-      const managerExistsInList = activeList.some(
-        (other) => other.id === mgrId,
-      );
-      return !managerExistsInList;
-    });
-
-    // Mark root nodes as claimed
-    rootDirectEmps.forEach((emp) => {
-      if (emp.id) claimedEmpIds.add(emp.id);
-    });
-
-    // Build subtrees for each direct report under CEO
-    const rootChildren = rootDirectEmps.map(buildSubTree);
-
-    // Any remaining unclaimed employees attach safely under CEO
-    const remainingUnclaimed = activeList.filter(
-      (emp) => emp.id && !claimedEmpIds.has(emp.id),
-    );
-    remainingUnclaimed.forEach((emp) => {
-      if (emp.id) claimedEmpIds.add(emp.id);
-    });
-    const fallbackChildren = remainingUnclaimed.map(buildSubTree);
-
-    return {
-      emp: rootCeoEmp,
-      isAdmin: true,
-      isCeo: true,
-      children: [...rootChildren, ...fallbackChildren],
-    };
-  }, [localEmps, employees, user]);
-
-  // Search Highlight
-  const highlightIds = useMemo(() => {
-    if (!searchTerm.trim()) return new Set<number>();
-    const term = searchTerm.toLowerCase();
-    const activeList = localEmps || (employees as Employee[]);
-    return new Set<number>(
-      activeList
-        .filter((e) =>
-          [e.firstName, e.lastName, e.email, e.designation, e.department]
-            .join(" ")
-            .toLowerCase()
-            .includes(term),
-        )
-        .map((e) => e.id!),
-    );
-  }, [searchTerm, localEmps, employees]);
+  }, [isAdminOrManager, user?.employeeId, activeList]);
 
   const handleZoomIn = () => setScale((s) => Math.min(s + 0.15, 2.0));
   const handleZoomOut = () => setScale((s) => Math.max(s - 0.15, 0.4));
@@ -1103,49 +1234,6 @@ export function OrgStructurePage() {
     }
   };
 
-  const handleManagerChange = async (newManagerId: string) => {
-    if (!selectedEmp?.id) return;
-    setIsUpdatingManager(true);
-    const parsedId = newManagerId ? parseInt(newManagerId, 10) : null;
-    const previousEmps = localEmps;
-
-    // Optimistically update localEmps
-    if (localEmps) {
-      setLocalEmps(
-        localEmps.map((emp) =>
-          emp.id === selectedEmp.id
-            ? { ...emp, reportingManagerId: parsedId }
-            : emp,
-        ),
-      );
-    }
-
-    try {
-      await apiClient.patch(`/employees/${selectedEmp.id}`, {
-        reportingManagerId: parsedId,
-      });
-      const targetMgr = ((employees as Employee[]) || []).find(
-        (e) => e.id === parsedId,
-      );
-      toast.success(
-        targetMgr
-          ? `Assigned ${selectedEmp.firstName} to report under ${targetMgr.firstName} ${targetMgr.lastName}`
-          : `Assigned ${selectedEmp.firstName} as direct report to CEO`,
-      );
-      setSelectedEmp(null);
-      refetch();
-    } catch (err: any) {
-      // Revert on error
-      setLocalEmps(previousEmps);
-      console.error(err);
-      toast.error(
-        err?.response?.data?.message || "Failed to update reporting manager",
-      );
-    } finally {
-      setIsUpdatingManager(false);
-    }
-  };
-
   const captureFullTree = async () => {
     if (!exportTreeRef.current) throw new Error("Organization chart is not ready.");
     // Capture an untransformed clone outside the scrollable chart viewport. This
@@ -1179,8 +1267,21 @@ export function OrgStructurePage() {
     }
   };
 
+  // Large-organization export can take a noticeable moment (the whole tree
+  // is force-expanded and rasterized) — say so up front instead of leaving
+  // the user staring at an unresponsive tab with no explanation.
+  const LARGE_EXPORT_THRESHOLD = 300;
+  const warnIfLargeExport = () => {
+    if (activeList.length > LARGE_EXPORT_THRESHOLD) {
+      toast.info(
+        `Large organization (${activeList.length} employees) — export may take a moment.`,
+      );
+    }
+  };
+
   const handleExportPNG = async () => {
     try {
+      warnIfLargeExport();
       toast.info("Generating high-resolution PNG of entire org structure...");
       const canvas = await captureFullTree();
 
@@ -1198,6 +1299,7 @@ export function OrgStructurePage() {
 
   const handleExportPDF = async () => {
     try {
+      warnIfLargeExport();
       toast.info("Preparing PDF document of entire org structure...");
       const canvas = await captureFullTree();
 
@@ -1274,8 +1376,8 @@ export function OrgStructurePage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-            {/* Zoom */}
-            <div className="flex items-center gap-0.5 rounded-lg border border-border bg-muted/50 p-1">
+            {/* Zoom — only meaningful for the desktop/tablet canvas */}
+            <div className="hidden sm:flex items-center gap-0.5 rounded-lg border border-border bg-muted/50 p-1">
               <Button
                 size="icon"
                 variant="ghost"
@@ -1372,25 +1474,182 @@ export function OrgStructurePage() {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 shadow-sm">
-          <form
-            className="flex min-w-[220px] flex-1 items-center gap-2 sm:max-w-md"
-            onSubmit={(event) => { event.preventDefault(); handleSearchSubmit(searchTerm); }}
-          >
-            <div className="relative min-w-0 flex-1">
-              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                type="search"
-                placeholder="Search employee by name"
-                aria-label="Search employee"
-                value={searchTerm}
-                onChange={(event) => setSearchTerm(event.target.value)}
-                className="h-9 border-border bg-background pl-9 text-sm"
-              />
+        {/* ─── Desktop/tablet: interactive pan/zoom tree canvas ─── */}
+        <div className="hidden sm:flex sm:flex-col sm:gap-4">
+        <div className="flex flex-col gap-3 rounded-xl border border-border bg-card px-4 py-3 shadow-sm">
+          <div className="flex flex-wrap items-center gap-3">
+            <form
+              className="relative flex min-w-[220px] flex-1 items-center gap-2 sm:max-w-md"
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (searchMatches.length === 1) {
+                  handleSelectSearchResult(searchMatches[0]);
+                } else {
+                  handleSearchSubmit(searchTerm);
+                }
+              }}
+            >
+              <div className="relative min-w-0 flex-1">
+                <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  type="search"
+                  placeholder="Search employee by name"
+                  aria-label="Search employee"
+                  value={searchTerm}
+                  onChange={(event) => setSearchTerm(event.target.value)}
+                  onFocus={() => setIsSearchFocused(true)}
+                  onBlur={() => setTimeout(() => setIsSearchFocused(false), 150)}
+                  className="h-9 border-border bg-background pl-9 text-sm"
+                />
+
+                {/* Multi-result dropdown */}
+                {isSearchFocused && debouncedSearchTerm.trim() && (
+                  <div className="absolute left-0 right-0 top-[calc(100%+4px)] z-30 max-h-72 overflow-y-auto rounded-lg border border-border bg-card shadow-lg">
+                    {searchMatches.length === 0 ? (
+                      <p className="px-3 py-3 text-xs text-muted-foreground">No employee matching "{debouncedSearchTerm}" found.</p>
+                    ) : (
+                      <>
+                        <p className="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                          {searchMatches.length} result{searchMatches.length === 1 ? "" : "s"}
+                        </p>
+                        {searchMatches.map((m) => (
+                          <button
+                            key={m.id}
+                            type="button"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => handleSelectSearchResult(m)}
+                            className="flex w-full flex-col items-start gap-0 px-3 py-2 text-left hover:bg-primary/10 focus-visible:bg-primary/10 outline-none"
+                          >
+                            <span className="text-xs font-bold text-foreground">{m.firstName} {m.lastName}</span>
+                            <span className="text-[11px] text-muted-foreground">{resolveDesignation(m, designations)}</span>
+                          </button>
+                        ))}
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+              <Button type="submit" size="sm" className={`h-9 px-4 text-xs font-semibold ${BTN_PRIMARY}`}>Find</Button>
+            </form>
+
+            <div className="flex items-center gap-1.5">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleExpandAll}
+                className={`h-9 text-xs font-semibold gap-1.5 px-3 ${BTN_OUTLINE}`}
+                title="Expand all branches"
+              >
+                <ChevronsUpDown className="w-3.5 h-3.5 text-primary" />
+                Expand All
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleCollapseAll}
+                className={`h-9 text-xs font-semibold gap-1.5 px-3 ${BTN_OUTLINE}`}
+                title="Collapse all branches"
+              >
+                <ChevronsDownUp className="w-3.5 h-3.5 text-primary" />
+                Collapse All
+              </Button>
             </div>
-            <Button type="submit" size="sm" className={`h-9 px-4 text-xs font-semibold ${BTN_PRIMARY}`}>Find</Button>
-          </form>
-          <span className="text-xs text-muted-foreground">Drag the chart background to pan · Ctrl or Shift + scroll to zoom</span>
+
+            <span className="hidden text-xs text-muted-foreground lg:inline">Drag the chart background to pan · Ctrl or Shift + scroll to zoom</span>
+          </div>
+
+          {/* Filters */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Filter className="w-3.5 h-3.5 text-muted-foreground" />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="sm" variant="outline" className={`h-8 text-xs font-medium gap-1 px-2.5 ${filterDeptId ? "border-primary text-primary" : BTN_OUTLINE}`}>
+                  Department
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="max-h-72 overflow-y-auto">
+                <DropdownMenuRadioGroup value={filterDeptId} onValueChange={setFilterDeptId}>
+                  <DropdownMenuRadioItem value="" className="text-xs">All Departments</DropdownMenuRadioItem>
+                  {departmentOptions.map((d: any) => (
+                    <DropdownMenuRadioItem key={d.id} value={String(d.id)} className="text-xs">{d.name}</DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuRadioGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="sm" variant="outline" className={`h-8 text-xs font-medium gap-1 px-2.5 ${filterLocationId ? "border-primary text-primary" : BTN_OUTLINE}`}>
+                  Location
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="max-h-72 overflow-y-auto">
+                <DropdownMenuRadioGroup value={filterLocationId} onValueChange={setFilterLocationId}>
+                  <DropdownMenuRadioItem value="" className="text-xs">All Locations</DropdownMenuRadioItem>
+                  {locationOptions.map((l: any) => (
+                    <DropdownMenuRadioItem key={l.id} value={String(l.id)} className="text-xs">{l.name || l.locationName}</DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuRadioGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="sm" variant="outline" className={`h-8 text-xs font-medium gap-1 px-2.5 ${filterDesignationId ? "border-primary text-primary" : BTN_OUTLINE}`}>
+                  Designation
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="max-h-72 overflow-y-auto">
+                <DropdownMenuRadioGroup value={filterDesignationId} onValueChange={setFilterDesignationId}>
+                  <DropdownMenuRadioItem value="" className="text-xs">All Designations</DropdownMenuRadioItem>
+                  {designations.map((d: any) => (
+                    <DropdownMenuRadioItem key={d.id} value={String(d.id)} className="text-xs">{d.name}</DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuRadioGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="sm" variant="outline" className={`h-8 text-xs font-medium gap-1 px-2.5 ${filterStatus ? "border-primary text-primary" : BTN_OUTLINE}`}>
+                  Status
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                <DropdownMenuRadioGroup value={filterStatus} onValueChange={setFilterStatus}>
+                  <DropdownMenuRadioItem value="" className="text-xs">All Statuses</DropdownMenuRadioItem>
+                  {statusOptions.map((s) => (
+                    <DropdownMenuRadioItem key={s} value={s} className="text-xs capitalize">{s}</DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuRadioGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {hasActiveFilters && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => { setFilterDeptId(""); setFilterLocationId(""); setFilterDesignationId(""); setFilterStatus(""); }}
+                className="h-8 text-xs font-medium text-muted-foreground hover:text-foreground"
+              >
+                Clear filters
+              </Button>
+            )}
+          </div>
+
+          {/* Reporting path breadcrumb for the selected employee */}
+          {selectedEmp && reportingPathEmployees.length > 1 && (
+            <div className="flex flex-wrap items-center gap-1 rounded-lg bg-muted/50 px-3 py-2 text-[11px] font-medium text-muted-foreground">
+              {reportingPathEmployees.map((e, idx) => (
+                <span key={e.id} className="flex items-center gap-1">
+                  {idx > 0 && <ChevronRight className="w-3 h-3 text-muted-foreground/60" />}
+                  <span className={idx === reportingPathEmployees.length - 1 ? "font-bold text-foreground" : ""}>
+                    {e.firstName} {e.lastName}
+                  </span>
+                </span>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* ─── Tree canvas wrapped in @dnd-kit DndContext ─── */}
@@ -1418,11 +1677,11 @@ export function OrgStructurePage() {
               }}
             />
 
-            {/* Edge pan controls */}
+            {/* Edge pan controls — 40px tap target on the short axis for touch */}
             <button
               type="button"
               onClick={() => setPan((p) => ({ ...p, y: p.y + 140 }))}
-              className={`${panBtn} top-0 left-1/2 -translate-x-1/2 w-28 h-6 rounded-b-lg border-t-0`}
+              className={`${panBtn} top-0 left-1/2 -translate-x-1/2 w-28 h-10 rounded-b-lg border-t-0`}
               title="Pan Up"
               aria-label="Pan up"
             >
@@ -1432,7 +1691,7 @@ export function OrgStructurePage() {
             <button
               type="button"
               onClick={() => setPan((p) => ({ ...p, y: p.y - 140 }))}
-              className={`${panBtn} bottom-0 left-1/2 -translate-x-1/2 w-28 h-6 rounded-t-lg border-b-0`}
+              className={`${panBtn} bottom-0 left-1/2 -translate-x-1/2 w-28 h-10 rounded-t-lg border-b-0`}
               title="Pan Down"
               aria-label="Pan down"
             >
@@ -1442,7 +1701,7 @@ export function OrgStructurePage() {
             <button
               type="button"
               onClick={() => setPan((p) => ({ ...p, x: p.x + 180 }))}
-              className={`${panBtn} left-0 top-1/2 -translate-y-1/2 w-6 h-28 rounded-r-lg border-l-0`}
+              className={`${panBtn} left-0 top-1/2 -translate-y-1/2 w-10 h-28 rounded-r-lg border-l-0`}
               title="Pan Left"
               aria-label="Pan left"
             >
@@ -1452,7 +1711,7 @@ export function OrgStructurePage() {
             <button
               type="button"
               onClick={() => setPan((p) => ({ ...p, x: p.x - 180 }))}
-              className={`${panBtn} right-0 top-1/2 -translate-y-1/2 w-6 h-28 rounded-l-lg border-r-0`}
+              className={`${panBtn} right-0 top-1/2 -translate-y-1/2 w-10 h-28 rounded-l-lg border-r-0`}
               title="Pan Right"
               aria-label="Pan right"
             >
@@ -1466,24 +1725,33 @@ export function OrgStructurePage() {
                   Building organization hierarchy...
                 </p>
               </div>
+            ) : isError ? (
+              <div className="relative flex h-64 items-center justify-center px-6">
+                <EmptyState
+                  icon={AlertCircle}
+                  title="Unable to load organization structure"
+                  description={hierarchyError || "We couldn't retrieve employee data. Please check your connection and try again."}
+                  action={
+                    <Button size="sm" onClick={() => refetch()} className={`h-8 text-xs font-semibold gap-1.5 ${BTN_PRIMARY}`}>
+                      <RotateCcw className="w-3.5 h-3.5" /> Retry
+                    </Button>
+                  }
+                />
+              </div>
             ) : !treeData ? (
-              <div className="relative flex flex-col items-center justify-center h-64 text-center space-y-3">
-                <Users className="w-10 h-10 text-muted-foreground" />
-                <div>
-                  <p className="text-sm font-bold text-foreground">
-                    No employees found
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Add staff to populate the hierarchy chart.
-                  </p>
-                </div>
-                <Button
-                  size="sm"
-                  onClick={() => setIsCreateModalOpen(true)}
-                  className={`h-8 text-xs font-semibold gap-1.5 ${BTN_PRIMARY}`}
-                >
-                  <UserPlus className="w-3.5 h-3.5" /> Add first employee
-                </Button>
+              <div className="relative flex h-64 items-center justify-center px-6">
+                <EmptyState
+                  icon={Users}
+                  title="No employees found"
+                  description="Your organization currently has no employees. Add staff to populate the hierarchy chart."
+                  action={
+                    isAdminOrManager ? (
+                      <Button size="sm" onClick={() => setIsCreateModalOpen(true)} className={`h-8 text-xs font-semibold gap-1.5 ${BTN_PRIMARY}`}>
+                        <UserPlus className="w-3.5 h-3.5" /> Add first employee
+                      </Button>
+                    ) : undefined
+                  }
+                />
               </div>
             ) : (
               <div
@@ -1494,6 +1762,8 @@ export function OrgStructurePage() {
               >
                 <div
                   ref={exportTreeRef}
+                  role="tree"
+                  aria-label="Organization chart"
                   className="w-fit min-w-full flex justify-center p-6 bg-card text-foreground rounded-xl"
                 >
                   <TreeBranch
@@ -1502,10 +1772,8 @@ export function OrgStructurePage() {
                     pulsingEmpId={pulsingEmpId}
                     collapsedMap={collapsedMap}
                     onToggleCollapse={toggleCollapse}
-                    onSelectEmp={(e) => {
-                      if (e.id === 999999) return;
-                      setSelectedEmp(e);
-                    }}
+                    onSelectEmp={handleSelectEmp}
+                    pathIds={reportingPathIdSet}
                   />
                 </div>
               </div>
@@ -1540,6 +1808,36 @@ export function OrgStructurePage() {
             ) : null}
           </DragOverlay>
         </DndContext>
+        </div>
+
+        {/* ─── Mobile: department-grouped list instead of the spatial tree ─── */}
+        <div className="sm:hidden">
+          {isLoading ? (
+            <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-border bg-card py-16">
+              <div className="w-6 h-6 border-2 border-border border-t-primary rounded-full animate-spin" />
+              <p className="text-xs text-muted-foreground font-medium">Building organization hierarchy...</p>
+            </div>
+          ) : isError ? (
+            <EmptyState
+              icon={AlertCircle}
+              title="Unable to load organization structure"
+              description={hierarchyError || "We couldn't retrieve employee data. Please check your connection and try again."}
+              action={
+                <Button size="sm" onClick={() => refetch()} className={`h-8 text-xs font-semibold gap-1.5 ${BTN_PRIMARY}`}>
+                  <RotateCcw className="w-3.5 h-3.5" /> Retry
+                </Button>
+              }
+            />
+          ) : activeList.length === 0 ? (
+            <EmptyState
+              icon={Users}
+              title="No employees found"
+              description="Your organization currently has no employees. Add staff to populate the hierarchy chart."
+            />
+          ) : (
+            <MobileOrgSummary employees={activeList} designations={designations} onSelectEmployee={handleSelectEmp} />
+          )}
+        </div>
 
         {/* ─── Settings dialog ─── */}
         {isSettingsModalOpen && (
@@ -1935,6 +2233,7 @@ export function OrgStructurePage() {
               {/* Details */}
               <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-xs bg-muted/50 p-3.5 rounded-xl border border-border">
                 {[
+                  ["Employee ID", selectedEmp.employeeCode || "—"],
                   ["Department", selectedEmp.department || "—"],
                   [
                     "Designation",
@@ -1951,6 +2250,10 @@ export function OrgStructurePage() {
                   [
                     "Employment",
                     selectedEmp.employmentType?.replace("_", " ") || "—",
+                  ],
+                  [
+                    "Direct Reports",
+                    String(directReportsCountFor(selectedEmp.id)),
                   ],
                 ].map(([label, value]) => (
                   <div key={label} className="min-w-0">

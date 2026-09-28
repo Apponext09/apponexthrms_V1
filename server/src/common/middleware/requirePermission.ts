@@ -51,29 +51,6 @@ async function permissionCheckAsync(
     return;
   }
 
-  // Allow managers, department heads, and team leads to create and access MRF requests & view recruitment/interview info
-  const isMrfOrHiringOp = requiredPermissions.every(p =>
-    p.startsWith('recruitment.mrf.') ||
-    p.startsWith('recruitment.interview.') ||
-    p === 'recruitment.read' ||
-    p === 'recruitment.job.read' ||
-    p === 'recruitment.jobs.read' ||
-    p === 'recruitment.application.read'
-  );
-  const isPerformanceOp = requiredPermissions.every(p =>
-    p.startsWith('performance.')
-  );
-  if (
-    (isMrfOrHiringOp || isPerformanceOp) &&
-    (roles.includes('manager') ||
-      roles.includes('department_head') ||
-      roles.includes('team_lead') ||
-      roles.includes('reporting_manager'))
-  ) {
-    next();
-    return;
-  }
-
   const { organizationId, userId } = req.ctx;
 
   // Check if user has all required permissions via RBAC
@@ -84,9 +61,10 @@ async function permissionCheckAsync(
   );
 
   if (!hasAllPerms) {
-    // Full tab access includes supported actions for that tab only. Tenant,
-    // subscription and controller-level business rules continue to apply.
-    if ((await Promise.all(requiredPermissions.map((permission) => rbacService.hasMenuPermission(req.ctx!, permission))))
+    // A page grant permits loading that page's read data, never mutation or approval.
+    // The lookup is DB-backed and subscription-filtered, not inferred from a role name.
+    if (['GET', 'HEAD'].includes(req.method) &&
+      (await Promise.all(requiredPermissions.map((permission) => rbacService.hasMenuReadPermission(req.ctx!, permission))))
         .every(Boolean)) {
       next();
       return;
@@ -110,14 +88,6 @@ async function permissionCheckAsync(
         return;
       }
 
-      // Check manager / team lead role codes in DB
-      if (
-        (isMrfOrHiringOp || isPerformanceOp) &&
-        roleCodes.some(r => ['manager', 'department_head', 'team_lead', 'reporting_manager'].includes(r))
-      ) {
-        next();
-        return;
-      }
     } catch (err) {
       // A failed permission lookup must never turn into access.
       throw err;
@@ -140,6 +110,36 @@ export async function hasPermission(
   permission: string
 ): Promise<boolean> {
   return rbacService.hasPermission(organizationId, userId, permission);
+}
+
+/**
+ * Roles that bypass the DB-backed permission lookup entirely, mirroring the
+ * fast-path in the requirePermission() route middleware above. Kept in sync
+ * with that list intentionally: a caller using this helper outside of a
+ * route (e.g. inside a service, where a body-conditional check can't be
+ * expressed as route middleware) must not be stricter than a route guarded
+ * by requirePermission() with the same permission string, or an admin who
+ * is authorized everywhere else would get blocked here.
+ */
+const PERMISSION_FAST_PATH_ROLES = [
+  'organization_admin', 'super_admin', 'admin', 'ceo', 'hr', 'hr_admin', 'hr_manager',
+];
+
+/**
+ * Non-middleware equivalent of requirePermission(), for call sites that need
+ * a conditional in-code check (e.g. only when a specific field is changing)
+ * rather than an unconditional route guard.
+ */
+export async function hasPermissionOrRole(
+  ctx: { organizationId: number; userId: number; role?: string; roles?: string[] },
+  permission: string
+): Promise<boolean> {
+  const roles = (ctx.roles && ctx.roles.length ? ctx.roles : ctx.role ? [ctx.role] : [])
+    .map((r) => String(r).toLowerCase());
+  if (roles.some((r) => PERMISSION_FAST_PATH_ROLES.includes(r))) {
+    return true;
+  }
+  return rbacService.hasPermission(ctx.organizationId, ctx.userId, permission);
 }
 
 /**

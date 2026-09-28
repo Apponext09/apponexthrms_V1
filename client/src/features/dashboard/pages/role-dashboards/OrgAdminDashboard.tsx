@@ -8,7 +8,6 @@ import {
   FileBarChart,
   Settings,
   CreditCard,
-  ChevronRight,
   TrendingUp,
   ShieldCheck,
   UserCheck,
@@ -35,6 +34,7 @@ import {
   ReceiptIndianRupee,
   CalendarDays,
   CakeSlice,
+  AlertTriangle,
 } from "lucide-react";
 import {
   Card,
@@ -319,12 +319,21 @@ export function OrgAdminDashboard() {
       })),
     [],
   );
-  const birthdayList = (upcomingEvents?.birthdays || []).filter((item) => {
-    const targetMonth = birthdayMonth === "custom"
-      ? customBirthdayMonth
-      : (new Date().getMonth() + (birthdayMonth === "next" ? 1 : 0)) % 12;
-    return Number(item.date.slice(5, 7)) - 1 === targetMonth;
-  });
+  const todayDate = new Date();
+  const todayMonthDay = `${String(todayDate.getMonth() + 1).padStart(2, "0")}-${String(todayDate.getDate()).padStart(2, "0")}`;
+  const birthdayList = useMemo(() => {
+    const targetMonth =
+      birthdayMonth === "custom"
+        ? customBirthdayMonth
+        : (new Date().getMonth() + (birthdayMonth === "next" ? 1 : 0)) % 12;
+    return (upcomingEvents?.birthdays || [])
+      .filter((item) => Number(item.date.slice(5, 7)) - 1 === targetMonth)
+      .sort(
+        (a, b) =>
+          a.date.slice(8, 10).localeCompare(b.date.slice(8, 10)) ||
+          a.name.localeCompare(b.name),
+      );
+  }, [upcomingEvents?.birthdays, birthdayMonth, customBirthdayMonth]);
 
   const attendanceOverview = useMemo(() => {
     const summary = attendanceAnalytics?.periodSummary?.[attendancePeriod];
@@ -467,42 +476,41 @@ export function OrgAdminDashboard() {
   }, [config.enabledQuickActionIds]);
 
   return (
-    <div className="org-admin-dashboard space-y-4 pb-8">
+    <div className="org-admin-dashboard space-y-6 pb-10 sm:space-y-8">
       {/* ── Header Section ── */}
-      <section className="dashboard-heading flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+      <section className="dashboard-heading flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div className="min-w-0 space-y-1.5">
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-balance text-xl font-extrabold tracking-tight text-foreground sm:text-[22px]">
-              Dashboard Overview
-            </h1>
-          </div>
-          <p className="flex items-center gap-2 text-pretty text-xs text-muted-foreground">
-            <MapPin className="size-3.5 flex-shrink-0 text-primary" />
-            <span>
-              <strong className="font-semibold text-foreground">
-                <b>{companyName}</b>
-              </strong>{" "}
-              <b>:</b> {primaryLocation}
+          <h1 className="dashboard-title text-balance font-extrabold tracking-tight text-foreground">
+            Dashboard Overview
+          </h1>
+          <p className="flex min-w-0 items-start gap-1.5 text-pretty text-xs text-muted-foreground sm:text-[13px]">
+            <MapPin className="mt-0.5 size-3.5 flex-shrink-0 text-primary" />
+            <span className="min-w-0 break-words">
+              <strong className="font-bold text-foreground">
+                {companyName}
+              </strong>
+              <span className="mx-1.5 text-muted-foreground/60">·</span>
+              {primaryLocation}
             </span>
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex w-full flex-wrap items-center gap-2 md:w-auto md:flex-nowrap md:justify-end">
           {config.showHeaderAttendanceReport && (
             <Button
               size="sm"
               variant="outline"
               onClick={() => navigate(activeReport.path)}
-              className="h-9 rounded-lg bg-card px-3 text-xs font-semibold cursor-pointer gap-1.5"
+              className="h-10 min-w-0 flex-1 cursor-pointer gap-1.5 rounded-lg bg-card px-3 text-xs font-semibold shadow-sm transition-colors hover:border-primary/40 hover:text-primary sm:h-9 sm:flex-none"
             >
-              <ReportIcon className="size-3.5" />
-              {activeReport.title}
+              <ReportIcon className="size-3.5 shrink-0 text-primary" />
+              <span className="truncate">{activeReport.title}</span>
             </Button>
           )}
           <Button
             variant="outline"
             size="icon"
-            className="size-9 shrink-0 bg-card shadow-sm"
+            className="size-10 shrink-0 rounded-lg bg-card shadow-sm transition-colors hover:border-primary/40 sm:size-9"
             onClick={() => navigate("/org-structure")}
             aria-label="Open organization structure"
             title="Organization Structure"
@@ -514,7 +522,7 @@ export function OrgAdminDashboard() {
               <Button
                 variant="outline"
                 size="icon"
-                className="size-9 shrink-0 bg-card shadow-sm"
+                className="size-10 shrink-0 rounded-lg bg-card shadow-sm transition-colors hover:border-primary/40 sm:size-9"
                 aria-label="Customize dashboard"
               >
                 <Settings className="size-4 text-primary" />
@@ -522,7 +530,7 @@ export function OrgAdminDashboard() {
             </DropdownMenuTrigger>
             <DropdownMenuContent
               align="end"
-              className="max-h-[min(620px,80vh)] w-[310px] overflow-y-auto rounded-xl p-2 shadow-soft-lg"
+              className="dashboard-scroll max-h-[min(620px,80vh)] w-[min(310px,calc(100vw-2rem))] overflow-y-auto rounded-xl p-2 shadow-soft-lg"
             >
               <DropdownMenuLabel className="px-2 py-2">
                 <span className="block text-xs font-bold">
@@ -602,17 +610,26 @@ export function OrgAdminDashboard() {
       {isError && (
         <div
           role="alert"
-          className="flex items-center justify-between gap-3 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-xs text-destructive"
+          className="dashboard-alert flex flex-col gap-3 rounded-xl border border-destructive/25 bg-destructive/5 p-4 text-xs text-destructive sm:flex-row sm:items-center sm:justify-between"
         >
-          <span>
-            Dashboard metrics could not be loaded. Values are unavailable, not
-            zero.
+          <span className="flex items-center gap-3">
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-destructive/10" aria-hidden="true">
+              <AlertTriangle className="size-4" />
+            </span>
+            <span>
+              <strong className="block font-semibold">
+                Dashboard metrics could not be loaded
+              </strong>
+              <span className="text-destructive/80">
+                Values are unavailable, not zero.
+              </span>
+            </span>
           </span>
           <Button
             size="sm"
             variant="outline"
             onClick={() => refetch()}
-            className="h-8 text-xs"
+            className="h-9 shrink-0 self-start border-destructive/30 bg-card text-xs text-destructive hover:bg-destructive/10 hover:text-destructive sm:h-8 sm:self-auto"
           >
             Retry
           </Button>
@@ -626,14 +643,14 @@ export function OrgAdminDashboard() {
           className="space-y-3"
         >
           {visibleKpiCards.length > 0 ? (
-            <div className="dashboard-kpis grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+            <div className="dashboard-kpis grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
               {visibleKpiCards.map(({ id, icon: Icon, label, value, path }) => (
                 <Card
                   key={id}
                   role="link"
                   tabIndex={0}
                   aria-label={`Open ${label}: ${value}`}
-                  className={`${panelClass} dashboard-kpi-card cursor-pointer group outline-none hover:ring-2 hover:ring-primary/20 focus-visible:ring-2 focus-visible:ring-primary/50`}
+                  className={`${panelClass} dashboard-kpi-card group cursor-pointer outline-none`}
                   onClick={() => navigate(path)}
                   onKeyDown={(event) => {
                     if (event.key === "Enter" || event.key === " ") {
@@ -642,31 +659,43 @@ export function OrgAdminDashboard() {
                     }
                   }}
                 >
-                  <CardContent className="flex h-full min-h-[108px] items-center gap-3 p-4 xl:gap-4 xl:p-5">
-                    <div className="flex size-11 flex-shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary ring-1 ring-primary/10 transition-colors group-hover:bg-primary/15 dark:bg-primary/15 dark:ring-primary/20 dark:group-hover:bg-primary/25">
-                      <Icon className="size-[21px]" />
+                  <CardContent className="flex h-full min-h-[112px] flex-col justify-between gap-3 p-4 sm:p-5">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="dashboard-kpi-icon flex size-10 flex-shrink-0 items-center justify-center rounded-xl text-primary">
+                        <Icon className="size-5" aria-hidden="true" />
+                      </div>
+                      <ArrowUpRight
+                        className="size-4 flex-shrink-0 text-muted-foreground/40 transition-all group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-primary"
+                        aria-hidden="true"
+                      />
                     </div>
-                    <div className="min-w-0 flex-1">
+                    <div className="min-w-0">
                       <p
-                        className="truncate text-[11px] font-semibold text-muted-foreground xl:text-xs"
+                        className="truncate text-xs font-medium text-muted-foreground"
                         title={label}
                       >
                         {label}
                       </p>
-                      <p
-                        className="mt-1.5 truncate text-xl font-extrabold leading-none tracking-tight text-foreground tabular-nums xl:text-2xl"
-                        title={value}
-                      >
-                        {value}
-                      </p>
+                      {value === "..." ? (
+                        <span
+                          className="dashboard-skeleton mt-2 h-7 w-20"
+                          aria-hidden="true"
+                        />
+                      ) : (
+                        <p
+                          className="dashboard-kpi-value mt-1 truncate font-extrabold tracking-tight text-foreground tabular-nums"
+                          title={value}
+                        >
+                          {value}
+                        </p>
+                      )}
                     </div>
-                    <ChevronRight className="size-4 flex-shrink-0 text-muted-foreground/45 transition-all group-hover:translate-x-0.5 group-hover:text-primary" />
                   </CardContent>
                 </Card>
               ))}
             </div>
           ) : (
-            <div className="flex min-h-24 items-center justify-center rounded-xl border border-dashed border-border bg-card/60 px-4 text-center">
+            <div className="dashboard-empty min-h-24">
               <p className="text-xs text-muted-foreground">
                 All KPI cards are hidden. Use{" "}
                 <strong className="font-semibold text-foreground">
@@ -682,15 +711,24 @@ export function OrgAdminDashboard() {
       {/* ── SECTION 1: ATTENDANCE & LEAVE ANALYTICS ── */}
       {(activeModuleFilter === "all" ||
         activeModuleFilter === "attendance") && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-bold flex items-center gap-2 text-foreground">
-              <Clock className="size-4 text-primary" /> Attendance & Leave
-              Analytics
-            </h2>
+        <div className="dashboard-reveal space-y-4">
+          <div className="dashboard-section-header flex flex-wrap items-end justify-between gap-3">
+            <div className="flex min-w-0 items-start gap-3">
+              <span className="dashboard-section-icon" aria-hidden="true">
+                <Clock className="size-4" />
+              </span>
+              <div className="min-w-0">
+                <h2 className="dashboard-section-title text-foreground">
+                  Attendance & Leave Analytics
+                </h2>
+                <p className="dashboard-section-subtitle">
+                  Check-ins, leave usage and team distribution
+                </p>
+              </div>
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 lg:gap-5">
             <AttendanceOverviewCard
               summary={attendanceOverview}
               period={attendancePeriod}
@@ -698,7 +736,10 @@ export function OrgAdminDashboard() {
               onOpenAttendance={() => navigate("/attendance")}
             />
             <LeaveDistributionCard leaveTypes={leaveTypes} />
-            <DepartmentDistributionCard departments={departmentBreakdown} />
+            <DepartmentDistributionCard
+              departments={departmentBreakdown}
+              className="md:col-span-2 lg:col-span-1"
+            />
             {false && (
               <>
                 <Card className={`${panelClass} attendance-overview-card`}>
@@ -824,7 +865,7 @@ export function OrgAdminDashboard() {
                 </Card>
 
                 <Card className={panelClass}>
-                  <CardHeader className="p-5 pb-2">
+                  <CardHeader className="p-4 pb-2 sm:p-5 sm:pb-2">
                     <CardTitle className="flex items-center gap-2 text-sm font-bold">
                       <Palmtree className="size-4 text-primary" /> Leave
                       Distribution by Type
@@ -833,7 +874,7 @@ export function OrgAdminDashboard() {
                       Approved applications categorised by leave policy
                     </CardDescription>
                   </CardHeader>
-                  <CardContent className="p-5 pt-0">
+                  <CardContent className="p-4 pt-0 sm:p-5 sm:pt-0">
                     {!leaveTypes.length ||
                     !leaveTypes.some(
                       (x) => x.approvedCount > 0 || x.pendingCount > 0,
@@ -908,7 +949,7 @@ export function OrgAdminDashboard() {
                 </Card>
 
                 <Card className={panelClass}>
-                  <CardHeader className="p-5 pb-2">
+                  <CardHeader className="p-4 pb-2 sm:p-5 sm:pb-2">
                     <CardTitle className="flex items-center gap-2 text-sm font-bold">
                       <Building2 className="size-4 text-primary" /> Department
                       distribution
@@ -917,7 +958,7 @@ export function OrgAdminDashboard() {
                       Active employees by team
                     </CardDescription>
                   </CardHeader>
-                  <CardContent className="p-5 pt-1">
+                  <CardContent className="p-4 pt-1 sm:p-5 sm:pt-1">
                     {departmentBreakdown.length === 0 ? (
                       <div className="flex h-52 flex-col items-center justify-center text-center text-xs text-muted-foreground">
                         <Building2 className="mb-2 size-8 text-primary opacity-40" />
@@ -1034,10 +1075,10 @@ export function OrgAdminDashboard() {
 
           {/* Leave Types & 6-Month Leave Trend */}
           {false && (
-            <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-5">
               {/* Leaves by Type */}
               <Card className={panelClass}>
-                <CardHeader className="p-5 pb-2">
+                <CardHeader className="p-4 pb-2 sm:p-5 sm:pb-2">
                   <CardTitle className="text-sm font-bold flex items-center gap-2">
                     <Palmtree className="size-4 text-sky-500" /> Leave
                     Distribution by Type
@@ -1046,7 +1087,7 @@ export function OrgAdminDashboard() {
                     Approved applications categorised by leave policy
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="p-5 pt-0">
+                <CardContent className="p-4 pt-0 sm:p-5 sm:pt-0">
                   {!leaveTypes.length ||
                   !leaveTypes.some(
                     (x) => x.approvedCount > 0 || x.pendingCount > 0,
@@ -1115,7 +1156,7 @@ export function OrgAdminDashboard() {
 
               {/* 6-Month Leave Usage Trend */}
               <Card className={panelClass}>
-                <CardHeader className="p-5 pb-2">
+                <CardHeader className="p-4 pb-2 sm:p-5 sm:pb-2">
                   <CardTitle className="text-sm font-bold flex items-center gap-2">
                     <Activity className="size-4 text-primary" /> 6-Month Leave
                     Application Trend
@@ -1124,12 +1165,12 @@ export function OrgAdminDashboard() {
                     Monthly volume of submitted vs approved leaves
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="p-5 pt-0">
+                <CardContent className="p-4 pt-0 sm:p-5 sm:pt-0">
                   {!leaveAnalytics?.monthlyTrend ||
                   !leaveAnalytics.monthlyTrend.some(
                     (d) => d.applied > 0 || d.approved > 0,
                   ) ? (
-                    <div className="flex flex-col items-center justify-center h-48 text-muted-foreground text-xs">
+                    <div className="dashboard-empty h-48">
                       <Activity className="size-8 mb-2 opacity-40 text-primary" />
                       <span className="font-semibold text-foreground">
                         No Leave History Recorded
@@ -1139,7 +1180,7 @@ export function OrgAdminDashboard() {
                       </span>
                     </div>
                   ) : (
-                    <div className="h-48 w-full pt-2 min-h-[190px]">
+                    <div className="h-48 dashboard-chart w-full pt-2 min-h-[190px]">
                       <ResponsiveContainer width="100%" height="100%">
                         <LineChart
                           data={leaveAnalytics.monthlyTrend}
@@ -1212,28 +1253,37 @@ export function OrgAdminDashboard() {
 
       {/* ── SECTION 2: PAYROLL & EXPENSES ANALYTICS ── */}
       {(activeModuleFilter === "all" || activeModuleFilter === "payroll") && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-bold flex items-center gap-2 text-foreground">
-              <Wallet className="size-4 text-emerald-600" /> Payroll & Expense
-              Analytics
-            </h2>
+        <div className="dashboard-reveal space-y-4">
+          <div className="dashboard-section-header flex flex-wrap items-end justify-between gap-3">
+            <div className="flex min-w-0 items-start gap-3">
+              <span className="dashboard-section-icon" aria-hidden="true">
+                <Wallet className="size-4" />
+              </span>
+              <div className="min-w-0">
+                <h2 className="dashboard-section-title text-foreground">
+                  Payroll & Expense Analytics
+                </h2>
+                <p className="dashboard-section-subtitle">
+                  Salary payouts and expense disbursements
+                </p>
+              </div>
+            </div>
             <Button
               variant="ghost"
               size="sm"
               onClick={() => navigate("/payroll")}
-              className="text-xs h-7 gap-1 text-primary hover:text-primary"
+              className="h-8 shrink-0 gap-1 px-2.5 text-xs font-semibold text-primary hover:bg-primary/5 hover:text-primary"
             >
               Go to Payroll Portal <ArrowUpRight className="size-3" />
             </Button>
           </div>
 
-          <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-5">
             {/* 6-Month Payroll Payout Trajectory */}
             <Card className={panelClass}>
-              <CardHeader className="p-5 pb-2">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
+              <CardHeader className="p-4 pb-2 sm:p-5 sm:pb-2">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0">
                     <CardTitle className="text-sm font-bold">
                       Payroll Trajectory
                     </CardTitle>
@@ -1241,7 +1291,7 @@ export function OrgAdminDashboard() {
                       Generated payroll, or this month’s active salary structure
                     </CardDescription>
                   </div>
-                  <div className="flex items-center gap-1 rounded-xl border border-border bg-muted/45 p-0.5">
+                  <div className="dashboard-segmented shrink-0 self-start">
                     {(
                       [
                         ["month", "Month"],
@@ -1252,8 +1302,9 @@ export function OrgAdminDashboard() {
                       <button
                         key={value}
                         type="button"
+                        aria-pressed={payrollRange === value}
                         onClick={() => setPayrollRange(value)}
-                        className={`rounded-lg px-2 py-1.5 text-[10px] font-semibold transition-all ${payrollRange === value ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                        className={`rounded-lg px-2.5 py-1 text-[11px] font-semibold ${payrollRange === value ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
                       >
                         {label}
                       </button>
@@ -1267,7 +1318,7 @@ export function OrgAdminDashboard() {
                         setPayrollRange("custom");
                       }}
                       aria-label="Choose a payroll month"
-                      className="h-7 max-w-24 rounded-lg border-0 bg-transparent px-1 text-[10px] font-semibold text-muted-foreground outline-none"
+                      className={`h-7 max-w-28 cursor-pointer rounded-lg border-0 px-1.5 text-[11px] font-semibold outline-none ${payrollRange === "custom" ? "bg-card text-foreground shadow-sm" : "bg-transparent text-muted-foreground hover:text-foreground"}`}
                     >
                       <option value="" disabled>
                         Custom
@@ -1287,12 +1338,12 @@ export function OrgAdminDashboard() {
                   </Badge>
                 </div>
               </CardHeader>
-              <CardContent className="p-5 pt-0">
+              <CardContent className="p-4 pt-0 sm:p-5 sm:pt-0">
                 {!payrollChartData.length ||
                 !payrollChartData.some(
                   (d) => d.grossSalary > 0 || d.netSalary > 0,
                 ) ? (
-                  <div className="flex flex-col items-center justify-center h-56 text-muted-foreground text-xs">
+                  <div className="dashboard-empty h-56">
                     <Wallet className="size-8 mb-2 opacity-40 text-emerald-600" />
                     <span className="font-semibold text-foreground">
                       No Payroll Records Generated
@@ -1302,7 +1353,7 @@ export function OrgAdminDashboard() {
                     </span>
                   </div>
                 ) : (
-                  <div className="h-56 w-full pt-2 min-h-[220px]">
+                  <div className="h-56 dashboard-chart w-full pt-2 min-h-[220px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart
                         data={payrollChartData}
@@ -1383,9 +1434,9 @@ export function OrgAdminDashboard() {
 
             {/* Expense Disbursement Trend */}
             <Card className={panelClass}>
-              <CardHeader className="p-5 pb-2">
-                <div className="flex items-center justify-between">
-                  <div>
+              <CardHeader className="p-4 pb-2 sm:p-5 sm:pb-2">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0">
                     <CardTitle className="text-sm font-bold flex items-center gap-1.5">
                       <ReceiptIndianRupee className="size-4 text-primary" />{" "}
                       Expense Disbursements
@@ -1394,7 +1445,7 @@ export function OrgAdminDashboard() {
                       Actual expense amounts disbursed to employees
                     </CardDescription>
                   </div>
-                  <div className="flex shrink-0 items-center gap-1 rounded-xl border border-border bg-muted/45 p-0.5">
+                  <div className="dashboard-segmented shrink-0 self-start">
                     {(
                       [
                         ["week", "Week"],
@@ -1404,8 +1455,9 @@ export function OrgAdminDashboard() {
                       <button
                         key={value}
                         type="button"
+                        aria-pressed={expenseRange === value}
                         onClick={() => setExpenseRange(value)}
-                        className={`rounded-lg px-2 py-1.5 text-[10px] font-semibold transition-all ${expenseRange === value ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                        className={`rounded-lg px-2.5 py-1 text-[11px] font-semibold ${expenseRange === value ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
                       >
                         {label}
                       </button>
@@ -1419,7 +1471,7 @@ export function OrgAdminDashboard() {
                         setExpenseRange("custom");
                       }}
                       aria-label="Choose an expense disbursement month"
-                      className="h-7 max-w-24 rounded-lg border-0 bg-transparent px-1 text-[10px] font-semibold text-muted-foreground outline-none"
+                      className={`h-7 max-w-28 cursor-pointer rounded-lg border-0 px-1.5 text-[11px] font-semibold outline-none ${expenseRange === "custom" ? "bg-card text-foreground shadow-sm" : "bg-transparent text-muted-foreground hover:text-foreground"}`}
                     >
                       <option value="" disabled>
                         Custom
@@ -1433,9 +1485,9 @@ export function OrgAdminDashboard() {
                   </div>
                 </div>
               </CardHeader>
-              <CardContent className="p-5 pt-0">
+              <CardContent className="p-4 pt-0 sm:p-5 sm:pt-0">
                 {!expenseChartData.length ? (
-                  <div className="flex flex-col items-center justify-center h-56 text-muted-foreground text-xs">
+                  <div className="dashboard-empty h-56">
                     <ReceiptIndianRupee className="size-8 mb-2 opacity-40 text-primary" />
                     <span className="font-semibold text-foreground">
                       No Expense Disbursements Recorded
@@ -1445,7 +1497,7 @@ export function OrgAdminDashboard() {
                     </span>
                   </div>
                 ) : (
-                  <div className="h-56 w-full pt-2 min-h-[220px]">
+                  <div className="h-56 dashboard-chart w-full pt-2 min-h-[220px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart
                         data={expenseChartData}
@@ -1528,26 +1580,35 @@ export function OrgAdminDashboard() {
 
       {/* ── SECTION 3: WORKFORCE & ORGANIZATION ANALYTICS ── */}
       {(activeModuleFilter === "all" || activeModuleFilter === "workforce") && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-bold flex items-center gap-2 text-foreground">
-              <Users className="size-4 text-primary" /> Workforce & Organization
-              Analytics
-            </h2>
+        <div className="dashboard-reveal space-y-4">
+          <div className="dashboard-section-header flex flex-wrap items-end justify-between gap-3">
+            <div className="flex min-w-0 items-start gap-3">
+              <span className="dashboard-section-icon" aria-hidden="true">
+                <Users className="size-4" />
+              </span>
+              <div className="min-w-0">
+                <h2 className="dashboard-section-title text-foreground">
+                  Workforce & Organization Analytics
+                </h2>
+                <p className="dashboard-section-subtitle">
+                  Headcount growth, holidays, birthdays and diversity
+                </p>
+              </div>
+            </div>
             <Button
               variant="ghost"
               size="sm"
               onClick={() => navigate("/org-structure")}
-              className="text-xs h-7 gap-1 text-primary hover:text-primary"
+              className="h-8 shrink-0 gap-1 px-2.5 text-xs font-semibold text-primary hover:bg-primary/5 hover:text-primary"
             >
               View Org Structure <ArrowUpRight className="size-3" />
             </Button>
           </div>
 
-          <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 lg:gap-5">
             {/* Employee Growth Trajectory */}
             <Card className={panelClass}>
-              <CardHeader className="p-5 pb-2">
+              <CardHeader className="p-4 pb-2 sm:p-5 sm:pb-2">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <CardTitle className="text-balance text-sm font-bold">
@@ -1566,11 +1627,11 @@ export function OrgAdminDashboard() {
                   </Badge>
                 </div>
               </CardHeader>
-              <CardContent className="px-5 pb-5 pt-0">
+              <CardContent className="px-4 pb-4 pt-0 sm:px-5 sm:pb-5">
                 {!growthChartData ||
                 growthChartData.length === 0 ||
                 !growthChartData.some((d) => d.employees > 0) ? (
-                  <div className="flex flex-col items-center justify-center h-56 text-muted-foreground text-xs">
+                  <div className="dashboard-empty h-56">
                     <Users className="size-8 mb-2 opacity-40 text-primary" />
                     <span className="font-semibold text-foreground">
                       No Employee Growth Data
@@ -1580,7 +1641,7 @@ export function OrgAdminDashboard() {
                     </span>
                   </div>
                 ) : (
-                  <div className="h-56 w-full pt-2 min-h-[220px]">
+                  <div className="h-56 dashboard-chart w-full pt-2 min-h-[220px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <AreaChart
                         data={growthChartData}
@@ -1654,8 +1715,8 @@ export function OrgAdminDashboard() {
             </Card>
 
             {/* Upcoming Holidays */}
-            <Card className={`${panelClass} lg:col-start-3`}>
-              <CardHeader className="p-5 pb-2">
+            <Card className={panelClass}>
+              <CardHeader className="p-4 pb-2 sm:p-5 sm:pb-2">
                 <CardTitle className="text-sm font-bold flex items-center gap-1.5">
                   <CalendarDays className="size-4 text-primary" /> Upcoming
                   Holidays
@@ -1664,20 +1725,23 @@ export function OrgAdminDashboard() {
                   Your organization’s next scheduled holidays
                 </CardDescription>
               </CardHeader>
-              <CardContent className="p-5 pt-0">
+              <CardContent className="p-4 pt-0 sm:p-5 sm:pt-0">
                 {(upcomingEvents?.holidays || []).length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-52 text-muted-foreground text-xs">
+                  <div className="dashboard-empty h-52">
                     <CalendarDays className="size-8 mb-2 opacity-40" />
                     <span>No upcoming holidays</span>
                   </div>
                 ) : (
-                  <div className="divide-y divide-border/60 pt-2 max-h-56 overflow-y-auto pr-1">
+                  <div className="dashboard-scroll divide-y divide-border/60 pt-2 max-h-56 overflow-y-auto pr-1">
                     {(upcomingEvents?.holidays || []).map((holiday) => (
                       <div
                         key={holiday.id}
                         className="flex items-center justify-between gap-3 py-3 text-xs first:pt-1 last:pb-1"
                       >
-                        <span className="font-semibold text-foreground truncate">
+                        <span
+                          className="min-w-0 truncate font-semibold text-foreground"
+                          title={holiday.name}
+                        >
                           {holiday.name}
                         </span>
                         <span className="shrink-0 font-bold text-foreground tabular-nums">
@@ -1695,34 +1759,40 @@ export function OrgAdminDashboard() {
                 )}
               </CardContent>
             </Card>
-            <Card className={`${panelClass} lg:col-start-2`}>
-              <CardHeader className="p-5 pb-2">
-                <div className="flex items-center justify-between">
-                  <div>
+            <Card className={`${panelClass} md:col-span-2 lg:col-span-1`}>
+              <CardHeader className="p-4 pb-2 sm:p-5 sm:pb-2">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
                     <CardTitle className="flex items-center gap-1.5 text-sm font-bold">
                       <CakeSlice className="size-4 text-primary" /> Upcoming
                       Birthdays
                     </CardTitle>
                     <CardDescription className="text-xs">
-                      Employees with a saved date of birth
+                      From employee date of birth
                     </CardDescription>
                   </div>
-                  <div className="flex rounded-lg border border-border p-0.5">
+                  <div className="dashboard-segmented shrink-0">
                     <button
+                      type="button"
+                      aria-pressed={birthdayMonth === "current"}
                       onClick={() => setBirthdayMonth("current")}
-                      className={`rounded-md px-2 py-1 text-[10px] ${birthdayMonth === "current" ? "bg-muted font-semibold" : "text-muted-foreground"}`}
+                      className={`rounded-lg px-2.5 py-1 text-[11px] font-semibold ${birthdayMonth === "current" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
                     >
                       Current
                     </button>
                     <button
+                      type="button"
+                      aria-pressed={birthdayMonth === "next"}
                       onClick={() => setBirthdayMonth("next")}
-                      className={`rounded-md px-2 py-1 text-[10px] ${birthdayMonth === "next" ? "bg-muted font-semibold" : "text-muted-foreground"}`}
+                      className={`rounded-lg px-2.5 py-1 text-[11px] font-semibold ${birthdayMonth === "next" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
                     >
                       Next
                     </button>
                     <button
+                      type="button"
+                      aria-pressed={birthdayMonth === "custom"}
                       onClick={() => setBirthdayMonth("custom")}
-                      className={`rounded-md px-2 py-1 text-[10px] ${birthdayMonth === "custom" ? "bg-muted font-semibold" : "text-muted-foreground"}`}
+                      className={`rounded-lg px-2.5 py-1 text-[11px] font-semibold ${birthdayMonth === "custom" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
                     >
                       Custom
                     </button>
@@ -1735,7 +1805,7 @@ export function OrgAdminDashboard() {
                     onChange={(event) =>
                       setCustomBirthdayMonth(Number(event.target.value))
                     }
-                    className="mt-3 h-8 w-full rounded-md border border-border bg-background px-2 text-xs text-foreground outline-none focus:ring-2 focus:ring-primary/30"
+                    className="dashboard-select mt-3 h-9 w-full cursor-pointer rounded-lg border border-border bg-background px-2.5 text-xs text-foreground outline-none sm:h-8"
                   >
                     {birthdayMonthOptions.map((option) => (
                       <option key={option.month} value={option.month}>
@@ -1745,28 +1815,50 @@ export function OrgAdminDashboard() {
                   </select>
                 )}
               </CardHeader>
-              <CardContent className="p-5 pt-0">
+              <CardContent className="p-4 pt-0 sm:p-5 sm:pt-0">
                 {birthdayList.length ? (
-                  <div className="divide-y divide-border/60">
-                    {birthdayList.map((person) => (
-                      <div
-                        key={person.id}
-                        className="flex items-center justify-between py-3 text-xs"
-                      >
-                        <span className="font-semibold">{person.name}</span>
-                        <span className="text-muted-foreground">
-                          {new Intl.DateTimeFormat("en-IN", {
-                            day: "numeric",
-                            month: "short",
-                          }).format(
-                            new Date(`${person.upcomingDate}T00:00:00`),
+                  <div className="dashboard-scroll divide-y divide-border/60 pt-2 max-h-56 overflow-y-auto pr-1">
+                    {birthdayList.map((person) => {
+                      const isToday = person.date.slice(5, 10) === todayMonthDay;
+                      return (
+                        <div
+                          key={person.id}
+                          className="flex items-center justify-between gap-3 py-3 text-xs first:pt-1 last:pb-1"
+                        >
+                          <span className="flex min-w-0 items-center gap-2">
+                            <span className="dashboard-avatar flex size-7 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-primary">
+                              {person.name
+                                .split(" ")
+                                .map((part) => part[0])
+                                .join("")
+                                .slice(0, 2)
+                                .toUpperCase()}
+                            </span>
+                            <span
+                              className="truncate font-semibold text-foreground"
+                              title={person.name}
+                            >
+                              {person.name}
+                            </span>
+                          </span>
+                          {isToday ? (
+                            <Badge className="shrink-0 text-[10px]">Today</Badge>
+                          ) : (
+                            <span className="shrink-0 font-bold text-foreground tabular-nums">
+                              {new Intl.DateTimeFormat("en-IN", {
+                                day: "numeric",
+                                month: "short",
+                              }).format(
+                                new Date(`${person.upcomingDate}T00:00:00`),
+                              )}
+                            </span>
                           )}
-                        </span>
-                      </div>
-                    ))}
+                        </div>
+                      );
+                    })}
                   </div>
                 ) : (
-                  <div className="flex h-52 flex-col items-center justify-center text-xs text-muted-foreground">
+                  <div className="dashboard-empty h-52">
                     <CakeSlice className="mb-2 size-8 opacity-40" />
                     No birthdays in this selected month
                   </div>
@@ -1778,7 +1870,7 @@ export function OrgAdminDashboard() {
           {/* Gender Distribution */}
           <div>
             <Card className={panelClass}>
-              <CardHeader className="p-5 pb-2">
+              <CardHeader className="p-4 pb-2 sm:p-5 sm:pb-2">
                 <CardTitle className="text-sm font-bold">
                   Gender Diversity
                 </CardTitle>
@@ -1786,14 +1878,15 @@ export function OrgAdminDashboard() {
                   Employee distribution by gender
                 </CardDescription>
               </CardHeader>
-              <CardContent className="p-5 pt-1">
+              <CardContent className="p-4 pt-1 sm:p-5 sm:pt-1">
                 {!workforceAnalytics?.byGender ||
                 workforceAnalytics.byGender.length === 0 ? (
-                  <p className="text-xs text-muted-foreground py-2">
-                    No gender data
-                  </p>
+                  <div className="dashboard-empty h-48">
+                    <Users aria-hidden="true" />
+                    <span>No gender data</span>
+                  </div>
                 ) : (
-                  <div className="h-64 w-full pt-2 min-h-[240px]">
+                  <div className="h-64 dashboard-chart w-full pt-2 min-h-[240px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart
                         data={workforceAnalytics.byGender}
@@ -1863,28 +1956,37 @@ export function OrgAdminDashboard() {
       {/* ── SECTION 4: RECRUITMENT & TALENT PIPELINE ── */}
       {(activeModuleFilter === "all" ||
         activeModuleFilter === "recruitment") && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-bold flex items-center gap-2 text-foreground">
-              <Briefcase className="size-4 text-primary" /> Recruitment & Talent
-              Pipeline
-            </h2>
+        <div className="dashboard-reveal space-y-4">
+          <div className="dashboard-section-header flex flex-wrap items-end justify-between gap-3">
+            <div className="flex min-w-0 items-start gap-3">
+              <span className="dashboard-section-icon" aria-hidden="true">
+                <Briefcase className="size-4" />
+              </span>
+              <div className="min-w-0">
+                <h2 className="dashboard-section-title text-foreground">
+                  Recruitment & Talent Pipeline
+                </h2>
+                <p className="dashboard-section-subtitle">
+                  Open roles and candidate progress across stages
+                </p>
+              </div>
+            </div>
             <Button
               variant="ghost"
               size="sm"
               onClick={() => navigate("/recruitment/jobs")}
-              className="text-xs h-7 gap-1 text-primary hover:text-primary"
+              className="h-8 shrink-0 gap-1 px-2.5 text-xs font-semibold text-primary hover:bg-primary/5 hover:text-primary"
             >
               View Recruitment Hub <ArrowUpRight className="size-3" />
             </Button>
           </div>
 
-          <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:gap-5">
             {/* Candidate Pipeline Funnel */}
             <Card className={`${panelClass} lg:col-span-2`}>
-              <CardHeader className="p-5 pb-2">
-                <div className="flex items-center justify-between">
-                  <div>
+              <CardHeader className="p-4 pb-2 sm:p-5 sm:pb-2">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
                     <CardTitle className="text-sm font-bold">
                       Candidate Pipeline Funnel
                     </CardTitle>
@@ -1894,18 +1996,18 @@ export function OrgAdminDashboard() {
                   </div>
                   <Badge
                     variant="secondary"
-                    className="text-[11px] font-semibold"
+                    className="shrink-0 text-[11px] font-semibold tabular-nums"
                   >
                     {openJobsCount} Active Jobs
                   </Badge>
                 </div>
               </CardHeader>
-              <CardContent className="p-5 pt-0">
+              <CardContent className="p-4 pt-0 sm:p-5 sm:pt-0">
                 {!recruitmentAnalytics?.pipelineStages ||
                 !recruitmentAnalytics.pipelineStages.some(
                   (s) => s.count > 0,
                 ) ? (
-                  <div className="flex flex-col items-center justify-center h-52 text-muted-foreground text-xs">
+                  <div className="dashboard-empty h-52">
                     <Briefcase className="size-8 mb-2 opacity-40 text-primary" />
                     <span className="font-semibold text-foreground">
                       No Active Candidates in Pipeline
@@ -1916,7 +2018,7 @@ export function OrgAdminDashboard() {
                     </span>
                   </div>
                 ) : (
-                  <div className="h-52 w-full pt-2 min-h-[200px]">
+                  <div className="h-52 dashboard-chart w-full pt-2 min-h-[200px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart
                         data={recruitmentAnalytics.pipelineStages}
@@ -1976,7 +2078,7 @@ export function OrgAdminDashboard() {
 
             {/* Open Positions by Department */}
             <Card className={panelClass}>
-              <CardHeader className="p-5 pb-2">
+              <CardHeader className="p-4 pb-2 sm:p-5 sm:pb-2">
                 <CardTitle className="text-sm font-bold">
                   Open Positions by Department
                 </CardTitle>
@@ -1984,10 +2086,10 @@ export function OrgAdminDashboard() {
                   Active job openings requiring staffing
                 </CardDescription>
               </CardHeader>
-              <CardContent className="p-5 pt-0">
+              <CardContent className="p-4 pt-0 sm:p-5 sm:pt-0">
                 {!recruitmentAnalytics?.openJobsByDept ||
                 recruitmentAnalytics.openJobsByDept.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-48 text-muted-foreground text-xs">
+                  <div className="dashboard-empty h-48">
                     <Briefcase className="size-8 mb-2 opacity-40" />
                     <span>No active job openings published</span>
                   </div>
@@ -1996,14 +2098,17 @@ export function OrgAdminDashboard() {
                     {recruitmentAnalytics.openJobsByDept.map((job, idx) => (
                       <div
                         key={idx}
-                        className="flex items-center justify-between p-2.5 rounded-lg bg-muted/40 text-xs"
+                        className="flex items-center justify-between gap-3 rounded-lg border border-transparent bg-muted/40 p-2.5 text-xs transition-colors hover:border-border hover:bg-muted/70"
                       >
-                        <span className="font-semibold text-foreground truncate max-w-[160px]">
+                        <span
+                          className="min-w-0 truncate font-semibold text-foreground"
+                          title={job.departmentName}
+                        >
                           {job.departmentName}
                         </span>
                         <Badge
                           variant="outline"
-                          className="font-bold text-primary border-primary/30"
+                          className="shrink-0 border-primary/30 font-bold text-primary tabular-nums"
                         >
                           {job.openCount} Open
                         </Badge>
@@ -2018,11 +2123,11 @@ export function OrgAdminDashboard() {
       )}
 
       {/* ── SECTION 5: ROSTER, ENTITY DETAILS & QUICK SHORTCUTS ── */}
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+      <div className="dashboard-reveal grid grid-cols-1 gap-4 lg:grid-cols-3 lg:gap-5">
         {/* Recent Employee Roster */}
         {config.showRecentRoster && (
           <Card className={`${panelClass} lg:col-span-2`}>
-            <CardHeader className="p-5 pb-2">
+            <CardHeader className="p-4 pb-2 sm:p-5 sm:pb-2">
               <div className="flex items-center justify-between gap-3">
                 <CardTitle className="text-sm font-bold flex items-center gap-2">
                   <UserRoundCheck className="size-4 text-primary" /> Recent
@@ -2032,49 +2137,69 @@ export function OrgAdminDashboard() {
                   variant="ghost"
                   size="sm"
                   onClick={() => navigate("/org-structure")}
-                  className="h-8 px-2 text-xs font-semibold text-primary hover:text-primary cursor-pointer"
+                  className="h-8 shrink-0 cursor-pointer px-2.5 text-xs font-semibold text-primary hover:bg-primary/5 hover:text-primary"
                 >
                   View All Employees
                 </Button>
               </div>
             </CardHeader>
-            <CardContent className="space-y-2.5 px-5 pb-5 pt-0">
+            <CardContent className="space-y-2.5 px-4 pb-4 pt-0 sm:px-5 sm:pb-5">
               {isLoading ? (
-                <p className="py-3 text-center text-xs text-muted-foreground">
-                  Loading employees...
-                </p>
+                <div
+                  className="grid grid-cols-1 gap-2.5 sm:grid-cols-2"
+                  role="status"
+                  aria-label="Loading employees"
+                >
+                  {Array.from({ length: 4 }, (_, index) => (
+                    <div
+                      key={index}
+                      className="flex items-center gap-2.5 rounded-lg border border-border p-2.5"
+                    >
+                      <span className="dashboard-skeleton size-9 shrink-0 rounded-lg" />
+                      <span className="flex-1 space-y-1.5">
+                        <span className="dashboard-skeleton h-3 w-3/4" />
+                        <span className="dashboard-skeleton h-2.5 w-1/2" />
+                      </span>
+                    </div>
+                  ))}
+                </div>
               ) : !recentEmployees.length ? (
-                <p className="py-3 text-center text-xs text-muted-foreground">
-                  No employees found.
-                </p>
+                <div className="dashboard-empty py-8">
+                  <UserRoundCheck aria-hidden="true" />
+                  <span>No employees found.</span>
+                </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   {recentEmployees.slice(0, 6).map((emp) => (
-                    <div
+                    <button
                       key={emp.id}
+                      type="button"
                       onClick={() => navigate(`/employees/${emp.id}`)}
-                      className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/30 p-2.5 text-xs cursor-pointer hover:bg-primary/5 hover:border-primary/30 transition-colors group"
+                      className="dashboard-roster-item group flex min-h-14 w-full min-w-0 cursor-pointer items-center justify-between gap-3 rounded-xl border border-transparent bg-muted/35 p-2.5 text-left text-xs outline-none hover:border-border hover:bg-muted/70"
                     >
-                      <div className="flex min-w-0 items-center gap-2.5">
-                        <div className="flex size-8 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10 font-bold text-primary">
+                      <span className="flex min-w-0 items-center gap-2.5">
+                        <span className="dashboard-avatar flex size-9 flex-shrink-0 items-center justify-center rounded-full font-bold text-primary">
                           {emp.firstName ? emp.firstName[0].toUpperCase() : "E"}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="truncate font-semibold text-foreground group-hover:text-primary transition-colors">
+                        </span>
+                        <span className="block min-w-0">
+                          <span
+                            className="block truncate font-semibold text-foreground transition-colors group-hover:text-primary"
+                            title={`${emp.firstName} ${emp.lastName}`}
+                          >
                             {emp.firstName} {emp.lastName}
-                          </p>
-                          <p className="truncate text-[10px] text-muted-foreground tabular-nums">
+                          </span>
+                          <span className="block truncate text-[10px] text-muted-foreground tabular-nums">
                             {emp.employeeCode} &bull; {emp.departmentName}
-                          </p>
-                        </div>
-                      </div>
+                          </span>
+                        </span>
+                      </span>
                       <Badge
                         variant="outline"
                         className="flex-shrink-0 text-[10px] capitalize"
                       >
                         {emp.status || "active"}
                       </Badge>
-                    </div>
+                    </button>
                   ))}
                 </div>
               )}
@@ -2083,40 +2208,46 @@ export function OrgAdminDashboard() {
         )}
 
         <aside
-          className="space-y-5"
+          className="min-w-0 space-y-4 lg:space-y-5"
           aria-label="Organization details and shortcuts"
         >
           {/* Active Entity Details Card */}
           {config.showEntityDetails && (
             <Card className={panelClass}>
-              <CardHeader className="p-5 pb-2">
+              <CardHeader className="p-4 pb-2 sm:p-5 sm:pb-2">
                 <CardTitle className="text-sm font-bold">
                   Organization Summary
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-0 px-5 pb-5 pt-0 text-xs">
+              <CardContent className="space-y-0 px-4 pb-4 pt-0 text-xs sm:px-5 sm:pb-5">
                 <div className="flex items-center justify-between gap-4 border-b border-border py-2.5">
-                  <span className="text-muted-foreground">Company Name</span>
-                  <span className="truncate font-bold text-foreground">
+                  <span className="shrink-0 text-muted-foreground">Company Name</span>
+                  <span
+                    className="min-w-0 truncate text-right font-bold text-foreground"
+                    title={companyName}
+                  >
                     {companyName}
                   </span>
                 </div>
                 <div className="flex items-center justify-between gap-4 border-b border-border py-2.5">
-                  <span className="text-muted-foreground">
+                  <span className="shrink-0 text-muted-foreground">
                     Primary Location
                   </span>
-                  <span className="truncate font-semibold text-foreground">
+                  <span
+                    className="min-w-0 truncate text-right font-semibold text-foreground"
+                    title={primaryLocation}
+                  >
                     {primaryLocation}
                   </span>
                 </div>
                 <div className="flex items-center justify-between gap-4 border-b border-border py-2.5">
-                  <span className="text-muted-foreground">Total Staff</span>
+                  <span className="shrink-0 text-muted-foreground">Total Staff</span>
                   <span className="font-bold text-foreground tabular-nums">
                     {totalEmployees} Members
                   </span>
                 </div>
                 <div className="flex items-center justify-between gap-4 pt-2.5">
-                  <span className="text-muted-foreground">
+                  <span className="shrink-0 text-muted-foreground">
                     Active Departments
                   </span>
                   <span className="font-bold text-foreground tabular-nums">
@@ -2130,12 +2261,12 @@ export function OrgAdminDashboard() {
           {/* Quick Management Shortcuts */}
           {config.showQuickActions && activeQuickActions.length > 0 && (
             <Card className={panelClass}>
-              <CardHeader className="p-5 pb-2">
+              <CardHeader className="p-4 pb-2 sm:p-5 sm:pb-2">
                 <CardTitle className="text-sm font-bold">
                   Quick Management Actions
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-2 px-5 pb-5 pt-0">
+              <CardContent className="grid grid-cols-2 gap-2 px-4 pb-4 pt-0 sm:px-5 sm:pb-5">
                 {activeQuickActions.map((qa: any) => {
                   const QAIcon = ICON_MAP[qa.iconName] || Settings;
                   return (
@@ -2144,12 +2275,26 @@ export function OrgAdminDashboard() {
                       variant="outline"
                       size="sm"
                       onClick={() => navigate(qa.path)}
-                      className="h-9 w-full justify-between rounded-lg bg-card text-xs font-medium cursor-pointer"
+                      title={qa.label}
+                      className="dashboard-action group relative h-auto min-h-[84px] w-full cursor-pointer flex-col items-start justify-between gap-2.5 whitespace-normal rounded-xl bg-card p-3 text-left text-xs font-medium"
                     >
-                      <span className="flex items-center gap-2">
-                        <QAIcon className="size-3.5 text-primary" /> {qa.label}
+                      <span className="dashboard-action-icon" aria-hidden="true">
+                        <QAIcon className="size-4" />
                       </span>
-                      <ChevronRight className="size-3.5 text-muted-foreground" />
+                      <span className="block w-full min-w-0">
+                        <span className="line-clamp-2 block font-semibold leading-snug text-foreground">
+                          {qa.label}
+                        </span>
+                        {qa.category && (
+                          <span className="mt-0.5 block truncate text-[10px] font-normal text-muted-foreground">
+                            {qa.category}
+                          </span>
+                        )}
+                      </span>
+                      <ArrowUpRight
+                        className="absolute right-2.5 top-2.5 size-3.5 text-muted-foreground/40 transition-all group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-primary"
+                        aria-hidden="true"
+                      />
                     </Button>
                   );
                 })}

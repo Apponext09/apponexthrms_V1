@@ -12,6 +12,32 @@ export const TAB_ACCESS_FLOWS: TabAccessFlow[] = ['admin', 'hr'].flatMap((portal
     { portal, owners: paths(['/lms/catalog', '/lms/courses', '/lms/my-learning', '/lms/my-courses']), pages: paths(['/lms/catalog/:id', '/lms/courses/:id', '/lms/course/:id', '/lms/assessment/:id']) },
   ];
 });
+
+// Tracking history is reached from the live map and is not an independently
+// assignable feature. Keep this relationship here so the access editor, API
+// expansion, and data migrations all use the same rule.
+TAB_ACCESS_FLOWS.push(
+  {
+    portal: 'admin',
+    owners: ['/attendance/live-tracking', '/live-tracking'],
+    pages: ['/live-tracking/history', '/admin/live-tracking/history'],
+  },
+  {
+    portal: 'hr',
+    owners: ['/hr/live-tracking'],
+    pages: ['/hr/live-tracking/history'],
+  },
+  {
+    portal: 'manager',
+    owners: ['/manager/live-tracking'],
+    pages: ['/manager/live-tracking/history'],
+  },
+  {
+    portal: 'team_lead',
+    owners: ['/team-lead/live-tracking'],
+    pages: ['/team-lead/live-tracking/history'],
+  },
+);
 TAB_ACCESS_FLOWS.push({ portal: 'employee', owners: ['/employee/lms/catalog', '/employee/lms/my-learning'],
   pages: ['/employee/lms/catalog/:id', '/employee/lms/course/:id', '/employee/lms/assessment/:id', '/employee/lms/assessment/:courseId'] });
 
