@@ -1,6 +1,6 @@
 # Dependencies
 myenv/
-venv/
+myev/
 node_modules/
 package-lock.json
 yarn.lock
