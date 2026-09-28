@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { authenticate } from '../../common/middleware/authenticate';
 import { resolveTenant } from '../../common/middleware/resolveTenant';
+import { requirePermission } from '../../common/middleware/requirePermission';
 import { EmployeeController } from './controllers/EmployeeController';
 
 const router = Router();
@@ -28,8 +29,13 @@ router.get('/my-edit-permission', controller.getMyEditPermission);
 router.post('/consume-edit-permission/:requestId', controller.consumeEditPermission);
 router.get('/my-profile-requests', controller.getMyProfileRequests);
 
+/**
+ * GET /employees/org-hierarchy - Lightweight, uncapped roster for the Org Chart
+ */
+router.get('/org-hierarchy', controller.getOrgHierarchy);
+
 router.get('/org-hierarchy/rules', controller.getOrgHierarchyRules);
-router.put('/org-hierarchy/rules', controller.saveOrgHierarchyRules);
+router.put('/org-hierarchy/rules', requirePermission('employee.org_hierarchy.update'), controller.saveOrgHierarchyRules);
 
 /**
  * GET /employees/me - Get logged-in user employee profile

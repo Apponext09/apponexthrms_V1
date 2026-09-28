@@ -52,9 +52,16 @@ export function EmployeePersonalInfo({ employeeId, editUnlocked = false, approve
   const handleSave = async () => {
     try {
       const payload: any = { ...form };
-      if (payload.childrenCount !== undefined && payload.childrenCount !== null) {
-        payload.childrenCount = Number(payload.childrenCount) || 0;
+      const rawChildrenCount = payload.childrenCount;
+      const childrenCount =
+        rawChildrenCount === undefined || rawChildrenCount === null || rawChildrenCount === ''
+          ? 0
+          : Number(rawChildrenCount);
+      if (!Number.isInteger(childrenCount) || childrenCount < 0 || childrenCount > 50) {
+        showToast.error('Children count must be a whole number between 0 and 50');
+        return;
       }
+      payload.childrenCount = childrenCount;
       await updatePersonalInfo(payload);
       showToast.success('Personal information saved');
       setIsEditing(false);
@@ -144,7 +151,7 @@ export function EmployeePersonalInfo({ employeeId, editUnlocked = false, approve
                 className="mt-1 h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
                 value={form.maritalStatus || ''}
                 onChange={(e) => {
-                  const status = e.target.value || null;
+                  const status = (e.target.value || null) as typeof form.maritalStatus;
                   // Clear spouse name if switching away from married
                   // Clear children count if switching to single
                   setForm({
@@ -153,7 +160,7 @@ export function EmployeePersonalInfo({ employeeId, editUnlocked = false, approve
                     spouseName: status === 'married' ? form.spouseName : null,
                     childrenCount: (status === 'married' || status === 'divorced' || status === 'widowed')
                       ? form.childrenCount
-                      : null,
+                      : 0,
                   });
                 }}
               >
@@ -186,6 +193,8 @@ export function EmployeePersonalInfo({ employeeId, editUnlocked = false, approve
                   id="childrenCount"
                   type="number"
                   min={0}
+                  max={50}
+                  step={1}
                   className="mt-1 h-9 text-xs"
                   value={form.childrenCount ?? ''}
                   onChange={(e) => setForm({ ...form, childrenCount: e.target.value as any })}

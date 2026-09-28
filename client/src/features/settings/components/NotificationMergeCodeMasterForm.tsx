@@ -198,9 +198,7 @@ export function NotificationMergeCodeMasterForm({ onCancel, onSave }: Notificati
         <div>
           <div className="flex items-center gap-2">
             <h2 className="text-xl font-bold text-foreground">Notification Merge Codes</h2>
-            <Badge variant="outline" className="text-[11px] font-semibold bg-primary/10 text-primary border-primary/20">
-              Templates & System
-            </Badge>
+          
           </div>
           <p className="text-xs text-muted-foreground mt-1">
             Store and manage module and sub-module notification merge codes.

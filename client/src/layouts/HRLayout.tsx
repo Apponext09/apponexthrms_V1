@@ -64,7 +64,7 @@ function getIconComponent(iconName?: string) {
 }
 
 // Map standard route href to /hr/* route href for HR layout
-function mapToHRHref(href: string): string {
+export function mapToHRHref(href: string): string {
   if (!href) return '/hr/dashboard';
   if (href.startsWith('/hr/')) return href;
   if (href === '/' || href === '/dashboard') return '/hr/dashboard';

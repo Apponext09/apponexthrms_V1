@@ -10,7 +10,7 @@ export class ApprovalService {
 
     // Format recent approvals for frontend
     const formattedRecentApprovals = recentApprovals.map((req: any) => {
-      let parsedDetails = {};
+      let parsedDetails: any = {};
       try {
         if (typeof req.details === 'string') {
           parsedDetails = JSON.parse(req.details);
@@ -21,18 +21,34 @@ export class ApprovalService {
         // ignore
       }
 
+      const fName = (req.firstName || req.first_name || '').trim();
+      const lName = (req.lastName || req.last_name || '').trim();
+      const fullCombined = `${fName} ${lName}`.trim();
+      const applicantName = (parsedDetails.name && parsedDetails.name !== 'Unknown' && parsedDetails.name !== 'Employee')
+        ? parsedDetails.name
+        : (fullCombined || req.displayName || req.email?.split('@')[0] || 'Employee');
+
+      const createdAtStr = req.createdAt || req.created_at || new Date().toISOString();
+
       return {
         id: req.id,
         uuid: req.uuid,
         applicant: {
-          name: req.firstName ? `${req.firstName} ${req.lastName}` : 'Unknown',
-          avatarUrl: req.avatarUrl,
-          email: req.email,
+          name: applicantName,
+          avatarUrl: req.avatarUrl || req.avatar_url || null,
+          email: req.email || null,
         },
-        moduleType: req.moduleType,
-        status: req.status,
-        createdAt: req.createdAt,
-        details: parsedDetails,
+        moduleType: req.moduleType || 'Leave',
+        status: req.status || 'Pending',
+        createdAt: createdAtStr,
+        details: {
+          ...parsedDetails,
+          name: applicantName,
+          department: parsedDetails.department || 'General',
+          role: parsedDetails.role || 'Employee',
+          type: parsedDetails.type || req.moduleType || 'Leave Application',
+          time: parsedDetails.time || (createdAtStr ? new Date(createdAtStr).toLocaleDateString() : ''),
+        },
         referenceId: req.referenceId
       };
     });

@@ -12,7 +12,7 @@ export const useNotificationSocket = () => {
       return socketInstance;
     }
 
-    const socketUrl = (import.meta as any).env.VITE_SOCKET_URL || 'http://localhost:5000';
+    const socketUrl = (import.meta as any).env.VITE_SOCKET_URL || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5001');
     socketInstance = io(`${socketUrl}/notifications`, {
       transports: ['websocket', 'polling'],
       reconnection: true,

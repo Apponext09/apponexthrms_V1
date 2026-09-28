@@ -1,8 +1,8 @@
-import { useState, useCallback } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiClient } from '@/config/api';
-import { useCompanyStore } from '@/features/settings/store/companyStore';
-import type {  Employee, EmployeeCreate  } from '@/types';
+import { useState, useCallback } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiClient } from "@/config/api";
+import { useCompanyStore } from "@/features/settings/store/companyStore";
+import type { Employee, EmployeeCreate } from "@/types";
 
 interface ListOptions {
   page?: number;
@@ -20,10 +20,14 @@ interface ListOptions {
  */
 export function useEmployee(employeeId: number | string) {
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ['employee', employeeId],
+    queryKey: ["employee", employeeId],
     queryFn: async () => {
-      const isMe = employeeId === 'me' || !employeeId || Number(employeeId) === 0 || isNaN(Number(employeeId));
-      const endpoint = isMe ? '/employees/me' : `/employees/${employeeId}`;
+      const isMe =
+        employeeId === "me" ||
+        !employeeId ||
+        Number(employeeId) === 0 ||
+        isNaN(Number(employeeId));
+      const endpoint = isMe ? "/employees/me" : `/employees/${employeeId}`;
       const response = await apiClient.get(endpoint);
       return (response.data?.data ?? response.data) as Employee;
     },
@@ -46,16 +50,27 @@ export function useEmployees(options: ListOptions = {}) {
   const {
     page = 1,
     pageSize = 25,
-    search = '',
-    sortBy = 'created_at',
-    sortOrder = 'desc',
-    status = '',
-    employmentType = '',
+    search = "",
+    sortBy = "created_at",
+    sortOrder = "desc",
+    status = "",
+    employmentType = "",
     departmentId,
   } = options;
 
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ['employees', selectedCompanyId, page, pageSize, search, sortBy, sortOrder, status, employmentType, departmentId],
+    queryKey: [
+      "employees",
+      selectedCompanyId,
+      page,
+      pageSize,
+      search,
+      sortBy,
+      sortOrder,
+      status,
+      employmentType,
+      departmentId,
+    ],
     queryFn: async () => {
       const params = new URLSearchParams({
         page: String(page),
@@ -65,7 +80,9 @@ export function useEmployees(options: ListOptions = {}) {
         sortOrder,
         ...(status && { status }),
         ...(employmentType && { employmentType }),
-        ...(departmentId !== undefined && { departmentId: String(departmentId) }),
+        ...(departmentId !== undefined && {
+          departmentId: String(departmentId),
+        }),
       });
 
       const response = await apiClient.get(`/employees?${params}`);
@@ -75,13 +92,19 @@ export function useEmployees(options: ListOptions = {}) {
 
   const employeeList = Array.isArray(data?.data)
     ? data.data
-    : (Array.isArray(data?.data?.items)
+    : Array.isArray(data?.data?.items)
       ? data.data.items
-      : (Array.isArray(data?.items)
+      : Array.isArray(data?.items)
         ? data.items
-        : (Array.isArray(data) ? data : [])));
+        : Array.isArray(data)
+          ? data
+          : [];
 
-  const totalCount = data?.pagination?.total ?? data?.meta?.total ?? data?.total ?? (Array.isArray(employeeList) ? employeeList.length : 0);
+  const totalCount =
+    data?.pagination?.total ??
+    data?.meta?.total ??
+    data?.total ??
+    (Array.isArray(employeeList) ? employeeList.length : 0);
 
   return {
     employees: employeeList,
@@ -103,15 +126,19 @@ export function useCreateEmployee() {
   const { mutateAsync, isPending } = useMutation({
     mutationFn: async (data: EmployeeCreate) => {
       setError(null);
-      const response = await apiClient.post('/employees', data);
+      const response = await apiClient.post("/employees", data);
       return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['employees'] });
+      queryClient.invalidateQueries({ queryKey: ["employees"] });
     },
     onError: (err: any) => {
       const errorData = err.response?.data?.error;
-      const message = errorData?.details?.message || errorData?.message || err.response?.data?.message || 'Failed to create employee';
+      const message =
+        errorData?.details?.message ||
+        errorData?.message ||
+        err.response?.data?.message ||
+        "Failed to create employee";
       setError(message);
       throw err;
     },
@@ -138,11 +165,12 @@ export function useUpdateEmployee(employeeId: number) {
       return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['employees'] });
-      queryClient.invalidateQueries({ queryKey: ['employee', employeeId] });
+      queryClient.invalidateQueries({ queryKey: ["employees"] });
+      queryClient.invalidateQueries({ queryKey: ["employee", employeeId] });
     },
     onError: (err: any) => {
-      const message = err.response?.data?.message || 'Failed to update employee';
+      const message =
+        err.response?.data?.message || "Failed to update employee";
       setError(message);
       throw err;
     },
@@ -168,10 +196,11 @@ export function useDeleteEmployee() {
       await apiClient.delete(`/employees/${employeeId}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['employees'] });
+      queryClient.invalidateQueries({ queryKey: ["employees"] });
     },
     onError: (err: any) => {
-      const message = err.response?.data?.message || 'Failed to delete employee';
+      const message =
+        err.response?.data?.message || "Failed to delete employee";
       setError(message);
       throw err;
     },
@@ -191,7 +220,7 @@ export function useDirectReports(managerId: number, options: ListOptions = {}) {
   const { page = 1, pageSize = 20 } = options;
 
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ['directReports', managerId, page, pageSize],
+    queryKey: ["directReports", managerId, page, pageSize],
     queryFn: async () => {
       const params = new URLSearchParams({
         page: String(page),
@@ -199,7 +228,7 @@ export function useDirectReports(managerId: number, options: ListOptions = {}) {
       });
 
       const response = await apiClient.get(
-        `/employees/${managerId}/direct-reports?${params}`
+        `/employees/${managerId}/direct-reports?${params}`,
       );
       return response.data;
     },
@@ -224,18 +253,37 @@ export function useBulkUploadEmployees() {
   const [error, setError] = useState<string | null>(null);
 
   const { mutateAsync, isPending } = useMutation({
-    mutationFn: async (employees: Partial<Employee>[]) => {
+    mutationFn: async ({
+      employees,
+      companyId,
+    }: {
+      employees: Partial<Employee>[];
+      companyId?: number;
+    }) => {
       setError(null);
-      const response = await apiClient.post('/employees/bulk', { employees });
+      const response = await apiClient.post(
+        "/employees/bulk",
+        { employees },
+        {
+          headers: companyId
+            ? { "X-Company-Id": String(companyId) }
+            : undefined,
+        },
+      );
       return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['employees'] });
+      queryClient.invalidateQueries({ queryKey: ["employees"] });
     },
     onError: (err: any) => {
       const errorData = err.response?.data?.error;
-      const message = errorData?.message || err.response?.data?.message || 'Failed to import employees';
-      const details = errorData?.details?.message || (typeof errorData?.details === 'string' ? errorData.details : '');
+      const message =
+        errorData?.message ||
+        err.response?.data?.message ||
+        "Failed to import employees";
+      const details =
+        errorData?.details?.message ||
+        (typeof errorData?.details === "string" ? errorData.details : "");
       const fullMessage = details ? `${message}: ${details}` : message;
       setError(fullMessage);
       throw err;
@@ -243,10 +291,9 @@ export function useBulkUploadEmployees() {
   });
 
   return {
-    bulkUploadEmployees: mutateAsync,
+    bulkUploadEmployees: (employees: Partial<Employee>[], companyId?: number) =>
+      mutateAsync({ employees, companyId }),
     isLoading: isPending,
     error,
   };
 }
-
-

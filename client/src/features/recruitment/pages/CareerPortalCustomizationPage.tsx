@@ -45,7 +45,6 @@ const DEFAULT_FIELDS = [
   { key: 'totalExperience', label: 'Total Experience', category: 'Professional' },
   { key: 'skills', label: 'Skills & Competencies', category: 'Professional' },
   { key: 'comments', label: 'Comments / Cover Note', category: 'General' },
-  { key: 'signature', label: 'Signature File Upload', category: 'Documents' },
   { key: 'resume', label: 'Resume File Upload', category: 'Documents' },
 ];
 

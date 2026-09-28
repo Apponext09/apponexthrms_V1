@@ -1,7 +1,7 @@
 import React, { lazy } from 'react';
 import { Route, Navigate } from 'react-router-dom';
 import { ProtectedRoute } from '../components/ProtectedRoute';
-import { FinanceLayout } from '../layouts/FinanceLayout';
+import { SharedPortalLayout } from '../layouts/SharedPortalLayout';
 
 // ── Lazy Imports ──────────────────────────────────────────────────────────────
 const FinanceDashboardPage = lazy(() => import('../features/finance/pages/FinanceDashboardPage').then(m => ({ default: m.FinanceDashboardPage })));
@@ -41,7 +41,7 @@ export const financeRoutes = (
   <Route
     element={
       <ProtectedRoute allowedRoles={['finance', 'organization_admin', 'super_admin', 'hr_admin', 'hr', 'hr_manager', 'ceo']}>
-        <FinanceLayout />
+        <SharedPortalLayout portal="finance" />
       </ProtectedRoute>
     }
   >

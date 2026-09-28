@@ -103,6 +103,11 @@ router.get('/public/job-reference/:mrfId', jobReferenceController.getPublicJobDa
 router.post('/public/job-reference/:mrfId/apply', jobReferenceController.applyFromReference);
 router.post('/public/job-reference/:mrfId/refer-existing', jobReferenceController.referExisting);
 
+// Direct /public/job-portal aliases
+router.get('/public/job-portal/:mrfId', jobReferenceController.getPublicJobData);
+router.post('/public/job-portal/:mrfId/apply', jobReferenceController.applyFromReference);
+router.post('/public/job-portal/:mrfId/refer-existing', jobReferenceController.referExisting);
+
 // Authenticated Career Portal Settings routes
 router.get('/recruitment/career-portal-settings', jobReferenceController.getPortalSettings);
 router.put('/recruitment/career-portal-settings', jobReferenceController.updatePortalSettings);

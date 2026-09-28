@@ -16,7 +16,10 @@ import { io, Socket } from 'socket.io-client';
 import type { LocationDelta, TrackingStatusChangedEvent } from '../types/livetracking.types';
 import { liveTrackingStore } from '../store/liveTrackingStore';
 
-const SOCKET_URL = (import.meta as any).env.VITE_SOCKET_URL || 'http://localhost:5000';
+const SOCKET_URL =
+  import.meta.env.VITE_SOCKET_URL ||
+  import.meta.env.VITE_API_URL?.replace(/\/api(?:\/v1)?\/?$/, '') ||
+  (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5000');
 
 interface UseLiveTrackingSocketOptions {
   token: string | null;

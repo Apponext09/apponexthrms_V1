@@ -15,7 +15,6 @@ import { LocationController } from './controllers/LocationController';
 import { GradeController } from './controllers/GradeController';
 import { CostCenterController } from './controllers/CostCenterController';
 import { BreakController } from './controllers/BreakController';
-import { RolesResponsibilityController } from './controllers/RolesResponsibilityController';
 import { KraController } from './controllers/KraController';
 import { MergeCodeController } from './controllers/MergeCodeController';
 import { NotificationTemplateSettingsController } from './controllers/NotificationTemplateSettingsController';
@@ -1966,10 +1965,6 @@ router.get('/org-settings', asyncHandler(async (req: Request, res: Response) => 
     settingsMap['sick_leave_doc_threshold'] = 3;
   }
 
-  // Default values for Attendance Module Configuration
-  if (settingsMap['attendance_mode'] === undefined) {
-    settingsMap['attendance_mode'] = 'gps';
-  }
   if (settingsMap['geofence_radius_meters'] === undefined) {
     settingsMap['geofence_radius_meters'] = 100;
   }
@@ -4578,58 +4573,6 @@ router.patch('/breaks/:id', asyncHandler((req, res) => breakCtrl.update(req, res
 router.delete('/breaks/:id', asyncHandler((req, res) => breakCtrl.delete(req, res)));
 router.post('/breaks/:id/restore', asyncHandler((req, res) => breakCtrl.restore(req, res)));
 
-// ─── Roles & Responsibilities Routes ──────────────────────────────────────────
-(async () => {
-  try {
-    const db = getKnex();
-    const exists = await db.schema.hasTable('roles_responsibilities');
-    if (!exists) {
-      await db.schema.createTable('roles_responsibilities', (table) => {
-        table.bigIncrements('id').primary();
-        table.string('uuid', 36).notNullable().unique();
-        table.bigInteger('organization_id').unsigned().notNullable().index();
-        table.bigInteger('company_id').unsigned().nullable();
-        table.string('company_name', 150).nullable();
-        table.bigInteger('department_id').unsigned().nullable();
-        table.string('department_name', 150).nullable();
-        table.bigInteger('designation_id').unsigned().nullable();
-        table.string('designation_name', 150).nullable();
-        table.bigInteger('kra_form_id').unsigned().nullable();
-        table.string('kra_form', 150).nullable();
-        table.text('responsibilities').notNullable();
-        table.enum('is_active', ['Yes', 'No']).notNullable().defaultTo('Yes');
-        table.bigInteger('created_by').unsigned().nullable();
-        table.bigInteger('updated_by').unsigned().nullable();
-        table.datetime('created_at').notNullable();
-        table.datetime('updated_at').notNullable();
-        table.datetime('deleted_at').nullable();
-        table.index(['organization_id', 'deleted_at']);
-        table.index(['organization_id', 'is_active']);
-      });
-      console.log('[Settings] ✅ Created table: roles_responsibilities');
-    } else {
-      // Migrate: add kra_form_id if missing
-      const hasKraFormId = await db.schema.hasColumn('roles_responsibilities', 'kra_form_id');
-      if (!hasKraFormId) {
-        await db.schema.alterTable('roles_responsibilities', (table) => {
-          table.bigInteger('kra_form_id').unsigned().nullable().after('designation_name');
-        });
-        console.log('[Settings] ✅ Migrated: added kra_form_id to roles_responsibilities');
-      }
-    }
-  } catch (err) {
-    console.error('[Settings] ❌ Failed to create/migrate roles_responsibilities table:', err);
-  }
-})();
-
-const rolesRespCtrl = new RolesResponsibilityController();
-router.get('/roles-responsibilities', asyncHandler((req, res) => rolesRespCtrl.list(req, res)));
-router.get('/roles-responsibilities/:id', asyncHandler((req, res) => rolesRespCtrl.get(req, res)));
-router.post('/roles-responsibilities', asyncHandler((req, res) => rolesRespCtrl.create(req, res)));
-router.patch('/roles-responsibilities/:id', asyncHandler((req, res) => rolesRespCtrl.update(req, res)));
-router.delete('/roles-responsibilities/:id', asyncHandler((req, res) => rolesRespCtrl.delete(req, res)));
-router.post('/roles-responsibilities/:id/restore', asyncHandler((req, res) => rolesRespCtrl.restore(req, res)));
-
 // ─── KRA Form Master Routes ───────────────────────────────────────────────────
 (async () => {
   try {
@@ -4946,5 +4889,3 @@ router.get('/id-card/active-template', asyncHandler((req, res) => idCardCtrl.res
 router.post('/id-card/upload-asset', asyncHandler((req, res) => idCardCtrl.uploadAsset(req, res)));
 
 export default router;
-
-

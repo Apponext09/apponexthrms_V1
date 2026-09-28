@@ -177,7 +177,7 @@ export class EmployeeController {
       intern: 10, employee: 5,
     };
     const roles = Array.from(new Set(assignedRoles.map((row: any) => String(row.code).toLowerCase())));
-    const accessRole = [...roles].sort((a, b) => (rolePriority[b] ?? 0) - (rolePriority[a] ?? 0))[0];
+    const accessRole = [...roles].sort((a, b) => (rolePriority[b] ?? 30) - (rolePriority[a] ?? 30))[0];
     res.json({
       success: true,
       data: {
@@ -251,6 +251,17 @@ export class EmployeeController {
   /**
    * List employees
    */
+  /**
+   * GET /employees/org-hierarchy
+   * Full active roster, narrow field set, no pageSize cap — purpose-built
+   * for the Organization Chart so it never silently truncates large orgs.
+   */
+  getOrgHierarchy = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const items = await this.service.getOrgHierarchy(ctx);
+    res.json({ success: true, data: items });
+  });
+
   listEmployees = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
     const {
@@ -295,12 +306,19 @@ export class EmployeeController {
       sortBy: sortBy as string,
       sortOrder: (sortOrder === 'asc' ? 'asc' : 'desc') as 'asc' | 'desc',
       filters: {
-        ...(status && { status: status as string }),
+        ...(status && status !== 'offboarded' && { status: status as string }),
         ...(empType && { employment_type: empType }),
         ...(deptId && { current_department_id: parseInt(deptId, 10) }),
         ...(targetCompId && targetCompId.toLowerCase() !== 'all' && { company_id: parseInt(targetCompId, 10) }),
         ...(shouldExcludeCeo && { is_ceo: 0 }),
       },
+      // The Employee Directory is an active-workforce view. Offboarded records
+      // are excluded unless a caller deliberately requests a specific status.
+      ...(status === 'offboarded'
+        ? { customWhere: (query: any) => query.whereIn('status', ['exit', 'exited', 'offboarded', 'alumni']) }
+        : !status && {
+        customWhere: (query: any) => query.whereNotIn('status', ['exit', 'exited', 'offboarded', 'alumni']),
+      }),
     });
 
     res.json({
@@ -863,4 +881,3 @@ export class EmployeeController {
 }
 
 export const employeeController = new EmployeeController();
-
