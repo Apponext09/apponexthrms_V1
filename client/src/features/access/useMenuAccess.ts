@@ -27,11 +27,16 @@ interface MyMenuAccess {
 
 const EMPTY_CATALOG: MenuCatalogItem[] = [];
 
+const canonicalMenuRoute = (route: string) => {
+  const [path, query] = route.split('?', 2);
+  return `${path.toLowerCase().replace(/\/$/, '') || '/'}${query ? `?${query}` : ''}`;
+};
+
 const unwrap = <T,>(response: { data: { data?: T } & Partial<T> }): T => (response.data.data ?? response.data) as T;
 
 export function matchesMenuPath(pattern: string, pathname: string): boolean {
   if (!pattern.startsWith('/')) return false;
-  if (pattern.includes('?') || pathname.includes('?')) return pattern === pathname;
+  if (pattern.includes('?') || pathname.includes('?')) return canonicalMenuRoute(pattern) === canonicalMenuRoute(pathname);
   return Boolean(matchPath({ path: pattern, end: true }, pathname));
 }
 
@@ -43,14 +48,18 @@ export function firstGrantedPage(paths: string[]): string | undefined {
 export function isPathGranted(pathname: string, catalog: MenuCatalogItem[], allowedPaths: string[]): boolean {
   // A URL tab with its own catalog entry must not inherit access from the hub page.
   const [base, query] = pathname.split('?', 2);
-  const tab = new URLSearchParams(query || '').get('tab');
-  if (tab && catalog.some((item) => (item.path ?? item.route) === `${base}?tab=${tab}`)) {
-    return allowedPaths.includes(`${base}?tab=${tab}`);
+  const params = new URLSearchParams(query || '');
+  const exactTab = ['tab', 'module'].map((key) => params.get(key) ? `${base}?${key}=${params.get(key)}` : null)
+    .find((route) => route && catalog.some((item) => (item.path ?? item.route) && canonicalMenuRoute((item.path ?? item.route)!) === canonicalMenuRoute(route)));
+  if (exactTab) {
+    return allowedPaths.some((route) => canonicalMenuRoute(route) === canonicalMenuRoute(exactTab));
   }
-  const candidates = catalog.filter((item) => (item.path ?? item.route) && matchesMenuPath((item.path ?? item.route)!, pathname));
+  // A dynamic or wildcard page must not unlock a separately catalogued static tab.
+  const exact = catalog.filter((item) => (item.path ?? item.route) && canonicalMenuRoute((item.path ?? item.route)!) === canonicalMenuRoute(base));
+  const candidates = exact.length ? exact : catalog.filter((item) => (item.path ?? item.route) && matchesMenuPath((item.path ?? item.route)!, base));
   if (!candidates.length) return false;
   const matchingIds = new Set(candidates.map((item) => item.id));
-  const matchingAllowed = catalog.some((item) => matchingIds.has(item.id) && (item.path ?? item.route) && allowedPaths.includes((item.path ?? item.route)!));
+  const matchingAllowed = catalog.some((item) => matchingIds.has(item.id) && (item.path ?? item.route) && allowedPaths.some((route) => canonicalMenuRoute(route) === canonicalMenuRoute((item.path ?? item.route)!)));
   return matchingAllowed;
 }
 

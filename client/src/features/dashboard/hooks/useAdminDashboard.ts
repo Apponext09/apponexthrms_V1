@@ -31,6 +31,7 @@ export interface AdminDashboardData {
     name: string;
     count: number;
     percentage: number;
+    employees: Array<{ id: number; name: string; employeeCode: string }>;
   }>;
   recentEmployees: Array<{
     id: number;
@@ -59,6 +60,14 @@ export interface AdminDashboardData {
       late: number;
       absent: number;
     }>;
+    periodSummary: Record<'today' | 'week' | 'month', {
+      present: number;
+      late: number;
+      absent: number;
+      onLeave: number;
+      total: number;
+      attendanceRate: number;
+    }>;
   };
   leaveAnalytics?: {
     byType: Array<{
@@ -78,9 +87,11 @@ export interface AdminDashboardData {
   payrollAnalytics?: {
     monthlyTrend: Array<{
       month: string;
+      monthKey: string;
       grossSalary: number;
       netSalary: number;
       deductions: number;
+      source: 'payslip' | 'salary_structure';
     }>;
   };
   recruitmentAnalytics?: {
@@ -95,15 +106,18 @@ export interface AdminDashboardData {
     }>;
   };
   expenseAnalytics?: {
-    monthlyTrend: Array<{
-      month: string;
-      claimedAmount: number;
-      approvedAmount: number;
+    disbursementTrend: Array<{
+      date: string;
+      disbursedAmount: number;
     }>;
     byCategory: Array<{
       categoryName: string;
       totalAmount: number;
     }>;
+  };
+  upcomingEvents?: {
+    holidays: Array<{ id: number; name: string; date: string; type: string }>;
+    birthdays: Array<{ id: number; name: string; date: string; upcomingDate: string }>;
   };
   workforceAnalytics?: {
     byEmploymentType: Array<{ type: string; count: number }>;

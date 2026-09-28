@@ -525,7 +525,8 @@ export class AttendanceController {
   approveSwap = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
     const swapId = parseInt(req.params.id);
-    const swap = await this.shiftService.approveShiftSwap(ctx, swapId);
+    const employeeId = await this.getEmployeeId(ctx);
+    const swap = await this.shiftService.approveShiftSwap(ctx, swapId, employeeId);
     res.json({ success: true, data: swap });
   });
 
@@ -533,7 +534,8 @@ export class AttendanceController {
     const ctx = req.ctx!;
     const swapId = parseInt(req.params.id);
     const { reason } = req.body;
-    const swap = await this.shiftService.rejectShiftSwap(ctx, swapId, reason);
+    const employeeId = await this.getEmployeeId(ctx);
+    const swap = await this.shiftService.rejectShiftSwap(ctx, swapId, employeeId, reason);
     res.json({ success: true, data: swap });
   });
 

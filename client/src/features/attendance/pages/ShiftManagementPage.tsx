@@ -11,8 +11,6 @@ import {
   Clock,
   Users,
   ArrowRightLeft,
-  CheckCircle2,
-  XCircle,
   CalendarDays,
   Activity,
   Edit2,
@@ -51,8 +49,6 @@ export function ShiftManagementPage({ pageType: propPageType }: { pageType?: 'ge
     getAllAssignments,
     deleteAssignment,
     getAllSwapRequests,
-    approveSwap,
-    rejectSwap,
   } = useShifts();
 
   const [activeTab, setActiveTab] = useState('shifts');
@@ -75,7 +71,6 @@ export function ShiftManagementPage({ pageType: propPageType }: { pageType?: 'ge
   // Swap requests state
   const [swapRequests, setSwapRequests] = useState<any[]>([]);
   const [loadingSwaps, setLoadingSwaps] = useState(false);
-  const [processingSwapId, setProcessingSwapId] = useState<number | null>(null);
 
   // Load data
   const fetchShifts = useCallback(async () => {
@@ -154,32 +149,6 @@ export function ShiftManagementPage({ pageType: propPageType }: { pageType?: 'ge
 
   const handleShiftUpdated = () => {
     fetchShifts();
-  };
-
-  const handleApproveSwapRequest = async (swapId: number) => {
-    setProcessingSwapId(swapId);
-    try {
-      await approveSwap(swapId);
-      showToast.success('Request Approved', 'Shift swap request approved successfully');
-      loadSwapRequestsData();
-    } catch (err: any) {
-      showToast.error('Approval Failed', err?.response?.data?.message || err?.message || 'Failed to approve swap');
-    } finally {
-      setProcessingSwapId(null);
-    }
-  };
-
-  const handleRejectSwapRequest = async (swapId: number) => {
-    setProcessingSwapId(swapId);
-    try {
-      await rejectSwap(swapId);
-      showToast.success('Request Rejected', 'Shift swap request rejected');
-      loadSwapRequestsData();
-    } catch (err: any) {
-      showToast.error('Rejection Failed', err?.response?.data?.message || err?.message || 'Failed to reject swap');
-    } finally {
-      setProcessingSwapId(null);
-    }
   };
 
   // Helper to format time strings
@@ -661,9 +630,9 @@ export function ShiftManagementPage({ pageType: propPageType }: { pageType?: 'ge
             <div className="flex flex-col items-center justify-center py-16 gap-3 text-center border border-border/80 rounded-xl bg-card">
               <ArrowRightLeft className="w-8 h-8 text-muted-foreground/40" />
               <div>
-                <p className="text-sm font-bold text-foreground">No pending shift swap requests</p>
+                <p className="text-sm font-bold text-foreground">No shift swap requests</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Shift swap requests submitted by employees will appear here for review.
+                  Shift swap requests submitted by employees will appear here for visibility.
                 </p>
               </div>
             </div>
@@ -680,8 +649,6 @@ export function ShiftManagementPage({ pageType: propPageType }: { pageType?: 'ge
 
                 const requesterName = `${reqFirst} ${reqLast}`.trim() || 'Employee';
                 const swapWithName = `${swpFirst} ${swpLast}`.trim() || 'Employee';
-                const isProcessing = processingSwapId === swap.id;
-
                 const reqDate = swap.requestShiftDate || swap.request_shift_date || '';
 
                 return (
@@ -717,27 +684,9 @@ export function ShiftManagementPage({ pageType: propPageType }: { pageType?: 'ge
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
                           {swap.status === 'pending' ? (
-                            <>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                disabled={isProcessing}
-                                onClick={() => handleRejectSwapRequest(swap.id)}
-                                className="h-8 text-xs font-bold border-rose-200 text-rose-600 hover:bg-rose-50"
-                              >
-                                {isProcessing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <XCircle className="w-3.5 h-3.5" />}
-                                Reject
-                              </Button>
-                              <Button
-                                size="sm"
-                                disabled={isProcessing}
-                                onClick={() => handleApproveSwapRequest(swap.id)}
-                                className="h-8 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white"
-                              >
-                                {isProcessing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
-                                Approve
-                              </Button>
-                            </>
+                            <Badge variant="outline" className="text-[9px] font-bold py-0.5 px-2 border-amber-200 bg-amber-50 text-amber-700">
+                              Awaiting {swapWithName}'s decision
+                            </Badge>
                           ) : (
                             <Badge
                               className={cn(

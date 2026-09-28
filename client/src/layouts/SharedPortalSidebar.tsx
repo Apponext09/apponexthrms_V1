@@ -6,7 +6,7 @@ import { useMenuAccess } from '@/features/access/useMenuAccess';
 import { SectionRail, type SectionGroup } from './SectionNavigation';
 import { Sidebar } from './Sidebar';
 import { EmployeeSidebar } from '@/features/employee/layout/EmployeeSidebar';
-import { buildCommonAccessModules, orderAccessModules } from '@/features/settings/components/roleAccessTabs';
+import { buildCompleteAccessModules, orderAccessModules } from '@/features/settings/components/roleAccessTabs';
 import type { RoleMenuItem } from '@/features/settings/components/roleMenuSelection';
 import { PortalSidebarBrand } from './PortalSidebarBrand';
 import { SidebarProfileMenu } from './SidebarProfileMenu';
@@ -15,10 +15,10 @@ export type OrganizationPortal = 'admin' | 'hr' | 'manager' | 'team_lead' | 'emp
 
 export function buildGrantedNavigationGroups(items: RoleMenuItem[], paths: string[], portal: OrganizationPortal, moduleOrder: string[] = []): SectionGroup[] {
   const allowed = new Set(paths);
-  return orderAccessModules(buildCommonAccessModules(items).modules, moduleOrder).map((module) => ({
+  return orderAccessModules(buildCompleteAccessModules(items), moduleOrder).map((module) => ({
     label: module.label, icon: module.icon,
     items: module.tabs.flatMap((tab) => {
-      const granted = tab.menus.filter((item) => item.route && allowed.has(item.route));
+      const granted = tab.menus.filter((item) => item.route && !/[:*]/.test(item.route) && allowed.has(item.route));
       const menu = granted.find((item) => item.portal === portal) ?? granted[0];
       return menu ? [{ name: tab.label, href: menu.route!, icon: tab.icon }] : [];
     }),
