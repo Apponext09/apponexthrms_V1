@@ -2,13 +2,13 @@ import { Router } from 'express';
 import { authenticate } from '../../common/middleware/authenticate';
 import { resolveTenant } from '../../common/middleware/resolveTenant';
 import { assetController } from './controllers/AssetController';
-import { denyRoles } from '../../common/middleware/denyRoles';
+import { requireMenuModule } from '../rbac/requireMenuAccess';
 
 const router = Router();
 
 // Apply authentication and tenant resolution middleware
 router.use(authenticate, resolveTenant);
-router.use(denyRoles(['organization_admin', 'ceo', 'hr', 'hr_admin', 'hr_manager']));
+router.use(requireMenuModule('assets'));
 
 // ===== ASSETS =====
 router.get('/stats', assetController.getStats);

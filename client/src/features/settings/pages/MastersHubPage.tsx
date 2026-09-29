@@ -53,7 +53,7 @@ const GradeMasterCustomUI = lazy(() => import('../components/GradeMasterCustomUI
 const EmploymentTypeMasterCustomUI = lazy(() => import('../components/EmploymentTypeMasterCustomUI').then(m => ({ default: m.EmploymentTypeMasterCustomUI })));
 const DesignationMaster = lazy(() => import('../components/DesignationMaster').then(m => ({ default: m.DesignationMaster })));
 const BreakMasterForm = lazy(() => import('../components/BreakMasterForm').then(m => ({ default: m.BreakMasterForm })));
-const RolesResponsibilityMasterForm = lazy(() => import('../components/RolesResponsibilityMasterForm').then(m => ({ default: m.RolesResponsibilityMasterForm })));
+const AccessRolesMasterForm = lazy(() => import('../components/AccessRolesMasterForm').then(m => ({ default: m.AccessRolesMasterForm })));
 const KraMasterForm = lazy(() => import('../components/KraMasterForm').then(m => ({ default: m.KraMasterForm })));
 const NotificationTemplateMasterForm = lazy(() => import('../components/NotificationTemplateMasterForm').then(m => ({ default: m.NotificationTemplateMasterForm })));
 const NotificationMergeCodeMasterForm = lazy(() => import('../components/NotificationMergeCodeMasterForm').then(m => ({ default: m.NotificationMergeCodeMasterForm })));
@@ -96,6 +96,7 @@ export const MASTER_CATEGORIES: MasterCategory[] = [
   { id: 'grade', name: 'Grade', icon: Award, category: 'Core & Structure', description: 'Employee pay grades, bands, and seniority levels.', defaultItemCount: 7 },
   { id: 'employee-status', name: 'Employee Status', icon: Users, category: 'Core & Structure', description: 'Active, On-Probation, Suspended, and Exit employee states.', defaultItemCount: 5 },
   { id: 'emp-type', name: 'Emp. Type', icon: Users, category: 'Core & Structure', description: 'Employment classification (Full-Time, Contract, Intern, Part-Time).', defaultItemCount: 4 },
+  { id: 'access-roles', name: 'Access Roles', icon: ShieldCheck, category: 'Templates & System', description: 'Create and manage organization access roles.', defaultItemCount: 0 },
 ];
 
 interface MasterItemRecord {
@@ -164,11 +165,6 @@ const INITIAL_RECORDS: Record<string, MasterItemRecord[]> = {
     { id: 'b1', code: 'BRK-LUNCH', name: 'Lunch Break (45 Mins)', description: 'Standard afternoon lunch break window', status: 'Active', createdAt: '2026-01-01' },
     { id: 'b2', code: 'BRK-TEA', name: 'Tea & Coffee Break (15 Mins)', description: 'Short morning/evening relaxation break', status: 'Active', createdAt: '2026-01-01' },
   ],
-  'roles-responsibility': [
-    { id: 'rr1', code: 'ROLE-ADMIN', name: 'Organization Admin', description: 'Full administrative access across all tenant configurations', status: 'Active', createdAt: '2026-01-01' },
-    { id: 'rr2', code: 'ROLE-HR', name: 'HR Manager', description: 'HR Operations, Leaves, Payroll, and Employee Management', status: 'Active', createdAt: '2026-01-01' },
-    { id: 'rr3', code: 'ROLE-MGR', name: 'Department Manager', description: 'Team approvals, timelog reviews, and performance evaluations', status: 'Active', createdAt: '2026-01-01' },
-  ],
   'resource-plan': [
     { id: 'rp1', code: 'RP-2026-Q3', name: 'Q3 Engineering Capacity Plan', description: 'Headcount and project allocation planning for Q3 2026', status: 'Active', createdAt: '2026-03-15' },
   ],
@@ -217,7 +213,7 @@ export function MastersHubPage() {
     if (c === 'holiday' || i === 'calendar') return Calendar;
     if (c === 'general-shift' || c === 'roster-shift' || c === 'shift' || i === 'clock') return Clock;
     if (c === 'break' || i === 'coffee') return Coffee;
-    if (c === 'roles-responsibility' || i === 'shieldcheck' || i === 'shield') return ShieldCheck;
+    if (c === 'access-roles' || i === 'shieldcheck' || i === 'shield') return ShieldCheck;
     if (c === 'kra' || c === 'resource-plan' || c === 'offer-templates' || i === 'filetext') return FileText;
     if (c === 'notification-templates' || i === 'bell') return Bell;
     if (c === 'notification-merge-codes' || i === 'code2') return Code2;
@@ -264,7 +260,7 @@ export function MastersHubPage() {
       isCustom: !cm.isSystem,
     }));
 
-    return [builderTab, ...dynamicCategories];
+    return [builderTab, ...dynamicCategories.filter((category) => !['access-roles', 'roles-responsibility', 'roles-responsibilities'].includes(category.id)), MASTER_CATEGORIES.find((category) => category.id === 'access-roles')!];
   }, [customMasters]);
 
   // Normalize common URL alias variants to canonical master IDs
@@ -308,7 +304,7 @@ export function MastersHubPage() {
     const OPERATIONAL_TABS = [
       'general-shift', 'roster-shift', 'ot-rule', 'break', 'breaks', 'holiday', 'events', 'event',
       'notification-templates', 'notification-merge-codes', 'offer-templates',
-      'roles-responsibility', 'kra', 'resource-plan'
+      'access-roles', 'kra', 'resource-plan'
     ];
 
     if (rawTab && OPERATIONAL_TABS.includes(rawTab)) {
@@ -554,8 +550,8 @@ export function MastersHubPage() {
           />
         ) : selectedMasterId === 'break' ? (
           <BreakMasterForm onCancel={() => handleSelectMaster('company')} />
-        ) : selectedMasterId === 'roles-responsibility' ? (
-          <RolesResponsibilityMasterForm onCancel={() => handleSelectMaster('company')} />
+        ) : selectedMasterId === 'access-roles' ? (
+          <AccessRolesMasterForm onCancel={() => handleSelectMaster('company')} />
         ) : selectedMasterId === 'kra' ? (
           <KraMasterForm onCancel={() => handleSelectMaster('company')} />
         ) : selectedMasterId === 'offer-templates' ? (

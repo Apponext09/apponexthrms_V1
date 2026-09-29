@@ -45,14 +45,14 @@ const RadioGroupItem = React.forwardRef<HTMLButtonElement, RadioGroupItemProps>(
         }}
         className={cn(
           'flex items-center gap-2 rounded-md border border-input px-3 py-2 text-sm transition-colors',
-          isChecked ? 'border-indigo-600 text-indigo-600 bg-indigo-50/50' : 'bg-transparent',
+          isChecked ? 'border-blue-600 text-blue-600 bg-blue-50/50' : 'bg-transparent',
           className
         )}
         data-value={value}
         {...props}
       >
-        <span className={cn('h-4 w-4 rounded-full border border-current flex items-center justify-center', isChecked && 'border-indigo-600')}>
-          {isChecked && <span className="h-2 w-2 rounded-full bg-indigo-600" />}
+        <span className={cn('h-4 w-4 rounded-full border border-current flex items-center justify-center', isChecked && 'border-blue-600')}>
+          {isChecked && <span className="h-2 w-2 rounded-full bg-blue-600" />}
         </span>
         {children}
       </button>

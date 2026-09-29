@@ -41,7 +41,7 @@ const C = {
   sectionLabel: 'text-muted-foreground',
 };
 
-const TEAM_LEAD_NAV = [
+export const TEAM_LEAD_NAV = [
   {
     label: 'Dashboard',
     subscriptionModule: null,

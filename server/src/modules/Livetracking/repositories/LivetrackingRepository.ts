@@ -15,6 +15,8 @@
 // ============================================================
 import { getKnex } from '../../../db/knex';
 import type { TenantContext } from '../../../db/types';
+import { calculateSessionMetrics } from '../utils/sessionCalculator';
+import { localDateStr } from '../utils/access';
 import type {
   EmployeeLiveLocation,
   EmployeeLocationHistory,
@@ -23,8 +25,173 @@ import type {
   LocationPingPayload,
 } from '../types/livetracking.types';
 
+/** Local-time MySQL DATETIME for an epoch-ms value — matches how recorded_at is stored */
+export function toMysqlDatetime(ms: number): string {
+  const d = new Date(ms);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return (
+    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ` +
+    `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+  );
+}
+
+/** [start, end) DATETIME bounds of a YYYY-MM-DD day — lets the (org, employee, recorded_at) index serve the range */
+function dayBounds(date: string): [string, string] {
+  const [y, m, d] = date.split('-').map(Number);
+  const start = new Date(y, m - 1, d).getTime();
+  const end = new Date(y, m - 1, d + 1).getTime();
+  return [toMysqlDatetime(start), toMysqlDatetime(end)];
+}
+
+/** Row shape for a batched breadcrumb insert */
+export interface BreadcrumbRow {
+  organization_id: number;
+  employee_id: number;
+  latitude: number;
+  longitude: number;
+  accuracy: number | null;
+  speed: number | null;
+  heading: number | null;
+  source: string;
+  recorded_at: string;
+}
+
+/** Row shape for a batched live-snapshot upsert */
+export interface LiveRow {
+  organization_id: number;
+  employee_id: number;
+  latitude: number;
+  longitude: number;
+  accuracy: number | null;
+  speed: number | null;
+  heading: number | null;
+  address: string | null;
+  last_ping_at: string;
+}
+
+// Optional history columns added by 20260926000001 — detected once so the module
+// keeps working on databases where that migration has not been applied yet.
+// (SHOW COLUMNS, not columnInfo(): getKnex()'s camelCasing mangles columnInfo.)
+let historyColumnsPromise: Promise<Set<string>> | null = null;
+function historyColumns(): Promise<Set<string>> {
+  if (!historyColumnsPromise) {
+    historyColumnsPromise = getKnex()
+      .raw('SHOW COLUMNS FROM employee_location_history')
+      .then(([rows]: any) => new Set<string>((rows as any[]).map((r) => String(r.Field ?? r.field))))
+      .catch(() => {
+        historyColumnsPromise = null;
+        return new Set<string>();
+      });
+  }
+  return historyColumnsPromise;
+}
+
 export class LivetrackingRepository {
   private db = getKnex();
+
+  // -------------------------------------------------------
+  // Batched writes used by the location ingest pipeline
+  // -------------------------------------------------------
+  async insertBreadcrumbs(rows: BreadcrumbRow[]): Promise<void> {
+    if (rows.length === 0) return;
+    const cols = await historyColumns();
+    const hasHeading = cols.has('heading');
+    const hasSource = cols.has('source');
+    const data = rows.map(({ heading, source, ...rest }) => ({
+      ...rest,
+      ...(hasHeading ? { heading } : {}),
+      ...(hasSource ? { source } : {}),
+    }));
+    await this.db('employee_location_history').insert(data);
+  }
+
+  async upsertLiveRows(rows: LiveRow[]): Promise<void> {
+    if (rows.length === 0) return;
+    const now = this._mysqlNow();
+    const data = rows.map((r) => ({ ...r, location_status: 'ON', connection_status: 'ONLINE', updated_at: now }));
+    await this.db('employee_live_locations')
+      .insert(data)
+      .onConflict(['organization_id', 'employee_id'])
+      .merge([
+        'latitude',
+        'longitude',
+        'accuracy',
+        'speed',
+        'heading',
+        'address',
+        'location_status',
+        'connection_status',
+        'last_ping_at',
+        'updated_at',
+      ]);
+  }
+
+  /** Store the road-snapped position next to a raw breadcrumb (no-op before the migration) */
+  async setBreadcrumbSnap(
+    organizationId: number,
+    employeeId: number,
+    recordedAt: string,
+    latitude: number,
+    longitude: number
+  ): Promise<void> {
+    const cols = await historyColumns();
+    if (!cols.has('snapped_latitude')) return;
+    await this.db('employee_location_history')
+      .where({ organization_id: organizationId, employee_id: employeeId, recorded_at: recordedAt })
+      .update({ snapped_latitude: latitude, snapped_longitude: longitude });
+  }
+
+  /** Latest stored breadcrumb for a day — seeds the ingest state after a reconnect/restart */
+  async getLastBreadcrumb(
+    ctx: TenantContext,
+    employeeId: number,
+    date: string
+  ): Promise<{ latitude: number; longitude: number; recordedAtMs: number } | null> {
+    const [start, end] = dayBounds(date);
+    const row = await this.db('employee_location_history')
+      .where('organization_id', ctx.organizationId)
+      .where('employee_id', employeeId)
+      .where('recorded_at', '>=', start)
+      .where('recorded_at', '<', end)
+      .orderBy('recorded_at', 'desc')
+      .select('latitude', 'longitude', 'recorded_at')
+      .first();
+    if (!row) return null;
+    const ts = new Date(row.recordedAt ?? row.recorded_at).getTime();
+    return { latitude: Number(row.latitude), longitude: Number(row.longitude), recordedAtMs: ts };
+  }
+
+  /**
+   * One day's breadcrumbs for many employees in a single query (dashboard seeding).
+   * Returned per employee as compact [lat, lng, epochMs] tuples.
+   */
+  async getTrailsForEmployees(
+    ctx: TenantContext,
+    employeeIds: number[],
+    date: string
+  ): Promise<Map<number, Array<[number, number, number]>>> {
+    const result = new Map<number, Array<[number, number, number]>>();
+    if (employeeIds.length === 0) return result;
+    const [start, end] = dayBounds(date);
+    const rows = await this.db('employee_location_history')
+      .where('organization_id', ctx.organizationId)
+      .whereIn('employee_id', employeeIds)
+      .where('recorded_at', '>=', start)
+      .where('recorded_at', '<', end)
+      .orderBy([{ column: 'employee_id' }, { column: 'recorded_at' }])
+      .select('employee_id', 'latitude', 'longitude', 'recorded_at');
+
+    for (const r of rows as any[]) {
+      const empId = Number(r.employeeId ?? r.employee_id);
+      let trail = result.get(empId);
+      if (!trail) {
+        trail = [];
+        result.set(empId, trail);
+      }
+      trail.push([Number(r.latitude), Number(r.longitude), new Date(r.recordedAt ?? r.recorded_at).getTime()]);
+    }
+    return result;
+  }
 
   // -------------------------------------------------------
   // UPSERT current live location snapshot for an employee
@@ -44,6 +211,7 @@ export class LivetrackingRepository {
         accuracy: payload.accuracy ?? null,
         speed: payload.speed ?? null,
         heading: payload.heading ?? null,
+        address: payload.address ?? null,
         location_status: 'ON',
         connection_status: 'ONLINE',
         last_ping_at: now,
@@ -56,6 +224,8 @@ export class LivetrackingRepository {
         accuracy: payload.accuracy ?? null,
         speed: payload.speed ?? null,
         heading: payload.heading ?? null,
+        // A new position invalidates the previous address; keep one only when re-supplied
+        address: payload.address ?? null,
         location_status: 'ON',
         connection_status: 'ONLINE',
         last_ping_at: now,
@@ -83,17 +253,29 @@ export class LivetrackingRepository {
   }
 
   // -------------------------------------------------------
-  // Update location_status (ON/OFF) without changing coordinates
+  // Update location_status (ON/OFF) without changing coordinates.
+  // Returns true only when the stored status actually changed.
   // -------------------------------------------------------
   async updateLocationStatus(
     ctx: TenantContext,
     employeeId: number,
     status: 'ON' | 'OFF'
-  ): Promise<void> {
+  ): Promise<boolean> {
     const now = this._mysqlNow();
-    await this.db('employee_live_locations')
+    const affected = await this.db('employee_live_locations')
       .where({ organization_id: ctx.organizationId, employee_id: employeeId })
+      .whereNot('location_status', status)
       .update({ location_status: status, updated_at: now });
+    return Number(affected) > 0;
+  }
+
+  // -------------------------------------------------------
+  // Mark every row OFFLINE — run at server start, when no socket can be connected
+  // -------------------------------------------------------
+  async markAllOffline(): Promise<void> {
+    await this.db('employee_live_locations')
+      .where('connection_status', 'ONLINE')
+      .update({ connection_status: 'OFFLINE', updated_at: this._mysqlNow() });
   }
 
   // -------------------------------------------------------
@@ -146,44 +328,14 @@ export class LivetrackingRepository {
   }
 
   // -------------------------------------------------------
-  // Get live snapshots for a Manager/Team Lead's reporting team
-  // (multi-tier: direct reports + their team members)
+  // Get live snapshots for a set of employees (manager + their reporting tree)
   // -------------------------------------------------------
-  async getLiveLocationsForTeam(
+  async getLiveLocationsForEmployees(
     ctx: TenantContext,
-    managerEmployeeId: number,
-    managerDepartmentId: number | null
+    employeeIds: number[]
   ): Promise<LiveEmployeeSnapshot[]> {
-    const query = this._buildLiveQuery(ctx);
-
-    if (managerEmployeeId && managerEmployeeId > 0) {
-      if (managerDepartmentId) {
-        // Get all team lead IDs in the manager's department via the designations join
-        const teamLeads = await this.db('employees as te')
-          .leftJoin('designations as tdesig', 'tdesig.id', 'te.current_designation_id')
-          .where('te.organization_id', ctx.organizationId)
-          .where('te.current_department_id', managerDepartmentId)
-          .whereRaw("LOWER(tdesig.name) IN ('team lead', 'team_lead')")
-          .select('te.id');
-
-        const teamLeadIds = teamLeads.map((tl: any) => tl.id);
-
-        query.where((qb: any) => {
-          qb.where('e.current_department_id', managerDepartmentId)
-            .orWhere('e.reporting_manager_id', managerEmployeeId);
-          if (teamLeadIds.length > 0) {
-            qb.orWhereIn('e.reporting_manager_id', teamLeadIds);
-          }
-        });
-      } else {
-        query.where((qb: any) => {
-          qb.where('e.reporting_manager_id', managerEmployeeId)
-            .orWhere('e.id', managerEmployeeId);
-        });
-      }
-    }
-
-    return query;
+    if (employeeIds.length === 0) return [];
+    return this._buildLiveQuery(ctx).whereIn('e.id', employeeIds);
   }
 
   // -------------------------------------------------------
@@ -194,19 +346,29 @@ export class LivetrackingRepository {
     employeeId: number,
     date: string // 'YYYY-MM-DD'
   ): Promise<any[]> {
+    const [start, end] = dayBounds(date);
+    const cols = await historyColumns();
+    const extra = ['heading', 'snapped_latitude', 'snapped_longitude'].filter((c) => cols.has(c));
     const rows = await this.db('employee_location_history')
       .where('organization_id', ctx.organizationId)
       .where('employee_id', employeeId)
-      .whereRaw('DATE(recorded_at) = ?', [date])
+      .where('recorded_at', '>=', start)
+      .where('recorded_at', '<', end)
       .orderBy('recorded_at', 'asc')
-      .select('latitude', 'longitude', 'speed', 'recorded_at');
+      .select('latitude', 'longitude', 'speed', 'recorded_at', ...extra);
 
+    const num = (v: any) => (v != null ? Number(v) : null);
     return rows.map((r: any) => {
       const recTime = r.recordedAt || r.recorded_at || new Date().toISOString();
       return {
         latitude: Number(r.latitude),
         longitude: Number(r.longitude),
-        speed: r.speed != null ? Number(r.speed) : null,
+        speed: num(r.speed),
+        heading: num(r.heading),
+        // Road-snapped position when a routing engine produced one — the raw
+        // latitude/longitude above is always the device's actual GPS fix.
+        snapped_latitude: num(r.snappedLatitude ?? r.snapped_latitude),
+        snapped_longitude: num(r.snappedLongitude ?? r.snapped_longitude),
         recorded_at: recTime,
         recordedAt: recTime,
       };
@@ -231,26 +393,23 @@ export class LivetrackingRepository {
       .leftJoin('designations as desig', 'desig.id', 'e.current_designation_id')
       // ── Branch name (employees uses current_branch_id, NOT branch_id) ──
       .leftJoin('branches as b', 'b.id', 'e.current_branch_id')
-      // ── Today's attendance: use a subquery to pick ONLY the single latest
-      //    record per employee today — prevents duplicate rows when multiple
-      //    attendance records exist for the same date (regularization, etc.) ──
+      // ── Attendance: the employee's LATEST record from today/yesterday (yesterday
+      //    covers night shifts). Joining the whole record by id keeps check-in,
+      //    check-out and status consistent — taking MAX() of each column
+      //    independently mixed yesterday's check-out with today's check-in, so
+      //    anyone who checked out yesterday looked "checked out" all day today. ──
       .leftJoin(
         db('attendance_records')
-          .whereRaw('(DATE(check_in_date) >= DATE_SUB(CURDATE(), INTERVAL 1 DAY) OR DATE(check_in_time) >= DATE_SUB(CURDATE(), INTERVAL 1 DAY) OR DATE(created_at) >= DATE_SUB(CURDATE(), INTERVAL 1 DAY))')
+          .where('organization_id', ctx.organizationId)
+          .whereNull('deleted_at')
+          .whereRaw('check_in_date >= DATE_SUB(CURDATE(), INTERVAL 1 DAY)')
           .groupBy('employee_id')
-          .select(
-            'employee_id',
-            db.raw('MAX(id) as ar_id'),
-            db.raw('MAX(status) as status'),
-            db.raw('MAX(check_in_time) as check_in_time'),
-            db.raw('MAX(check_out_time) as check_out_time')
-          )
-          .as('ar'),
-        'ar.employee_id',
+          .select('employee_id', db.raw('MAX(id) as ar_id'))
+          .as('ar_latest'),
+        'ar_latest.employee_id',
         'e.id'
       )
-      // ── Users table for avatar fallback ──
-      .leftJoin('users as u', 'u.employee_id', 'e.id')
+      .leftJoin('attendance_records as ar', 'ar.id', 'ar_latest.ar_id')
       // ── Reporting manager's name ──
       .leftJoin('employees as mgr', 'mgr.id', 'e.reporting_manager_id')
       // ── Scope: this org; include employees across all company branches for live tracking ──
@@ -263,7 +422,11 @@ export class LivetrackingRepository {
         'e.id as employee_id',
         'e.employee_code',
         db.raw("TRIM(CONCAT(COALESCE(e.first_name,''), ' ', COALESCE(e.last_name,''))) as name"),
-        db.raw("COALESCE(NULLIF(e.avatar_url, ''), NULLIF(u.avatar_url, ''), '') as avatar_url"),
+        // Correlated lookup, not a join — an employee linked to 2+ users rows
+        // used to appear twice on the dashboard.
+        db.raw(
+          "COALESCE(NULLIF(e.avatar_url, ''), (SELECT u.avatar_url FROM users u WHERE u.employee_id = e.id AND u.organization_id = e.organization_id AND u.avatar_url IS NOT NULL AND u.avatar_url <> '' LIMIT 1), '') as avatar_url"
+        ),
         db.raw("COALESCE(d.name, '') as department"),
         'e.current_department_id as department_id',
         db.raw("COALESCE(desig.name, '') as designation"),
@@ -271,12 +434,15 @@ export class LivetrackingRepository {
         'e.current_branch_id as branch_id',
         'e.reporting_manager_id',
         db.raw("TRIM(CONCAT(COALESCE(mgr.first_name,''), ' ', COALESCE(mgr.last_name,''))) as reporting_manager"),
-        // ── Live location fields — fallback to default center (19.0760, 72.8777) if no GPS ping recorded ──
-        db.raw("CAST(COALESCE(CASE WHEN DATE(ll.last_ping_at) = CURDATE() THEN ll.latitude ELSE NULL END, 19.0760) AS DOUBLE) as latitude"),
-        db.raw("CAST(COALESCE(CASE WHEN DATE(ll.last_ping_at) = CURDATE() THEN ll.longitude ELSE NULL END, 72.8777) AS DOUBLE) as longitude"),
-        db.raw("COALESCE(NULLIF(ll.address, ''), 'Checked-in Field Location') as address"),
-        db.raw("COALESCE(ll.location_status, 'ON') as location_status"),
-        db.raw("COALESCE(ll.connection_status, 'ONLINE') as connection_status"),
+        // ── Live location — NULL when there's no ping today. This used to fall
+        //    back to a hard-coded Mumbai point, plotting every un-pinged employee
+        //    there as if it were a real position. ──
+        db.raw("CASE WHEN DATE(ll.last_ping_at) = CURDATE() THEN CAST(ll.latitude AS DOUBLE) ELSE NULL END as latitude"),
+        db.raw("CASE WHEN DATE(ll.last_ping_at) = CURDATE() THEN CAST(ll.longitude AS DOUBLE) ELSE NULL END as longitude"),
+        db.raw("COALESCE(ll.address, '') as address"),
+        // No live row = never tracked → OFF / OFFLINE, not ON / ONLINE
+        db.raw("COALESCE(ll.location_status, 'OFF') as location_status"),
+        db.raw("COALESCE(ll.connection_status, 'OFFLINE') as connection_status"),
         'll.last_ping_at',
         // ── Attendance fields — NULL-safe ──
         db.raw("COALESCE(ar.status, 'absent') as attendance_status"),
@@ -306,7 +472,9 @@ export class LivetrackingRepository {
     const now = this._mysqlNow();
     const startDt = this._toMysqlDatetime(metrics.sessionStart);
     const endDt = this._toMysqlDatetime(metrics.sessionEnd);
-    const walkJson = metrics.locationWalk || null;
+    // Only touch location_walk when the caller supplies it — merging NULL used
+    // to wipe the stored walk whenever a caller recalculated metrics only.
+    const walkPatch = metrics.locationWalk !== undefined ? { location_walk: metrics.locationWalk } : {};
 
     await this.db('employee_tracking_sessions')
       .insert({
@@ -320,7 +488,7 @@ export class LivetrackingRepository {
         break_count: metrics.breakCount,
         total_distance_km: metrics.totalDistanceKm,
         ping_count: metrics.pingCount,
-        location_walk: walkJson,
+        ...walkPatch,
         created_at: now,
         updated_at: now,
       })
@@ -333,7 +501,7 @@ export class LivetrackingRepository {
         break_count: metrics.breakCount,
         total_distance_km: metrics.totalDistanceKm,
         ping_count: metrics.pingCount,
-        location_walk: walkJson,
+        ...walkPatch,
         updated_at: now,
       });
   }
@@ -364,10 +532,9 @@ export class LivetrackingRepository {
     await this.addLocationBreadcrumb(ctx, employeeId, nowPayload);
 
     // 3. Fetch all today's breadcrumbs and recalculate session & location_walk JSON
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localDateStr();
     const breadcrumbs = await this.getLocationHistory(ctx, employeeId, today);
     if (breadcrumbs && breadcrumbs.length > 0) {
-      const { calculateSessionMetrics } = await import('../utils/sessionCalculator');
       const metrics = calculateSessionMetrics(breadcrumbs);
       await this.upsertTrackingSession(ctx, employeeId, today, {
         ...metrics,

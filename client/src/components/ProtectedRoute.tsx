@@ -4,18 +4,12 @@ import { useAuthStore, useAuthHydrated, hasStoredAccessToken } from '../features
 import type { Role } from '@/config/roles';
 import { hasAnyRole } from '@/lib/rbac';
 import { PolicyAcceptanceModal } from '../features/auth/components/PolicyAcceptanceModal';
+import { useMenuAccess } from '@/features/access/useMenuAccess';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
   allowedRoles?: Role[];
   requiredPermissions?: string[];
-}
-
-function getEffectiveRoles(user: any): string[] {
-  if (!user) return [];
-  const userRoles = user.roles || [];
-  const accessRole = (user.accessRole || user.role || '').toLowerCase();
-  return Array.from(new Set([...userRoles.map((r: any) => String(r).toLowerCase()), accessRole].filter(Boolean)));
 }
 
 export function ProtectedRoute({
@@ -24,6 +18,7 @@ export function ProtectedRoute({
   requiredPermissions
 }: ProtectedRouteProps) {
   const { isAuthenticated, user } = useAuthStore();
+  const menuAccess = useMenuAccess();
   const authHydrated = useAuthHydrated();
   const [sessionValid, setSessionValid] = useState(true);
   const lastUserIdRef = useRef<number | null>(user?.id ?? null);
@@ -72,7 +67,7 @@ export function ProtectedRoute({
     }
 
     // 2. Prevent back button by clearing history
-    const popstateHandler = (e: PopStateEvent) => {
+    const popstateHandler = () => {
       window.history.pushState(null, '', window.location.href);
     };
     window.addEventListener('popstate', popstateHandler);
@@ -97,12 +92,7 @@ export function ProtectedRoute({
           return;
         }
 
-        // If current page requires specific roles, verify user still has them
-        if (allowedRoles && allowedRoles.length > 0) {
-          if (!hasAnyRole(getEffectiveRoles(currentUser), allowedRoles)) {
-            window.location.href = '/unauthorized?' + new Date().getTime();
-          }
-        }
+        // The rendered access guard checks current menu grants after refocus.
       }
     };
 
@@ -124,11 +114,7 @@ export function ProtectedRoute({
         return;
       }
 
-      if (allowedRoles && allowedRoles.length > 0) {
-        if (!hasAnyRole(getEffectiveRoles(currentUser), allowedRoles)) {
-          window.location.href = '/unauthorized?' + new Date().getTime();
-        }
-      }
+      // Do not reject a custom role solely because it lacks a legacy role label.
     };
 
     window.addEventListener('focus', handleFocus);
@@ -138,13 +124,13 @@ export function ProtectedRoute({
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('focus', handleFocus);
     };
+    // Role arrays are represented by stable keys to avoid re-registering listeners every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allowedRolesKey, requiredPermissionsKey, user?.id, authHydrated]);
 
   if (!authHydrated) {
     return null;
   }
-
-  const hasToken = hasStoredAccessToken();
 
   // 1. Check if user is authenticated
   if (!isAuthenticated || !user) {
@@ -158,11 +144,11 @@ export function ProtectedRoute({
   // 2. Check role-based access
   if (allowedRoles && allowedRoles.length > 0) {
     const userRoles = user.roles || [];
-    const accessRole = (user.accessRole || (user as any).role || '').toLowerCase();
+    const accessRole = (user.accessRole || user.role || '').toLowerCase();
     const effectiveRoles = Array.from(new Set([...userRoles.map((r) => String(r).toLowerCase()), accessRole].filter(Boolean)));
 
     // User must have at least one of the allowed roles
-    if (!hasAnyRole(effectiveRoles, allowedRoles)) {
+    if (!hasAnyRole(effectiveRoles, allowedRoles) && (window.location.pathname.startsWith('/superadmin') || menuAccess.error || (menuAccess.ready && !menuAccess.canAccessPath(`${window.location.pathname}${window.location.search}`)))) {
       console.warn('[ProtectedRoute] Access denied: Insufficient role', {
         userRoles: effectiveRoles,
         allowedRoles,
@@ -172,6 +158,7 @@ export function ProtectedRoute({
       });
       return <Navigate to="/unauthorized" replace />;
     }
+    if (!hasAnyRole(effectiveRoles, allowedRoles) && !menuAccess.ready) return null;
   }
 
   // 3. Check permission-based access

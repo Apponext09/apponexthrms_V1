@@ -3,7 +3,7 @@ import type { Knex } from 'knex';
 const COMPANY_SCOPED_MASTER_TABLES = [
   'breaks', 'locations', 'departments', 'branches', 'designations', 'grades',
   'employee_types', 'employee_statuses', 'cost_centers', 'leave_types',
-  'leave_policies', 'attendance_policies', 'roles_responsibilities', 'kra_forms',
+  'leave_policies', 'attendance_policies', 'kra_forms',
   'notification_templates', 'notification_merge_codes', 'shift_templates',
 ];
 

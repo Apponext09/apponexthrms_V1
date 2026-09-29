@@ -27,7 +27,7 @@ export function AppShellLayout() {
 
         {/* Content area */}
         <main className="app-shell-scroll flex-1 overflow-auto">
-          <div className="app-shell-content p-4 sm:p-6">
+          <div className="app-shell-content mx-auto w-full max-w-[1680px] p-4 sm:p-5 lg:p-6">
             <Outlet />
           </div>
         </main>

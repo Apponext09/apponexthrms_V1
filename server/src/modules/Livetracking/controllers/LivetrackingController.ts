@@ -8,57 +8,16 @@
 import type { Request, Response } from 'express';
 import { LivetrackingRepository } from '../repositories/LivetrackingRepository';
 import type { TenantContext } from '../../../db/types';
-import { getKnex } from '../../../db/knex';
-import { broadcastLocationUpdate } from '../sockets/livetracking.socket';
-import { calculateSessionMetrics } from '../utils/sessionCalculator';
+import { ingestFixes, MAX_BATCH_POINTS, SEGMENT_GAP_MS } from '../services/locationIngest';
+import {
+  checkIsHROrAdmin,
+  getManagerChain,
+  getSubordinateIds,
+  localDateStr,
+  resolveEmployeeId,
+} from '../utils/access';
 
 const repo = new LivetrackingRepository();
-
-/** Resolve employee_id from the users table using the authed userId.
- * Falls back to matching employees by email if users.employee_id is NULL. */
-async function resolveEmployeeId(
-  organizationId: number,
-  userId: number
-): Promise<number | null> {
-  if (!userId) return null;
-  const db = getKnex();
-
-  // Primary: get employee_id from users table directly
-  const user = await db('users')
-    .where('id', userId)
-    .where('organization_id', organizationId)
-    .select('employee_id', 'email')
-    .first()
-    .catch(() => null);
-
-  if (!user) return null;
-
-  // If employee_id is set on the user record, use it
-  if (user.employee_id) return Number(user.employee_id);
-
-  // Fallback: match by email in the employees table
-  if (user.email) {
-    const emp = await db('employees')
-      .where('organization_id', organizationId)
-      .whereRaw('LOWER(email) = ?', [user.email.toLowerCase()])
-      .whereIn('status', ['active', 'probation', 'onboarding', 'notice'])
-      .select('id')
-      .first()
-      .catch(() => null);
-
-    if (emp?.id) {
-      // Backfill the users.employee_id for future requests
-      await db('users')
-        .where('id', userId)
-        .update({ employee_id: emp.id })
-        .catch(() => {});
-
-      return Number(emp.id);
-    }
-  }
-
-  return null;
-}
 
 /** Reject out-of-range / null-island / non-finite coordinates (spoofed or garbage GPS data) */
 function isValidLatLng(lat: unknown, lng: unknown): lat is number {
@@ -75,52 +34,35 @@ function isValidLatLng(lat: unknown, lng: unknown): lat is number {
   );
 }
 
-/** Determine if user is HR, Admin, or CEO by inspecting JWT claims and DB user_roles */
-async function checkIsHROrAdmin(organizationId: number, userId: number, userClaims: any): Promise<boolean> {
-  const adminPatterns = ['admin', 'hr', 'organization_admin', 'super_admin', 'ceo', 'owner', 'director', 'executive'];
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
-  // Check claims / JWT if present
-  const claimsRoles: string[] = Array.isArray(userClaims?.roles) ? userClaims.roles : [];
-  if (userClaims?.role) claimsRoles.push(userClaims.role);
-
-  for (const r of claimsRoles) {
-    const norm = String(r).toLowerCase().replace(/[\s-]+/g, '_');
-    if (adminPatterns.some((p) => norm.includes(p))) return true;
-  }
-
-  // Query DB user_roles joined with roles table
-  const rows = await getKnex()('user_roles as ur')
-    .leftJoin('roles as r', 'r.id', 'ur.role_id')
-    .where('ur.user_id', userId)
-    .where('ur.organization_id', organizationId)
-    .select('r.code', 'r.name')
-    .catch(() => []);
-
-  for (const row of rows) {
-    const codeNorm = String(row?.code || '').toLowerCase().replace(/[\s-]+/g, '_');
-    const nameNorm = String(row?.name || '').toLowerCase().replace(/[\s-]+/g, '_');
-
-    if (adminPatterns.some((p) => codeNorm.includes(p) || nameNorm.includes(p))) {
-      return true;
-    }
-  }
-
-  return false;
+/** Validate an optional YYYY-MM-DD query param, falling back to server-local today */
+function parseDateParam(value: unknown, fallback: string = localDateStr()): string | null {
+  if (value === undefined || value === '') return fallback;
+  return typeof value === 'string' && DATE_RE.test(value) ? value : null;
 }
 
-/**
- * Non-blocking async session recalculation.
- * Fetches today's breadcrumbs for an employee and upserts the session summary.
- */
-async function recalcSessionAsync(ctx: TenantContext, employeeId: number): Promise<void> {
-  const today = new Date().toISOString().slice(0, 10);
-  const breadcrumbs = await repo.getLocationHistory(ctx, employeeId, today);
-  if (!breadcrumbs || breadcrumbs.length === 0) return;
-  const metrics = calculateSessionMetrics(breadcrumbs);
-  await repo.upsertTrackingSession(ctx, employeeId, today, {
-    ...metrics,
-    locationWalk: JSON.stringify(breadcrumbs),
-  });
+/** Meters between two points (equirectangular — accurate enough at breadcrumb scale) */
+function approxMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const x = (((lng2 - lng1) * Math.PI) / 180) * Math.cos((((lat1 + lat2) / 2) * Math.PI) / 180);
+  const y = ((lat2 - lat1) * Math.PI) / 180;
+  return Math.sqrt(x * x + y * y) * 6371000;
+}
+
+const TRAIL_MIN_SPACING_M = 10;
+
+/** Drop stationary jitter (points within ~10m of the last kept one); keep gaps and the latest point */
+function thinTrail(points: Array<[number, number, number]>): Array<[number, number, number]> {
+  const kept: Array<[number, number, number]> = [];
+  for (const p of points) {
+    const last = kept[kept.length - 1];
+    if (!last || p[2] - last[2] >= SEGMENT_GAP_MS || approxMeters(last[0], last[1], p[0], p[1]) >= TRAIL_MIN_SPACING_M) {
+      kept.push(p);
+    }
+  }
+  const final = points[points.length - 1];
+  if (final && kept[kept.length - 1] !== final) kept.push(final);
+  return kept;
 }
 
 export class LivetrackingController {
@@ -128,7 +70,7 @@ export class LivetrackingController {
    * GET /api/v1/livetracking/live
    * Returns current live location snapshot for all accessible employees.
    * - HR / Admin / Super Admin → full org
-   * - Manager / Team Lead (has direct reports) → reporting team (multi-tier)
+   * - Manager / Team Lead → self + everyone below them in the reporting tree
    * - Regular employee → self only
    */
   getLiveLocations = async (req: Request, res: Response): Promise<void> => {
@@ -148,22 +90,8 @@ export class LivetrackingController {
           return;
         }
 
-        const empRow = await getKnex()('employees')
-          .where('id', employeeId)
-          .select('current_department_id')
-          .first()
-          .catch(() => null);
-
-        const hasReports = await getKnex()('employees')
-          .where('organization_id', ctx.organizationId)
-          .where('reporting_manager_id', employeeId)
-          .whereNull('deleted_at')
-          .first()
-          .catch(() => null);
-
-        employees = hasReports
-          ? await repo.getLiveLocationsForTeam(ctx, employeeId, empRow?.current_department_id ?? null)
-          : await repo.getLiveLocationForEmployee(ctx, employeeId);
+        const subordinateIds = await getSubordinateIds(ctx.organizationId, employeeId);
+        employees = await repo.getLiveLocationsForEmployees(ctx, [employeeId, ...subordinateIds]);
       }
 
       res.json({ success: true, data: employees });
@@ -177,7 +105,7 @@ export class LivetrackingController {
    * GET /api/v1/livetracking/history/:employeeId?date=YYYY-MM-DD
    * Returns historical location breadcrumbs for route playback.
    * - HR/Admin → any employee
-   * - Manager → their own reports only
+   * - Manager → anyone below them in the reporting tree
    * - Regular employee → self only
    */
   getRouteHistory = async (req: Request, res: Response): Promise<void> => {
@@ -185,10 +113,14 @@ export class LivetrackingController {
       const ctx = (req as any).ctx as TenantContext;
       const user = (req as any).user;
       const employeeId = parseInt(req.params.employeeId, 10);
-      const date = (req.query.date as string) || new Date().toISOString().slice(0, 10);
+      const date = parseDateParam(req.query.date);
 
       if (isNaN(employeeId)) {
         res.status(400).json({ success: false, error: 'Invalid employeeId' });
+        return;
+      }
+      if (!date) {
+        res.status(400).json({ success: false, error: 'date must be YYYY-MM-DD' });
         return;
       }
 
@@ -203,15 +135,8 @@ export class LivetrackingController {
         }
 
         if (requesterEmployeeId !== employeeId) {
-          const managesTarget = await getKnex()('employees')
-            .where('organization_id', ctx.organizationId)
-            .where('id', employeeId)
-            .where('reporting_manager_id', requesterEmployeeId)
-            .whereNull('deleted_at')
-            .first()
-            .catch(() => null);
-
-          if (!managesTarget) {
+          const targetChain = await getManagerChain(ctx.organizationId, employeeId);
+          if (!targetChain.includes(requesterEmployeeId)) {
             res.status(403).json({ success: false, error: 'Access denied' });
             return;
           }
@@ -229,15 +154,14 @@ export class LivetrackingController {
   /**
    * POST /api/v1/livetracking/ping
    * HTTP fallback for location ping (when socket not connected).
-   * Resolves employee_id from the authenticated user's DB record.
+   * Resolves employee_id from the authenticated user's DB record — a client-sent
+   * employee id is never used. Goes through the same pipeline as socket pings.
    */
   postLocationPing = async (req: Request, res: Response): Promise<void> => {
     try {
       const ctx = (req as any).ctx as TenantContext;
 
-      // Resolve employee_id from DB
       const employeeId = await resolveEmployeeId(ctx.organizationId, ctx.userId);
-
       if (!employeeId) {
         res.status(403).json({
           success: false,
@@ -246,8 +170,7 @@ export class LivetrackingController {
         return;
       }
 
-      const { latitude, longitude, accuracy, speed, heading } = req.body;
-
+      const { latitude, longitude, accuracy, speed, heading, timestamp } = req.body ?? {};
       if (latitude === undefined || longitude === undefined) {
         res.status(400).json({ success: false, error: 'latitude and longitude are required' });
         return;
@@ -255,47 +178,115 @@ export class LivetrackingController {
 
       const parsedLat = parseFloat(latitude);
       const parsedLng = parseFloat(longitude);
-
       if (!isValidLatLng(parsedLat, parsedLng)) {
         res.status(400).json({ success: false, error: 'latitude/longitude out of valid range' });
         return;
       }
 
-      const payload = {
-        latitude: parsedLat,
-        longitude: parsedLng,
-        accuracy: accuracy !== undefined ? parseFloat(accuracy) : undefined,
-        speed: speed !== undefined ? parseFloat(speed) : undefined,
-        heading: heading !== undefined ? parseFloat(heading) : undefined,
-      };
-
-      await repo.upsertLiveLocation(ctx, employeeId, payload);
-      await repo.addLocationBreadcrumb(ctx, employeeId, payload);
-
-      // Async session recalculation (non-blocking) after every breadcrumb write
-      recalcSessionAsync(ctx, employeeId).catch(() => {});
-
-      // Broadcast real-time location update to HR/Admin & Manager clients via Socket.IO
-      broadcastLocationUpdate(ctx.organizationId, {
-        employee_id: employeeId,
-        latitude: payload.latitude,
-        longitude: payload.longitude,
-        accuracy: payload.accuracy,
-        speed: payload.speed,
-        heading: payload.heading,
-        location_status: 'ON',
-        connection_status: 'ONLINE',
-        last_ping_at: new Date().toISOString(),
-      });
+      const result = await ingestFixes(
+        ctx.organizationId,
+        employeeId,
+        [{ latitude: parsedLat, longitude: parsedLng, accuracy, speed, heading, timestamp }],
+        'http'
+      );
 
       res.json({
         success: true,
         message: 'Location ping received',
         employee_id: employeeId,
+        accepted: result.accepted > 0,
       });
     } catch (error) {
       console.error('[LivetrackingController] postLocationPing error:', error);
       res.status(500).json({ success: false, error: 'Failed to store location ping' });
+    }
+  };
+
+  /**
+   * POST /api/v1/livetracking/ping/batch
+   * Replays fixes the tracker buffered while offline and the socket is still down.
+   * Body: { points: [{ latitude, longitude, accuracy?, speed?, heading?, timestamp }] }
+   * Duplicates / out-of-order / stale / invalid points are dropped server-side.
+   */
+  postLocationBatch = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const ctx = (req as any).ctx as TenantContext;
+      const points = req.body?.points;
+
+      if (!Array.isArray(points) || points.length === 0 || points.length > MAX_BATCH_POINTS) {
+        res.status(400).json({ success: false, error: `points must be an array of 1-${MAX_BATCH_POINTS} fixes` });
+        return;
+      }
+
+      const employeeId = await resolveEmployeeId(ctx.organizationId, ctx.userId);
+      if (!employeeId) {
+        res.status(403).json({ success: false, error: 'No employee record linked to this user account' });
+        return;
+      }
+
+      const result = await ingestFixes(ctx.organizationId, employeeId, points, 'replay');
+      res.json({ success: true, ...result });
+    } catch (error) {
+      console.error('[LivetrackingController] postLocationBatch error:', error);
+      res.status(500).json({ success: false, error: 'Failed to store buffered locations' });
+    }
+  };
+
+  /**
+   * GET /api/v1/livetracking/trails?employee_ids=1,2,3&date=YYYY-MM-DD&max_points=300
+   * One day's route for many employees in one request (dashboard seeding), as
+   * compact [lat, lng, epochMs] tuples. Points within ~10m of the previous kept
+   * point are thinned out; only the last max_points per employee are sent.
+   * Scope: HR/Admin → any employee in the org; others → self + reporting tree.
+   */
+  getTrails = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const ctx = (req as any).ctx as TenantContext;
+      const user = (req as any).user;
+      const date = parseDateParam(req.query.date);
+      if (!date) {
+        res.status(400).json({ success: false, error: 'date must be YYYY-MM-DD' });
+        return;
+      }
+
+      const requested = String(req.query.employee_ids ?? '')
+        .split(',')
+        .map((v) => parseInt(v, 10))
+        .filter((v) => Number.isInteger(v) && v > 0);
+      if (requested.length === 0) {
+        res.json({ success: true, data: {} });
+        return;
+      }
+      if (requested.length > 2000) {
+        res.status(400).json({ success: false, error: 'Too many employee_ids (max 2000)' });
+        return;
+      }
+
+      const maxPointsRaw = parseInt(String(req.query.max_points ?? ''), 10);
+      const maxPoints = Number.isInteger(maxPointsRaw) ? Math.min(Math.max(maxPointsRaw, 2), 2000) : 300;
+
+      let allowed = requested;
+      const isHROrAdmin = await checkIsHROrAdmin(ctx.organizationId, ctx.userId, user);
+      if (!isHROrAdmin) {
+        const selfId = await resolveEmployeeId(ctx.organizationId, ctx.userId);
+        if (!selfId) {
+          res.json({ success: true, data: {} });
+          return;
+        }
+        const visible = new Set([selfId, ...(await getSubordinateIds(ctx.organizationId, selfId))]);
+        allowed = requested.filter((id) => visible.has(id));
+      }
+
+      // The query itself is scoped to ctx.organizationId, so ids from another org return nothing.
+      const trails = await repo.getTrailsForEmployees(ctx, allowed, date);
+      const data: Record<number, Array<[number, number, number]>> = {};
+      for (const [empId, points] of trails) {
+        data[empId] = thinTrail(points).slice(-maxPoints);
+      }
+      res.json({ success: true, data });
+    } catch (error) {
+      console.error('[LivetrackingController] getTrails error:', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch route trails' });
     }
   };
 
@@ -314,7 +305,11 @@ export class LivetrackingController {
         return;
       }
 
-      const date = (req.query.date as string) || new Date().toISOString().slice(0, 10);
+      const date = parseDateParam(req.query.date);
+      if (!date) {
+        res.status(400).json({ success: false, error: 'date must be YYYY-MM-DD' });
+        return;
+      }
       const sessions = await repo.getSessionsForDate(ctx, date);
       res.json({ success: true, data: sessions });
     } catch (error) {
@@ -344,10 +339,12 @@ export class LivetrackingController {
         return;
       }
 
-      const today = new Date().toISOString().slice(0, 10);
-      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-      const from = (req.query.from as string) || thirtyDaysAgo;
-      const to = (req.query.to as string) || today;
+      const from = parseDateParam(req.query.from, localDateStr(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)));
+      const to = parseDateParam(req.query.to);
+      if (!from || !to) {
+        res.status(400).json({ success: false, error: 'from/to must be YYYY-MM-DD' });
+        return;
+      }
 
       const sessions = await repo.getEmployeeSessions(ctx, employeeId, from, to);
       res.json({ success: true, data: sessions });

@@ -51,7 +51,39 @@ export interface RoutePoint {
   longitude: number;
   speed: number | null;
   recorded_at: string;
+  heading?: number | null;
+  /** Road-snapped position, when a routing engine produced one. latitude/longitude is raw GPS. */
+  snapped_latitude?: number | null;
+  snapped_longitude?: number | null;
 }
+
+/** One accepted location fix, as broadcast in `tracking:locations` batches */
+export interface LocationDelta {
+  employee_id: number;
+  latitude: number;
+  longitude: number;
+  previous_latitude: number | null;
+  previous_longitude: number | null;
+  heading: number | null;
+  /** m/s */
+  speed: number | null;
+  accuracy: number | null;
+  /** When the fix was taken (ISO) */
+  timestamp: string;
+  /** When the server received it (ISO) */
+  last_ping_at: string;
+  location_status: 'ON' | 'OFF';
+  connection_status: 'ONLINE' | 'OFFLINE';
+  /** Stored as a breadcrumb → append to the route line */
+  route_point: boolean;
+  /** Start a new route segment (do not connect to the previous point) */
+  segment_break: boolean;
+  /** Replayed after an offline period → append without animating each point */
+  replay: boolean;
+}
+
+/** Derived live state shown on the map and in the selected-employee panel */
+export type MovementStatus = 'moving' | 'idle' | 'offline' | 'gps_off';
 
 /** Real-time socket event payloads */
 export interface TrackingLocationUpdatedEvent {

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -42,10 +42,7 @@ import { useEmployeeCustomizationStore } from '../store/employeeCustomizationSto
 import { useCompanyStore } from '@/features/settings/store/companyStore';
 import { usePolicies } from '@/features/policy/api/usePolicies';
 import { useEmployeeLinkedMasters } from '@/features/master-builder/hooks/useEmployeeCustomMasters';
-import { getEligibleReportingManagers, formatCandidateLabel } from '../utils/reportingHierarchy';
-
-export const createEmployeeCode = (nextNum: number = 1) =>
-  `EMP${String(nextNum % 1000).padStart(3, '0')}`;
+import { useAccessRoles } from '@/features/settings/hooks/useAccessRoles';
 
 interface EmployeeCreateModalProps {
   open: boolean;
@@ -271,15 +268,32 @@ export function EmployeeCreateModal({
 }: EmployeeCreateModalProps) {
   const queryClient = useQueryClient();
   const { selectedCompanyId } = useCompanyStore();
-  const { config: customConfig, generateEmployeeCode, generatePassword } = useEmployeeCustomizationStore();
+  const { config: customConfig, generatePassword } = useEmployeeCustomizationStore();
   const { employees: allEmployees } = useEmployees({ pageSize: 500 });
   const { employeeTypes } = useEmployeeTypes();
+  const { data: accessRoles = [] } = useAccessRoles();
   const { employeeStatuses } = useEmployeeStatuses();
   const { data: allOrgPolicies = [] } = usePolicies();
-  const nextCodeNum = (allEmployees?.length || 0) + 1;
+
+  // The Employee Code field is read-only and its value is never computed on
+  // the client — employees.length / a cached list's max suffix / a local
+  // "EMP001" default can all drift from what the backend will actually
+  // assign (different pagination window, different scoping, a create by
+  // another admin since the list was fetched). GET /employees/next-code runs
+  // the exact same server-side generator createEmployee() uses, so this is
+  // only ever a preview: the POST itself re-derives and safely retries the
+  // real code regardless of what was last shown here.
+  const fetchNextEmployeeCode = useCallback(async (): Promise<string> => {
+    try {
+      const res = await apiClient.get('/employees/next-code');
+      return res.data?.data?.employeeCode || res.data?.employeeCode || '';
+    } catch {
+      return '';
+    }
+  }, []);
 
   const [formData, setFormData] = useState({
-    employeeCode: generateEmployeeCode(nextCodeNum),
+    employeeCode: '',
     firstName: '',
     lastName: '',
     email: '',
@@ -295,6 +309,7 @@ export function EmployeeCreateModal({
     departmentId: '',
     gradeId: '',
     jobTitle: '',
+    designationId: '',
     locationId: '',
     accessRole: 'employee',
     password: '',
@@ -315,17 +330,20 @@ export function EmployeeCreateModal({
 
   React.useEffect(() => {
     if (open) {
-      const initialCode = generateEmployeeCode(nextCodeNum);
       const initialPwd = customConfig.enableCustomPasswordFormat ? generatePassword() : '';
       setFormData(prev => ({
         ...prev,
-        employeeCode: initialCode,
+        employeeCode: '',
         status: prev.status || 'active',
         ...(initialPwd ? { password: initialPwd, confirmPassword: initialPwd } : {})
       }));
       setFieldErrors({});
       setValidationError(null);
       setActiveInfoId(null);
+
+      fetchNextEmployeeCode().then((code) => {
+        if (code) setFormData(prev => ({ ...prev, employeeCode: code }));
+      });
 
       apiClient.get('/payroll/slabs').then((res: any) => {
         const list = res.data?.data || res.data || [];
@@ -517,8 +535,13 @@ export function EmployeeCreateModal({
 
 
 
-    if (!formData.jobTitle) {
+    if (!formData.jobTitle?.trim()) {
       errors.jobTitle = 'Job title is required';
+      if (!firstTabWithError) firstTabWithError = 'professional';
+    }
+
+    if (!formData.designationId) {
+      errors.designationId = 'Designation is required';
       if (!firstTabWithError) firstTabWithError = 'professional';
     }
 
@@ -578,8 +601,9 @@ export function EmployeeCreateModal({
         reportingManagerId: formData.reportingManagerId ? parseInt(formData.reportingManagerId, 10) : undefined,
         departmentId: formData.departmentId ? parseInt(formData.departmentId, 10) : undefined,
         currentGradeId: formData.gradeId ? parseInt(formData.gradeId, 10) : undefined,
+        designationId: formData.designationId ? parseInt(formData.designationId, 10) : undefined,
         locationId: formData.locationId ? parseInt(formData.locationId, 10) : undefined,
-        jobTitle: formData.jobTitle || undefined,
+        jobTitle: formData.jobTitle.trim() || undefined,
         status: formData.status || 'active',
         accessRole: formData.accessRole,
         avatarUrl: formData.avatarUrl || undefined,
@@ -639,8 +663,14 @@ export function EmployeeCreateModal({
       queryClient.invalidateQueries({ queryKey: ['admin-dashboard-stats'] });
       onSuccess?.();
 
+      // The dialog can stay open for another create without a reopen (this is
+      // exactly the "Create Another Employee" path) — re-sending an already-
+      // used code here was exactly what caused "Employee code 'EMP001'
+      // already exists" on the very next submit. Never compute the next code
+      // locally: ask the backend again, the same as on open. Until it
+      // resolves, the field shows blank rather than a stale/guessed value.
       setFormData({
-        employeeCode: createEmployeeCode(),
+        employeeCode: '',
         firstName: '',
         lastName: '',
         email: '',
@@ -656,11 +686,15 @@ export function EmployeeCreateModal({
         departmentId: '',
         gradeId: '',
         jobTitle: '',
+        designationId: '',
         locationId: '',
         accessRole: 'employee',
         password: '',
         confirmPassword: '',
         salarySlabId: '',
+      });
+      fetchNextEmployeeCode().then((code) => {
+        if (code) setFormData(prev => ({ ...prev, employeeCode: code }));
       });
       setFieldErrors({});
     } catch (err: any) {
@@ -688,6 +722,16 @@ export function EmployeeCreateModal({
       }
       setValidationError(errMsg);
       toast.error(errMsg);
+
+      // The backend already retries a concurrent duplicate-code collision
+      // internally, so this only surfaces on the rare case that exhausts
+      // those retries. Refresh the previewed code so the displayed value
+      // isn't the stale/taken one the failed request just tried.
+      if (/employee code .* already exists/i.test(errMsg)) {
+        fetchNextEmployeeCode().then((code) => {
+          if (code) setFormData(prev => ({ ...prev, employeeCode: code }));
+        });
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -695,11 +739,11 @@ export function EmployeeCreateModal({
 
   // Tab error counts for badges
   const basicErrorCount = ['employeeCode', 'email', 'firstName', 'lastName', 'mobile', 'gender', 'dateOfBirth', 'maritalStatus', 'dateOfJoining', 'password', 'confirmPassword'].filter(k => !!fieldErrors[k]).length;
-  const professionalErrorCount = ['employmentType', 'departmentId', 'gradeId', 'status', 'jobTitle', 'locationId', 'accessRole'].filter(k => !!fieldErrors[k]).length;
+  const professionalErrorCount = ['employmentType', 'departmentId', 'gradeId', 'status', 'jobTitle', 'designationId', 'locationId', 'accessRole'].filter(k => !!fieldErrors[k]).length;
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-[580px] max-h-[92vh] flex flex-col p-6 overflow-hidden">
+      <DialogContent className="w-[calc(100vw-1rem)] max-w-[580px] max-h-[92vh] flex flex-col p-4 sm:p-6 overflow-hidden">
         <ActiveInfoContext.Provider value={{ activeId: activeInfoId, setActiveId: setActiveInfoId }}>
           {createdCredentials ? (
             <div className="space-y-6 pt-2">
@@ -814,7 +858,7 @@ export function EmployeeCreateModal({
                 <div className="flex-1 overflow-y-auto pr-2 space-y-4" style={{ maxHeight: 'calc(90vh - 220px)' }}>
                   {/* 1. Basic Info Sub Tab (includes Personal Info) */}
                   {activeTab === 'basic' && (
-                    <div className="grid grid-cols-2 gap-4 pb-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pb-2">
                       <div>
                         <Label htmlFor="employeeCode" className="flex items-center text-xs font-bold text-foreground">
                           Employee Code <span className="text-red-500 ml-0.5">*</span>
@@ -830,9 +874,9 @@ export function EmployeeCreateModal({
                         <Input
                           id="employeeCode"
                           value={formData.employeeCode}
-                          onChange={(e) => handleFieldChange('employeeCode', e.target.value)}
-                          placeholder="e.g. EMP001"
-                          className={cn("mt-1", fieldErrors.employeeCode && "border-red-500 focus-visible:ring-red-500 bg-red-50/15")}
+                          readOnly
+                          aria-readonly="true"
+                          className={cn("mt-1 bg-muted text-muted-foreground", fieldErrors.employeeCode && "border-red-500 focus-visible:ring-red-500 bg-red-50/15")}
                         />
                         {fieldErrors.employeeCode && (
                           <p className="text-[11px] text-red-500 font-medium mt-1 flex items-center gap-1">
@@ -900,7 +944,7 @@ export function EmployeeCreateModal({
                         )}
                       </div>
 
-                      <div className="col-span-2">
+                      <div className="sm:col-span-2">
                         <Label htmlFor="mobile" className="flex items-center text-xs font-bold text-foreground">
                           Mobile Number <span className="text-red-500 ml-0.5">*</span>
                         </Label>
@@ -1079,7 +1123,7 @@ export function EmployeeCreateModal({
 
                   {/* 2. Professional Info Sub Tab */}
                   {activeTab === 'professional' && (
-                    <div className="grid grid-cols-2 gap-4 pb-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pb-2">
                       <div>
                         <Label htmlFor="employmentType" className="flex items-center text-xs font-bold text-foreground">
                           Employment Type <span className="text-red-500 ml-0.5">*</span>
@@ -1211,7 +1255,7 @@ export function EmployeeCreateModal({
 
 
 
-                      {/* Job Title */}
+                      {/* Job title is employee-specific; designation is a master reference. */}
                       <div>
                         <Label htmlFor="jobTitle" className="flex items-center text-xs font-bold text-foreground">
                           Job Title <span className="text-red-500 ml-0.5">*</span>
@@ -1226,22 +1270,14 @@ export function EmployeeCreateModal({
                             onRefresh={() => queryClient.invalidateQueries({ queryKey: ['designations'] })}
                           />
                         </Label>
-                        <select
+                        <Input
                           id="jobTitle"
-                          className={cn(
-                            "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring mt-1 cursor-pointer",
-                            fieldErrors.jobTitle && "border-red-500 focus-visible:ring-red-500 bg-red-50/15"
-                          )}
+                          placeholder="e.g. Senior Frontend Engineer"
+                          maxLength={150}
+                          className={cn("mt-1", fieldErrors.jobTitle && "border-red-500 focus-visible:ring-red-500 bg-red-50/15")}
                           value={formData.jobTitle}
                           onChange={(e) => handleFieldChange('jobTitle', e.target.value)}
-                        >
-                          <option value="">-- Select Job Title --</option>
-                          {designations.map((desig: any) => (
-                            <option key={desig.id} value={desig.name}>
-                              {desig.name}
-                            </option>
-                          ))}
-                        </select>
+                        />
                         {fieldErrors.jobTitle ? (
                           <p className="text-[11px] text-red-500 font-medium mt-1 flex items-center gap-1">
                             <AlertCircle className="w-3 h-3 shrink-0" />
@@ -1249,6 +1285,32 @@ export function EmployeeCreateModal({
                           </p>
                         ) : (
                           <p ></p>
+                        )}
+                      </div>
+
+                      <div>
+                        <Label htmlFor="designationId" className="flex items-center text-xs font-bold text-foreground">
+                          Designation <span className="text-red-500 ml-0.5">*</span>
+                        </Label>
+                        <select
+                          id="designationId"
+                          className={cn(
+                            "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring mt-1 cursor-pointer",
+                            fieldErrors.designationId && "border-red-500 focus-visible:ring-red-500 bg-red-50/15"
+                          )}
+                          value={formData.designationId}
+                          onChange={(e) => handleFieldChange('designationId', e.target.value)}
+                        >
+                          <option value="">-- Select Designation --</option>
+                          {designations.map((desig: any) => (
+                            <option key={desig.id} value={desig.id}>{desig.name}</option>
+                          ))}
+                        </select>
+                        {fieldErrors.designationId && (
+                          <p className="text-[11px] text-red-500 font-medium mt-1 flex items-center gap-1">
+                            <AlertCircle className="w-3 h-3 shrink-0" />
+                            <span>{fieldErrors.designationId}</span>
+                          </p>
                         )}
                       </div>
 
@@ -1292,7 +1354,7 @@ export function EmployeeCreateModal({
                       </div>
 
                       {/* Access Role — controls portal access after login */}
-                      <div className="col-span-2">
+                      <div className="sm:col-span-2">
                         <Label htmlFor="accessRole" className="flex items-center text-xs font-bold text-foreground">
                           System Access Role <span className="text-red-500 ml-0.5">*</span>
                         </Label>
@@ -1305,13 +1367,7 @@ export function EmployeeCreateModal({
                           value={formData.accessRole}
                           onChange={(e) => handleFieldChange('accessRole', e.target.value)}
                         >
-                          <option value="employee">Employee </option>
-                          <option value="team_lead">Team Lead </option>
-                          <option value="department_head">Department Head / Manager</option>
-                          <option value="hr_manager">HR Manager </option>
-                          <option value="intern">Intern </option>
-                          <option value="consultant">Consultant </option>
-                          <option value="finance">Finance </option>
+                          {accessRoles.map((role) => <option key={role.id} value={role.code}>{role.name}</option>)}
 
                         </select>
                         
@@ -1395,7 +1451,7 @@ export function EmployeeCreateModal({
                       </div>
 
                       {/* Reporting Manager - NOT MANDATORY */}
-                      <div className="col-span-2">
+                      <div className="sm:col-span-2">
                         <Label htmlFor="reportingManager" className="flex items-center text-xs font-bold text-foreground">
                           Reports To
                           <SimpleFieldInfo
@@ -1416,30 +1472,60 @@ export function EmployeeCreateModal({
                               value={formData.reportingManagerId}
                               onChange={(e) => setFormData({ ...formData, reportingManagerId: e.target.value })}
                             >
+                              <option value="">-- Select Reporting Manager (Defaults to CEO / Dept Head) --</option>
                               {(() => {
-                                const eligibleManagers = getEligibleReportingManagers({
-                                  targetEmployee: {
-                                    accessRole: formData.accessRole,
-                                    jobTitle: formData.jobTitle,
-                                    currentDepartmentId: formData.departmentId,
-                                  },
-                                  selectedDepartmentId: formData.departmentId,
-                                  allDepartments: departmentsData?.data || [],
-                                  allEmployees: allEmployees || [],
-                                });
+                                const getCat = (m: any) => {
+                                  const r = (m.accessRole || '').toLowerCase();
+                                  const d = (m.designation || '').toLowerCase();
+                                  if (['cfo', 'coo', 'cto'].includes(r) || d.includes('chief')) return 'cxo';
+                                  if (['department_head', 'hr_manager', 'manager'].includes(r) || d.includes('manager') || d.includes('head')) return 'manager';
+                                  if (r === 'team_lead' || d.includes('lead')) return 'lead';
+                                  return 'other';
+                                };
+
+                                const cxos = departmentManagers.filter((m: any) => getCat(m) === 'cxo');
+                                const mgrs = departmentManagers.filter((m: any) => getCat(m) === 'manager');
+                                const leads = departmentManagers.filter((m: any) => getCat(m) === 'lead');
+                                const others = departmentManagers.filter((m: any) => getCat(m) === 'other');
 
                                 return (
                                   <>
-                                    <option value="">
-                                      {eligibleManagers.length > 0
-                                        ? '-- Select Reporting Manager / Team Lead --'
-                                        : '-- No eligible reporting manager in this department --'}
-                                    </option>
-                                    {eligibleManagers.map((mgr: any) => (
-                                      <option key={mgr.id} value={String(mgr.id)}>
-                                        {formatCandidateLabel(mgr)}
-                                      </option>
-                                    ))}
+                                    {cxos.length > 0 && (
+                                      <optgroup label="⚡ C-Suite Executives (CTO, COO, CFO)">
+                                        {cxos.map((mgr: any) => (
+                                          <option key={mgr.id} value={String(mgr.id)}>
+                                            {mgr.name} {mgr.employeeCode ? `(${mgr.employeeCode})` : ''} · {mgr.designation} ({mgr.department})
+                                          </option>
+                                        ))}
+                                      </optgroup>
+                                    )}
+                                    {mgrs.length > 0 && (
+                                      <optgroup label="👔 Department Heads & Managers">
+                                        {mgrs.map((mgr: any) => (
+                                          <option key={mgr.id} value={String(mgr.id)}>
+                                            {mgr.name} {mgr.employeeCode ? `(${mgr.employeeCode})` : ''} · {mgr.designation} ({mgr.department})
+                                          </option>
+                                        ))}
+                                      </optgroup>
+                                    )}
+                                    {leads.length > 0 && (
+                                      <optgroup label="🎖️ Team Leads">
+                                        {leads.map((mgr: any) => (
+                                          <option key={mgr.id} value={String(mgr.id)}>
+                                            {mgr.name} {mgr.employeeCode ? `(${mgr.employeeCode})` : ''} · {mgr.designation} ({mgr.department})
+                                          </option>
+                                        ))}
+                                      </optgroup>
+                                    )}
+                                    {others.length > 0 && (
+                                      <optgroup label="👥 Other Department Members">
+                                        {others.map((mgr: any) => (
+                                          <option key={mgr.id} value={String(mgr.id)}>
+                                            {mgr.name} {mgr.employeeCode ? `(${mgr.employeeCode})` : ''} · {mgr.designation} ({mgr.department})
+                                          </option>
+                                        ))}
+                                      </optgroup>
+                                    )}
                                   </>
                                 );
                               })()}
@@ -1450,7 +1536,7 @@ export function EmployeeCreateModal({
                       </div>
 
                       {/* Assigned Salary Slab - NOT MANDATORY */}
-                      <div className="col-span-2">
+                      <div className="sm:col-span-2">
                         <Label htmlFor="salarySlabId" className="flex items-center text-xs font-bold text-foreground">
                           Assigned Salary Slab <span className="text-xs text-muted-foreground font-normal ml-1.5">(Optional)</span>
                           <SimpleFieldInfo
@@ -1478,7 +1564,7 @@ export function EmployeeCreateModal({
   {/* Linked Custom Masters Section */ }
   {
     linkedMasters.length > 0 && (
-      <div className="col-span-2 pt-4 border-t border-border/80 space-y-3">
+      <div className="sm:col-span-2 pt-4 border-t border-border/80 space-y-3">
         <div className="flex items-center gap-2">
           <Layers className="w-4 h-4 text-primary" />
           <Label className="text-xs font-bold uppercase tracking-wider text-primary">

@@ -31,6 +31,7 @@ export interface AdminDashboardStats {
     name: string;
     count: number;
     percentage: number;
+    employees: Array<{ id: number; name: string; employeeCode: string }>;
   }>;
   recentEmployees: Array<{
     id: number;
@@ -59,6 +60,14 @@ export interface AdminDashboardStats {
       late: number;
       absent: number;
     }>;
+    periodSummary: Record<'today' | 'week' | 'month', {
+      present: number;
+      late: number;
+      absent: number;
+      onLeave: number;
+      total: number;
+      attendanceRate: number;
+    }>;
   };
   leaveAnalytics: {
     byType: Array<{
@@ -69,18 +78,20 @@ export interface AdminDashboardStats {
       approvedCount: number;
       pendingCount: number;
     }>;
-    monthlyTrend: Array<{
-      month: string;
-      applied: number;
+      monthlyTrend: Array<{
+        month: string;
+        applied: number;
       approved: number;
     }>;
   };
   payrollAnalytics: {
     monthlyTrend: Array<{
       month: string;
+      monthKey: string;
       grossSalary: number;
       netSalary: number;
       deductions: number;
+      source: 'payslip' | 'salary_structure';
     }>;
   };
   recruitmentAnalytics: {
@@ -95,15 +106,18 @@ export interface AdminDashboardStats {
     }>;
   };
   expenseAnalytics: {
-    monthlyTrend: Array<{
-      month: string;
-      claimedAmount: number;
-      approvedAmount: number;
+    disbursementTrend: Array<{
+      date: string;
+      disbursedAmount: number;
     }>;
     byCategory: Array<{
       categoryName: string;
       totalAmount: number;
     }>;
+  };
+  upcomingEvents: {
+    holidays: Array<{ id: number; name: string; date: string; type: string }>;
+    birthdays: Array<{ id: number; name: string; date: string; upcomingDate: string }>;
   };
   workforceAnalytics: {
     byEmploymentType: Array<{ type: string; count: number }>;
@@ -200,44 +214,16 @@ export class AdminDashboardService {
     // company switch has supplied ctx.companyId.
     const targetCompanyId = companyId || null;
 
-    // Fallback Location Resolution if company record doesn't specify address:
-    if (!location && targetCompanyId) {
-      // A switched company shows only its own location.
-      const hasLocationsTable = await db.schema.hasTable('locations');
-      if (hasLocationsTable) {
-        const compLoc = await db('locations')
-          .where('company_id', targetCompanyId)
-          .whereNull('deleted_at')
-          .first();
-        if (compLoc) {
-          location = buildLocationStr(compLoc) || compLoc.locationName || compLoc.name || '';
-        }
-      }
-    }
-
-    if (!location && organizationId) {
-      // Check organization table
+    // Dashboard header location belongs to the organization itself. A company
+    // address or a Location Master record must not override organizations.location.
+    if (organizationId) {
       const org = await db('organizations').where('id', organizationId).first();
       if (org) {
         if (!companyName || companyName === 'Organization') {
           companyName = org.name || companyName;
           companyCode = org.code || '';
         }
-        location = org.location || buildLocationStr(org) || org.addressLine1 || org.address_line_1 || '';
-      }
-    }
-
-    if (!location && organizationId) {
-      // Check primary location record in locations table for the organization
-      const hasLocationsTable = await db.schema.hasTable('locations');
-      if (hasLocationsTable) {
-        const orgLoc = await db('locations')
-          .where('organization_id', organizationId)
-          .whereNull('deleted_at')
-          .first();
-        if (orgLoc) {
-          location = buildLocationStr(orgLoc) || orgLoc.locationName || orgLoc.name || '';
-        }
+        location = org.location || buildLocationStr(org) || org.addressLine1 || org.address_line_1 || location;
       }
     }
 
@@ -250,6 +236,10 @@ export class AdminDashboardService {
     try {
       let empQuery = db('employees')
         .whereNull('employees.deleted_at')
+        // Dashboard headcount is active workforce only. Notice, exited,
+        // inactive, alumni, onboarding and candidate records are not staff
+        // currently counted by the Total Employees KPI.
+        .where('employees.status', 'active')
         .whereNotExists(function () {
           this.select('ceo_user.id')
             .from('users as ceo_user')
@@ -269,7 +259,9 @@ export class AdminDashboardService {
     } catch (e) {
       console.warn('[AdminDashboardService] empQuery error fallback:', e);
       try {
-        let fallbackEmp = db('employees').whereNull('deleted_at');
+        let fallbackEmp = db('employees')
+          .whereNull('deleted_at')
+          .where('status', 'active');
         if (targetCompanyId) {
           fallbackEmp = fallbackEmp.where('company_id', targetCompanyId);
         } else {
@@ -655,7 +647,7 @@ export class AdminDashboardService {
     }
 
     // 4. Department Breakdown with Employee Counts
-    let departmentBreakdown: Array<{ id: number; name: string; count: number; percentage: number }> = [];
+    let departmentBreakdown: Array<{ id: number; name: string; count: number; percentage: number; employees: Array<{ id: number; name: string; employeeCode: string }> }> = [];
     try {
       let deptBreakdownQuery = db('departments')
         .leftJoin('employees', function () {
@@ -682,15 +674,37 @@ export class AdminDashboardService {
 
       const deptRows = await deptBreakdownQuery;
 
+      let departmentEmployeesQuery = db('employees')
+        .select('id', 'current_department_id as departmentId', 'first_name as firstName', 'last_name as lastName', 'employee_code as employeeCode')
+        .whereNull('deleted_at')
+        .where('status', 'active')
+        .whereNotNull('current_department_id');
+      if (targetCompanyId) departmentEmployeesQuery = departmentEmployeesQuery.where('company_id', targetCompanyId);
+      else departmentEmployeesQuery = departmentEmployeesQuery.where('organization_id', organizationId);
+      const departmentEmployees = await departmentEmployeesQuery.orderBy('first_name', 'asc');
+      const employeesByDepartment = new Map<number, Array<{ id: number; name: string; employeeCode: string }>>();
+      for (const employee of departmentEmployees) {
+        const departmentId = Number(employee.departmentId ?? employee.current_department_id);
+        const list = employeesByDepartment.get(departmentId) || [];
+        list.push({
+          id: Number(employee.id),
+          name: `${employee.firstName || employee.first_name || 'Employee'} ${employee.lastName || employee.last_name || ''}`.trim(),
+          employeeCode: employee.employeeCode || employee.employee_code || `EMP${employee.id}`,
+        });
+        employeesByDepartment.set(departmentId, list);
+      }
+
       departmentBreakdown = (deptRows || [])
         .map((row: any) => {
-          const count = Number(row.emp_count || 0);
+          const employees = employeesByDepartment.get(Number(row.id)) || [];
+          const count = employees.length;
           const percentage = totalHeadcount > 0 ? Math.round((count / totalHeadcount) * 100) : 0;
           return {
             id: Number(row.id),
             name: row.name || 'Unassigned',
             count,
             percentage,
+            employees,
           };
         })
         .sort((a: any, b: any) => b.count - a.count);
@@ -750,6 +764,11 @@ export class AdminDashboardService {
         attendanceRate: 0,
       },
       weeklyTrend: [] as Array<{ day: string; date: string; present: number; late: number; absent: number }>,
+      periodSummary: {
+        today: { present: 0, late: 0, absent: 0, onLeave: onLeaveToday, total: totalHeadcount, attendanceRate: 0 },
+        week: { present: 0, late: 0, absent: 0, onLeave: 0, total: 0, attendanceRate: 0 },
+        month: { present: 0, late: 0, absent: 0, onLeave: 0, total: 0, attendanceRate: 0 },
+      },
     };
 
     try {
@@ -772,8 +791,7 @@ export class AdminDashboardService {
 
         const todayRecords = await attTodayQuery.select(
           'ar.status',
-          'ar.is_late',
-          'ar.is_half_day'
+          'ar.is_late'
         );
 
         let presentCount = 0;
@@ -808,6 +826,14 @@ export class AdminDashboardService {
           totalHeadcount,
           attendanceRate: rate,
         };
+        attendanceAnalytics.periodSummary.today = {
+          present: presentCount + halfDayCount + wfhCount,
+          late: lateCount,
+          absent: absentCount,
+          onLeave: onLeaveToday,
+          total: totalHeadcount,
+          attendanceRate: rate,
+        };
 
         // 7-Day Attendance Trend
         const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -835,7 +861,7 @@ export class AdminDashboardService {
           let dayLate = 0;
           for (const rec of dayRecs) {
             const st = String(rec.status || '').toLowerCase();
-            if (rec.is_late || st === 'late') dayLate++;
+            if (rec.isLate || rec.is_late || st === 'late') dayLate++;
             else if (st !== 'absent') dayPresent++;
           }
           const dayAbsent = Math.max(0, totalHeadcount - (dayPresent + dayLate));
@@ -849,6 +875,77 @@ export class AdminDashboardService {
           });
         }
         attendanceAnalytics.weeklyTrend = weeklyTrend;
+
+        const summarizeAttendancePeriod = async (startDate: string, endDate: string) => {
+          let periodQuery = db('attendance_records as ar')
+            .join('employees as e', 'ar.employee_id', 'e.id')
+            .where('ar.organization_id', organizationId)
+            .whereNull('ar.deleted_at')
+            .whereNull('e.deleted_at')
+            .whereBetween('ar.check_in_date', [startDate, endDate]);
+          if (targetCompanyId) periodQuery = periodQuery.where('e.company_id', targetCompanyId);
+          else periodQuery = periodQuery.where('ar.organization_id', organizationId);
+
+          const records = await periodQuery.select(
+            'ar.employee_id', 'ar.status', 'ar.is_late',
+            'ar.check_in_date as attendance_date'
+          );
+          const uniqueRecords = new Map<string, any>();
+          for (const record of records) {
+            const employeeId = record.employeeId ?? record.employee_id;
+            const attendanceDate = record.attendanceDate ?? record.attendance_date;
+            uniqueRecords.set(`${employeeId}:${String(attendanceDate).slice(0, 10)}`, record);
+          }
+
+          let present = 0;
+          let late = 0;
+          for (const record of uniqueRecords.values()) {
+            const status = String(record.status || '').toLowerCase();
+            if (record.isLate || record.is_late || status === 'late') late++;
+            else if (status !== 'absent') present++;
+          }
+
+          let onLeave = 0;
+          try {
+            if (await db.schema.hasTable('leave_application_dates')) {
+              let leaveQuery = db('leave_applications as la')
+                .join('leave_application_dates as lad', 'lad.application_id', 'la.id')
+                .join('employees as le', 'la.employee_id', 'le.id')
+                .whereNull('la.deleted_at').where('la.status', 'approved')
+                .where('la.organization_id', organizationId)
+                .whereBetween('lad.leave_date', [startDate, endDate]);
+              if (targetCompanyId) leaveQuery = leaveQuery.where('le.company_id', targetCompanyId);
+              const leaveDates = await leaveQuery.select('la.employee_id', 'lad.leave_date');
+              onLeave = new Set(leaveDates.map((row: any) => {
+                const employeeId = row.employeeId ?? row.employee_id;
+                const leaveDate = row.leaveDate ?? row.leave_date;
+                return `${employeeId}:${String(leaveDate).slice(0, 10)}`;
+              })).size;
+            }
+          } catch (leaveError) {
+            console.warn('[AdminDashboardService] period leave aggregation error:', leaveError);
+          }
+
+          let workingDays = 0;
+          const cursor = new Date(`${startDate}T00:00:00`);
+          const end = new Date(`${endDate}T00:00:00`);
+          while (cursor <= end) {
+            if (cursor.getDay() !== 0 && cursor.getDay() !== 6) workingDays++;
+            cursor.setDate(cursor.getDate() + 1);
+          }
+          const total = totalHeadcount * workingDays;
+          const absent = Math.max(0, total - present - late - onLeave);
+          const attendanceRate = total > 0 ? Math.min(100, Math.round(((present + late) / total) * 100)) : 0;
+          return { present, late, absent, onLeave, total, attendanceRate };
+        };
+
+        const now = new Date();
+        const weekStart = new Date(now);
+        weekStart.setDate(now.getDate() - 6);
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        const toDateString = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+        attendanceAnalytics.periodSummary.week = await summarizeAttendancePeriod(toDateString(weekStart), todayStr);
+        attendanceAnalytics.periodSummary.month = await summarizeAttendancePeriod(toDateString(monthStart), todayStr);
       }
     } catch (e) {
       console.warn('[AdminDashboardService] attendanceAnalytics error:', e);
@@ -929,12 +1026,13 @@ export class AdminDashboardService {
 
     // ── 8. REAL PAYROLL ANALYTICS ─────────────────────────────────────────────
     let payrollAnalytics = {
-      monthlyTrend: [] as Array<{ month: string; grossSalary: number; netSalary: number; deductions: number }>,
+      monthlyTrend: [] as Array<{ month: string; monthKey: string; grossSalary: number; netSalary: number; deductions: number; source: 'payslip' | 'salary_structure' }>,
     };
 
     try {
       const hasPayslips = await db.schema.hasTable('payslips');
-      for (let i = 5; i >= 0; i--) {
+      const hasSalaryStructures = await db.schema.hasTable('salary_structures');
+      for (let i = 11; i >= 0; i--) {
         const targetMonth = new Date(now.getFullYear(), now.getMonth() - i, 1);
         const monthIso = targetMonth.toISOString().slice(0, 7); // YYYY-MM
         const monthLabel = monthNames[targetMonth.getMonth()];
@@ -942,6 +1040,7 @@ export class AdminDashboardService {
         let grossVal = 0;
         let netVal = 0;
         let dedVal = 0;
+        let source: 'payslip' | 'salary_structure' = 'payslip';
 
         if (hasPayslips) {
           let payQ = db('payslips')
@@ -971,21 +1070,44 @@ export class AdminDashboardService {
           dedVal = Number(sumPay?.deductions || 0);
         }
 
-        // If no generated payslip exists for this month, calculate from active employee compensation baseline
-        if (grossVal === 0 && monthlyPayrollCost > 0) {
-          const monthEmpCount = growthTrend[5 - i]?.employees || totalHeadcount;
-          const ratio = totalHeadcount > 0 ? Math.min(1, monthEmpCount / totalHeadcount) : 1;
-          grossVal = Math.round(monthlyPayrollCost * ratio);
-          dedVal = Math.round(grossVal * 0.1);
-          netVal = grossVal - dedVal;
+        // If this is the current month and payroll has not yet been generated,
+        // surface the exact active salary structure. This represents configured
+        // compensation, not a historical or disbursed payroll amount.
+        if (i === 0 && grossVal === 0 && netVal === 0 && dedVal === 0 && hasSalaryStructures) {
+          let structureQuery = db('salary_structures as ss')
+            .join('employees as e', 'ss.employee_id', 'e.id')
+            .whereNull('ss.deleted_at')
+            .whereNull('e.deleted_at')
+            .where('ss.organization_id', organizationId)
+            .where(function () {
+              this.where('ss.status', 'active').orWhere('ss.status', 'Active').orWhereNull('ss.status');
+            });
+
+          if (targetCompanyId) structureQuery = structureQuery.where('e.company_id', targetCompanyId);
+
+          const [structureTotals] = await structureQuery.select(
+            db.raw('COALESCE(SUM(ss.gross_monthly), 0) as gross'),
+            db.raw('COALESCE(SUM(ss.net_take_home), 0) as net'),
+            db.raw('COALESCE(SUM(ss.total_deductions), 0) as deductions')
+          );
+          grossVal = Number(structureTotals?.gross || 0);
+          netVal = Number(structureTotals?.net || 0);
+          dedVal = Number(structureTotals?.deductions || 0);
+          source = 'salary_structure';
         }
 
-        payrollAnalytics.monthlyTrend.push({
-          month: monthLabel,
-          grossSalary: grossVal,
-          netSalary: netVal,
-          deductions: dedVal,
-        });
+        // Only include an exact database record: a generated payslip, or the
+        // current month's active salary structure. Never create estimated bars.
+        if (grossVal > 0 || netVal > 0 || dedVal > 0) {
+          payrollAnalytics.monthlyTrend.push({
+            month: monthLabel,
+            monthKey: monthIso,
+            grossSalary: grossVal,
+            netSalary: netVal,
+            deductions: dedVal,
+            source,
+          });
+        }
       }
     } catch (e) {
       console.warn('[AdminDashboardService] payrollAnalytics error:', e);
@@ -1082,57 +1204,82 @@ export class AdminDashboardService {
 
     // ── 10. REAL EXPENSE ANALYTICS ────────────────────────────────────────────
     let expenseAnalytics = {
-      monthlyTrend: [] as Array<{ month: string; claimedAmount: number; approvedAmount: number }>,
+      disbursementTrend: [] as Array<{ date: string; disbursedAmount: number }>,
       byCategory: [] as Array<{ categoryName: string; totalAmount: number }>,
     };
 
     try {
       const hasExpenses = await db.schema.hasTable('expense_claims');
       if (hasExpenses) {
-        // 6-Month Expense Trends
-        for (let i = 5; i >= 0; i--) {
-          const targetMonth = new Date(now.getFullYear(), now.getMonth() - i, 1);
-          const nextMonth = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
-          const monthStartIso = targetMonth.toISOString().slice(0, 10);
-          const monthEndIso = nextMonth.toISOString().slice(0, 10);
-          const monthLabel = monthNames[targetMonth.getMonth()];
+        const hasExpensePayments = await db.schema.hasTable('expense_payments');
+        const hasExpenseDeletedAt = await db.schema.hasColumn('expense_claims', 'deleted_at');
+        const hasExpenseRuns = await db.schema.hasTable('expense_approval_runs');
+        const trendStart = new Date(now.getFullYear(), now.getMonth() - 11, 1)
+          .toISOString()
+          .slice(0, 10);
 
-          let expQ = db('expense_claims as ec')
-            .whereNull('ec.deleted_at')
-            .where('ec.created_at', '>=', monthStartIso)
-            .where('ec.created_at', '<', monthEndIso)
-            .where('ec.organization_id', organizationId);
+        // expense_payments is the source of truth for money actually paid by
+        // the workflow. Fall back to paid expense claims for older databases.
+        let disbursementRows: any[] = [];
+        if (hasExpensePayments) {
+          let paymentQuery = db('expense_payments as ep')
+            .where('ep.organization_id', organizationId)
+            .where('ep.payment_date', '>=', trendStart);
 
+          if (targetCompanyId && hasExpenseRuns) {
+            paymentQuery = paymentQuery
+              .join('expense_approval_runs as ear', 'ep.run_id', 'ear.id')
+              .where(function () {
+                this.where('ear.company_id', targetCompanyId).orWhereNull('ear.company_id');
+              });
+          }
+
+          disbursementRows = await paymentQuery
+            .select(
+              db.raw("DATE_FORMAT(ep.payment_date, '%Y-%m-%d') as date"),
+              db.raw('COALESCE(SUM(ep.amount), 0) as disbursedAmount')
+            )
+            .groupByRaw("DATE_FORMAT(ep.payment_date, '%Y-%m-%d')")
+            .orderByRaw("DATE_FORMAT(ep.payment_date, '%Y-%m-%d') asc");
+        } else {
+          let claimQuery = db('expense_claims as ec')
+            .where('ec.organization_id', organizationId)
+            .whereIn('ec.status', ['paid', 'reimbursed'])
+            .whereNotNull('ec.payment_date')
+            .where('ec.payment_date', '>=', trendStart)
+            .where('ec.paid_amount', '>', 0);
+          if (hasExpenseDeletedAt) claimQuery = claimQuery.whereNull('ec.deleted_at');
           if (targetCompanyId) {
-            expQ = expQ
+            claimQuery = claimQuery
               .join('employees as e', 'ec.employee_id', 'e.id')
               .where('e.company_id', targetCompanyId);
           }
-
-          const [expRow]: any = await expQ.select(
-            db.raw('COALESCE(SUM(total_claimed_amount), COALESCE(SUM(amount), 0)) as claimed'),
-            db.raw("COALESCE(SUM(CASE WHEN ec.status IN ('approved', 'paid', 'settled') THEN COALESCE(total_approved_amount, amount) ELSE 0 END), 0) as approved")
-          );
-
-          expenseAnalytics.monthlyTrend.push({
-            month: monthLabel,
-            claimedAmount: Number(expRow?.claimed || 0),
-            approvedAmount: Number(expRow?.approved || 0),
-          });
+          disbursementRows = await claimQuery
+            .select(
+              db.raw("DATE_FORMAT(ec.payment_date, '%Y-%m-%d') as date"),
+              db.raw('COALESCE(SUM(ec.paid_amount), 0) as disbursedAmount')
+            )
+            .groupByRaw("DATE_FORMAT(ec.payment_date, '%Y-%m-%d')")
+            .orderByRaw("DATE_FORMAT(ec.payment_date, '%Y-%m-%d') asc");
         }
+
+        expenseAnalytics.disbursementTrend = (disbursementRows || []).map((row: any) => ({
+          date: String(row.date).slice(0, 10),
+          disbursedAmount: Number(row.disbursedAmount ?? row.disbursed_amount ?? 0),
+        }));
 
         // Expenses by Category
         let catQ = db('expense_claims as ec')
           .leftJoin('expense_categories as c', 'ec.category_id', 'c.id')
-          .whereNull('ec.deleted_at')
           .where('ec.organization_id', organizationId)
           .select(
             db.raw("COALESCE(c.name, 'General Expense') as categoryName"),
-            db.raw('COALESCE(SUM(ec.total_claimed_amount), COALESCE(SUM(ec.amount), 0)) as totalAmount')
+            db.raw('COALESCE(SUM(ec.total_claimed_amount), 0) as totalAmount')
           )
           .groupBy('categoryName')
           .orderBy('totalAmount', 'desc')
           .limit(6);
+        if (hasExpenseDeletedAt) catQ = catQ.whereNull('ec.deleted_at');
 
         if (targetCompanyId) {
           catQ = catQ
@@ -1151,6 +1298,44 @@ export class AdminDashboardService {
     }
 
     // ── 11. REAL WORKFORCE ANALYTICS ──────────────────────────────────────────
+    let upcomingEvents = { holidays: [] as Array<{ id: number; name: string; date: string; type: string }>, birthdays: [] as Array<{ id: number; name: string; date: string; upcomingDate: string }> };
+    try {
+      const today = new Date(); const todayIso = today.toISOString().slice(0, 10);
+      if (await db.schema.hasTable('holidays')) {
+        let q = db('holidays').where('organization_id', organizationId).where('holiday_date', '>=', todayIso);
+        if (await db.schema.hasColumn('holidays', 'deleted_at')) q = q.whereNull('deleted_at');
+        upcomingEvents.holidays = (await q.orderBy('holiday_date').limit(6)).map((r: any) => ({ id: Number(r.id), name: r.holidayName || r.holiday_name || 'Holiday', date: String(r.holidayDate || r.holiday_date).slice(0, 10), type: r.holidayType || r.holiday_type || 'company' }));
+      }
+      if (await db.schema.hasColumn('employees', 'date_of_birth')) {
+        let q = db('employees').whereNull('deleted_at').where('organization_id', organizationId).whereNotNull('date_of_birth'); if (targetCompanyId) q = q.where('company_id', targetCompanyId);
+        const birthdayRows = await q.select(
+          'id',
+          'first_name',
+          'last_name',
+          db.raw("DATE_FORMAT(date_of_birth, '%Y-%m-%d') as dateOfBirth")
+        );
+        upcomingEvents.birthdays = birthdayRows
+          .map((r: any) => {
+            const d = String(r.dateOfBirth || r.date_of_birth || '').slice(0, 10);
+            const [, month, day] = d.split('-').map(Number);
+            if (!month || !day) return null;
+            const upcomingYear = today.getFullYear() + (month - 1 < today.getMonth() ? 1 : 0);
+            return {
+              id: Number(r.id),
+              name: `${r.firstName || r.first_name || ''} ${r.lastName || r.last_name || ''}`.trim() || 'Employee',
+              date: d,
+              upcomingDate: `${upcomingYear}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
+            };
+          })
+          .filter((birthday): birthday is NonNullable<typeof birthday> => birthday !== null)
+          .sort((a, b) => {
+            const aMonthDay = a.date.slice(5, 10);
+            const bMonthDay = b.date.slice(5, 10);
+            return aMonthDay.localeCompare(bMonthDay) || a.name.localeCompare(b.name);
+          });
+      }
+    } catch (e) { console.warn('[AdminDashboardService] upcoming events error:', e); }
+
     let workforceAnalytics = {
       byEmploymentType: [] as Array<{ type: string; count: number }>,
       byStatus: [] as Array<{ status: string; count: number }>,
@@ -1230,6 +1415,7 @@ export class AdminDashboardService {
       payrollAnalytics,
       recruitmentAnalytics,
       expenseAnalytics,
+      upcomingEvents,
       workforceAnalytics,
     };
   }

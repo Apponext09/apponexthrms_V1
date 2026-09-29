@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,12 +9,13 @@ import { showToast } from '@/components/ui/toast';
 import { useAuthStore } from '@/features/auth/store/authStore';
 import { useEmployees, useUpdateEmployee } from '../hooks/useEmployees';
 import { useDepartments } from '../../settings/hooks/useDepartments';
+import { useLocations } from '../../settings/hooks/useLocations';
 import { useEmployeeTypes } from '../../settings/hooks/useEmployeeTypes';
 import { useDesignations } from '../../settings/hooks/useDesignations';
 import { useEmployeeStatuses } from '../../settings/api/useEmployeeStatuses';
+import { useAccessRoles } from '@/features/settings/hooks/useAccessRoles';
 import { ProfileEditRequestModal } from './ProfileEditRequestModal';
 import type { Employee } from '@/types';
-import { getEligibleReportingManagers, formatCandidateLabel } from '../utils/reportingHierarchy';
 
 interface EmployeeBasicInfoProps {
   employee: Employee;
@@ -113,9 +114,11 @@ export function EmployeeBasicInfo({
   const { updateEmployee, isLoading: isSaving } = useUpdateEmployee(employee.id as number);
   const { employees } = useEmployees({ pageSize: 500 });
   const { data: departmentsData } = useDepartments(1, 100);
+  const { data: locationsData } = useLocations(1, 500);
   const { employeeTypes } = useEmployeeTypes();
   const { designations } = useDesignations();
   const { employeeStatuses } = useEmployeeStatuses();
+  const { data: accessRoles = [] } = useAccessRoles();
   const [internalIsEditing, setInternalIsEditing] = useState(false);
 
   const isEditing = internalIsEditing;
@@ -128,13 +131,21 @@ export function EmployeeBasicInfo({
   useEffect(() => {
     setForm({
       ...(employee || {}),
-      currentDepartmentId: employee?.currentDepartmentId ?? (employee as any)?.current_department_id ?? (employee as any)?.departmentId ?? (employee as any)?.department_id,
       status: (employee as any)?.employeeStatus || (employee as any)?.employee_status || employee?.status || 'active',
       nationality: employee?.nationality || (employee as any)?.nationality || '',
       password: '',
       confirmPassword: '',
       jobTitle: (employee as any).jobTitle || (employee as any).job_title || '',
       accessRole: (employee as any).accessRole || 'employee',
+      currentDesignationId:
+        (employee as any).currentDesignationId ||
+        (employee as any).current_designation_id ||
+        '',
+      currentLocationId:
+        (employee as any).currentLocationId ||
+        (employee as any).current_location_id ||
+        (employee as any).locationId ||
+        '',
     });
   }, [employee]);
 
@@ -185,6 +196,12 @@ export function EmployeeBasicInfo({
         dateOfJoining: formattedDoj === '' ? undefined : formattedDoj,
         employmentType: form.employmentType || '',
         departmentId: form.currentDepartmentId ? Number(form.currentDepartmentId) : null,
+        designationId: (form as any).currentDesignationId
+          ? Number((form as any).currentDesignationId)
+          : null,
+        locationId: (form as any).currentLocationId
+          ? Number((form as any).currentLocationId)
+          : null,
         employeeCode: form.employeeCode,
         reportingManagerId: form.reportingManagerId ? Number(form.reportingManagerId) : null,
         avatarUrl: form.avatarUrl || null,
@@ -227,16 +244,23 @@ export function EmployeeBasicInfo({
       confirmPassword: '',
       jobTitle: (employee as any).jobTitle || (employee as any).job_title || '',
       accessRole: (employee as any).accessRole || 'employee',
+      currentDesignationId:
+        (employee as any).currentDesignationId ||
+        (employee as any).current_designation_id ||
+        '',
+      currentLocationId:
+        (employee as any).currentLocationId ||
+        (employee as any).current_location_id ||
+        (employee as any).locationId ||
+        '',
     });
     setIsEditing(false);
   };
 
   // Find department name for display
-  const activeDeptId = form.currentDepartmentId !== undefined ? form.currentDepartmentId : (employee?.currentDepartmentId ?? (employee as any)?.current_department_id ?? (employee as any)?.departmentId);
-  const departmentName = departmentsData?.data?.find((d: any) => Number(d.id) === Number(activeDeptId))?.name || (employee as any)?.department || '-';
-
-
-
+  const departmentName = departmentsData?.data?.find(
+    (d: any) => d.id === employee.currentDepartmentId
+  )?.name || '-';
 
   const accessRole = (employee as any).accessRole;
   const designation = (employee as any).designation || (employee as any).designationName || (employee as any).designation_name || (employee as any).currentDesignationName || (employee as any).current_designation_name || '-';
@@ -253,37 +277,19 @@ export function EmployeeBasicInfo({
         : ''));
 
   // Filter manager options: ONLY Team Lead, Department Manager, HR Manager, or Admin roles
-  const managerCandidates = useMemo(() => {
-    return getEligibleReportingManagers({
-      targetEmployee: {
-        ...employee,
-        ...form,
-        id: employee.id,
-        accessRole: form.accessRole || (employee as any).accessRole,
-        jobTitle: form.jobTitle || (employee as any).jobTitle || (employee as any).designation,
-        designation: (employee as any).designation,
-        currentDepartmentId: form.currentDepartmentId !== undefined ? form.currentDepartmentId : employee.currentDepartmentId,
-        department: departmentName,
-      },
-      selectedDepartmentId: form.currentDepartmentId,
-      selectedDepartmentName: departmentName,
-      allDepartments: departmentsData?.data || [],
-      allEmployees: employees || [],
-    });
-  }, [employees, employee, form.currentDepartmentId, departmentName, departmentsData?.data, form.accessRole, form.jobTitle]);
-  // Done computing managerCandidates
-
-
-
-
-
-
-
-
-
-
-
-
+  const managerCandidates = (employees || []).filter((item: any) => {
+    if (item.id === employee.id) return false;
+    const role = (item.accessRole || item.access_role || item.role || '').toLowerCase();
+    const code = (item.employeeCode || item.employee_code || '');
+    const isCurrentlyAssigned = Number(item.id) === Number(form.reportingManagerId || employee.reportingManagerId || (employee as any).reporting_manager_id);
+    return (
+      isCurrentlyAssigned ||
+      ['team_lead', 'department_head', 'hr_manager', 'organization_admin', 'super_admin', 'cto', 'cfo', 'coo', 'cxo', 'manager'].includes(role) ||
+      code.startsWith('CEO-') ||
+      item.isCeo ||
+      item.is_ceo
+    );
+  });
 
   return (
     <Card className="border border-border/80 shadow-2xs rounded-xl bg-card">
@@ -467,10 +473,34 @@ export function EmployeeBasicInfo({
                 >
                   <option value="">-- Select Reporting Manager / Team Lead --</option>
                   {managerCandidates.map((item: any) => (
-                    <option key={item.id} value={item.id}>{formatCandidateLabel(item)}</option>
+                    <option key={item.id} value={item.id}>{item.firstName} {item.lastName} ({item.employeeCode} - {item.jobTitle || item.accessRole || 'Lead'})</option>
                   ))}
                 </select>
               )}
+            </div>
+            <div>
+              <Label htmlFor="jobLocation" className="flex items-center gap-1">
+                Job Location {!isAdmin && <Lock className="w-3 h-3 text-amber-500 inline shrink-0" />}
+              </Label>
+              <select
+                id="jobLocation"
+                disabled={!isAdmin}
+                className={`flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm mt-1 ${!isAdmin ? 'bg-muted text-muted-foreground cursor-not-allowed opacity-80' : ''}`}
+                value={(form as any).currentLocationId || ''}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    currentLocationId: e.target.value ? Number(e.target.value) : null,
+                  } as any)
+                }
+              >
+                <option value="">-- No Job Location --</option>
+                {(locationsData?.items || locationsData?.data || []).map((loc: any) => (
+                  <option key={loc.id} value={loc.id}>
+                    {loc.name || loc.locationName || loc.location_name || loc.code}
+                  </option>
+                ))}
+              </select>
             </div>
             <div>
               <Label htmlFor="status" className="flex items-center gap-1">
@@ -508,34 +538,35 @@ export function EmployeeBasicInfo({
                 value={form.accessRole || 'employee'}
                 onChange={(e) => setForm({ ...form, accessRole: e.target.value })}
               >
-                <option value="employee">Employee</option>
-                <option value="team_lead">Team Lead</option>
-                <option value="department_head">Manager</option>
-                <option value="hr_manager">HR</option>
-                <option value="intern">Intern</option>
-                <option value="consultant">Consultant</option>
-                <option value="finance">Finance</option>
+                {accessRoles.map((role) => <option key={role.id} value={role.code}>{role.name}</option>)}
               </select>
             </div>
             <div>
-              <Label htmlFor="jobTitle" className="flex items-center gap-1">
+              <Label htmlFor="designationId" className="flex items-center gap-1">
                 Designation {!isAdmin && <Lock className="w-3 h-3 text-amber-500 inline shrink-0" />}
               </Label>
               <select
-                id="jobTitle"
+                id="designationId"
                 disabled={!isAdmin}
                 className={`flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring mt-1 ${!isAdmin ? 'bg-muted text-muted-foreground cursor-not-allowed opacity-80' : ''}`}
-                value={form.jobTitle || ''}
-                onChange={(e) => setForm({ ...form, jobTitle: e.target.value })}
+                value={(form as any).currentDesignationId || ''}
+                onChange={(e) => {
+                  const selected = designations.find((d: any) => String(d.id) === e.target.value);
+                  setForm({
+                    ...form,
+                    currentDesignationId: e.target.value ? Number(e.target.value) : null,
+                    jobTitle: selected?.name || '',
+                  } as any);
+                }}
               >
                 <option value="">-- Select Designation --</option>
                 {designations.map((desig: any) => (
-                  <option key={desig.id} value={desig.name}>
+                  <option key={desig.id} value={desig.id}>
                     {desig.name}
                   </option>
                 ))}
-                {form.jobTitle && !designations.some((d: any) => d.name === form.jobTitle) && (
-                  <option value={form.jobTitle}>{form.jobTitle}</option>
+                {form.jobTitle && !(form as any).currentDesignationId && (
+                  <option value="">{form.jobTitle}</option>
                 )}
               </select>
             </div>

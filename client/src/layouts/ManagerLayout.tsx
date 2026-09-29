@@ -43,7 +43,7 @@ const C = {
   sectionLabel: 'text-muted-foreground',
 };
 
-const MANAGER_NAV = [
+export const MANAGER_NAV = [
   {
     label: 'Dashboard',
     subscriptionModule: null,

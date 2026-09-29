@@ -10,6 +10,8 @@ router.use(authenticate, resolveTenant);
 router.get('/employees', lifecycleController.getEmployeeLifecycleSummaries);
 router.get('/employees/me', lifecycleController.getMyEmployeeLifecycleDetails);
 router.post('/employees/me/resignation', lifecycleController.submitMyResignation);
+router.get('/resignations/pending', lifecycleController.listPendingResignations);
+router.post('/resignations/:id/review', lifecycleController.reviewResignation);
 router.get('/employees/:id', lifecycleController.getEmployeeLifecycleDetails);
 router.get('/managers', lifecycleController.getManagers);
 router.post('/transfers', lifecycleController.transferEmployee);

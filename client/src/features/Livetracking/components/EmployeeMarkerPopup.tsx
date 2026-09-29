@@ -9,9 +9,48 @@
 //  - Reverse-geocoded Address, GPS Coordinates, Live Speed, Last Ping time
 //  - CTA button to open full historical Travel History Playback
 // ============================================================
-import React from 'react';
-import { X, Navigation, MapPin, Clock, Wifi, Radio, Zap, ShieldCheck } from 'lucide-react';
-import type { LiveEmployee } from '../types/livetracking.types';
+import React, { useEffect, useState } from 'react';
+import { X, Navigation, MapPin, Clock, Wifi, Radio, Zap, Route, Crosshair, Timer, Target } from 'lucide-react';
+import type { LiveEmployee, MovementStatus } from '../types/livetracking.types';
+import { formatMinutesLabel } from '../utils/routeStats';
+
+/** Live values for the selected employee (from the live store, not the REST snapshot) */
+export interface LiveCardData {
+  status: MovementStatus;
+  /** m/s, as reported by the device */
+  speedMps: number | null;
+  distanceKm: number;
+  accuracyM: number | null;
+  lastUpdatedMs: number | null;
+  trackingSinceMs: number | null;
+}
+
+const STATUS_LABEL: Record<MovementStatus, { label: string; cls: string }> = {
+  moving: { label: 'Moving', cls: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40' },
+  idle: { label: 'Idle', cls: 'bg-amber-500/20 text-amber-300 border-amber-500/40' },
+  offline: { label: 'Offline', cls: 'bg-slate-800 text-slate-400 border-slate-700' },
+  gps_off: { label: 'GPS disabled', cls: 'bg-rose-500/20 text-rose-400 border-rose-500/40' },
+};
+
+function agoLabel(ms: number | null, now: number): string {
+  if (!ms) return 'No update yet';
+  const sec = Math.max(0, Math.round((now - ms) / 1000));
+  if (sec < 60) return `${sec} sec ago`;
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min} min ago`;
+  return `${Math.floor(min / 60)}h ${min % 60}m ago`;
+}
+
+/** Re-render once a second so "x sec ago" stays current */
+function useNow(active: boolean): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!active) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [active]);
+  return now;
+}
 
 function formatAvatarUrl(url: string | null | undefined): string | null {
   if (!url || typeof url !== 'string' || url.trim() === '') return null;
@@ -30,9 +69,23 @@ interface Props {
   address: string;
   onViewHistory: (employee: LiveEmployee) => void;
   onClose: () => void;
+  live?: LiveCardData;
+  follow?: boolean;
+  onToggleFollow?: () => void;
+  onZoomTo?: () => void;
 }
 
-export const EmployeeMarkerCard: React.FC<Props> = ({ employee, address, onViewHistory, onClose }) => {
+export const EmployeeMarkerCard: React.FC<Props> = ({
+  employee,
+  address,
+  onViewHistory,
+  onClose,
+  live,
+  follow,
+  onToggleFollow,
+  onZoomTo,
+}) => {
+  const now = useNow(Boolean(live));
   const isOnline = employee.connection_status === 'ONLINE';
   const isLocationOn = employee.location_status === 'ON';
   const avatarSrc = formatAvatarUrl(employee.avatar_url);
@@ -176,33 +229,107 @@ export const EmployeeMarkerCard: React.FC<Props> = ({ employee, address, onViewH
           </span>
         </div>
 
-        {/* Speed / Movement */}
+        {/* Live status */}
+        {live && (
+          <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-800/60">
+            <span className="text-slate-400 font-medium flex items-center gap-1.5 text-[11px]">
+              <Target className="w-3.5 h-3.5 text-violet-400" /> Status
+            </span>
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border ${STATUS_LABEL[live.status].cls}`}>
+              {STATUS_LABEL[live.status].label}
+            </span>
+          </div>
+        )}
+
+        {/* Speed / Movement — the device reports m/s (it used to be shown as km/h unconverted) */}
         <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-800/60">
           <span className="text-slate-400 font-medium flex items-center gap-1.5 text-[11px]">
             <Navigation className="w-3.5 h-3.5 text-emerald-400" /> Live Speed
           </span>
-          <span className="text-slate-300 font-semibold text-[11px]">
-            {employee.speed && Number(employee.speed) > 0
-              ? `${Math.round(Number(employee.speed))} km/h`
-              : 'Stationary'}
+          <span className="text-slate-300 font-semibold text-[11px] tabular-nums">
+            {(() => {
+              const mps = live ? live.speedMps : employee.speed != null ? Number(employee.speed) : null;
+              const moving = live ? live.status === 'moving' : true;
+              return mps != null && mps > 0.3 && moving ? `${Math.round(mps * 3.6)} km/h` : 'Stationary';
+            })()}
           </span>
         </div>
 
-        {/* Last ping */}
+        {live && (
+          <>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-slate-400 font-medium flex items-center gap-1.5 text-[11px]">
+                <Route className="w-3.5 h-3.5 text-sky-400" /> Distance Travelled
+              </span>
+              <span className="text-slate-300 font-semibold text-[11px] tabular-nums">{live.distanceKm.toFixed(2)} km</span>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-slate-400 font-medium flex items-center gap-1.5 text-[11px]">
+                <Crosshair className="w-3.5 h-3.5 text-sky-400" /> GPS Accuracy
+              </span>
+              <span className="text-slate-300 font-semibold text-[11px] tabular-nums">
+                {live.accuracyM != null ? `±${Math.round(live.accuracyM)} m` : 'N/A'}
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-slate-400 font-medium flex items-center gap-1.5 text-[11px]">
+                <Timer className="w-3.5 h-3.5 text-sky-400" /> Tracking Duration
+              </span>
+              <span className="text-slate-300 font-semibold text-[11px] tabular-nums">
+                {live.trackingSinceMs ? formatMinutesLabel((now - live.trackingSinceMs) / 60000) : 'N/A'}
+              </span>
+            </div>
+          </>
+        )}
+
+        {/* Last update */}
         <div className="flex items-center justify-between gap-2">
           <span className="text-slate-400 font-medium flex items-center gap-1.5 text-[11px]">
-            <Clock className="w-3.5 h-3.5 text-sky-400" /> Last Ping
+            <Clock className="w-3.5 h-3.5 text-sky-400" /> {live ? 'Last Updated' : 'Last Ping'}
           </span>
-          <span className="text-slate-300 font-semibold text-[11px]">
-            {employee.last_ping_at
-              ? new Date(employee.last_ping_at).toLocaleTimeString('en-IN', {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                })
-              : 'Just now'}
+          <span className="text-slate-300 font-semibold text-[11px] tabular-nums">
+            {live
+              ? agoLabel(live.lastUpdatedMs, now)
+              : employee.last_ping_at
+                ? new Date(employee.last_ping_at).toLocaleTimeString('en-IN', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })
+                : 'Just now'}
           </span>
         </div>
       </div>
+
+      {/* Follow / zoom */}
+      {(onToggleFollow || onZoomTo) && (
+        <div className="grid grid-cols-2 gap-2 mb-2">
+          {onToggleFollow && (
+            <button
+              type="button"
+              aria-pressed={Boolean(follow)}
+              onClick={onToggleFollow}
+              className={`py-2 px-2 rounded-xl text-[11px] font-extrabold border transition-colors flex items-center justify-center gap-1.5 ${
+                follow
+                  ? 'bg-sky-500/20 border-sky-400/60 text-sky-300'
+                  : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
+              }`}
+            >
+              <Crosshair className="w-3.5 h-3.5" />
+              Follow: {follow ? 'ON' : 'OFF'}
+            </button>
+          )}
+          {onZoomTo && (
+            <button
+              type="button"
+              onClick={onZoomTo}
+              className="py-2 px-2 rounded-xl text-[11px] font-extrabold border bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700 flex items-center justify-center gap-1.5"
+            >
+              <MapPin className="w-3.5 h-3.5" />
+              Zoom to
+            </button>
+          )}
+        </div>
+      )}
 
       {/* CTA: View Travel History */}
       <button

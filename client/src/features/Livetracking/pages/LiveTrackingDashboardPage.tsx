@@ -4,7 +4,7 @@
 // Palette: white surfaces · soft blue canvas · navy text · blue accents
 // Font: Plus Jakarta Sans
 // ============================================================
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   RefreshCw,
@@ -21,9 +21,14 @@ import {
 import { toast } from "sonner";
 import { LiveTrackingMap } from "../components/LiveTrackingMap";
 import { RoutePlaybackModal } from "../components/RoutePlaybackModal";
-import { fetchLiveLocations, fetchRouteHistory } from "../api/livetrackingApi";
+import {
+  fetchLiveLocations,
+  fetchLiveTrails,
+  fetchRouteHistory,
+} from "../api/livetrackingApi";
 import { useLiveTrackingSocket } from "../hooks/useLiveTrackingSocket";
-import { detectBreakPoints } from "../utils/breakDetector";
+import { liveTrackingStore } from "../store/liveTrackingStore";
+import { localDateStr } from "../utils/dates";
 import type { LiveEmployee } from "../types/livetracking.types";
 import { useAuthStore } from "@/features/auth/store/authStore";
 import { useCompanyStore } from "@/features/settings/store/companyStore";
@@ -69,9 +74,37 @@ function isStaleSignal(
   }
 }
 
-/** An employee currently online with GPS on — eligible for default map focus */
-function isActiveEmployee(emp: LiveEmployee): boolean {
-  return emp.connection_status === "ONLINE" && emp.location_status === "ON";
+/** Points per employee used to seed the overview map; the selected employee loads the full day */
+const OVERVIEW_TRAIL_POINTS = 300;
+/** Roster labels (online / GPS / "x m ago") are synced from the live store at this cadence */
+const ROSTER_SYNC_MS = 5000;
+
+function normalizeLiveRow(item: any): LiveEmployee {
+  return {
+    ...item,
+    employee_id: item.employee_id ?? item.employeeId ?? item.id,
+    check_in_time: item.check_in_time ?? item.checkInTime,
+    attendance_status: item.attendance_status ?? item.attendanceStatus,
+    location_status: item.location_status ?? item.locationStatus,
+    connection_status: item.connection_status ?? item.connectionStatus,
+    last_ping_at: item.last_ping_at ?? item.lastPingAt,
+  };
+}
+
+/** Seed the live store with today's routes for these employees (one request) */
+async function seedTrails(ids: number[]): Promise<void> {
+  if (ids.length === 0) return;
+  try {
+    const trails = await fetchLiveTrails(ids, localDateStr(), OVERVIEW_TRAIL_POINTS);
+    for (const [id, points] of Object.entries(trails)) {
+      liveTrackingStore.seedRoute(
+        Number(id),
+        points.map(([lat, lng, ts]) => ({ lat, lng, ts })),
+      );
+    }
+  } catch {
+    // Routes are cosmetic on first paint — live deltas still draw from here on
+  }
 }
 
 function isCheckedInEmployee(rawEmp: any): boolean {
@@ -137,24 +170,25 @@ export const LiveTrackingDashboardPage: React.FC = () => {
   const isHROrAdmin = useMemo(() => {
     const roles: string[] = Array.isArray(user?.roles) ? [...user.roles] : [];
     if ((user as any)?.role) roles.push((user as any).role);
-    const adminPatterns = [
-      "admin",
-      "hr",
-      "organization_admin",
-      "hr_manager",
-      "hr_admin",
+    // Exact match, mirroring the server — a substring match treated any role
+    // containing "admin"/"executive"/"director" as HR.
+    const hrAdminRoles = new Set([
       "super_admin",
+      "organization_admin",
+      "org_admin",
+      "admin",
+      "hr_admin",
+      "hr_manager",
+      "hr",
       "ceo",
       "owner",
-      "director",
-      "executive",
-    ];
+    ]);
     return roles.some((r) =>
-      adminPatterns.some((p) =>
+      hrAdminRoles.has(
         String(r)
+          .trim()
           .toLowerCase()
-          .replace(/[\s-]+/g, "_")
-          .includes(p),
+          .replace(/[\s-]+/g, "_"),
       ),
     );
   }, [user]);
@@ -197,6 +231,11 @@ export const LiveTrackingDashboardPage: React.FC = () => {
   const [selectedEmployee, setSelectedEmployee] = useState<LiveEmployee | null>(
     null,
   );
+  const [follow, setFollow] = useState(false);
+  const employeesRef = useRef<LiveEmployee[]>([]);
+  useEffect(() => {
+    employeesRef.current = employees;
+  }, [employees]);
 
   // Derived stats (computed from employees list — no extra state)
   const stats = useMemo(
@@ -210,77 +249,35 @@ export const LiveTrackingDashboardPage: React.FC = () => {
   );
 
   // ── Load initial & continuous snapshot ───────────────────────────────
-  const loadSnapshot = useCallback(async (isInitial = false) => {
+  // ── Load the roster + seed today's routes ─────────────────────────────
+  // Positions/routes live in the live store (outside React); `employees` is
+  // the roster metadata. A full reload replaces both; `onlyNew` merges in
+  // employees that checked in after the page loaded.
+  const loadSnapshot = useCallback(async (isInitial = false, onlyNew = false) => {
     try {
       if (isInitial) setLoading(true);
       const data = await fetchLiveLocations();
 
-      // Normalize camelCase and snake_case properties
-      const normalizedData = (data || []).map((item: any) => ({
-        ...item,
-        employee_id: item.employee_id ?? item.employeeId ?? item.id,
-        check_in_time: item.check_in_time ?? item.checkInTime,
-        attendance_status: item.attendance_status ?? item.attendanceStatus,
-        location_status: item.location_status ?? item.locationStatus,
-        connection_status: item.connection_status ?? item.connectionStatus,
-        last_ping_at: item.last_ping_at ?? item.lastPingAt,
-      }));
-
       // Filter to show STRICTLY ONLY employees who punched attendance TODAY
-      const dataToUse = normalizedData.filter(isCheckedInEmployee);
+      const roster = (data || []).map(normalizeLiveRow).filter(isCheckedInEmployee);
+      const known = new Set(employeesRef.current.map((e) => Number(e.employee_id)));
+      const incoming = onlyNew ? roster.filter((e) => !known.has(Number(e.employee_id))) : roster;
 
-      // Pre-fetch today's route trails safely for active employees
-      // ✅ Using server-generated routed trails
-      const todayStr = new Date().toISOString().slice(0, 10);
-      const enrichedData = await Promise.all(
-        dataToUse.map(async (emp) => {
-          const empId = emp.employee_id;
-          if (!empId) return emp;
-          try {
-            const history = await fetchRouteHistory(empId, todayStr).catch(
-              () => [],
-            );
-            if (history && history.length > 0) {
-              // History now contains snapped coordinates from server
-              // Breaks will be detected by socket updates
-              const breaks = detectBreakPoints(history);
-              return { ...emp, routeTrail: history, breakPoints: breaks };
-            }
-          } catch {
-            // fallback if history fetch fails
-          }
-          if (emp.latitude != null && emp.longitude != null) {
-            const initialPoint = {
-              latitude: Number(emp.latitude),
-              longitude: Number(emp.longitude),
-              speed: null,
-              recorded_at: emp.last_ping_at || new Date().toISOString(),
-            };
-            return { ...emp, routeTrail: [initialPoint], breakPoints: [] };
-          }
-          return emp;
-        }),
-      );
+      if (!onlyNew) liveTrackingStore.retain(roster.map((e) => Number(e.employee_id)));
+      incoming.forEach((emp) => liveTrackingStore.upsertSnapshot(emp));
 
-      setEmployees(enrichedData);
-      setLastRefreshed(new Date());
+      if (onlyNew) {
+        if (incoming.length) setEmployees((prev) => [...prev, ...incoming]);
+      } else {
+        setEmployees(roster);
+        setLastRefreshed(new Date());
+        // Keep the current selection only if that employee is still on the roster
+        setSelectedEmployee((prev) =>
+          prev && roster.some((e) => Number(e.employee_id) === Number(prev.employee_id)) ? prev : null,
+        );
+      }
 
-      // Auto-select the first checked-in employee for single-employee focus
-      setSelectedEmployee((prev) => {
-        if (
-          prev &&
-          enrichedData.some(
-            (e) =>
-              (e.employee_id ?? (e as any).id) ===
-              (prev.employee_id ?? (prev as any).id),
-          )
-        ) {
-          return prev;
-        }
-        // Default focus: prefer a currently active (online + GPS on) employee.
-        // If nobody is active, leave selection empty so the map falls back to Navi Mumbai.
-        return enrichedData.find(isActiveEmployee) || null;
-      });
+      await seedTrails(incoming.map((e) => Number(e.employee_id)));
     } catch {
       // Ignore background poll errors quietly
     } finally {
@@ -291,40 +288,101 @@ export const LiveTrackingDashboardPage: React.FC = () => {
   const { selectedCompanyId } = useCompanyStore();
 
   useEffect(() => {
-    // Load snapshot ONCE on mount to seed initial route trails + live list.
-    // After this, all real-time state changes are driven purely by the Socket.IO
-    // useLiveTrackingSocket hook. The 3-second HTTP polling loop has been removed
-    // to prevent stale HTTP data from overwriting live socket-updated state.
+    // Load snapshot ONCE on mount (and on company switch) to seed the roster and
+    // today's routes. After this, positions are driven by Socket.IO deltas.
+    liveTrackingStore.reset();
     loadSnapshot(true);
   }, [loadSnapshot, selectedCompanyId]);
 
-  // ── Employee map list: Show all employees on map by default, or focus on selected single employee ──
-  const mapEmployees = useMemo(() => {
-    if (!selectedEmployee) return employees;
-    const updated = employees.find(
-      (e) =>
-        (e.employee_id ?? (e as any).id) ===
-        (selectedEmployee.employee_id ?? (selectedEmployee as any).id),
-    );
-    return updated ? [updated] : [selectedEmployee];
-  }, [selectedEmployee, employees]);
+  // Someone we don't know yet sent a location (checked in after load) — merge them in
+  const unknownTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scheduleRosterMerge = useCallback(() => {
+    if (unknownTimerRef.current) return;
+    unknownTimerRef.current = setTimeout(() => {
+      unknownTimerRef.current = null;
+      loadSnapshot(false, true);
+    }, 5000);
+  }, [loadSnapshot]);
+  useEffect(() => () => {
+    if (unknownTimerRef.current) clearTimeout(unknownTimerRef.current);
+  }, []);
+
+  // ── Selected employee: load the full-resolution route for today ───────
+  const selectedIdNum = selectedEmployee ? Number(selectedEmployee.employee_id) : null;
+  useEffect(() => {
+    setFollow(false);
+    if (!selectedIdNum) return;
+    let cancelled = false;
+    fetchRouteHistory(selectedIdNum, localDateStr())
+      .then((history) => {
+        if (cancelled || !history?.length) return;
+        liveTrackingStore.seedRoute(
+          selectedIdNum,
+          history.map((p) => ({
+            lat: Number(p.latitude),
+            lng: Number(p.longitude),
+            ts: new Date(String(p.recorded_at).replace(" ", "T")).getTime(),
+          })),
+        );
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedIdNum]);
+
+  // ── Roster labels follow the live store (throttled — not per GPS update) ─
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setEmployees((prev) => {
+        let changed = false;
+        const next = prev.map((emp) => {
+          const track = liveTrackingStore.get(Number(emp.employee_id));
+          if (!track) return emp;
+          const lastPing = track.lastPingAt ? new Date(track.lastPingAt).toISOString() : emp.last_ping_at;
+          if (
+            emp.location_status === track.locationStatus &&
+            emp.connection_status === track.connectionStatus &&
+            emp.last_ping_at === lastPing
+          ) {
+            return emp;
+          }
+          changed = true;
+          return {
+            ...emp,
+            location_status: track.locationStatus,
+            connection_status: track.connectionStatus,
+            last_ping_at: lastPing,
+            latitude: track.lat,
+            longitude: track.lng,
+          };
+        });
+        return changed ? next : prev;
+      });
+    }, ROSTER_SYNC_MS);
+    return () => clearInterval(timer);
+  }, []);
+
+  const nameOf = (id: number) =>
+    employeesRef.current.find((e) => Number(e.employee_id) === id)?.name ?? `Employee #${id}`;
 
   // ── Real-time socket updates ────────────────────────────
   const { isConnected } = useLiveTrackingSocket({
     token,
-    employees,
-    setEmployees,
-    onLocationOff: (_, name) => {
-      toast.warning(`${name} turned OFF location tracking`, { duration: 8000 });
+    onUnknownEmployees: scheduleRosterMerge,
+    // Deltas sent while we were disconnected are gone — reseed routes quietly
+    onReconnect: () => seedTrails(employeesRef.current.map((e) => Number(e.employee_id))),
+    onLocationOff: (id) => {
+      toast.warning(`${nameOf(id)} turned OFF location tracking`, { duration: 8000 });
     },
-    onLocationOn: (_, name) => {
-      toast.success(`${name} resumed location tracking`, { duration: 5000 });
+    onLocationOn: (id) => {
+      toast.success(`${nameOf(id)} resumed location tracking`, { duration: 5000 });
     },
-    onOffline: (_, name) => {
-      toast.info(`${name} went offline`, { duration: 4000 });
+    onOffline: (id) => {
+      toast.info(`${nameOf(id)} went offline`, { duration: 4000 });
     },
-    onOnline: (_, name) => {
-      toast.success(`${name} is back online`, { duration: 3000 });
+    onOnline: (id) => {
+      toast.success(`${nameOf(id)} is back online`, { duration: 3000 });
     },
   });
 
@@ -604,7 +662,7 @@ export const LiveTrackingDashboardPage: React.FC = () => {
 
           <div className="px-4 py-2.5 border-t border-[#EDF3FC] text-[10.5px] font-medium text-[#8AA0BC] flex items-center gap-1.5 dark:border-border dark:text-muted-foreground">
             <Crosshair className="w-3 h-3" />
-            Select a name to focus the map on one person.
+            Select a name to highlight their route and follow them.
           </div>
         </aside>
 
@@ -657,6 +715,18 @@ export const LiveTrackingDashboardPage: React.FC = () => {
               </span>
               <button
                 type="button"
+                aria-pressed={follow}
+                onClick={() => setFollow((f) => !f)}
+                className={`text-[11px] font-bold rounded-lg px-2 py-0.5 transition-colors ${
+                  follow
+                    ? "bg-[#1B6BFF] text-white"
+                    : "text-[#1B6BFF] hover:bg-[#EAF1FF]"
+                }`}
+              >
+                Follow: {follow ? "ON" : "OFF"}
+              </button>
+              <button
+                type="button"
                 onClick={() => setSelectedEmployee(null)}
                 className="text-[11px] font-bold text-[#1B6BFF] hover:bg-[#EAF1FF] rounded-lg px-2 py-0.5 transition-colors"
               >
@@ -666,8 +736,10 @@ export const LiveTrackingDashboardPage: React.FC = () => {
           )}
 
           <LiveTrackingMap
-            employees={mapEmployees}
+            employees={employees}
             selectedEmployee={selectedEmployee}
+            follow={follow}
+            onFollowChange={setFollow}
             onSelectEmployee={(emp) => setSelectedEmployee(emp)}
             onViewHistory={(emp) => {
               setSelectedEmployee(emp);

@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/button';
 import { useNotificationSocket } from '@/features/notifications/hooks/useNotificationSocket';
 import { NotificationBell } from '@/features/notifications/components/NotificationBell';
 import { NotificationDrawer } from '@/features/notifications/components/NotificationDrawer';
+import { useAuthStore } from '@/features/auth/store/authStore';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 export function Topbar({
   onMenuClick,
@@ -15,6 +17,10 @@ export function Topbar({
   sidebarOpen: boolean;
 }) {
   const { theme, setTheme } = useThemeStore();
+  const { user } = useAuthStore();
+  const firstName = user?.firstName || (user as any)?.first_name || 'there';
+  const fullName = `${firstName} ${user?.lastName || (user as any)?.last_name || ''}`.trim();
+  const initials = fullName.split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase();
 
   // Initialise notification socket at the layout level so all users get live pushes
   useNotificationSocket();
@@ -27,7 +33,7 @@ export function Topbar({
 
   return (
     <>
-      <header className="sticky top-0 z-40 h-16 flex-shrink-0 border-b border-border bg-card">
+      <header className="sticky top-0 z-40 h-[72px] flex-shrink-0 border-b border-border bg-card/95 backdrop-blur-xl">
         <div className="flex h-full items-center justify-between gap-2 px-3 sm:gap-4 sm:px-6">
           <div className="flex min-w-0 flex-1 items-center gap-3">
             <Button
@@ -50,7 +56,10 @@ export function Topbar({
               {sidebarOpen ? <PanelLeftClose className="size-4" /> : <PanelLeftOpen className="size-4" />}
             </Button>
 
-            <span className="hidden truncate text-base font-extrabold tracking-tight text-foreground md:inline">APPONEXTHRMS</span>
+            <div className="hidden min-w-0 md:block">
+              <p className="truncate text-[15px] font-extrabold tracking-tight text-foreground">Welcome back, {firstName} <span aria-hidden="true">👋</span></p>
+              <p className="mt-0.5 text-[11px] font-medium text-muted-foreground">Here’s what’s happening with your workforce today.</p>
+            </div>
 
           </div>
 
@@ -80,6 +89,17 @@ export function Topbar({
 
             {/* Notifications — popup dropdown connected to live API + Socket.IO */}
             <NotificationBell className="size-9 rounded-lg border border-border bg-card hover:bg-muted" iconClassName="size-4" />
+
+            <div className="ml-1 hidden items-center gap-2.5 border-l border-border pl-3 sm:flex">
+              <Avatar className="size-9 border border-primary/15">
+                <AvatarImage src={user?.avatarUrl || (user as any)?.avatar || (user as any)?.profile_picture} />
+                <AvatarFallback className="bg-primary/10 text-[11px] font-bold text-primary">{initials || 'HR'}</AvatarFallback>
+              </Avatar>
+              <div className="hidden max-w-28 leading-tight lg:block">
+                <p className="truncate text-[11px] font-bold text-foreground">{fullName}</p>
+                <p className="truncate text-[9px] font-medium text-muted-foreground">HR Administrator</p>
+              </div>
+            </div>
           </div>
         </div>
       </header>

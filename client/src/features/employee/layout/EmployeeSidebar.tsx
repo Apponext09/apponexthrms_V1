@@ -1,4 +1,4 @@
-import { SectionRail } from '@/layouts/SectionNavigation';
+import { SectionRail, type SectionGroup } from '@/layouts/SectionNavigation';
 import React, { useState } from 'react';
 import {
   LayoutDashboard,
@@ -51,6 +51,7 @@ import { SidebarProfileMenu } from '@/layouts/SidebarProfileMenu';
 export interface EmployeeSidebarProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  navigationGroups?: SectionGroup[];
 }
 
 interface SubNavItem {
@@ -74,40 +75,7 @@ interface NavSection {
   items: EmployeeNavItem[];
 }
 
-export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
-  const navigate = useNavigate();
-  const location = useLocation();
-  const { user, logout } = useAuthStore();
-  const { hasModule, isGatingEnabled } = useSubscriptionStore();
-
-  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
-    'EMPLOYEE CORE': true,
-    'ATTENDANCE': true,
-    'LEAVES': true,
-    'PAYROLL': true,
-    'LOAN MANAGEMENT': true,
-    'EXPENSE MANAGEMENT': true,
-    'LEARNING & ACADEMY (LMS)': true,
-    'DEVELOPMENT & ENGAGEMENT': true,
-    'CAREER & OPENINGS': true,
-    'TOOLS & SUPPORT': true,
-  });
-
-  const employeeId = user?.employeeId || 0;
-  const { employee } = useEmployee(employeeId);
-
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
-  };
-
-  const handleItemClick = (href: string, name: string) => {
-    navigate(href);
-  };
-
-  const isDashboardActive = location.pathname === '/employee/dashboard' || location.pathname === '/employee';
-
-  const navSections: NavSection[] = [
+export const EMPLOYEE_NAV_SECTIONS: NavSection[] = [
     {
       label: 'CoreHR',
       subscriptionModule: 'Core HR & Directory',
@@ -375,6 +343,41 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
     },
   ];
 
+export function EmployeeSidebar({ open, onOpenChange, navigationGroups }: EmployeeSidebarProps) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { user, logout } = useAuthStore();
+  const { hasModule, isGatingEnabled } = useSubscriptionStore();
+
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
+    'EMPLOYEE CORE': true,
+    'ATTENDANCE': true,
+    'LEAVES': true,
+    'PAYROLL': true,
+    'LOAN MANAGEMENT': true,
+    'EXPENSE MANAGEMENT': true,
+    'LEARNING & ACADEMY (LMS)': true,
+    'DEVELOPMENT & ENGAGEMENT': true,
+    'CAREER & OPENINGS': true,
+    'TOOLS & SUPPORT': true,
+  });
+
+  const employeeId = user?.employeeId || 0;
+  const { employee } = useEmployee(employeeId);
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
+
+  const handleItemClick = (href: string, name: string) => {
+    navigate(href);
+  };
+
+  const isDashboardActive = location.pathname === '/employee/dashboard' || location.pathname === '/employee';
+
+  const navSections = EMPLOYEE_NAV_SECTIONS;
+
   const visibleNavSections = navSections.filter(sec => {
     if (!isGatingEnabled || !sec.subscriptionModule) return true;
     return hasModule(sec.subscriptionModule);
@@ -409,7 +412,7 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
         <PortalSidebarBrand open={false} portalLabel="Employee Portal" />
 
         {/* Navigation List */}
-          <SectionRail id="employee" groups={[{ label: 'Dashboard', icon: LayoutDashboard, items: [{ name: 'Dashboard', href: '/employee/dashboard', icon: LayoutDashboard }] }, ...visibleNavSections.map(section => ({ ...section, icon: section.items[0]?.icon }))]} open={open} onNavigate={() => { if (window.innerWidth < 768) onOpenChange(false); }} />
+          <SectionRail id="employee" groups={navigationGroups ?? [{ label: 'Dashboard', icon: LayoutDashboard, items: [{ name: 'Dashboard', href: '/employee/dashboard', icon: LayoutDashboard }] }, ...visibleNavSections.map(section => ({ ...section, icon: section.items[0]?.icon }))]} open={open} onNavigate={() => { if (window.innerWidth < 768) onOpenChange(false); }} />
       </div>
 
       {/* Employee User Card Footer */}
