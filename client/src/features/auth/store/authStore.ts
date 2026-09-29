@@ -91,7 +91,7 @@ export const useAuthStore = create<AuthState>()(
           const isDemoKot = (userObj.email || email).toLowerCase().includes('kot@gmail.com') || (userObj.email || email).toLowerCase().includes('pp@gmail.com');
           const computedOrgId = userObj.organizationId || userObj.organization_id || orgObj.id || (isDemoKot ? 1 : Math.abs(Array.from(email).reduce((acc, char) => (acc << 5) - acc + char.charCodeAt(0), 0)) || 2);
 
-          const nameParts = (email.split('@')[0] || 'User').split(/[\._]/);
+          const nameParts = (email.split('@')[0] || 'User').split(/[._]/);
           const defaultFirstName = nameParts[0] ? nameParts[0].charAt(0).toUpperCase() + nameParts[0].slice(1) : 'User';
           const defaultLastName = nameParts[1] ? nameParts[1].charAt(0).toUpperCase() + nameParts[1].slice(1) : '';
 

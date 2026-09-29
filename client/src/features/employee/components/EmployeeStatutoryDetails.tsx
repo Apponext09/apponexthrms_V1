@@ -164,7 +164,7 @@ export const validateStatutoryField = (field: string, value: string, currentData
     case 'pfNumber': {
       const upper = cleanVal.toUpperCase();
       if (upper.length < 5 || upper.length > 35) return 'PF number must be 5 to 35 characters';
-      if (!/^[A-Z0-9\/\-]+$/.test(upper)) return 'PF number contains invalid characters (letters, numbers, slashes allowed)';
+      if (!/^[A-Z0-9/-]+$/.test(upper)) return 'PF number contains invalid characters (letters, numbers, slashes allowed)';
       return '';
     }
 

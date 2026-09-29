@@ -2,6 +2,16 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { apiClient } from '@/config/api';
 import { queryClient } from '@/config/query';
 
+export const useSettlementDetails = (settlementId?: number) =>
+  useQuery({
+    queryKey: ['settlement', settlementId],
+    queryFn: async () => {
+      const res = await apiClient.get(`/payroll/settlements/${settlementId}`);
+      return res.data?.data || res.data || null;
+    },
+    enabled: !!settlementId
+  });
+
 export const useSettlement = () => {
   const createSettlementMutation = useMutation({
     mutationFn: (data: any) =>
@@ -77,15 +87,7 @@ export const useSettlement = () => {
     }
   });
 
-  const getSettlementQuery = (settlementId: number) =>
-    useQuery({
-      queryKey: ['settlement', settlementId],
-      queryFn: async () => {
-        const res = await apiClient.get(`/payroll/settlements/${settlementId}`);
-        return res.data?.data || res.data || null;
-      },
-      enabled: !!settlementId
-    });
+  const getSettlementQuery = useSettlementDetails;
 
   const settlementsQuery = useQuery({
     queryKey: ['settlements'],

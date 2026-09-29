@@ -390,7 +390,7 @@ export function MyAttendanceFaceTab({
         : apiMsg;
       setErrorMsg(cleanError);
       toast.error(cleanError);
-    } font: {
+    } finally {
       setIsProcessing(false);
     }
   };

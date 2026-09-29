@@ -141,7 +141,7 @@ export function OrgLeaveSettings() {
           console.error("Failed to load company profile", e);
         }
 
-        let res = await apiClient.get('/settings/locations?pageSize=100');
+        const res = await apiClient.get('/settings/locations?pageSize=100');
         let list = res.data?.data || res.data?.data?.items || [];
         if (!Array.isArray(list) || list.length === 0) {
           const fallbackLocName = orgLoc || orgName;

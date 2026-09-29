@@ -10,7 +10,7 @@ import { useAiChatStore, ChatMessage } from '../store/aiChatStore';
 
 const renderMarkdown = (text: string, isUser: boolean) => {
   // Pre-process text to fix common AI formatting quirks
-  let cleanText = text
+  const cleanText = text
     .replace(/\]\s*\n\s*\(/g, '](') // Fix newlines between ] and ( in links
     .replace(/\*\*(\[[^\]]+\]\([^)]+\))\*\*/g, '$1') // Strip ** around links: **[text](url)** -> [text](url)
     .replace(/\[\*\*(.*?)\*\*\]\((.*?)\)/g, '[$1]($2)'); // Strip ** inside links: [**text**](url) -> [text](url)

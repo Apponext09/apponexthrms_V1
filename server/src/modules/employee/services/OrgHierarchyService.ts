@@ -19,8 +19,8 @@ export const DEFAULT_BACKEND_HIERARCHY_RULES: HierarchyRuleBackend[] = [
   { id: 'rule-it-head', designationOrRole: 'IT Head', allowedParentDesignations: ['CTO', 'CEO', 'COO', 'ORGANIZATION ADMIN'], hierarchyLevel: 3 },
   { id: 'rule-pm', designationOrRole: 'Project Manager', allowedParentDesignations: ['IT Head', 'Department Manager', 'Department Head', 'HR Manager', 'Finance Manager', 'CTO', 'COO', 'CFO', 'CEO', 'ORGANIZATION ADMIN'], hierarchyLevel: 4 },
   { id: 'rule-tl', designationOrRole: 'Team Leader', allowedParentDesignations: ['Project Manager', 'Department Manager', 'IT Head', 'Department Head', 'Manager', 'HR Manager', 'Finance Manager', 'Organization Manager', 'CTO', 'COO', 'CFO', 'CEO', 'ORGANIZATION ADMIN'], hierarchyLevel: 5 },
-  { id: 'rule-employee', designationOrRole: 'Employee', allowedParentDesignations: ['Team Leader'], hierarchyLevel: 6 },
-  { id: 'rule-intern', designationOrRole: 'Intern', allowedParentDesignations: ['Employee', 'HR Executive', 'Accountant'], hierarchyLevel: 7 },
+  { id: 'rule-employee', designationOrRole: 'Employee', allowedParentDesignations: ['Team Leader', 'Project Manager', 'Department Manager', 'Department Head', 'Manager', 'HR Manager', 'Finance Manager', 'IT Head', 'CTO', 'COO', 'CFO', 'CEO', 'ORGANIZATION ADMIN'], hierarchyLevel: 6 },
+  { id: 'rule-intern', designationOrRole: 'Intern', allowedParentDesignations: ['Team Leader', 'Employee', 'HR Executive', 'Accountant', 'Project Manager', 'Department Manager', 'Department Head', 'Manager', 'CTO', 'COO', 'CFO', 'CEO', 'ORGANIZATION ADMIN'], hierarchyLevel: 7 },
   { id: 'rule-dept-head', designationOrRole: 'Department Head', allowedParentDesignations: ['CTO', 'COO', 'CFO', 'CEO', 'ORGANIZATION ADMIN'], hierarchyLevel: 3 },
   { id: 'rule-dept-mgr', designationOrRole: 'Department Manager', allowedParentDesignations: ['Department Head', 'IT Head', 'HR Manager', 'Finance Manager', 'CTO', 'COO', 'CFO', 'CEO', 'ORGANIZATION ADMIN'], hierarchyLevel: 3 },
   { id: 'rule-mgr', designationOrRole: 'Manager', allowedParentDesignations: ['Department Head', 'IT Head', 'HR Manager', 'Finance Manager', 'CTO', 'COO', 'CFO', 'CEO', 'ORGANIZATION ADMIN'], hierarchyLevel: 3 },
@@ -62,27 +62,8 @@ export class OrgHierarchyService {
    * Update hierarchy rules for an organization
    */
   async saveHierarchyRules(ctx: TenantContext, rules: HierarchyRuleBackend[]): Promise<void> {
-    if (!Array.isArray(rules) || rules.length === 0) {
-      throw new ValidationError('At least one organization hierarchy rule is required.');
-    }
-    const normalizedRules = rules.map((rule, index) => {
-      const designationOrRole = String(rule?.designationOrRole || '').trim();
-      const hierarchyLevel = Number(rule?.hierarchyLevel);
-      if (!designationOrRole || !Number.isFinite(hierarchyLevel) || hierarchyLevel < 1) {
-        throw new ValidationError(`Hierarchy rule ${index + 1} must include a position name and a valid level.`);
-      }
-      return {
-        id: String(rule.id || `rule-${designationOrRole.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`),
-        designationOrRole,
-        allowedParentDesignations: Array.from(new Set((Array.isArray(rule.allowedParentDesignations) ? rule.allowedParentDesignations : [])
-          .map((parent) => String(parent).trim())
-          .filter(Boolean))),
-        ...(rule.departmentScope ? { departmentScope: String(rule.departmentScope).trim() } : {}),
-        hierarchyLevel,
-      };
-    });
     const db = getKnex();
-    const settingValue = JSON.stringify(normalizedRules);
+    const settingValue = JSON.stringify(rules);
 
     const existing = await db('organization_settings')
       .where({
@@ -157,14 +138,6 @@ export class OrgHierarchyService {
 
     // Target is Org Admin / Top Root / null
     if (!targetManagerId || targetManagerId === 999999) {
-      const rules = await this.getHierarchyRules(ctx);
-      const rule = rules.find((r) => r.designationOrRole.toLowerCase() === sourcePos.toLowerCase()) ||
-        DEFAULT_BACKEND_HIERARCHY_RULES.find((r) => r.designationOrRole.toLowerCase() === sourcePos.toLowerCase());
-      const allowedParents = rule?.allowedParentDesignations || [];
-      const allowsAdmin = allowedParents.some((p) => ['ceo', 'organization admin'].includes(p.toLowerCase()));
-      if (!allowsAdmin && sourcePos !== 'CEO') {
-        throw new ValidationError(`${sourcePos}s cannot report directly to Organization Admin. According to the organization hierarchy, please select the appropriate manager level.`);
-      }
       return;
     }
 
@@ -205,10 +178,15 @@ export class OrgHierarchyService {
     // Department Boundary Validation (Same Department Reporting Only for non-executives)
     const isExecutiveRole = (pos: string) => ['CEO', 'COO', 'CTO', 'CFO', 'ORGANIZATION ADMIN'].includes(pos.toUpperCase());
 
-    if (!isExecutiveRole(sourcePos) && !isExecutiveRole(targetPos)) {
-      const activeEmp = await db('employees').where('id', activeEmployeeId).first();
-      const targetMgr = await db('employees').where('id', targetManagerId).first();
+    const activeEmp = await db('employees').where('id', activeEmployeeId).first();
+    const targetMgr = await db('employees').where('id', targetManagerId).first();
 
+    // If reporting manager is unchanged from what is already saved in DB, do not block profile updates
+    if (activeEmp && activeEmp.reporting_manager_id && Number(activeEmp.reporting_manager_id) === Number(targetManagerId)) {
+      return;
+    }
+
+    if (!isExecutiveRole(sourcePos) && !isExecutiveRole(targetPos)) {
       if (activeEmp && targetMgr) {
         const srcDeptId = activeEmp.current_department_id;
         const tgtDeptId = targetMgr.current_department_id;
@@ -226,7 +204,7 @@ export class OrgHierarchyService {
     const allowedParents = rule?.allowedParentDesignations || [];
     const isAllowed = allowedParents.some((p) => p.toLowerCase() === targetPos.toLowerCase());
 
-    if (!isAllowed) {
+    if (!isAllowed && !isExecutiveRole(targetPos) && targetPos !== 'Employee') {
       const expectedStr = allowedParents.join(' or ') || 'its immediate manager';
       throw new ValidationError(`${sourcePos}s can report only to ${expectedStr}. Assigned position (${targetPos}) is not valid under the configured organization hierarchy.`);
     }

@@ -368,7 +368,7 @@ export const JobReferencePage: React.FC = () => {
 
     // 3. Contact Number Validation
     if (candidateForm.contactNumber.trim()) {
-      const cleanPhone = candidateForm.contactNumber.replace(/[\s\-\+\(\)]/g, '');
+      const cleanPhone = candidateForm.contactNumber.replace(/[\s\-+()]/g, '');
       if (cleanPhone.length < 7 || !/^\d+$/.test(cleanPhone)) {
         toast.error('Invalid Contact Number. Please enter a valid phone number.');
         setStatusModal({

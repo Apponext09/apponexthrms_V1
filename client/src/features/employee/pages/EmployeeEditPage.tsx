@@ -16,6 +16,7 @@ import {
 } from '../hooks/useEmployeeProfile';
 import { useDepartments } from '../../settings/hooks/useDepartments';
 import { useLocations } from '../../settings/hooks/useLocations';
+import { getEligibleReportingManagers, formatCandidateLabel } from '../utils/reportingHierarchy';
 
 function formatInputDate(value: any): string {
   if (!value) return '';
@@ -394,14 +395,35 @@ export function EmployeeEditPage() {
                     value={basicForm.reportingManagerId || ''}
                     onChange={(e) => setBasicForm({ ...basicForm, reportingManagerId: e.target.value ? Number(e.target.value) : '' })}
                   >
-                    <option value="">-- No Manager --</option>
-                    {allEmployees
-                      .filter((emp: any) => emp.id !== employeeId)
-                      .map((emp: any) => (
-                        <option key={emp.id} value={emp.id}>
-                          {emp.firstName} {emp.lastName} ({emp.employeeCode})
-                        </option>
-                      ))}
+                    {(() => {
+                      const eligibleManagers = getEligibleReportingManagers({
+                        targetEmployee: {
+                          ...employee,
+                          id: employeeId,
+                          accessRole: (employee as any)?.accessRole,
+                          jobTitle: (employee as any)?.jobTitle,
+                          currentDepartmentId: basicForm.departmentId,
+                        },
+                        selectedDepartmentId: basicForm.departmentId,
+                        allDepartments: departmentsData?.data || [],
+                        allEmployees: allEmployees || [],
+                      });
+
+                      return (
+                        <>
+                          <option value="">
+                            {eligibleManagers.length > 0
+                              ? '-- Select Reporting Manager / Team Lead --'
+                              : '-- No eligible reporting manager in this department --'}
+                          </option>
+                          {eligibleManagers.map((emp: any) => (
+                            <option key={emp.id} value={emp.id}>
+                              {formatCandidateLabel(emp)}
+                            </option>
+                          ))}
+                        </>
+                      );
+                    })()}
                   </select>
                 </div>
               </CardContent>

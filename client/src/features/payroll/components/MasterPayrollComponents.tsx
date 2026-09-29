@@ -319,7 +319,7 @@ export const MasterPayrollComponents: React.FC = () => {
     const bracketMatches = str.match(/\[([^\]]+)\]/g) || [];
     for (const match of bracketMatches) {
       const inner = match.slice(1, -1).trim();
-      if (/[\+\-\*\/%^]/.test(inner)) {
+      if (/[-+*/%^]/.test(inner)) {
         const tokens = inner.match(/[a-zA-Z_][a-zA-Z0-9_]*/g) || [];
         for (const token of tokens) {
           const tLower = token.toLowerCase();
@@ -350,12 +350,12 @@ export const MasterPayrollComponents: React.FC = () => {
     }
 
     // 5. Consecutive operators like ++, --, **, //, +*, *+, etc.
-    if (/[\+\-\*\/]{2,}/.test(str.replace(/\*\*/g, ''))) {
+    if (/[-+*/]{2,}/.test(str.replace(/\*\*/g, ''))) {
       return { isValid: false, error: 'Invalid consecutive math operators detected (e.g. ++, //, *+).' };
     }
 
     // 6. Trailing operator at the end e.g. [CTC] +
-    if (/[\+\-\*\/\,\(\[]$/.test(str)) {
+    if (/[-+*/,([]$/.test(str)) {
       return { isValid: false, error: 'Formula cannot end with an open operator or bracket.' };
     }
 

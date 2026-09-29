@@ -64,7 +64,7 @@ function parseMediaEmbed(url?: string | null, contentType?: string | null) {
   }
 
   // 2. Vimeo
-  const vimeoMatch = trimmed.match(/vimeo\.com\/(?:channels\/(?:\w+\/)?|groups\/([^\/]*)\/videos\/|video\/|)(\d+)/);
+  const vimeoMatch = trimmed.match(/vimeo\.com\/(?:channels\/(?:\w+\/)?|groups\/([^/]*)\/videos\/|video\/|)(\d+)/);
   if (vimeoMatch && vimeoMatch[2]) {
     return {
       type: 'vimeo' as const,
@@ -505,7 +505,7 @@ export function MyEnrollmentsPage() {
                         )}
                       </div>
 
-                      {Boolean(enr.batchMeetingLink || (enr as any).batch_meeting_link) ? (
+                      {(enr.batchMeetingLink || (enr as any).batch_meeting_link) ? (
                         <a
                           href={enr.batchMeetingLink || (enr as any).batch_meeting_link || '#'}
                           target="_blank"

@@ -1055,7 +1055,7 @@ export const MrfRequestPage: React.FC = () => {
       if (resumeBankFilters.skills) params.skills = resumeBankFilters.skills;
       if (resumeBankFilters.contact) params.phone = resumeBankFilters.contact;
       
-      let res = await apiClient.get('/recruitment/resume-bank', { params });
+      const res = await apiClient.get('/recruitment/resume-bank', { params });
       let list = res.data?.success && Array.isArray(res.data.data) ? res.data.data : [];
 
       if (list.length === 0) {
@@ -1760,7 +1760,7 @@ export const MrfRequestPage: React.FC = () => {
 
   const applyFilters = (mrNum = searchMrNumber, pos = selectedPosition, reqBy = selectedRequestedBy) => {
     const safeData = Array.isArray(data) ? data : [];
-    let result = safeData.filter(item => {
+    const result = safeData.filter(item => {
       if (!item) return false;
       const isClosed = isMrfExpiredOrClosed(item);
       const matchStatus = activeTab === 'open' ? !isClosed : isClosed;

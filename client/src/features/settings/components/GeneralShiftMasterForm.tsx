@@ -282,7 +282,7 @@ export function GeneralShiftMasterForm({ onCancel, onSave }: GeneralShiftMasterF
 
     setSubmitting(true);
     try {
-      let finalShiftName = shiftName.trim();
+      const finalShiftName = shiftName.trim();
       const rawCode = finalShiftName
         .toUpperCase()
         .replace(/\s+/g, '-')

@@ -159,8 +159,8 @@ function buildPayslipHtmlDoc(d: PayslipDocData & { items?: PayslipItemDetail[] }
   const fmt = (n: number) => (Number(n) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   // ── 1. Dynamically Build Earnings & Deductions List ──
-  let earningsList: Array<{ name: string; earned: number; actual: number; cumulative: number; group: string }> = [];
-  let deductionsList: Array<{ name: string; earned: number; actual: number; cumulative: number; group: string }> = [];
+  const earningsList: Array<{ name: string; earned: number; actual: number; cumulative: number; group: string }> = [];
+  const deductionsList: Array<{ name: string; earned: number; actual: number; cumulative: number; group: string }> = [];
 
   if (d.items && d.items.length > 0) {
     for (const item of d.items) {

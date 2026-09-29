@@ -31,15 +31,11 @@ export function useShifts() {
   }, [selectedCompanyId]);
 
   const getMyShift = useCallback(async (date?: string) => {
-    try {
-      const response = await apiClient.get('/attendance/my-shift', {
-        params: date ? { date } : {},
-      });
-      setMyShift(response.data.data);
-      return response.data.data;
-    } catch (err) {
-      throw err;
-    }
+    const response = await apiClient.get('/attendance/my-shift', {
+      params: date ? { date } : {},
+    });
+    setMyShift(response.data.data);
+    return response.data.data;
   }, []);
 
   const createShift = useCallback(async (shiftData: any) => {
@@ -80,15 +76,11 @@ export function useShifts() {
   }, []);
 
   const toggleShiftStatus = useCallback(async (shiftId: number, status: 'active' | 'inactive') => {
-    try {
-      const response = await apiClient.patch(`/attendance/shifts/${shiftId}/status`, { status });
-      setShifts((prev) =>
-        prev.map((s) => (s.id === shiftId ? { ...s, status } : s))
-      );
-      return response.data.data;
-    } catch (err) {
-      throw err;
-    }
+    const response = await apiClient.patch(`/attendance/shifts/${shiftId}/status`, { status });
+    setShifts((prev) =>
+      prev.map((s) => (s.id === shiftId ? { ...s, status } : s))
+    );
+    return response.data.data;
   }, []);
 
   // ─── Assignments ──────────────────────────────────────────
@@ -163,27 +155,19 @@ export function useShifts() {
   }, []);
 
   const approveSwap = useCallback(async (swapId: number) => {
-    try {
-      const response = await apiClient.post(`/attendance/shift-swaps/${swapId}/approve`);
-      setSwapRequests((prev) =>
-        prev.map((s) => (s.id === swapId ? { ...s, status: 'approved' } : s))
-      );
-      return response.data.data;
-    } catch (err) {
-      throw err;
-    }
+    const response = await apiClient.post(`/attendance/shift-swaps/${swapId}/approve`);
+    setSwapRequests((prev) =>
+      prev.map((s) => (s.id === swapId ? { ...s, status: 'approved' } : s))
+    );
+    return response.data.data;
   }, []);
 
   const rejectSwap = useCallback(async (swapId: number, reason?: string) => {
-    try {
-      const response = await apiClient.post(`/attendance/shift-swaps/${swapId}/reject`, { reason });
-      setSwapRequests((prev) =>
-        prev.map((s) => (s.id === swapId ? { ...s, status: 'rejected' } : s))
-      );
-      return response.data.data;
-    } catch (err) {
-      throw err;
-    }
+    const response = await apiClient.post(`/attendance/shift-swaps/${swapId}/reject`, { reason });
+    setSwapRequests((prev) =>
+      prev.map((s) => (s.id === swapId ? { ...s, status: 'rejected' } : s))
+    );
+    return response.data.data;
   }, []);
 
   return {

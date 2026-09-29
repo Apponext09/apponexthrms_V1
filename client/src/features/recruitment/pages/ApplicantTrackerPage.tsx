@@ -626,7 +626,7 @@ export const ApplicantTrackerPage: React.FC = () => {
           const rawName = item.candidateName || item.candidate_name || item.name || 'N/A';
           const cleanName = rawName
             .replace(/^resume[_\s-]*(\d+pct|\d+%)?[_\s-]*(match)?[_\s-]*/i, '')
-            .replace(/[_\-]+/g, ' ')
+            .replace(/[_-]+/g, ' ')
             .trim() || rawName;
 
           return {

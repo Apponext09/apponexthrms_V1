@@ -394,7 +394,7 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
     // 0. Pre-process bracket notation: e.g. [CTC / 12], [ALLOWANCE * 100 / CTC], [50 % ctc], [CTC], [Basic]
     expr = expr.replace(/\[\s*([0-9.]+)\s*%\s*(?:of\s*)?([a-z_]+)\s*\]/gi, '($2 * ($1 / 100))');
     expr = expr.replace(/\[\s*([^\]]+?)\s*\]/g, (_, innerKey) => {
-      if (/[\+\-\*\/%^]/.test(innerKey)) {
+      if (/[-+*/%^]/.test(innerKey)) {
         return `(${innerKey})`;
       }
       const k = innerKey.toLowerCase().trim().replace(/[\s\-_]+/g, '_');
@@ -1381,7 +1381,7 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
                                   const val = Number(e.target.value) || 0;
                                   setModalEarnings(prev => {
                                     const updated = prev.map((it, i) => i === idx ? { ...it, amount: val } : it);
-                                    let saIdx = updated.findIndex(it => it.name.toLowerCase().includes('special'));
+                                    const saIdx = updated.findIndex(it => it.name.toLowerCase().includes('special'));
                                     const mGross = inputFrequency === 'monthly' ? (Number(salaryInput) || 0) : Math.round((Number(salaryInput) || 0) / 12);
                                     if (mGross > 0) {
                                       const otherSum = updated
@@ -1584,6 +1584,6 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
       </Dialog>
     </div>
   );
-};
+}
 
 export default EmployeePayrollDetail;

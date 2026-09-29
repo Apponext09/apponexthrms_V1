@@ -12,10 +12,10 @@ import { Label } from '@/components/ui/label';
 import { useUpdateEmployee, useEmployees } from '../hooks/useEmployees';
 import { useDepartments } from '../../settings/hooks/useDepartments';
 import { useEmployeeTypes } from '../../settings/hooks/useEmployeeTypes';
-import { useAccessRoles } from '@/features/settings/hooks/useAccessRoles';
 import { useEmployeeLinkedMasters, useEmployeeMasterValues, useSaveEmployeeMasterValues } from '../../master-builder/hooks/useEmployeeCustomMasters';
 import { AlertCircle, Edit2, Copy, Check, Eye, EyeOff, Layers } from 'lucide-react';
 import { toast } from 'sonner';
+import { getEligibleReportingManagers, formatCandidateLabel } from '../utils/reportingHierarchy';
 
 const updateEmployeeCode = () =>
   `EMP${Date.now().toString().slice(-8)}${Math.floor(100 + Math.random() * 900)}`;
@@ -64,7 +64,7 @@ export function EmployeeEditModal({
         avatarUrl: employee.avatarUrl || '',
         departmentId: employee.currentDepartmentId ? String(employee.currentDepartmentId) : '',
         jobTitle: employee.designation?.name || '',
-        accessRole: employee.accessRole || employee.access_role || employee.user?.role?.code || 'employee',
+        accessRole: employee.user?.role?.code || 'employee',
         password: '',
         confirmPassword: '',
       });
@@ -83,7 +83,6 @@ export function EmployeeEditModal({
   const { employees: allEmployees } = useEmployees({ pageSize: 500 });
   const { data: departmentsData } = useDepartments(1, 100);
   const { employeeTypes } = useEmployeeTypes();
-  const { data: accessRoles = [] } = useAccessRoles();
   const { data: linkedMasters = [] } = useEmployeeLinkedMasters();
   const { data: currentMasterValues = [] } = useEmployeeMasterValues(employee?.id);
   const saveMasterValuesMutation = useSaveEmployeeMasterValues(employee?.id);
@@ -178,6 +177,7 @@ export function EmployeeEditModal({
       return;
     }
 
+    
     const payload: any = {
       firstName: formData.firstName,
       lastName: formData.lastName,
@@ -453,7 +453,13 @@ export function EmployeeEditModal({
                       value={formData.accessRole}
                       onChange={(e) => setFormData({ ...formData, accessRole: e.target.value })}
                     >
-                      {accessRoles.map((role) => <option key={role.id} value={role.code}>{role.name}</option>)}
+                      <option value="employee">Employee</option>
+                      <option value="team_lead">Team Lead</option>
+                      <option value="department_head">Manager</option>
+                      <option value="hr_manager">HR</option>
+                      <option value="intern">Intern</option>
+                      <option value="consultant">Consultant</option>
+                      <option value="finance">Finance</option>
                     </select>
                     <p className="text-xs text-muted-foreground mt-1">
                       Controls which portal they log into.{' '}
@@ -489,14 +495,37 @@ export function EmployeeEditModal({
                           onChange={(e) => setFormData({ ...formData, reportingManagerId: e.target.value })}
                           disabled={!formData.departmentId}
                         >
-                          <option value="">{formData.departmentId ? '-- No reporting manager yet --' : '-- Select a department first --'}</option>
-                          {departmentEmployees.map((emp: any) => (
-                            <option key={emp.id} value={emp.id}>
-                              {emp.firstName} {emp.lastName} ({emp.employeeCode})
-                            </option>
-                          ))}
-                        </select>
-                        <p className="text-xs text-muted-foreground mt-1">Only people already assigned to this department are listed.</p>
+                          {(() => {
+                            const eligibleManagers = getEligibleReportingManagers({
+                              targetEmployee: {
+                                ...employee,
+                                id: employee?.id,
+                                accessRole: formData.accessRole,
+                                jobTitle: formData.jobTitle,
+                                currentDepartmentId: formData.departmentId,
+                              },
+                              selectedDepartmentId: formData.departmentId,
+                              allDepartments: departmentsData?.data || [],
+                              allEmployees: allEmployees || [],
+                            });
+
+                            return (
+                              <>
+                                <option value="">
+                                  {formData.departmentId
+                                    ? (eligibleManagers.length > 0
+                                        ? '-- Select Reporting Manager / Team Lead --'
+                                        : '-- No eligible reporting manager in this department --')
+                                    : '-- Select a department first --'}
+                                </option>
+                                {eligibleManagers.map((emp: any) => (
+                                  <option key={emp.id} value={emp.id}>
+                                    {formatCandidateLabel(emp)}
+                                  </option>
+                                ))}
+                              </>
+                            );
+                          })()}
                       </>
                     )}
                   </div>

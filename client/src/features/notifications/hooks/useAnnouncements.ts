@@ -6,6 +6,16 @@ interface AnnouncementListOptions {
   pageSize?: number;
 }
 
+export const useAnnouncement = (id?: number) =>
+  useQuery({
+    queryKey: ['announcement', id],
+    queryFn: async () => {
+      const response = await apiClient.get(`/notifications/announcements/${id}`);
+      return response.data;
+    },
+    enabled: !!id,
+  });
+
 export const useAnnouncements = (options?: AnnouncementListOptions) => {
   const queryClient = useQueryClient();
 
@@ -21,15 +31,7 @@ export const useAnnouncements = (options?: AnnouncementListOptions) => {
     },
   });
 
-  const getAnnouncementQuery = (id?: number) =>
-    useQuery({
-      queryKey: ['announcement', id],
-      queryFn: async () => {
-        const response = await apiClient.get(`/notifications/announcements/${id}`);
-        return response.data;
-      },
-      enabled: !!id,
-    });
+  const getAnnouncementQuery = useAnnouncement;
 
   const createAnnouncementMutation = useMutation({
     mutationFn: async (input: any) => {
