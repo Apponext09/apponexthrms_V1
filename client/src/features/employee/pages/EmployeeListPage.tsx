@@ -5,6 +5,7 @@ import { EmployeeDataTable } from '../components/EmployeeDataTable';
 import { EmployeeCreateModal } from '../components/EmployeeCreateModal';
 import { BulkUploadModal } from '../components/BulkUploadModal';
 import { Button } from '@/components/ui/button';
+import { PermissionGate } from '@/components/PermissionGate';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -243,18 +244,18 @@ export function EmployeeListPage() {
 
           {/* Action buttons */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            {config.enableBulkUpload && (
+            {config.enableBulkUpload && <PermissionGate permission="employee.profile.create">{
               <button className="elp-btn-outline" onClick={() => setIsBulkModalOpen(true)}>
                 <Upload size={13} strokeWidth={2.2} />
                 Bulk Upload
               </button>
-            )}
-            {config.enableAddEmployee && (
+            }</PermissionGate>}
+            {config.enableAddEmployee && <PermissionGate permission="employee.profile.create">{
               <button className="elp-btn-primary" onClick={() => setIsCreateModalOpen(true)}>
                 <Plus size={14} strokeWidth={2.5} />
                 Add Employee
               </button>
-            )}
+            }</PermissionGate>}
           </div>
         </div>
 

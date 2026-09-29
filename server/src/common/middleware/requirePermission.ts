@@ -51,29 +51,6 @@ async function permissionCheckAsync(
     return;
   }
 
-  // Allow managers, department heads, and team leads to create and access MRF requests & view recruitment/interview info
-  const isMrfOrHiringOp = requiredPermissions.every(p =>
-    p.startsWith('recruitment.mrf.') ||
-    p.startsWith('recruitment.interview.') ||
-    p === 'recruitment.read' ||
-    p === 'recruitment.job.read' ||
-    p === 'recruitment.jobs.read' ||
-    p === 'recruitment.application.read'
-  );
-  const isPerformanceOp = requiredPermissions.every(p =>
-    p.startsWith('performance.')
-  );
-  if (
-    (isMrfOrHiringOp || isPerformanceOp) &&
-    (roles.includes('manager') ||
-      roles.includes('department_head') ||
-      roles.includes('team_lead') ||
-      roles.includes('reporting_manager'))
-  ) {
-    next();
-    return;
-  }
-
   const { organizationId, userId } = req.ctx;
 
   // Check if user has all required permissions via RBAC
@@ -111,14 +88,6 @@ async function permissionCheckAsync(
         return;
       }
 
-      // Check manager / team lead role codes in DB
-      if (
-        (isMrfOrHiringOp || isPerformanceOp) &&
-        roleCodes.some(r => ['manager', 'department_head', 'team_lead', 'reporting_manager'].includes(r))
-      ) {
-        next();
-        return;
-      }
     } catch (err) {
       // A failed permission lookup must never turn into access.
       throw err;

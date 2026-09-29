@@ -18,6 +18,7 @@ export const SYSTEM_ROLE_CODES = Object.values(SYSTEM_ROLES);
 
 // Export performance permissions
 export * from './performance.permissions.js';
+export * from './attendance.permissions.js';
 
 // Permission module catalog (will grow as phases 2-18 are built)
 export const PERMISSION_MODULES = {
@@ -177,3 +178,5 @@ export const ERROR_CODE = {
   RATE_LIMITED: 'rate_limited',
   IP_RESTRICTED: 'ip_restricted',
 } as const;
+export * from './settings-access.js';
+export * from './tab-access.js';

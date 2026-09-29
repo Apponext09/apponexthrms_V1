@@ -17,7 +17,7 @@ import {
   Bell,
   UserCheck,
 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
@@ -25,6 +25,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { HelpHint } from '../components/HelpHint';
+import { useAuthStore } from '@/features/auth/store/authStore';
 
 interface WeeklyWorkDay {
   is_working: boolean;
@@ -42,6 +43,16 @@ interface Location {
 }
 
 export function OrgLeaveSettings() {
+  const location = useLocation();
+  const leaveSettingsPath = location.pathname.startsWith('/hr/')
+    ? '/hr/settings/leave-policies'
+    : '/settings/leave-policies';
+  const user = useAuthStore((state) => state.user);
+  const roles = [...(user?.roles ?? []), user?.accessRole, user?.role]
+    .filter(Boolean)
+    .map((role) => String(role).toLowerCase());
+  const canManage = roles.some((role) => ['organization_admin', 'super_admin', 'admin', 'ceo', 'hr', 'hr_admin', 'hr_manager'].includes(role))
+    || (user?.permissions ?? []).some((permission) => permission === '*' || permission === 'leave.policy.manage');
   const [locations, setLocations] = useState<Location[]>([]);
   const [companyName, setCompanyName] = useState<string>('');
   const [selectedLocationUuid, setSelectedLocationUuid] = useState<string>(''); // empty means Org-Wide
@@ -445,11 +456,17 @@ export function OrgLeaveSettings() {
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-5xl mx-auto space-y-6">
+      {!canManage && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-medium text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+          View-only access. Ask an administrator for Manage Leave Policies permission to change these settings.
+        </div>
+      )}
+      <fieldset disabled={!canManage} className="contents">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-200 dark:border-slate-800">
         <div className="flex items-center gap-3">
           <Link
-            to="/settings/leave-policies"
+            to={leaveSettingsPath}
             className="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:border-slate-300 shadow-2xs transition-all"
             title="Back to Leave Policies"
           >
@@ -600,7 +617,7 @@ export function OrgLeaveSettings() {
                   <span>Save Clubbing Rules</span>
                 </Button>
                 <Link
-                  to="/settings/leave-policies"
+                  to={leaveSettingsPath}
                   className="text-xs font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
                 >
                   Cancel
@@ -1613,6 +1630,7 @@ export function OrgLeaveSettings() {
         </DialogContent>
       </Dialog>
 
+      </fieldset>
     </div>
   );
 }

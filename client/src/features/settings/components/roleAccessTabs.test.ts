@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { buildAccessTabs, buildCommonAccessModules, buildCompleteAccessModules, defaultPortalForRole, menuForRolePortal, menusForAccessRole, modulesForRolePortal, orderAccessModules } from './roleAccessTabs';
+import { buildAccessSourceGroups, buildAccessTabs, buildCommonAccessModules, buildCompleteAccessModules, defaultPortalForRole, menuForRolePortal, menusForAccessRole, modulesForRolePortal, orderAccessModules } from './roleAccessTabs';
+import { buildSourceLabelledModules } from './roleAccessTabs';
+import { LayoutDashboard } from 'lucide-react';
 import type { RoleMenuItem } from './roleMenuSelection';
 import { PORTAL_ROUTES } from '../../../../../server/src/modules/rbac/menu.catalog';
 
@@ -15,6 +17,32 @@ const menus: RoleMenuItem[] = [
 ];
 
 describe('access role navigation tabs', () => {
+  it('lists all CEO pages before HR pages inside a single module, keeping source IDs separate', () => {
+    const pages = ['intern', 'hr', 'admin'].map((portal, index) => ({
+      id: index + 900, code: portal, label: portal, parentId: null, portal,
+    }));
+    const result = buildSourceLabelledModules([{ label: 'Attendance', icon: LayoutDashboard, tabs: [
+      { label: 'My Attendance', icon: LayoutDashboard, menus: pages },
+      { label: 'Face Punch', icon: LayoutDashboard, menus: pages.map((page) => ({ ...page, id: page.id + 10 })) },
+    ] }]);
+    expect(result).toHaveLength(1);
+    expect(result[0].tabs.map((tab) => `${tab.label} (${tab.source})`)).toEqual([
+      'My Attendance (CEO / Admin)', 'Face Punch (CEO / Admin)',
+      'My Attendance (HR)', 'Face Punch (HR)',
+      'My Attendance (Intern)', 'Face Punch (Intern)',
+    ]);
+    for (const tab of result[0].tabs) expect(tab.menus.every((menu) => menu.portal === tab.portal)).toBe(true);
+  });
+  it('clearly separates CEO/Admin, HR and Intern source modules without mixing IDs', () => {
+    const routes = [['admin', '/dashboard'], ['hr', '/hr/profile'], ['hr', '/hr/my-profile'], ['intern', '/intern/profile']];
+    const pages = routes.map(([portal, route], index) => ({ id: index + 300, code: route, label: route, parentId: null, portal, route }));
+    const groups = buildAccessSourceGroups(buildCompleteAccessModules(pages));
+    expect(groups.map((group) => group.label)).toEqual(['CEO / Admin', 'HR', 'Intern']);
+    for (const group of groups) expect(group.modules.flatMap((module) => module.tabs.flatMap((tab) => tab.menus)).every((menu) => menu.portal === group.portal)).toBe(true);
+    const hrTabs = groups.find((group) => group.portal === 'hr')!.modules.flatMap((module) => module.tabs);
+    expect(hrTabs).toHaveLength(1);
+    expect(hrTabs[0].menus).toHaveLength(2);
+  });
   it('uses working navigation labels and places dashboard before attendance', () => {
     const view = buildAccessTabs(menus, 'admin');
     expect(view.groups.slice(0, 2).map((group) => group.label)).toEqual(['Dashboard', 'Attendance']);
@@ -92,9 +120,24 @@ describe('access role navigation tabs', () => {
       { id: 104, code: 'encashment', label: 'Encashment', parentId: 1, portal: 'admin', route: '/leaves/encashment' },
     ]);
     const leaves = view.find((module) => module.label === 'Leaves')!;
-    expect(leaves.tabs.map((tab) => tab.label)).toEqual(['My Leaves', 'Leave Encashment']);
-    expect(menusForAccessRole(leaves.tabs[0], 'admin').map((menu) => menu.id)).toEqual([101, 102]);
+    expect(leaves.tabs.map((tab) => tab.label)).toEqual(['My Leaves']);
+    expect(menusForAccessRole(leaves.tabs[0], 'admin').map((menu) => menu.id)).toEqual([101, 102, 104]);
     expect(menusForAccessRole(leaves.tabs[0], 'employee').map((menu) => menu.id)).toEqual([103]);
+  });
+
+  it('shows LMS Settings once under Settings with all working URL variants', () => {
+    const routes = [
+      ['admin', '/lms/settings/integrations'], ['admin', '/settings/lms-integrations'],
+      ['admin', '/settings-group/lms-integrations'], ['hr', '/hr/lms/settings/integrations'],
+      ['hr', '/hr/settings/lms-integrations'],
+    ];
+    const view = buildCompleteAccessModules(routes.map(([portal, route], index) => ({ id: index + 200, code: route, label: 'Integrations', parentId: null, portal, route })));
+    const all = view.flatMap((module) => module.tabs);
+    expect(all).toHaveLength(1);
+    const tab = view.find((module) => module.label === 'Settings')?.tabs[0];
+    expect(tab?.label).toBe('LMS Settings');
+    expect(tab?.menus).toHaveLength(5);
+    expect(menusForAccessRole(tab!, 'hr').map((menu) => menu.portal)).toEqual(['hr', 'hr']);
   });
 
   it('keeps Shift Management separate with both General and Roster Shift tabs', () => {

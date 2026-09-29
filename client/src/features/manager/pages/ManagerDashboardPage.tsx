@@ -13,10 +13,12 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { getUserRoleAndDept } from '@/lib/userProfile';
 import { cn } from '@/lib/utils';
+import { useMenuAccess } from '@/features/access/useMenuAccess';
 
 export function ManagerDashboardPage() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
+  const menuAccess = useMenuAccess();
   const roleInfo = getUserRoleAndDept(user);
   const { dashboard, isDashboardLoading, employees, submitRecommendation, isSubmittingRecommendation } = useManager();
 
@@ -78,6 +80,8 @@ export function ManagerDashboardPage() {
     { label: 'Performance', desc: 'Goals & annual reviews', icon: TrendingUp, href: '/manager/performance', accent: 'emerald' },
     { label: 'Hiring Requisitions', desc: 'Request new headcount', icon: Briefcase, href: '/manager/hiring', accent: 'blue' },
   ];
+  const canOpen = (path: string) => menuAccess.ready && menuAccess.canAccessPath(path);
+  const grantedQuickLinks = quickLinks.filter((link) => canOpen(link.href));
 
   const accentStyles: Record<string, { bg: string; border: string; text: string; iconBg: string; badge: string }> = {
     primary: {
@@ -158,21 +162,21 @@ export function ManagerDashboardPage() {
               </div>
             </div>
             <div className="flex items-center gap-2.5 shrink-0 pt-2 sm:pt-0">
-              <Button
+              {canOpen('/manager/face-attendance') && <Button
                 variant="outline"
                 size="sm"
                 onClick={() => navigate('/manager/face-attendance')}
                 className="text-xs font-semibold gap-2 rounded-xl border-border bg-card hover:bg-muted/70 transition-all shadow-2xs"
               >
                 <Scan className="h-3.5 w-3.5 text-primary" /> Face Attendance
-              </Button>
-              <Button
+              </Button>}
+              {canOpen('/manager/team') && <Button
                 size="sm"
                 onClick={() => navigate('/manager/team')}
                 className="text-xs font-bold gap-2 rounded-xl shadow-xs"
               >
                 <Users className="h-3.5 w-3.5" /> View Department
-              </Button>
+              </Button>}
             </div>
           </div>
         </div>
@@ -315,7 +319,7 @@ export function ManagerDashboardPage() {
               Manager Portals & Actions
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {quickLinks.map((link) => {
+              {grantedQuickLinks.map((link) => {
                 const Icon = link.icon;
                 return (
                   <button
@@ -413,7 +417,7 @@ export function ManagerDashboardPage() {
                 </div>
               )}
 
-              {employees.length > 0 && (
+              {employees.length > 0 && canOpen('/manager/team') && (
                 <div className="p-3 border-t border-border/60 bg-muted/20 flex-shrink-0">
                   <button
                     onClick={() => navigate('/manager/team')}

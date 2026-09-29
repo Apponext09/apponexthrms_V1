@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import type { Employee } from '@/types';
 import { useDeleteEmployee } from '../hooks/useEmployees';
+import { PermissionGate } from '@/components/PermissionGate';
 import { EmployeeCustomizationConfig } from '../store/employeeCustomizationStore';
 import { cn } from '@/lib/utils';
 
@@ -365,7 +366,7 @@ export function EmployeeDataTable({
                         </Button>
                       )}
 
-                      {cols.actionDelete && (
+                      {cols.actionDelete && <PermissionGate permission="employee.profile.delete">{
                         <Button
                           variant="ghost"
                           size="sm"
@@ -386,7 +387,7 @@ export function EmployeeDataTable({
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </Button>
-                      )}
+                      }</PermissionGate>}
                     </div>
                   </TableCell>
                 )}

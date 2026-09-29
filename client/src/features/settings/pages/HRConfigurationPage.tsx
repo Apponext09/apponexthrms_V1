@@ -30,6 +30,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { HelpHint } from '../components/HelpHint';
 import { apiClient } from '@/config/api';
+import { useConfigurationTabAccess } from '../hooks/useConfigurationTabAccess';
 
 export type ConfigTabId =
   | 'attendance-adjustment'
@@ -142,7 +143,7 @@ const CONFIG_TABS: ConfigTabItem[] = [
 ];
 
 export function HRConfigurationPage() {
-  const [activeTab, setActiveTab] = useState<ConfigTabId>('attendance-adjustment');
+  const { activeTab, setActiveTab, allowedTabs, ready: accessReady } = useConfigurationTabAccess(CONFIG_TABS);
   const [searchQuery, setSearchQuery] = useState('');
   const [saving, setSaving] = useState(false);
   const [loadingSettings, setLoadingSettings] = useState(true);
@@ -346,13 +347,13 @@ export function HRConfigurationPage() {
   }, []);
 
   // Filter tabs
-  const filteredTabs = CONFIG_TABS.filter(
+  const filteredTabs = allowedTabs.filter(
     (t) =>
       t.label.toLowerCase().includes(searchQuery.toLowerCase()) ||
       t.description.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const activeTabMeta = CONFIG_TABS.find((t) => t.id === activeTab) || CONFIG_TABS[0];
+  const activeTabMeta = allowedTabs.find((t) => t.id === activeTab) || CONFIG_TABS[0];
 
   const handleSaveCurrentTab = async () => {
     setSaving(true);
@@ -495,6 +496,9 @@ export function HRConfigurationPage() {
       },
     }));
   };
+
+  if (!accessReady) return <p role="status" className="p-6">Loading configuration access...</p>;
+  if (!activeTab) return <p role="alert" className="p-6">No configuration tabs are assigned to your role. Ask an administrator to assign them in Access Management.</p>;
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto font-sans select-none pb-14">

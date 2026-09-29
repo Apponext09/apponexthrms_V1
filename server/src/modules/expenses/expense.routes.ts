@@ -5,6 +5,7 @@ import { resolveTenant } from '../../common/middleware/resolveTenant';
 import { asyncHandler } from '../../common/utils/asyncHandler';
 import { WorkflowExpenseService } from './services/WorkflowExpenseService';
 import { requireMenuModule } from '../rbac/requireMenuAccess';
+import { requirePermission } from '../../common/middleware/requirePermission';
 
 const router = Router();
 const controller = new ExpenseController();
@@ -35,65 +36,65 @@ router.get('/workflow-options', asyncHandler(async (req, res) => {
 }));
 
 // Categories
-router.get('/categories', asyncHandler((req, res) => controller.getCategories(req, res)));
-router.post('/categories', asyncHandler((req, res) => controller.createCategory(req, res)));
-router.put('/categories/:id', asyncHandler((req, res) => controller.updateCategory(req, res)));
-router.delete('/categories/:id', asyncHandler((req, res) => controller.deleteCategory(req, res)));
+router.get('/categories', requirePermission('expense.category.view'), asyncHandler((req, res) => controller.getCategories(req, res)));
+router.post('/categories', requirePermission('expense.category.create'), asyncHandler((req, res) => controller.createCategory(req, res)));
+router.put('/categories/:id', requirePermission('expense.category.update'), asyncHandler((req, res) => controller.updateCategory(req, res)));
+router.delete('/categories/:id', requirePermission('expense.category.delete'), asyncHandler((req, res) => controller.deleteCategory(req, res)));
 
 // Policies
-router.get('/policies', asyncHandler((req, res) => controller.getPolicies(req, res)));
-router.post('/policies', asyncHandler((req, res) => controller.createPolicy(req, res)));
-router.put('/policies/:id', asyncHandler((req, res) => controller.updatePolicy(req, res)));
-router.delete('/policies/:id', asyncHandler((req, res) => controller.deletePolicy(req, res)));
+router.get('/policies', requirePermission('expense.policy.view'), asyncHandler((req, res) => controller.getPolicies(req, res)));
+router.post('/policies', requirePermission('expense.policy.create'), asyncHandler((req, res) => controller.createPolicy(req, res)));
+router.put('/policies/:id', requirePermission('expense.policy.update'), asyncHandler((req, res) => controller.updatePolicy(req, res)));
+router.delete('/policies/:id', requirePermission('expense.policy.delete'), asyncHandler((req, res) => controller.deletePolicy(req, res)));
 router.post('/policies/validate', asyncHandler((req, res) => controller.validatePolicy(req, res)));
 
 // Travel Requests & Advances
-router.get('/travel-requests', asyncHandler((req, res) => controller.getTravelRequests(req, res)));
-router.post('/travel-requests', asyncHandler((req, res) => controller.createTravelRequest(req, res)));
-router.put('/travel-requests/:id', asyncHandler((req, res) => controller.updateTravelRequest(req, res)));
-router.put('/travel-requests/:id/status', asyncHandler((req, res) => controller.updateTravelRequestStatus(req, res)));
+router.get('/travel-requests', requirePermission('expense.travel.view'), asyncHandler((req, res) => controller.getTravelRequests(req, res)));
+router.post('/travel-requests', requirePermission('expense.travel.create'), asyncHandler((req, res) => controller.createTravelRequest(req, res)));
+router.put('/travel-requests/:id', requirePermission('expense.travel.update'), asyncHandler((req, res) => controller.updateTravelRequest(req, res)));
+router.put('/travel-requests/:id/status', requirePermission('expense.travel.approve'), asyncHandler((req, res) => controller.updateTravelRequestStatus(req, res)));
 
-router.get('/travel-advances', asyncHandler((req, res) => controller.getTravelAdvances(req, res)));
-router.post('/travel-advances', asyncHandler((req, res) => controller.createTravelAdvance(req, res)));
-router.put('/travel-advances/:id/approve', asyncHandler((req, res) => controller.approveTravelAdvance(req, res)));
-router.put('/travel-advances/:id/reject', asyncHandler((req, res) => controller.rejectTravelAdvance(req, res)));
+router.get('/travel-advances', requirePermission('expense.advance.view'), asyncHandler((req, res) => controller.getTravelAdvances(req, res)));
+router.post('/travel-advances', requirePermission('expense.advance.create'), asyncHandler((req, res) => controller.createTravelAdvance(req, res)));
+router.put('/travel-advances/:id/approve', requirePermission('expense.advance.approve'), asyncHandler((req, res) => controller.approveTravelAdvance(req, res)));
+router.put('/travel-advances/:id/reject', requirePermission('expense.advance.approve'), asyncHandler((req, res) => controller.rejectTravelAdvance(req, res)));
 
 // Mileage Claims
-router.get('/mileage', asyncHandler((req, res) => controller.getMileageClaims(req, res)));
-router.post('/mileage', asyncHandler((req, res) => controller.createMileageClaim(req, res)));
-router.post('/mileage/:id/approve', asyncHandler((req, res) => controller.approveMileageClaim(req, res)));
-router.post('/mileage/:id/reject', asyncHandler((req, res) => controller.rejectMileageClaim(req, res)));
+router.get('/mileage', requirePermission('expense.mileage.view'), asyncHandler((req, res) => controller.getMileageClaims(req, res)));
+router.post('/mileage', requirePermission('expense.mileage.create'), asyncHandler((req, res) => controller.createMileageClaim(req, res)));
+router.post('/mileage/:id/approve', requirePermission('expense.mileage.approve'), asyncHandler((req, res) => controller.approveMileageClaim(req, res)));
+router.post('/mileage/:id/reject', requirePermission('expense.mileage.approve'), asyncHandler((req, res) => controller.rejectMileageClaim(req, res)));
 
 // Dashboard & Reports
 router.get('/dashboard/summary', asyncHandler((req, res) => controller.getDashboardSummary(req, res)));
-router.get('/reports', asyncHandler((req, res) => controller.getReports(req, res)));
+router.get('/reports', requirePermission('expense.report.view'), asyncHandler((req, res) => controller.getReports(req, res)));
 
 // Settings
-router.get('/settings', asyncHandler((req, res) => controller.getSettings(req, res)));
-router.put('/settings', asyncHandler((req, res) => controller.updateSettings(req, res)));
+router.get('/settings', requirePermission('expense.settings.view'), asyncHandler((req, res) => controller.getSettings(req, res)));
+router.put('/settings', requirePermission('expense.settings.update'), asyncHandler((req, res) => controller.updateSettings(req, res)));
 
 // Workflows
-router.get('/workflows', asyncHandler((req, res) => controller.getWorkflows(req, res)));
-router.post('/workflows', asyncHandler((req, res) => controller.createWorkflow(req, res)));
-router.put('/workflows/:id', asyncHandler((req, res) => controller.updateWorkflow(req, res)));
-router.delete('/workflows/:id', asyncHandler((req, res) => controller.deleteWorkflow(req, res)));
+router.get('/workflows', requirePermission('expense.workflow.view'), asyncHandler((req, res) => controller.getWorkflows(req, res)));
+router.post('/workflows', requirePermission('expense.workflow.create'), asyncHandler((req, res) => controller.createWorkflow(req, res)));
+router.put('/workflows/:id', requirePermission('expense.workflow.update'), asyncHandler((req, res) => controller.updateWorkflow(req, res)));
+router.delete('/workflows/:id', requirePermission('expense.workflow.delete'), asyncHandler((req, res) => controller.deleteWorkflow(req, res)));
 
 // Claims CRUD & Actions
-router.get('/claims', asyncHandler((req, res) => controller.getClaims(req, res)));
-router.get('/claims/:id', asyncHandler((req, res) => controller.getClaimById(req, res)));
-router.post('/claims', asyncHandler((req, res) => controller.submitClaim(req, res)));
+router.get('/claims', requirePermission('expense.claim.view'), asyncHandler((req, res) => controller.getClaims(req, res)));
+router.get('/claims/:id', requirePermission('expense.claim.view'), asyncHandler((req, res) => controller.getClaimById(req, res)));
+router.post('/claims', requirePermission('expense.claim.create'), asyncHandler((req, res) => controller.submitClaim(req, res)));
 router.post('/claims/:id/resubmit-workflow', asyncHandler(async (req, res) => {
   res.json({ success: true, data: await workflowExpense.resubmitLegacy(req.ctx!, req.params.id) });
 }));
-router.put('/claims/:id', asyncHandler((req, res) => controller.updateClaim(req, res)));
+router.put('/claims/:id', requirePermission('expense.claim.update'), asyncHandler((req, res) => controller.updateClaim(req, res)));
 
 // Approvals & Workflow Actions
-router.post('/claims/bulk-approve', asyncHandler((req, res) => controller.bulkApproveClaims(req, res)));
-router.post('/claims/:id/manager-approve', asyncHandler((req, res) => controller.approveClaimByManager(req, res)));
-router.post('/claims/:id/finance-verify', asyncHandler((req, res) => controller.verifyAndApproveByFinance(req, res)));
-router.post('/claims/:id/approve', asyncHandler((req, res) => controller.approveClaimByManager(req, res)));
-router.post('/claims/:id/reject', asyncHandler((req, res) => controller.rejectClaim(req, res)));
-router.post('/claims/:id/return', asyncHandler((req, res) => controller.returnClaimForCorrection(req, res)));
-router.post('/claims/:id/reimburse', asyncHandler((req, res) => controller.processReimbursement(req, res)));
+router.post('/claims/bulk-approve', requirePermission('expense.claim.approve'), asyncHandler((req, res) => controller.bulkApproveClaims(req, res)));
+router.post('/claims/:id/manager-approve', requirePermission('expense.claim.approve'), asyncHandler((req, res) => controller.approveClaimByManager(req, res)));
+router.post('/claims/:id/finance-verify', requirePermission('expense.claim.verify'), asyncHandler((req, res) => controller.verifyAndApproveByFinance(req, res)));
+router.post('/claims/:id/approve', requirePermission('expense.claim.approve'), asyncHandler((req, res) => controller.approveClaimByManager(req, res)));
+router.post('/claims/:id/reject', requirePermission('expense.claim.approve'), asyncHandler((req, res) => controller.rejectClaim(req, res)));
+router.post('/claims/:id/return', requirePermission('expense.claim.approve'), asyncHandler((req, res) => controller.returnClaimForCorrection(req, res)));
+router.post('/claims/:id/reimburse', requirePermission('expense.claim.reimburse'), asyncHandler((req, res) => controller.processReimbursement(req, res)));
 
 export default router;

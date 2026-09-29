@@ -137,10 +137,9 @@ apiClient.interceptors.response.use(
         method: originalRequest?.method,
         timestamp: new Date().toISOString(),
       });
-      // Redirect to unauthorized page
-      if (typeof window !== 'undefined' && !window.location.pathname.includes('/unauthorized')) {
-        window.location.href = '/unauthorized';
-      }
+      // Keep the failure local to the request. A permitted page may contain an
+      // optional widget backed by a more privileged endpoint; route guards are
+      // responsible for page access, and the feature handles its own 403.
       return Promise.reject(error);
     }
 

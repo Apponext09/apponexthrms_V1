@@ -45,3 +45,14 @@ export function selectMenuChildren(items: RoleMenuItem[], current: number[], par
   for (const childId of menuDescendantIds(items, parentId)) selected.add(childId);
   return [...selected].sort((a, b) => a - b);
 }
+
+/** Unselect a source section without revoking the same module in other portals. */
+export function toggleSourceModule(items: RoleMenuItem[], current: number[], parentIds: number[], pageIds: number[], checked: boolean): number[] {
+  if (checked) return parentIds.reduce((ids, id) => toggleMenu(items, ids, id, true), current);
+  const selected = new Set(current);
+  for (const id of pageIds) selected.delete(id);
+  for (const id of parentIds) {
+    if (!menuDescendantIds(items, id).some((child) => selected.has(child))) selected.delete(id);
+  }
+  return [...selected].sort((a, b) => a - b);
+}

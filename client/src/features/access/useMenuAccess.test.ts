@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { expandTabAccessIds } from '@apponexthrms/shared';
 import { firstGrantedPage, isPathGranted, matchesMenuPath, type MenuCatalogItem } from './useMenuAccess';
 
 const catalog: MenuCatalogItem[] = [
@@ -9,6 +10,19 @@ const catalog: MenuCatalogItem[] = [
 ];
 
 describe('role menu route access', () => {
+  it('opens full Employees flow from one tab without unlocking onboarding or HR', () => {
+    const routes = ['/employees', '/employees/:id', '/employees/:id/edit', '/employees/onboarding', '/hr/employees/:id/edit'];
+    const pages: MenuCatalogItem[] = routes.map((route, index) => ({ id: index + 100, code: route, label: route, route, path: route,
+      parentId: 1, portal: route.startsWith('/hr/') ? 'hr' : 'admin', sortOrder: index }));
+    const ids = expandTabAccessIds([100], pages);
+    const paths = pages.filter((page) => ids.includes(page.id)).map((page) => page.route!);
+    expect(isPathGranted('/employees', pages, paths)).toBe(true);
+    expect(isPathGranted('/employees/42', pages, paths)).toBe(true);
+    expect(isPathGranted('/employees/42/edit', pages, paths)).toBe(true);
+    expect(isPathGranted('/employees/onboarding', pages, paths)).toBe(false);
+    expect(isPathGranted('/hr/employees/42/edit', pages, paths)).toBe(false);
+    expect(isPathGranted('/employees/42/edit', pages, [])).toBe(false);
+  });
   it('does not grant a child when its parent alone is selected', () => {
     expect(isPathGranted('/employee/attendance', catalog, [])).toBe(false);
   });
