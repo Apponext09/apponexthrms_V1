@@ -62,10 +62,10 @@ export const CONSULTANT_NAV = [
     label: 'Attendance',
     subscriptionModule: 'Attendance & Time Tracking',
     items: [
-      { name: 'FacePunch', href: '/consultant/face-attendance', icon: ScanFace },
-      { name: 'Logs', href: '/consultant/attendance', icon: Clock },
-      { name: 'Shifts', href: '/consultant/shift-roster', icon: Calendar },
-      { name: 'Correction', href: '/consultant/attendance-regularization', icon: RefreshCw },
+      { name: 'Face Punch', href: '/consultant/face-attendance', icon: ScanFace },
+      { name: 'My Attendance Logs', href: '/consultant/attendance', icon: Clock },
+      { name: 'My Shifts', href: '/consultant/shift-roster', icon: Calendar },
+      { name: 'Attendance Correction', href: '/consultant/attendance-regularization', icon: RefreshCw },
     ],
   },
   {

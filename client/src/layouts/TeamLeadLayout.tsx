@@ -92,9 +92,9 @@ export const TEAM_LEAD_NAV = [
         icon: Clock,
         subItems: [
           { name: 'Dashboard', href: '/team-lead/attendance', icon: LayoutDashboard },
-          { name: 'Face Attendance', href: '/team-lead/face-attendance', icon: Scan },
-          { name: 'My Attendance Log', href: '/team-lead/attendance-log', icon: Clock },
-          { name: 'My Shift', href: '/team-lead/my-shift', icon: Calendar },
+          { name: 'Face Punch', href: '/team-lead/face-attendance', icon: Scan },
+          { name: 'My Attendance Logs', href: '/team-lead/attendance-log', icon: Clock },
+          { name: 'My Shifts', href: '/team-lead/my-shift', icon: Calendar },
           { name: 'Attendance Correction', href: '/team-lead/attendance-correction', icon: CheckCircle2 },
         ],
       },

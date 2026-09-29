@@ -112,7 +112,7 @@ export const EMPLOYEE_NAV_SECTIONS: NavSection[] = [
           badge: 'Live Scan',
         },
         {
-          name: 'Attendance Logs',
+          name: 'My Attendance Logs',
           href: '/employee/attendance',
           icon: Clock,
           color: 'text-emerald-500',

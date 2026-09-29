@@ -46,7 +46,7 @@ describe('access role navigation tabs', () => {
     const view = buildCommonAccessModules(sharedMenus);
     expect(view.modules.slice(0, 2).map((module) => module.label)).toEqual(['Dashboard', 'Attendance']);
     expect(view.modules[1].tabs.map((tab) => tab.label)).toEqual([
-      'Dashboard', 'CEO Face Punch', 'Attendance Logs',
+      'Dashboard', 'CEO Face Punch', 'My Attendance Logs',
     ]);
     expect(view.otherPages.flatMap((page) => page.menus.map((menu) => menu.route))).toContain('/employees/:id');
     expect(view.modules[0].tabs).toHaveLength(1);

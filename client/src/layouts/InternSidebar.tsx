@@ -58,10 +58,10 @@ export const INTERN_NAV = [
   {
     label: 'Attendance',
     items: [
-      { name: 'FacePunch', href: '/intern/face-attendance', icon: ScanFace },
-      { name: 'Logs', href: '/intern/attendance', icon: Clock },
-      { name: 'Shifts', href: '/intern/shift-roster', icon: Calendar },
-      { name: 'Correction', href: '/intern/attendance-regularization', icon: RefreshCw },
+      { name: 'Face Punch', href: '/intern/face-attendance', icon: ScanFace },
+      { name: 'My Attendance Logs', href: '/intern/attendance', icon: Clock },
+      { name: 'My Shifts', href: '/intern/shift-roster', icon: Calendar },
+      { name: 'Attendance Correction', href: '/intern/attendance-regularization', icon: RefreshCw },
     ],
   },
   {

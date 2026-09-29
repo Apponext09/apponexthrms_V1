@@ -94,10 +94,10 @@ export const MANAGER_NAV = [
         icon: Clock,
         subItems: [
           { name: 'Dashboard', href: '/manager/attendance', icon: LayoutDashboard },
-          { name: 'Face Attendance', href: '/manager/face-attendance', icon: Scan },
-          { name: 'My Attendance Log', href: '/manager/attendance-log', icon: Clock },
+          { name: 'Face Punch', href: '/manager/face-attendance', icon: Scan },
+          { name: 'My Attendance Logs', href: '/manager/attendance-log', icon: Clock },
           { name: 'Live Tracking', href: '/manager/live-tracking', icon: Navigation },
-          { name: 'My Shift', href: '/manager/my-shift', icon: Calendar },
+          { name: 'My Shifts', href: '/manager/my-shift', icon: Calendar },
           { name: 'Attendance Correction', href: '/manager/attendance-correction', icon: CheckCircle2 },
         ],
       },

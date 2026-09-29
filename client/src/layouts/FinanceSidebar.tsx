@@ -77,10 +77,10 @@ export const FINANCE_NAV = [
   {
     label: "Attendance",
     items: [
-      { name: "FacePunch", href: "/finance/face-punch", icon: Scan },
-      { name: "Logs", href: "/finance/attendance", icon: Clock },
-      { name: "Shifts", href: "/finance/shift-roster", icon: Calendar },
-      { name: "Correction", href: "/finance/attendance-regularization", icon: RefreshCw },
+      { name: "Face Punch", href: "/finance/face-punch", icon: Scan },
+      { name: "My Attendance Logs", href: "/finance/attendance", icon: Clock },
+      { name: "My Shifts", href: "/finance/shift-roster", icon: Calendar },
+      { name: "Attendance Correction", href: "/finance/attendance-regularization", icon: RefreshCw },
     ],
   },
   {
