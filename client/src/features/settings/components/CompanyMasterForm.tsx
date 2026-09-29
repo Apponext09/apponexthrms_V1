@@ -191,13 +191,18 @@ export function CompanyMasterForm({
   const [companyMasterId, setCompanyMasterId] = useState<number | null>(null);
   const [customFields, setCustomFields] = useState<any[]>([]);
   const [customFieldValues, setCustomFieldValues] = useState<Record<string, any>>({});
+  const [choiceLists, setChoiceLists] = useState<any[]>([]);
 
   // Fetch Master Builder custom fields configured for 'company'
   useEffect(() => {
     const fetchMasterSchema = async () => {
       try {
-        const masters = await masterBuilderApi.getMasters();
-        const comp = masters.find((m) => m.code === 'company');
+        const [masters, cLists] = await Promise.all([
+          masterBuilderApi.getMasters(),
+          masterBuilderApi.getChoiceLists().catch(() => []),
+        ]);
+        setChoiceLists(cLists || []);
+        const comp = (masters || []).find((m: any) => m.code === 'company');
         if (comp) {
           setCompanyMasterId(comp.id);
           const detail = await masterBuilderApi.getMasterById(comp.id);
@@ -1902,7 +1907,19 @@ export function CompanyMasterForm({
 
                 // 5. CHOICE / SELECT DROPDOWN
                 if (fieldType === 'choice' || fieldType === 'select') {
-                  const choiceList = Array.isArray(opts.choiceList) ? opts.choiceList : Array.isArray(opts.options) ? opts.options : [];
+                  const choiceListId = field.choiceListId || field.choice_list_id;
+                  const boundChoiceList = choiceLists.find(
+                    (cl) =>
+                      (choiceListId && String(cl.id) === String(choiceListId)) ||
+                      (cl.code && (cl.code === opts.choiceListCode || cl.code === opts.choiceList))
+                  );
+                  const choiceList = boundChoiceList?.options?.length
+                    ? boundChoiceList.options
+                    : Array.isArray(opts.choiceList)
+                    ? opts.choiceList
+                    : Array.isArray(opts.options)
+                    ? opts.options
+                    : [];
                   return (
                     <select
                       value={customFieldValues[fieldKey] || ''}
@@ -1912,8 +1929,8 @@ export function CompanyMasterForm({
                     >
                       <option value="">{placeholder || `-- Select ${fieldName} --`}</option>
                       {choiceList.map((opt: any, idx: number) => {
-                        const optVal = typeof opt === 'string' ? opt : opt.value || opt.label || opt.name;
-                        const optLabel = typeof opt === 'string' ? opt : opt.label || opt.name || opt.value;
+                        const optVal = typeof opt === 'string' ? opt : (opt.value !== undefined ? opt.value : opt.label || opt.name);
+                        const optLabel = typeof opt === 'string' ? opt : (opt.label || opt.name || opt.value);
                         return (
                           <option key={idx} value={optVal}>
                             {optLabel}

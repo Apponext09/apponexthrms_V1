@@ -67,10 +67,11 @@ export function useLeaveApprovals(options = {}) {
 export function useProcessedApprovals(options = {}) {
   const { page = 1, pageSize = 20 } = options as any;
   const { user } = useAuthStore();
+  const { selectedCompanyId } = useCompanyStore();
   const userId = user?.id || 'unknown';
 
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ['processed-leave-approvals', userId, page, pageSize],
+    queryKey: ['processed-leave-approvals', userId, selectedCompanyId, page, pageSize],
     queryFn: async () => {
       const params = new URLSearchParams({
         page: String(page),

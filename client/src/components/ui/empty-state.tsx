@@ -27,10 +27,21 @@ function EmptyState({
     >
       {Icon && (
         <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-muted">
-          {typeof Icon === 'function' ? (
-            <Icon className="h-6 w-6 text-muted-foreground" />
-          ) : (
+          {/*
+            `typeof Icon === 'function'` misclassifies forwardRef-wrapped
+            components (e.g. lucide-react icons in this project's version,
+            which are `{ $$typeof, render }` objects, not functions) — those
+            fell through to being rendered as a raw object and crashed the
+            tree. isValidElement is the correct test for "already a
+            rendered node" vs. "a component reference to invoke".
+          */}
+          {React.isValidElement(Icon) ? (
             Icon
+          ) : (
+            (() => {
+              const IconComp = Icon as LucideIcon;
+              return <IconComp className="h-6 w-6 text-muted-foreground" />;
+            })()
           )}
         </div>
       )}

@@ -235,10 +235,20 @@ export function MasterBuilderPage() {
   const handleOpenChoiceListModal = (cl?: ChoiceListItem) => {
     if (cl) {
       setEditingChoiceList(cl);
-      setClName(cl.name);
-      setClCode(cl.code);
+      setClName(cl.name || '');
+      setClCode(cl.code || '');
       setClDescription(cl.description || '');
-      setClOptions(cl.options || []);
+      let rawOpts = cl.options;
+      if (!rawOpts && (cl as any).optionsJson) {
+        rawOpts = typeof (cl as any).optionsJson === 'string' ? JSON.parse((cl as any).optionsJson) : (cl as any).optionsJson;
+      }
+      if (!Array.isArray(rawOpts) || rawOpts.length === 0) {
+        rawOpts = [
+          { label: 'Option 1', value: 'opt_1' },
+          { label: 'Option 2', value: 'opt_2' },
+        ];
+      }
+      setClOptions(rawOpts);
     } else {
       setEditingChoiceList(null);
       setClName('');
@@ -256,20 +266,17 @@ export function MasterBuilderPage() {
     e.preventDefault();
     if (!clName.trim() || !clCode.trim()) return;
     try {
+      const payload: any = {
+        name: clName.trim(),
+        code: clCode.trim(),
+        description: clDescription.trim(),
+        options: clOptions,
+        optionsJson: clOptions,
+      };
       if (editingChoiceList) {
-        await masterBuilderApi.updateChoiceList(editingChoiceList.id, {
-          name: clName.trim(),
-          code: clCode.trim(),
-          description: clDescription.trim(),
-          options: clOptions,
-        });
+        await masterBuilderApi.updateChoiceList(editingChoiceList.id, payload);
       } else {
-        await masterBuilderApi.createChoiceList({
-          name: clName.trim(),
-          code: clCode.trim(),
-          description: clDescription.trim(),
-          options: clOptions,
-        });
+        await masterBuilderApi.createChoiceList(payload);
       }
       setIsChoiceListModalOpen(false);
       const res = await masterBuilderApi.getChoiceLists();

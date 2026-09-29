@@ -40,7 +40,6 @@ export function GeneralSettingsPage() {
   const [liveTrackingEnabled, setLiveTrackingEnabled] = useState<boolean>(false);
   const [trackingInterval, setTrackingInterval] = useState<number>(15);
   const [geofenceRadius, setGeofenceRadius] = useState<number>(100);
-  const [attendanceMode, setAttendanceMode] = useState<string>('gps');
   const [requireCheckout, setRequireCheckout] = useState<boolean>(true);
 
   // ... fetchSettings and saveSettings logic ...
@@ -68,9 +67,6 @@ export function GeneralSettingsPage() {
         if (data.geofence_radius_meters !== undefined) {
           setGeofenceRadius(Number(data.geofence_radius_meters));
         }
-        if (data.attendance_mode !== undefined) {
-          setAttendanceMode(String(data.attendance_mode));
-        }
         if (data.require_checkout !== undefined) {
           setRequireCheckout(Boolean(data.require_checkout));
         }
@@ -97,7 +93,6 @@ export function GeneralSettingsPage() {
         live_tracking_enabled: liveTrackingEnabled,
         tracking_interval_minutes: trackingInterval,
         geofence_radius_meters: geofenceRadius,
-        attendance_mode: attendanceMode,
         require_checkout: requireCheckout,
         ...(override || {}),
       };
@@ -396,15 +391,6 @@ export function GeneralSettingsPage() {
             </p>
           </div>
 
-          <Link to="/settings/attendance-module">
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-1.5 text-xs font-bold rounded-xl h-8 text-sky-600 border-sky-500/30 hover:bg-sky-50 dark:hover:bg-sky-950/20"
-            >
-              <Clock className="w-3.5 h-3.5" /> Full Attendance Module Studio <ArrowRight className="w-3.5 h-3.5" />
-            </Button>
-          </Link>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
@@ -495,20 +481,9 @@ export function GeneralSettingsPage() {
                 <p className="text-[11px] text-muted-foreground">GPS Location, Facial Biometric or IP</p>
               </div>
             </div>
-            <select
-              value={attendanceMode}
-              onChange={(e) => {
-                const val = e.target.value;
-                setAttendanceMode(val);
-                saveSettings({ attendance_mode: val });
-              }}
-              className="h-9 px-2.5 rounded-xl border border-border bg-background text-xs font-bold text-foreground focus:outline-none cursor-pointer"
-            >
-              <option value="gps">GPS Geofencing</option>
-              <option value="face">Facial Recognition</option>
-              <option value="both">GPS + Face AI</option>
-              <option value="wifi_ip">Office IP / WiFi</option>
-            </select>
+            <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
+              GPS + Face enabled
+            </span>
           </Card>
 
           {/* Geofence Radius */}

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -18,7 +18,7 @@ interface OrgHierarchyConfigModalProps {
   open: boolean;
   onClose: () => void;
   rules: HierarchyRule[];
-  onSaveRules: (updatedRules: HierarchyRule[]) => void;
+  onSaveRules: (updatedRules: HierarchyRule[]) => Promise<void>;
 }
 
 export function OrgHierarchyConfigModal({
@@ -27,10 +27,16 @@ export function OrgHierarchyConfigModal({
   rules,
   onSaveRules,
 }: OrgHierarchyConfigModalProps) {
-  const [localRules, setLocalRules] = useState<HierarchyRule[]>(() =>
-    rules && rules.length > 0 ? JSON.parse(JSON.stringify(rules)) : DEFAULT_HIERARCHY_RULES
-  );
+  const [localRules, setLocalRules] = useState<HierarchyRule[]>([]);
   const [newParentInputs, setNewParentInputs] = useState<Record<string, string>>({});
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setLocalRules(JSON.parse(JSON.stringify(rules?.length ? rules : DEFAULT_HIERARCHY_RULES)));
+      setNewParentInputs({});
+    }
+  }, [open, rules]);
 
   const handleAddParent = (ruleId: string) => {
     const val = (newParentInputs[ruleId] || '').trim();
@@ -71,10 +77,21 @@ export function OrgHierarchyConfigModal({
     toast.success('Reset hierarchy configuration to default rules!');
   };
 
-  const handleSave = () => {
-    onSaveRules(localRules);
-    toast.success('Organization hierarchy rules updated successfully!');
-    onClose();
+  const handleSave = async () => {
+    if (!localRules.every((rule) => rule.designationOrRole.trim() && Number.isFinite(rule.hierarchyLevel))) {
+      toast.error('Each hierarchy rule needs a position name and level.');
+      return;
+    }
+    setIsSaving(true);
+    try {
+      await onSaveRules(localRules);
+      toast.success('Organization hierarchy rules updated successfully!');
+      onClose();
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || 'Failed to save hierarchy rules.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -179,15 +196,16 @@ export function OrgHierarchyConfigModal({
         </div>
 
         <div className="p-3 border-t border-border/80 bg-muted/20 flex items-center justify-end gap-2 shrink-0">
-          <Button variant="outline" size="sm" onClick={onClose} className="h-8 text-xs font-semibold">
+          <Button variant="outline" size="sm" onClick={onClose} disabled={isSaving} className="h-8 text-xs font-semibold">
             Cancel
           </Button>
           <Button
             size="sm"
             onClick={handleSave}
+            disabled={isSaving}
             className="h-8 text-xs font-bold gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90"
           >
-            <Save className="w-3.5 h-3.5" /> Save Hierarchy Rules
+            <Save className="w-3.5 h-3.5" /> {isSaving ? 'Saving…' : 'Save Hierarchy Rules'}
           </Button>
         </div>
       </DialogContent>

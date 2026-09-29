@@ -1,6 +1,6 @@
 import { PortalSidebarBrand } from './PortalSidebarBrand';
 import { SidebarProfileMenu } from './SidebarProfileMenu';
-import { SectionRail } from '@/layouts/SectionNavigation';
+import { SectionRail, type SectionGroup } from '@/layouts/SectionNavigation';
 import { useState, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
@@ -36,7 +36,7 @@ import {
 // ── Static icon registry — only icons referenced in navigation config ────────
 // This replaces `import * as LucideIcons` (which imports all ~1000 icons).
 // Vite/Rollup tree-shakes this object, keeping bundle size minimal.
-const ICON_REGISTRY: Record<string, React.ComponentType<{ className?: string }>> = {
+export const ICON_REGISTRY: Record<string, React.ComponentType<{ className?: string }>> = {
   LayoutDashboard, Users, RefreshCw, GitBranch, BarChart3, Calendar, FilePlus,
   Briefcase, UserCheck, FileText, ClipboardList, Clock, MapPin, Wifi, Coffee,
   ScanFace, Palmtree, FileBarChart, CheckSquare, DollarSign, CreditCard,
@@ -84,9 +84,10 @@ interface SidebarProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onNavigate?: () => void;
+  navigationGroups?: SectionGroup[];
 }
 
-export function Sidebar({ open, onOpenChange, onNavigate }: SidebarProps) {
+export function Sidebar({ open, onOpenChange, onNavigate, navigationGroups }: SidebarProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuthStore();
@@ -111,7 +112,7 @@ export function Sidebar({ open, onOpenChange, onNavigate }: SidebarProps) {
       'notification-templates', 'notification_templates',
       'notification-merge-codes', 'notification_merge_codes',
       'break', 'general-shift', 'general_shift', 'roster-shift', 'roster_shift',
-      'holiday', 'offer-templates', 'roles-responsibility',
+      'holiday', 'offer-templates', 'access-roles',
       'kra', 'resource-plan', 'employment_status', 'employment_type',
       'custom_company', 'test1',
     ]);
@@ -141,7 +142,9 @@ export function Sidebar({ open, onOpenChange, onNavigate }: SidebarProps) {
   // Removed location.pathname from deps: pathname changes no longer trigger
   // the heavy getVisibleSections() computation on every navigation.
   const visibleSections = useMemo(
-    () => getVisibleSections(roles, licensedFeatures, attendanceMode, liveTrackingEnabled, enabledModules),
+    // Role grants are enforced by SectionRail. Build the complete admin menu here
+    // so a newly created role is not hidden by legacy hardcoded minRoles rules.
+    () => getVisibleSections([...roles, 'organization_admin', 'hr'], licensedFeatures, attendanceMode, liveTrackingEnabled, enabledModules),
     [roles, licensedFeatures, attendanceMode, liveTrackingEnabled, enabledModules]
   );
 
@@ -304,7 +307,7 @@ export function Sidebar({ open, onOpenChange, onNavigate }: SidebarProps) {
         <PortalSidebarBrand open={false} portalLabel={portalLabel} />
 
         {/* Navigation List */}
-        <SectionRail id="admin" groups={finalSections.map(section => ({ label: section.label, icon: ICON_REGISTRY[section.icon || section.items[0]?.icon] || LayoutDashboard, items: section.items.map(item => ({ ...item, icon: ICON_REGISTRY[item.icon] || LayoutDashboard, children: item.children?.map(child => ({ name: child.name, href: child.href, icon: ICON_REGISTRY[child.icon] || LayoutDashboard, isLocked: (child as any).isLocked })) })) }))} open={open} onNavigate={onNavigate} />
+        <SectionRail id="admin" groups={navigationGroups ?? finalSections.map(section => ({ label: section.label, icon: ICON_REGISTRY[section.icon || section.items[0]?.icon] || LayoutDashboard, items: section.items.map(item => ({ ...item, icon: ICON_REGISTRY[item.icon] || LayoutDashboard, children: item.children?.map(child => ({ name: child.name, href: child.href, icon: ICON_REGISTRY[child.icon] || LayoutDashboard, isLocked: (child as any).isLocked })) })) }))} open={open} onNavigate={onNavigate} />
 
         {/* User Card & Platform Admin Footer */}
         <div className="flex-shrink-0 space-y-1.5 border-t border-border bg-white p-2 dark:bg-slate-950">

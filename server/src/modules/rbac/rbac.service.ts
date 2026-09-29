@@ -6,7 +6,7 @@ import {
   invalidateUserPermissions,
   invalidateOrgPermissions,
 } from '../../common/lib/cache';
-import { logger } from '@/common/lib/logger';
+import { logger } from '../../common/lib/logger';
 import { NotFoundError, ForbiddenError, ConflictError } from '../../common/errors/index';
 import { RoleRepository } from './repositories/role.repository';
 import { PermissionRepository } from './repositories/permission.repository';
@@ -14,6 +14,17 @@ import { AuditService } from '../audit/audit.service';
 import { publishEvent } from '../../realtime/eventBus';
 import type { TenantContext } from '../../db/types';
 import type { EffectivePermissions } from './rbac.types';
+import { canManageRoleMenu } from './role-management-policy';
+import { SUBSCRIPTION_ALIASES, expandMenuSelection, pageAllowsReadPermission } from './menu.catalog';
+
+const legacyRolePortals: Record<string, string[]> = {
+  organization_admin: ['admin', 'manager', 'finance'], org_admin: ['admin', 'manager', 'finance'], owner: ['admin', 'manager', 'finance'], admin: ['admin', 'manager', 'finance'], ceo: ['admin', 'manager', 'finance'],
+  cto: ['admin', 'manager', 'finance'], cfo: ['admin', 'manager', 'finance'], coo: ['admin', 'manager', 'finance'], cxo: ['admin', 'manager', 'finance'],
+  hr: ['hr', 'finance'], hr_admin: ['hr', 'finance'], hr_manager: ['hr', 'finance'],
+  manager: ['manager'], department_head: ['manager'], dept_head: ['manager'], reporting_manager: ['manager'],
+  team_lead: ['team_lead'], lead: ['team_lead'], finance: ['finance'], finance_manager: ['finance'],
+  intern: ['intern', 'employee'], consultant: ['consultant', 'employee'], employee: ['employee'], support: ['employee'],
+};
 
 export class RbacService {
   private roleRepo: RoleRepository;
@@ -90,6 +101,140 @@ export class RbacService {
     return this.roleRepo.getForOrganization(ctx);
   }
 
+  /** The catalog is global; role grants are always scoped through an organization role. */
+  async listMenus() {
+    const rows = await this.db('menu_items').where('is_active', true)
+      .orderBy('sort_order').select('id', 'code', 'label', 'portal', 'route', 'parent_id', 'sort_order', 'subscription_module');
+    return rows.map((row) => ({ ...row, path: row.route, parentId: row.parentId ?? row.parent_id, sortOrder: row.sortOrder ?? row.sort_order, subscriptionModule: row.subscriptionModule ?? row.subscription_module }));
+  }
+
+  private async organizationRole(ctx: TenantContext, roleId: number) {
+    if (!Number.isSafeInteger(roleId) || roleId <= 0) throw new NotFoundError('Role not found');
+    const role = await this.db('roles').where({ id: roleId, organization_id: ctx.organizationId })
+      .whereNull('deleted_at').where('is_platform_role', false).whereNot('code', 'super_admin').first();
+    if (!role) throw new NotFoundError('Role not found');
+    return role;
+  }
+
+  /** Handles standard roles created in a new organization after the catalog migration. */
+  private async initializeLegacyRole(role: any): Promise<void> {
+    if (role.menuAccessInitialized ?? role.menu_access_initialized) return;
+    const portals = legacyRolePortals[role.code] || ((role.isSystem ?? role.is_system) ? ['employee'] : null);
+    if (!portals) return;
+    await this.db.transaction(async (trx) => {
+      const locked = await trx('roles').where('id', role.id).forUpdate().first('menu_access_initialized');
+      if (locked?.menuAccessInitialized ?? locked?.menu_access_initialized) return;
+      const menuRows = await trx('menu_items').whereIn('portal', portals).select('id', 'parent_id');
+      const ids = [...new Set(menuRows.flatMap((row) => [Number(row.id), Number(row.parentId ?? row.parent_id)]).filter(Boolean))];
+      for (let index = 0; index < ids.length; index += 100) {
+        await trx('role_menu_access').insert(ids.slice(index, index + 100).map((menuId) => ({ role_id: role.id, menu_id: menuId })))
+          .onConflict(['role_id', 'menu_id']).ignore();
+      }
+      await trx('roles').where('id', role.id).update({ menu_access_initialized: true });
+    });
+  }
+
+  async getRoleMenus(ctx: TenantContext, roleId: number) {
+    const role = await this.organizationRole(ctx, roleId);
+    await this.initializeLegacyRole(role);
+    const rows = await this.db('role_menu_access').where('role_id', roleId).pluck('menu_id');
+    return { menuIds: rows.map(Number), moduleOrder: this.parseModuleOrder(role.moduleOrder ?? role.module_order) };
+  }
+
+  private parseModuleOrder(value: unknown): string[] {
+    try {
+      const parsed = typeof value === 'string' ? JSON.parse(value) : value;
+      return Array.isArray(parsed) ? parsed.filter((entry): entry is string => typeof entry === 'string') : [];
+    } catch { return []; }
+  }
+
+  async setRoleMenus(ctx: TenantContext, roleId: number, requestedIds: number[], moduleOrder?: string[]) {
+    const role = await this.organizationRole(ctx, roleId);
+    const ids = [...new Set(requestedIds)];
+    if (ids.some((id) => !Number.isSafeInteger(id) || id <= 0)) throw new ForbiddenError('Invalid menu selection');
+    if (moduleOrder && (moduleOrder.length > 150 || new Set(moduleOrder).size !== moduleOrder.length || moduleOrder.some((label) => !label || label.length > 100))) {
+      throw new ForbiddenError('Invalid module order');
+    }
+    const menus = ids.length ? await this.db('menu_items').whereIn('id', ids).where('is_active', true)
+      .select('id', 'code', 'parent_id', 'portal') : [];
+    if (menus.length !== ids.length) throw new ForbiddenError('One or more menu items are invalid');
+    const before = await this.getRoleMenus(ctx, roleId);
+    const actorAccess = await this.getMyMenus(ctx);
+    if (!canManageRoleMenu(actorAccess.roleCodes, role.code)) {
+      throw new ForbiddenError('This role cannot be managed from your account');
+    }
+    const actorIsAdmin = actorAccess.roleCodes.some((code: string) => ['organization_admin', 'ceo'].includes(code));
+    if (!actorIsAdmin) {
+      // HR can administer lower organization roles, but cannot edit an admin/HR
+      // system role or grant pages beyond the HR user's own effective access.
+      const allowedCodes = new Set(actorAccess.menuCodes);
+      if (menus.some((menu) => !allowedCodes.has(menu.code))) {
+        throw new ForbiddenError('Cannot grant access that your own role does not have');
+      }
+    }
+    const effectiveIds = expandMenuSelection(ids, menus);
+    await this.db.transaction(async (trx) => {
+      await trx('role_menu_access').where('role_id', roleId).delete();
+      await trx('roles').where('id', roleId).update({ menu_access_initialized: true, ...(moduleOrder ? { module_order: JSON.stringify(moduleOrder) } : {}) });
+      for (let index = 0; index < effectiveIds.length; index += 100) {
+        await trx('role_menu_access').insert(effectiveIds.slice(index, index + 100).map((menuId) => ({ role_id: roleId, menu_id: menuId })));
+      }
+    });
+    invalidateOrgPermissions(ctx.organizationId);
+    await this.auditService.log(ctx, {
+      action: 'UPDATE', entityType: 'ROLE_MENU_ACCESS', entityId: roleId,
+      beforeState: before, afterState: { menuIds: effectiveIds, moduleOrder: moduleOrder ?? before.moduleOrder, roleCode: role.code },
+    });
+    publishEvent('permission.assigned', { organizationId: ctx.organizationId, roleId, menuIds: effectiveIds });
+    return { menuIds: effectiveIds, moduleOrder: moduleOrder ?? before.moduleOrder };
+  }
+
+  /** Union of non-expired role grants. No role-code fallback: unknown/new roles start with no access. */
+  async getMyMenus(ctx: TenantContext) {
+    const roleRows = await this.db('user_roles as ur').join('roles as r', 'r.id', 'ur.role_id')
+      .where((query) => query.where('ur.organization_id', ctx.organizationId).orWhereNull('ur.organization_id'))
+      .where('ur.user_id', ctx.userId)
+      .where('r.organization_id', ctx.organizationId).whereNull('r.deleted_at')
+      .where((query) => query.whereNull('ur.expires_at').orWhere('ur.expires_at', '>', this.db.fn.now()))
+      .select('r.id', 'r.code', 'r.portal', 'r.module_order', 'r.is_system', 'r.menu_access_initialized');
+    for (const role of roleRows) await this.initializeLegacyRole(role);
+    const roleIds = roleRows.map((row) => Number(row.id));
+    const menus = roleIds.length ? await this.db('role_menu_access as rma')
+      .join('menu_items as menu', 'menu.id', 'rma.menu_id')
+      .whereIn('rma.role_id', roleIds).where('menu.is_active', true)
+      .distinct('menu.code', 'menu.route', 'menu.portal', 'menu.parent_id', 'menu.subscription_module') : [];
+    const organization = await this.db('organizations').where('id', ctx.organizationId).first('enabled_modules');
+    const rawModules = organization?.enabledModules ?? organization?.enabled_modules;
+    let enabledModules: string[] | null = null;
+    if (rawModules != null) {
+      try {
+        const parsed = typeof rawModules === 'string' ? JSON.parse(rawModules) : rawModules;
+        enabledModules = Array.isArray(parsed) ? parsed.map((entry) => String(entry).toLowerCase()) : [];
+      } catch { enabledModules = []; }
+    }
+    const licensed = menus.filter((menu) => {
+      const module = menu.subscriptionModule ?? menu.subscription_module;
+      if (!module || enabledModules === null) return true;
+      const names = [module, ...(SUBSCRIPTION_ALIASES[module] || [])].map((name) => name.toLowerCase());
+      return names.some((name) => enabledModules!.includes(name));
+    });
+    const primaryRole = roleRows.find((row) => row.code === ctx.role) || roleRows.find((row) => !(row.isSystem ?? row.is_system)) || roleRows[0];
+    return {
+      configured: true,
+      primaryPortal: primaryRole?.portal || 'employee',
+      moduleOrder: this.parseModuleOrder(primaryRole?.moduleOrder ?? primaryRole?.module_order),
+      roleCodes: roleRows.map((row) => row.code),
+      menuCodes: licensed.map((menu) => menu.code),
+      paths: licensed.filter((menu) => menu.route).map((menu) => menu.route),
+      items: licensed.map((menu) => ({ code: menu.code, route: menu.route, portal: menu.portal, parentId: menu.parentId ?? menu.parent_id })),
+    };
+  }
+
+  async hasMenuReadPermission(ctx: TenantContext, permission: string): Promise<boolean> {
+    const access = await this.getMyMenus(ctx);
+    return access.items.some((item) => item.route && pageAllowsReadPermission(permission, item.route));
+  }
+
   /**
    * Check if user has a specific permission
    */
@@ -137,9 +282,11 @@ export class RbacService {
   ): Promise<void> {
     // Verify role exists and belongs to organization or is platform role
     const role = await this.roleRepo.getById(ctx, roleId);
-    if (!role) {
+    if (!role || role.isPlatformRole || role.code === 'super_admin') {
       throw new NotFoundError('Role not found');
     }
+    const targetUser = await this.db('users').where({ id: userId, organization_id: ctx.organizationId }).first('id');
+    if (!targetUser) throw new NotFoundError('User not found in this organization');
 
     // Check if assignment already exists
     const existing = await this.db('user_roles')
@@ -229,7 +376,21 @@ export class RbacService {
   /**
    * Create custom role
    */
-  async createRole(ctx: TenantContext, input: { name: string; code: string; description?: string }) {
+  async createRole(ctx: TenantContext, input: { name: string; code: string; description?: string; portal?: string }) {
+    // Only the true platform-root codes are permanently reserved.
+    // Org-level system roles (hr, employee, manager etc.) are NOT reserved.
+    const reservedCodes = ['super_admin', 'superadmin'];
+
+    // Block only platform-global roles (organization_id IS NULL, is_platform_role=true).
+    const existingPlatformRole = await this.db('roles')
+      .where('code', input.code)
+      .where('is_platform_role', true)
+      .whereNull('organization_id')
+      .first('id');
+
+    if (reservedCodes.includes(input.code) || existingPlatformRole) {
+      throw new ForbiddenError('This role code is reserved for system roles');
+    }
     // Check code is unique
     const existing = await this.roleRepo.getByCode(ctx, input.code);
     if (existing) {
@@ -242,6 +403,7 @@ export class RbacService {
       name: input.name,
       code: input.code,
       description: input.description,
+      portal: input.portal || 'employee',
       is_system: false,
       is_platform_role: false,
       is_default: false,
@@ -269,11 +431,15 @@ export class RbacService {
   async updateRole(
     ctx: TenantContext,
     roleId: number,
-    input: { name?: string; description?: string }
+    input: { name?: string; description?: string; portal?: string }
   ) {
     const role = await this.roleRepo.getById(ctx, roleId);
     if (!role) {
       throw new NotFoundError('Role not found');
+    }
+
+    if (!canManageRoleMenu((await this.getMyMenus(ctx)).roleCodes, role.code)) {
+      throw new ForbiddenError('This role cannot be managed from your account');
     }
 
     if (role.isSystem) {
@@ -283,6 +449,7 @@ export class RbacService {
     const updated = await this.roleRepo.update(ctx, roleId, {
       name: input.name,
       description: input.description,
+      portal: input.portal,
     } as any);
 
     // Invalidate org permissions cache
@@ -307,6 +474,10 @@ export class RbacService {
     const role = await this.roleRepo.getById(ctx, roleId);
     if (!role) {
       throw new NotFoundError('Role not found');
+    }
+
+    if (!canManageRoleMenu((await this.getMyMenus(ctx)).roleCodes, role.code)) {
+      throw new ForbiddenError('This role cannot be managed from your account');
     }
 
     if (role.isSystem) {
@@ -337,5 +508,3 @@ export class RbacService {
     });
   }
 }
-
-

@@ -327,6 +327,7 @@ export class ApprovalRepository {
         .leftJoin('employees as e', 'la.employee_id', 'e.id')
         .leftJoin('leave_types as lt', 'la.leave_type_id', 'lt.id')
         .leftJoin('departments as d', 'e.current_department_id', 'd.id')
+        .leftJoin('designations as des', 'e.current_designation_id', 'des.id')
         .select(
           'la.id',
           'la.uuid',
@@ -340,10 +341,10 @@ export class ApprovalRepository {
           'la.employee_id',
           'e.first_name',
           'e.last_name',
-          'e.avatar_url',
           'e.email',
           'lt.leave_name',
-          'd.name as dept_name'
+          'd.name as dept_name',
+          'des.name as desig_name'
         )
         .orderBy('la.created_at', 'desc')
         .limit(limit);
@@ -354,7 +355,8 @@ export class ApprovalRepository {
 
       const rows = await q;
       for (const row of rows) {
-        const key = `leave:${row.id}`;
+        const id = row.id;
+        const key = `leave:${id}`;
         seenKeys.add(key);
 
         let s = 'Pending';
@@ -363,28 +365,40 @@ export class ApprovalRepository {
         else if (['rejected', 'cancelled', 'withdrawn', 'declined'].includes(rawStatus)) s = 'Rejected';
         else if (rawStatus.includes('escalat')) s = 'Escalated';
 
+        const fName = (row.firstName || row.first_name || '').trim();
+        const lName = (row.lastName || row.last_name || '').trim();
+        const email = row.email || '';
+        const applicantName = `${fName} ${lName}`.trim() || email.split('@')[0] || 'Employee';
+        const department = row.deptName || row.dept_name || 'General';
+        const role = row.desigName || row.desig_name || 'Employee';
+        const leaveName = row.leaveName || row.leave_name || 'Leave Application';
+        const totalDays = row.totalDays || row.total_days || 1;
+        const createdAt = row.createdAt || row.created_at || new Date().toISOString();
+        const reason = row.reasonDescription || row.reason_description || '';
+
         combined.push({
-          id: row.id,
+          id,
           uuid: row.uuid,
-          organizationId: row.organization_id,
+          organizationId: row.organizationId || row.organization_id,
           moduleType: 'Leave',
-          referenceId: row.id,
-          applicantId: row.employee_id,
+          referenceId: id,
+          applicantId: row.employeeId || row.employee_id,
           approverRole: 'Manager',
           status: s,
-          firstName: row.first_name,
-          lastName: row.last_name,
-          avatarUrl: row.avatar_url,
-          email: row.email,
+          firstName: fName,
+          lastName: lName,
+          email,
           details: {
-            name: `${row.first_name || ''} ${row.last_name || ''}`.trim() || 'Employee',
-            department: row.dept_name || 'General',
-            role: 'Employee',
-            type: row.leave_name ? `${row.leave_name} (${row.total_days || 1} day)` : 'Leave Application',
-            time: row.created_at ? new Date(row.created_at).toLocaleDateString() : '',
-            reason: row.reason_description || '',
+            name: applicantName,
+            department,
+            role,
+            type: `${leaveName} (${totalDays} day${Number(totalDays) > 1 ? 's' : ''})`,
+            time: createdAt ? new Date(createdAt).toLocaleDateString() : '',
+            reason,
+            startDate: row.applicationStartDate || row.application_start_date,
+            endDate: row.applicationEndDate || row.application_end_date,
           },
-          createdAt: row.created_at,
+          createdAt,
         });
       }
     } catch (err) {
@@ -398,6 +412,7 @@ export class ApprovalRepository {
         .whereNull('ar.deleted_at')
         .leftJoin('employees as e', 'ar.employee_id', 'e.id')
         .leftJoin('departments as d', 'e.current_department_id', 'd.id')
+        .leftJoin('designations as des', 'e.current_designation_id', 'des.id')
         .select(
           'ar.id',
           'ar.uuid',
@@ -410,9 +425,9 @@ export class ApprovalRepository {
           'ar.employee_id',
           'e.first_name',
           'e.last_name',
-          'e.avatar_url',
           'e.email',
-          'd.name as dept_name'
+          'd.name as dept_name',
+          'des.name as desig_name'
         )
         .orderBy('ar.created_at', 'desc')
         .limit(limit);
@@ -423,7 +438,8 @@ export class ApprovalRepository {
 
       const rows = await q;
       for (const row of rows) {
-        const key = `attendance:${row.id}`;
+        const id = row.id;
+        const key = `attendance:${id}`;
         seenKeys.add(key);
 
         let s = 'Pending';
@@ -432,35 +448,46 @@ export class ApprovalRepository {
         else if (['rejected', 'cancelled', 'declined'].includes(rawStatus)) s = 'Rejected';
         else if (rawStatus.includes('escalat')) s = 'Escalated';
 
-        const regTypeLabel = row.regularization_type
-          ? String(row.regularization_type).replace(/_/g, ' ')
+        const rawRegType = row.regularizationType || row.regularization_type;
+        const regTypeLabel = rawRegType
+          ? String(rawRegType).replace(/_/g, ' ')
           : 'Regularization';
 
+        const fName = (row.firstName || row.first_name || '').trim();
+        const lName = (row.lastName || row.last_name || '').trim();
+        const email = row.email || '';
+        const applicantName = `${fName} ${lName}`.trim() || email.split('@')[0] || 'Employee';
+        const department = row.deptName || row.dept_name || 'General';
+        const role = row.desigName || row.desig_name || 'Employee';
+        const createdAt = row.createdAt || row.created_at || new Date().toISOString();
+        const reason = row.reasonDescription || row.reason_description || '';
+
         combined.push({
-          id: row.id,
+          id,
           uuid: row.uuid,
-          organizationId: row.organization_id,
+          organizationId: row.organizationId || row.organization_id,
           moduleType: 'Attendance',
-          referenceId: row.id,
-          applicantId: row.employee_id,
+          referenceId: id,
+          applicantId: row.employeeId || row.employee_id,
           approverRole: 'Manager',
           status: s,
-          firstName: row.first_name,
-          lastName: row.last_name,
-          avatarUrl: row.avatar_url,
-          email: row.email,
+          firstName: fName,
+          lastName: lName,
+          email,
           details: {
-            name: `${row.first_name || ''} ${row.last_name || ''}`.trim() || 'Employee',
-            department: row.dept_name || 'General',
-            role: 'Employee',
+            name: applicantName,
+            department,
+            role,
             type: `Attendance: ${regTypeLabel}`,
-            time: row.created_at ? new Date(row.created_at).toLocaleDateString() : '',
-            reason: row.reason_description || '',
+            time: createdAt ? new Date(createdAt).toLocaleDateString() : '',
+            reason,
           },
-          createdAt: row.created_at,
+          createdAt,
         });
       }
-    } catch (err) {}
+    } catch (err) {
+      console.error('Error fetching recent attendance approvals:', err);
+    }
 
     // 3. Workflow Approvals
     try {
@@ -469,13 +496,14 @@ export class ApprovalRepository {
         .whereNull('wa.deleted_at')
         .leftJoin('employees as e', 'wa.applicant_id', 'e.id')
         .leftJoin('departments as d', 'e.current_department_id', 'd.id')
+        .leftJoin('designations as des', 'e.current_designation_id', 'des.id')
         .select(
           'wa.*',
           'e.first_name',
           'e.last_name',
-          'e.avatar_url',
           'e.email',
-          'd.name as dept_name'
+          'd.name as dept_name',
+          'des.name as desig_name'
         )
         .orderBy('wa.created_at', 'desc')
         .limit(limit);
@@ -486,8 +514,10 @@ export class ApprovalRepository {
 
       const rows = await q;
       for (const row of rows) {
-        const mod = (row.module_type || '').toLowerCase();
-        const key = `${mod}:${row.reference_id}`;
+        const id = row.id;
+        const mod = (row.moduleType || row.module_type || '').toLowerCase();
+        const refId = row.referenceId || row.reference_id;
+        const key = `${mod}:${refId}`;
         if (seenKeys.has(key)) continue;
         seenKeys.add(key);
 
@@ -503,31 +533,43 @@ export class ApprovalRepository {
           else if (typeof row.details === 'object' && row.details !== null) parsedDetails = row.details;
         } catch (e) {}
 
+        const fName = (row.firstName || row.first_name || '').trim();
+        const lName = (row.lastName || row.last_name || '').trim();
+        const email = row.email || '';
+        const applicantName = (parsedDetails.name && parsedDetails.name !== 'Employee' && parsedDetails.name !== 'Unknown')
+          ? parsedDetails.name
+          : (`${fName} ${lName}`.trim() || email.split('@')[0] || 'Employee');
+
+        const department = row.deptName || row.dept_name || parsedDetails.department || 'General';
+        const role = row.desigName || row.desig_name || row.approverRole || row.approver_role || parsedDetails.role || 'Employee';
+        const createdAt = row.createdAt || row.created_at || new Date().toISOString();
+
         combined.push({
-          id: row.id,
+          id,
           uuid: row.uuid,
-          organizationId: row.organization_id,
-          moduleType: row.module_type || 'Workflow',
-          referenceId: row.reference_id,
-          applicantId: row.applicant_id,
-          approverRole: row.approver_role || 'Manager',
+          organizationId: row.organizationId || row.organization_id,
+          moduleType: row.moduleType || row.module_type || 'Workflow',
+          referenceId: refId,
+          applicantId: row.applicantId || row.applicant_id,
+          approverRole: row.approverRole || row.approver_role || 'Manager',
           status: s,
-          firstName: row.first_name,
-          lastName: row.last_name,
-          avatarUrl: row.avatar_url,
-          email: row.email,
+          firstName: fName,
+          lastName: lName,
+          email,
           details: {
-            name: `${row.first_name || ''} ${row.last_name || ''}`.trim() || 'Employee',
-            department: row.dept_name || parsedDetails.department || 'General',
-            role: row.approver_role || 'Employee',
-            type: parsedDetails.type || row.module_type || 'Approval Request',
-            time: row.created_at ? new Date(row.created_at).toLocaleDateString() : '',
+            name: applicantName,
+            department,
+            role,
+            type: parsedDetails.type || row.moduleType || row.module_type || 'Approval Request',
+            time: createdAt ? new Date(createdAt).toLocaleDateString() : '',
             ...parsedDetails,
           },
-          createdAt: row.created_at,
+          createdAt,
         });
       }
-    } catch (err) {}
+    } catch (err) {
+      console.error('Error fetching recent workflow approvals:', err);
+    }
 
     // 4. Expense Claims
     try {
@@ -536,6 +578,7 @@ export class ApprovalRepository {
         .whereNull('ec.deleted_at')
         .leftJoin('employees as e', 'ec.employee_id', 'e.id')
         .leftJoin('departments as d', 'e.current_department_id', 'd.id')
+        .leftJoin('designations as des', 'e.current_designation_id', 'des.id')
         .select(
           'ec.id',
           'ec.uuid',
@@ -548,9 +591,9 @@ export class ApprovalRepository {
           'ec.employee_id',
           'e.first_name',
           'e.last_name',
-          'e.avatar_url',
           'e.email',
-          'd.name as dept_name'
+          'd.name as dept_name',
+          'des.name as desig_name'
         )
         .orderBy('ec.created_at', 'desc')
         .limit(limit);
@@ -561,7 +604,8 @@ export class ApprovalRepository {
 
       const rows = await q;
       for (const row of rows) {
-        const key = `expense:${row.id}`;
+        const id = row.id;
+        const key = `expense:${id}`;
         if (seenKeys.has(key)) continue;
         seenKeys.add(key);
 
@@ -571,30 +615,40 @@ export class ApprovalRepository {
         else if (['rejected', 'cancelled'].includes(rawStatus)) s = 'Rejected';
         else if (rawStatus.includes('escalat')) s = 'Escalated';
 
+        const fName = (row.firstName || row.first_name || '').trim();
+        const lName = (row.lastName || row.last_name || '').trim();
+        const email = row.email || '';
+        const applicantName = `${fName} ${lName}`.trim() || email.split('@')[0] || 'Employee';
+        const department = row.deptName || row.dept_name || 'Finance';
+        const role = row.desigName || row.desig_name || 'Employee';
+        const createdAt = row.createdAt || row.created_at || new Date().toISOString();
+        const amount = row.totalClaimedAmount || row.total_claimed_amount || 0;
+
         combined.push({
-          id: row.id,
+          id,
           uuid: row.uuid,
-          organizationId: row.organization_id,
+          organizationId: row.organizationId || row.organization_id,
           moduleType: 'Expense',
-          referenceId: row.id,
-          applicantId: row.employee_id,
+          referenceId: id,
+          applicantId: row.employeeId || row.employee_id,
           approverRole: 'Finance',
           status: s,
-          firstName: row.first_name,
-          lastName: row.last_name,
-          avatarUrl: row.avatar_url,
-          email: row.email,
+          firstName: fName,
+          lastName: lName,
+          email,
           details: {
-            name: `${row.first_name || ''} ${row.last_name || ''}`.trim() || 'Employee',
-            department: row.dept_name || 'Finance',
-            role: 'Employee',
-            type: row.title ? `Expense: ${row.title} (₹${row.total_claimed_amount || 0})` : 'Expense Claim',
-            time: row.created_at ? new Date(row.created_at).toLocaleDateString() : '',
+            name: applicantName,
+            department,
+            role,
+            type: row.title ? `Expense: ${row.title} (₹${amount})` : 'Expense Claim',
+            time: createdAt ? new Date(createdAt).toLocaleDateString() : '',
           },
-          createdAt: row.created_at,
+          createdAt,
         });
       }
-    } catch (err) {}
+    } catch (err) {
+      console.error('Error fetching recent expense approvals:', err);
+    }
 
     // 5. Salary Advances
     try {
@@ -603,6 +657,7 @@ export class ApprovalRepository {
         .whereNull('sa.deleted_at')
         .leftJoin('employees as e', 'sa.employee_id', 'e.id')
         .leftJoin('departments as d', 'e.current_department_id', 'd.id')
+        .leftJoin('designations as des', 'e.current_designation_id', 'des.id')
         .select(
           'sa.id',
           'sa.uuid',
@@ -614,9 +669,9 @@ export class ApprovalRepository {
           'sa.employee_id',
           'e.first_name',
           'e.last_name',
-          'e.avatar_url',
           'e.email',
-          'd.name as dept_name'
+          'd.name as dept_name',
+          'des.name as desig_name'
         )
         .orderBy('sa.created_at', 'desc')
         .limit(limit);
@@ -627,7 +682,8 @@ export class ApprovalRepository {
 
       const rows = await q;
       for (const row of rows) {
-        const key = `salary_advance:${row.id}`;
+        const id = row.id;
+        const key = `salary_advance:${id}`;
         if (seenKeys.has(key)) continue;
         seenKeys.add(key);
 
@@ -636,31 +692,41 @@ export class ApprovalRepository {
         if (['approved', 'recovered'].includes(rawStatus)) s = 'Approved';
         else if (['rejected', 'cancelled'].includes(rawStatus)) s = 'Rejected';
 
+        const fName = (row.firstName || row.first_name || '').trim();
+        const lName = (row.lastName || row.last_name || '').trim();
+        const email = row.email || '';
+        const applicantName = `${fName} ${lName}`.trim() || email.split('@')[0] || 'Employee';
+        const department = row.deptName || row.dept_name || 'General';
+        const role = row.desigName || row.desig_name || 'Employee';
+        const createdAt = row.createdAt || row.created_at || new Date().toISOString();
+        const advanceAmount = row.advanceAmount || row.advance_amount || 0;
+
         combined.push({
-          id: row.id,
+          id,
           uuid: row.uuid,
-          organizationId: row.organization_id,
+          organizationId: row.organizationId || row.organization_id,
           moduleType: 'Salary Advance',
-          referenceId: row.id,
-          applicantId: row.employee_id,
+          referenceId: id,
+          applicantId: row.employeeId || row.employee_id,
           approverRole: 'HR',
           status: s,
-          firstName: row.first_name,
-          lastName: row.last_name,
-          avatarUrl: row.avatar_url,
-          email: row.email,
+          firstName: fName,
+          lastName: lName,
+          email,
           details: {
-            name: `${row.first_name || ''} ${row.last_name || ''}`.trim() || 'Employee',
-            department: row.dept_name || 'General',
-            role: 'Employee',
-            type: `Advance: ₹${row.advance_amount || 0}`,
-            time: row.created_at ? new Date(row.created_at).toLocaleDateString() : '',
+            name: applicantName,
+            department,
+            role,
+            type: `Advance: ₹${advanceAmount}`,
+            time: createdAt ? new Date(createdAt).toLocaleDateString() : '',
             reason: row.reason || '',
           },
-          createdAt: row.created_at,
+          createdAt,
         });
       }
-    } catch (err) {}
+    } catch (err) {
+      console.error('Error fetching recent salary advance approvals:', err);
+    }
 
     // Sort by created_at desc
     combined.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());

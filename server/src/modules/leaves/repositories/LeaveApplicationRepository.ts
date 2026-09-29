@@ -372,6 +372,9 @@ export class LeaveApplicationRepository extends BaseRepository<LeaveApplication>
     const query = db('leave_applications')
       .leftJoin('employees', 'leave_applications.employee_id', 'employees.id')
       .leftJoin('leave_types', 'leave_applications.leave_type_id', 'leave_types.id')
+      .leftJoin('users as app_user', 'leave_applications.approved_by', 'app_user.id')
+      .leftJoin('employees as approver_emp', 'app_user.employee_id', 'approver_emp.id')
+      .leftJoin('employees as approver_emp_direct', 'leave_applications.approved_by', 'approver_emp_direct.id')
       .where('leave_applications.organization_id', ctx.organizationId)
       .whereNull('leave_applications.deleted_at');
 
@@ -384,7 +387,11 @@ export class LeaveApplicationRepository extends BaseRepository<LeaveApplication>
       'employees.first_name as employeeFirstName', 
       'employees.last_name as employeeLastName', 
       'employees.employee_code as employeeCode', 
-      'leave_types.leave_name as leaveTypeName'
+      'leave_types.leave_name as leaveTypeName',
+      db.raw('COALESCE(approver_emp.first_name, approver_emp_direct.first_name) as approverFirstName'),
+      db.raw('COALESCE(approver_emp.last_name, approver_emp_direct.last_name) as approverLastName'),
+      db.raw('COALESCE(approver_emp.employee_code, approver_emp_direct.employee_code) as approverCode'),
+      'app_user.email as approverEmail'
     );
 
     // Filter to only processed approvals (history)
@@ -392,16 +399,23 @@ export class LeaveApplicationRepository extends BaseRepository<LeaveApplication>
 
     // Subordinate restriction for managers/TLs/DeptHeads
     if (!isHrOrAdmin && subordinateIds.length > 0) {
-      query.whereIn('leave_applications.employee_id', subordinateIds);
+      query.where(function() {
+        this.whereIn('leave_applications.employee_id', subordinateIds)
+          .orWhere('leave_applications.approved_by', approverId)
+          .orWhere('leave_applications.approved_by', employee ? employee.id : -1);
+      });
     } else if (!isHrOrAdmin) {
-      query.where('leave_applications.id', -1);
+      query.where(function() {
+        this.where('leave_applications.approved_by', approverId)
+          .orWhere('leave_applications.approved_by', employee ? employee.id : -1);
+      });
     }
 
     // Pagination
     const page = options?.page || 1;
     const pageSize = options?.pageSize || 20;
     const offset = (page - 1) * pageSize;
-    const data = await query.orderBy('leave_applications.updated_at', 'desc').limit(pageSize).offset(offset);
+    const data = await query.groupBy('leave_applications.id').orderBy('leave_applications.updated_at', 'desc').limit(pageSize).offset(offset);
 
     return data;
   }

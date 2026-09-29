@@ -598,10 +598,21 @@ export function MyLeavesPage() {
             ) : (
               <div className="space-y-3.5">
                 {applications.map((app) => {
+                  const formatDateDDMMYYYY = (str?: string) => {
+                    if (!str) return '';
+                    const clean = str.includes('T') ? str.split('T')[0] : str;
+                    const parts = clean.split('-');
+                    if (parts.length === 3) {
+                      const [y, m, d] = parts;
+                      if (y.length === 4) return `${d}/${m}/${y}`;
+                    }
+                    return clean;
+                  };
+
                   const appName = app.leave_name || app.leaveName || app.name || `Leave #${app.leave_type_id || app.leaveTypeId || app.id}`;
                   const appCode = app.leave_code || app.leaveCode || app.code || 'PTO';
-                  const startDate = app.application_start_date || app.applicationStartDate || '';
-                  const endDate = app.application_end_date || app.applicationEndDate || '';
+                  const startDate = formatDateDDMMYYYY(app.application_start_date || app.applicationStartDate || '');
+                  const endDate = formatDateDDMMYYYY(app.application_end_date || app.applicationEndDate || '');
                   const totalDays = app.total_days ?? app.totalDays ?? 1;
                   const reason = app.reason || app.reason_description || app.reasonDescription;
 
@@ -635,6 +646,19 @@ export function MyLeavesPage() {
                         {reason && (
                           <div className="bg-muted/40 p-3 rounded-2xl border border-border/40 text-xs text-muted-foreground italic mt-1 max-w-2xl">
                             "{reason}"
+                          </div>
+                        )}
+
+                        {(app.admin_notes || app.rejection_reason || app.comments) && (
+                          <div className={`p-2.5 rounded-2xl border text-xs mt-1.5 max-w-2xl flex items-start gap-1.5 ${
+                            app.status?.toLowerCase() === 'approved' 
+                              ? 'bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200/60 dark:border-emerald-800/40 text-emerald-900 dark:text-emerald-200'
+                              : 'bg-rose-50/50 dark:bg-rose-950/20 border-rose-200/60 dark:border-rose-800/40 text-rose-900 dark:text-rose-200'
+                          }`}>
+                            <span className="font-bold shrink-0 text-[11px]">
+                              {app.status?.toLowerCase() === 'rejected' ? 'Rejection Reason:' : 'Approver Note:'}
+                            </span>
+                            <span className="italic">"{app.rejection_reason || app.admin_notes || app.comments}"</span>
                           </div>
                         )}
                       </div>
@@ -692,13 +716,13 @@ export function MyLeavesPage() {
                   .map((t) => {
                     const balanceItem = balances.find((b: any) => String(b.leave_type_id || b.leaveTypeId || b.id) === String(t.id));
                     const avail = balanceItem
-                      ? (balanceItem.available_balance ?? (balanceItem as any).availableBalance ?? 0)
-                      : (t.annual_quota ?? t.annualQuota ?? t.default_allowance_days ?? t.defaultAllowanceDays ?? 0);
+                      ? Number(balanceItem.available_balance ?? (balanceItem as any).availableBalance ?? 0)
+                      : 0;
                     const name = t.leave_name || t.leaveName || t.name || t.title || (balanceItem ? (balanceItem.leave_name || balanceItem.leaveName || balanceItem.name) : '') || 'Leave Category';
                     const code = t.leave_code || t.leaveCode || t.code || (balanceItem ? (balanceItem.leave_code || balanceItem.leaveCode || balanceItem.code) : '') || '';
                     return (
                       <option key={t.id} value={t.id}>
-                        {name} {code ? `(${code})` : ''} - Balance: {avail} days
+                        {name} {code ? `(${code})` : ''} - {avail > 0 ? `${avail} days left` : '0 days left (Exhausted)'}
                       </option>
                     );
                   })}

@@ -70,6 +70,22 @@ export interface ShiftTemplate {
   flexibleStartRangeEnd?: string | null;
   isDefault?: boolean;
   rosterPattern?: any;
+  globalAttendanceRules?: {
+    minHoursFullDayExcluded: string;
+    minHoursFullDayIncluded: string;
+    minHoursHalfDay: string;
+    minExcludedDaysWorked: number;
+    shiftCutOffTime: string;
+    halfDayStartTime?: string | null;
+  };
+  behaviorToggles?: {
+    excludeBreakTime?: boolean;
+    disableCheckInAfterBuffer?: boolean;
+    disableCheckOutBeforeTotalHours?: boolean;
+    noLateDeduction?: boolean;
+    considerShiftHoursForExcluded?: boolean;
+    enableHalfDayRuleForExcluded?: boolean;
+  };
   employeeCount?: number;
   employee_count?: number;
 }

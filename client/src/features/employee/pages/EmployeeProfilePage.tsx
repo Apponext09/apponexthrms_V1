@@ -20,6 +20,7 @@ import { ProfilePhotoUploadModal } from '../components/ProfilePhotoUploadModal';
 import { ProfileEditRequestModal } from '../components/ProfileEditRequestModal';
 import { MyProfileRequestsView } from '../components/MyProfileRequestsView';
 import { CoreCircularLoader } from '@/components/ui/core-circular-loader';
+import { useAccessRoles } from '@/features/settings/hooks/useAccessRoles';
 
 const STATUS_STYLES: Record<string, string> = {
   active: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30',
@@ -49,6 +50,7 @@ export function EmployeeProfilePage() {
   } as any);
   const resolvedEmpId = employee?.id || (typeof targetId === 'number' ? targetId : Number(user?.employeeId || 0));
   const { professionalInfo } = useEmployeeProfessionalInfo(resolvedEmpId);
+  const { data: accessRoles = [] } = useAccessRoles();
   const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
   const [isEditRequestModalOpen, setIsEditRequestModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('details');
@@ -144,7 +146,7 @@ export function EmployeeProfilePage() {
     intern: 'Intern',
     employee: 'Employee',
   };
-  const roleLabel = ROLE_LABEL_MAP[empRoleCode] ||
+  const roleLabel = accessRoles.find((role) => role.code === empRoleCode)?.name || ROLE_LABEL_MAP[empRoleCode] ||
     (empRoleCode ? empRoleCode.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()) : 'Employee');
 
 
@@ -157,9 +159,6 @@ export function EmployeeProfilePage() {
       setActiveTab('statutory');
     } else {
       setActiveTab('details');
-      if (isBasicUnlocked) {
-        setIsEditingBasicInfo(true);
-      }
     }
   };
 

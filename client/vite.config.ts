@@ -48,14 +48,15 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           if (id.includes('node_modules')) {
-            if (id.includes('react') || id.includes('react-dom') || id.includes('react-router-dom')) {
-              return 'vendor-react';
-            }
-            if (id.includes('@mui') || id.includes('@emotion')) {
-              return 'vendor-mui';
-            }
-            if (id.includes('recharts')) {
-              return 'vendor-charts';
+            if (
+              id.includes('react') ||
+              id.includes('react-dom') ||
+              id.includes('react-router-dom') ||
+              id.includes('@mui') ||
+              id.includes('@emotion') ||
+              id.includes('recharts')
+            ) {
+              return 'vendor-core';
             }
             if (id.includes('leaflet') || id.includes('react-leaflet')) {
               return 'vendor-maps';

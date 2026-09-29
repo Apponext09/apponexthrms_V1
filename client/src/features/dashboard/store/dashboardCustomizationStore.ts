@@ -50,8 +50,6 @@ export const ALL_AVAILABLE_REPORTS: ReportOption[] = [
   { id: 'break_logs_report', title: 'Break Logs Report', path: '/attendance/break-logs', description: 'Break duration, exceedances and activity timeline', iconName: 'Coffee' },
   { id: 'live_tracking_report', title: 'Live Field Geotracking', path: '/live-tracking', description: 'GPS coordinates and live route tracking for field staff', iconName: 'Navigation' },
   { id: 'payroll_reports', title: 'Payroll & Salary Report', path: '/payroll/reports', description: 'Statutory calculations, gross/net distribution & tax deductions', iconName: 'IndianRupee' },
-  { id: 'leave_burnout_report', title: 'Leave & Burnout Risk Analysis', path: '/leaves/reports/burnout-risk', description: 'Employee fatigue indicators and leave balance utilization', iconName: 'Flame' },
-  { id: 'policy_acknowledgement_report', title: 'Policy Compliance & Acknowledgement', path: '/policies/reports', description: 'Employee sign-off audit, pending acknowledgements and policy version tracking', iconName: 'ShieldCheck' },
 ];
 
 export const ALL_AVAILABLE_QUICK_ACTIONS: QuickActionOption[] = [
@@ -73,6 +71,7 @@ export interface DashboardSectionsConfig {
   selectedReportId: string; // The primary report linked to the button
   showKpiSection: boolean;
   enabledKpiIds: string[]; // List of KPI IDs displayed in top grid
+  hiddenKpiIds: string[]; // KPI cards hidden through the inline dashboard customizer
   showGrowthTrendChart: boolean;
   showEntityDetails: boolean;
   showRecentRoster: boolean;
@@ -86,7 +85,8 @@ const DEFAULT_CONFIG: DashboardSectionsConfig = {
   showHeaderAttendanceReport: true,
   selectedReportId: 'attendance_reports',
   showKpiSection: true,
-  enabledKpiIds: [], // Optional KPIs — all off by default
+  enabledKpiIds: ALL_AVAILABLE_KPIS.map((kpi) => kpi.id),
+  hiddenKpiIds: [],
   showGrowthTrendChart: true,
   showEntityDetails: true,
   showRecentRoster: true,
@@ -99,6 +99,7 @@ interface DashboardCustomizationStore {
   config: DashboardSectionsConfig;
   updateConfig: (patch: Partial<DashboardSectionsConfig>) => void;
   toggleKpi: (kpiId: string) => void;
+  toggleKpiVisibility: (kpiId: string) => void;
   toggleQuickAction: (actionId: string) => void;
   setSelectedReport: (reportId: string) => void;
   resetToDefaults: () => void;
@@ -120,6 +121,14 @@ export const useDashboardCustomizationStore = create<DashboardCustomizationStore
           return {
             config: { ...state.config, enabledKpiIds: next },
           };
+        }),
+      toggleKpiVisibility: (kpiId) =>
+        set((state) => {
+          const current = state.config.hiddenKpiIds || [];
+          const next = current.includes(kpiId)
+            ? current.filter((id) => id !== kpiId)
+            : [...current, kpiId];
+          return { config: { ...state.config, hiddenKpiIds: next } };
         }),
       toggleQuickAction: (actionId) =>
         set((state) => {

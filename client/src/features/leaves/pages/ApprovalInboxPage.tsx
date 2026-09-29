@@ -5,6 +5,25 @@ import { apiClient } from '@/lib/api';
 import { toast } from 'sonner';
 import { useCompanyStore } from '@/features/settings/store/companyStore';
 
+const formatDateDMY = (dateVal: any): string => {
+  if (!dateVal) return '-';
+  if (typeof dateVal === 'string') {
+    const cleanStr = dateVal.trim();
+    const match = cleanStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (match) {
+      return `${match[3]}/${match[2]}/${match[1]}`;
+    }
+  }
+  const d = new Date(dateVal);
+  if (isNaN(d.getTime())) {
+    return String(dateVal);
+  }
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
+  return `${day}/${month}/${year}`;
+};
+
 export function ApprovalInboxPage() {
   const { selectedCompanyId } = useCompanyStore();
   const [selectedApplicationId, setSelectedApplicationId] = useState<number | null>(null);
@@ -75,7 +94,8 @@ export function ApprovalInboxPage() {
     }
   };
 
-  const applications = activeTab === 'pending' ? pendingApps : processedApps;
+  const rawApplications = activeTab === 'pending' ? pendingApps : processedApps;
+  const applications = Array.from(new Map((rawApplications || []).map((app: any) => [app.id, app])).values());
   const isLoading = activeTab === 'pending' ? pendingLoading : processedLoading;
   const error = activeTab === 'pending' ? pendingError : processedError;
   const refetch = activeTab === 'pending' ? refetchPending : refetchProcessed;
@@ -87,14 +107,15 @@ export function ApprovalInboxPage() {
     : null;
 
   useEffect(() => {
-    if (!selectedApplicationId) {
+    const appId = selectedApp?.id;
+    if (!appId) {
       setHistoryLogs([]);
       return;
     }
     const fetchHistory = async () => {
       setHistoryLoading(true);
       try {
-        const res = await apiClient.get(`/leaves/applications/${selectedApplicationId}/approvals`);
+        const res = await apiClient.get(`/leaves/applications/${appId}/approvals`);
         if (res.data?.success) {
           setHistoryLogs(res.data.data || []);
         }
@@ -105,7 +126,7 @@ export function ApprovalInboxPage() {
       }
     };
     fetchHistory();
-  }, [selectedApplicationId]);
+  }, [selectedApp?.id]);
 
   const handleApprove = async () => {
     const appId = selectedApp?.id || selectedApplicationId;
@@ -389,34 +410,41 @@ export function ApprovalInboxPage() {
                 const reasonText = appItem.reason || appItem.reasonDescription;
                 const empName = `${appItem.employeeFirstName || appItem.employee_first_name || ''} ${appItem.employeeLastName || appItem.employee_last_name || ''}`.trim() || `Employee #${empId}`;
                 const empCode = appItem.employeeCode || appItem.employee_code || '';
+                const isApproved = appItem.status?.toLowerCase() === 'approved';
+                const isRejected = appItem.status?.toLowerCase() === 'rejected';
+                const approverName = `${appItem.approverFirstName || ''} ${appItem.approverLastName || ''}`.trim() || appItem.approverEmail || (isApproved ? 'Manager / HR' : 'Reviewing Authority');
+                const actionDate = appItem.approval_date || appItem.approvalDate || appItem.updated_at || appItem.updatedAt || appItem.created_at;
+                const commentOrReason = isRejected 
+                  ? (appItem.rejection_reason || appItem.rejectionReason || appItem.admin_notes || appItem.comments || 'Application was rejected.')
+                  : (appItem.admin_notes || appItem.comments || 'Leave request approved.');
 
                 return (
                   <div
                     key={appItem.id}
                     onClick={() => setSelectedApplicationId(appItem.id)}
-                    className={`p-4 rounded-xl border cursor-pointer transition-all duration-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                    className={`p-4 rounded-xl border cursor-pointer transition-all duration-200 flex flex-col justify-between gap-3 ${
                       isSelected
                         ? 'bg-card border-primary ring-2 ring-primary/20 shadow-2xs'
                         : 'bg-card border-border/80 hover:border-border shadow-2xs'
                     }`}
                   >
-                    <div className="space-y-1.5 flex-1">
-                      <div className="flex items-center space-x-2.5">
+                    <div className="space-y-2 flex-1">
+                      <div className="flex items-center justify-between gap-2">
                         <span className="font-bold text-sm text-foreground">
                           {empName} {empCode ? `(${empCode})` : ''}
                         </span>
-                        {appItem.status?.toLowerCase() === 'approved' ? (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 flex items-center space-x-1">
+                        {isApproved ? (
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 flex items-center space-x-1">
                             <CheckCircle2 className="w-3 h-3 text-emerald-500" />
                             <span>Approved</span>
                           </span>
-                        ) : appItem.status?.toLowerCase() === 'rejected' ? (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/10 text-rose-700 dark:text-rose-300 border border-rose-500/30 flex items-center space-x-1">
+                        ) : isRejected ? (
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/10 text-rose-700 dark:text-rose-300 border border-rose-500/30 flex items-center space-x-1">
                             <XCircle className="w-3 h-3 text-rose-500" />
                             <span>Rejected</span>
                           </span>
                         ) : (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/30 flex items-center space-x-1">
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/30 flex items-center space-x-1">
                             <Clock className="w-3 h-3" />
                             <span>Pending Review</span>
                           </span>
@@ -426,17 +454,47 @@ export function ApprovalInboxPage() {
                       <div className="flex items-center space-x-3 text-xs text-muted-foreground">
                         <span className="flex items-center space-x-1 font-medium">
                           <Calendar className="w-3.5 h-3.5 text-primary" />
-                          <span>{startDate} to {endDate}</span>
+                          <span>{formatDateDMY(startDate)} to {formatDateDMY(endDate)}</span>
                         </span>
                         <span className="font-semibold text-foreground">
                           • {days} {days === 1 ? 'day' : 'days'}
                         </span>
+                        {appItem.leaveTypeName && (
+                          <>
+                            <span>•</span>
+                            <span className="font-bold text-violet-600 dark:text-violet-400">{appItem.leaveTypeName}</span>
+                          </>
+                        )}
                       </div>
 
                       {reasonText && (
                         <p className="text-xs text-muted-foreground italic">
                           "{reasonText}"
                         </p>
+                      )}
+
+                      {/* Processed Details Badge/Section */}
+                      {(isApproved || isRejected) && (
+                        <div className={`mt-2 p-2.5 rounded-lg border text-[11px] space-y-1.5 ${
+                          isApproved 
+                            ? 'bg-emerald-50/60 dark:bg-emerald-950/20 border-emerald-200/60 dark:border-emerald-800/40 text-emerald-900 dark:text-emerald-200' 
+                            : 'bg-rose-50/60 dark:bg-rose-950/20 border-rose-200/60 dark:border-rose-800/40 text-rose-900 dark:text-rose-200'
+                        }`}>
+                          <div className="flex items-center justify-between font-semibold">
+                            <span>
+                              {isApproved ? '✓ Approved' : '✕ Rejected'} {approverName ? `by ${approverName}` : ''}
+                            </span>
+                            {actionDate && (
+                              <span className="text-[10px] opacity-80 flex items-center gap-1 font-medium">
+                                <Clock className="w-3 h-3" /> {formatDateDMY(actionDate)}
+                              </span>
+                            )}
+                          </div>
+                          <div className="pt-1 border-t border-current/10 flex items-start gap-1 font-medium text-[11px]">
+                            <span className="font-bold shrink-0">{isRejected ? 'Reason:' : 'Approver Note:'}</span>
+                            <span className="italic">"{commentOrReason}"</span>
+                          </div>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -454,11 +512,22 @@ export function ApprovalInboxPage() {
               const reasonText = rawSelected.reason || rawSelected.reasonDescription;
               const empName = `${rawSelected.employeeFirstName || rawSelected.employee_first_name || ''} ${rawSelected.employeeLastName || rawSelected.employee_last_name || ''}`.trim() || `Employee #${empId}`;
               const empCode = rawSelected.employeeCode || rawSelected.employee_code || '';
+              const leaveType = rawSelected.leaveTypeName || rawSelected.leave_type_name;
+              const isProcessed = ['approved', 'rejected', 'cancelled'].includes(rawSelected.status?.toLowerCase());
 
               return (
                 <div className="lg:col-span-1 bg-card rounded-xl border border-border/80 shadow-2xs p-5 space-y-4 sticky top-6">
-                  <h2 className="text-sm font-bold text-foreground border-b border-border/60 pb-2.5">
-                    Review Leave Request
+                  <h2 className="text-sm font-bold text-foreground border-b border-border/60 pb-2.5 flex items-center justify-between">
+                    <span>Review Leave Request</span>
+                    {isProcessed && (
+                      <span className={`text-[10px] uppercase font-black px-2 py-0.5 rounded-full ${
+                        rawSelected.status?.toLowerCase() === 'approved'
+                          ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+                          : 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
+                      }`}>
+                        {rawSelected.status}
+                      </span>
+                    )}
                   </h2>
 
                   <div className="space-y-2.5 text-xs">
@@ -474,10 +543,19 @@ export function ApprovalInboxPage() {
                       )}
                     </div>
 
+                    {leaveType && (
+                      <div>
+                        <span className="text-muted-foreground block font-medium">Leave Type</span>
+                        <span className="font-semibold text-violet-600 dark:text-violet-400 block">
+                          {leaveType}
+                        </span>
+                      </div>
+                    )}
+
                     <div>
                       <span className="text-muted-foreground block font-medium">Dates & Duration</span>
                       <span className="font-semibold text-foreground block">
-                        {startDate} to {endDate}
+                        {formatDateDMY(startDate)} to {formatDateDMY(endDate)}
                       </span>
                       <span className="text-[11px] text-muted-foreground block">
                         Total: {days} Days
@@ -486,42 +564,129 @@ export function ApprovalInboxPage() {
 
                     {reasonText && (
                       <div>
-                        <span className="text-muted-foreground block font-medium">Reason</span>
-                        <p className="text-foreground font-medium italic mt-0.5">
+                        <span className="text-muted-foreground block font-medium">Reason for Leave</span>
+                        <p className="text-foreground font-medium italic mt-0.5 bg-muted/40 p-2 rounded-lg border border-border/40">
                           "{reasonText}"
                         </p>
                       </div>
                     )}
                   </div>
 
-                  {['approved', 'rejected', 'cancelled'].includes(rawSelected.status?.toLowerCase()) ? (
+                  {isProcessed ? (
                     <div className="space-y-3 pt-3 border-t border-border/60">
                       <span className="text-[11px] font-bold text-foreground block">
                         Approval & Comment History
                       </span>
                       {historyLoading ? (
-                        <p className="text-[10px] text-muted-foreground italic">Loading comment history...</p>
-                      ) : historyLogs.length === 0 ? (
-                        <p className="text-[10px] text-muted-foreground italic">No comments or logs recorded for this action.</p>
-                      ) : (
-                        <div className="space-y-2">
-                          {historyLogs.map((log: any, idx: number) => (
-                            <div key={log.id || idx} className="p-2.5 bg-muted/60 rounded-xl border text-[11px] space-y-1">
-                              <div className="flex justify-between items-center text-[10px] text-muted-foreground font-bold">
-                                <span>Approver Level {log.approval_level || 1}</span>
-                                <span>{new Date(log.approval_date || log.created_at).toLocaleDateString()}</span>
-                              </div>
-                              <p className="font-black text-foreground capitalize text-[10px]">
-                                Status: <span className={log.status === 'approved' ? 'text-emerald-600' : 'text-rose-600'}>{log.status}</span>
-                              </p>
-                              {log.comments && (
-                                <p className="text-muted-foreground font-medium bg-card p-1.5 rounded border border-border/50 mt-1">
-                                  {log.comments}
-                                </p>
-                              )}
-                            </div>
-                          ))}
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin text-primary" />
+                          <span>Loading approval details...</span>
                         </div>
+                      ) : historyLogs.length > 0 ? (
+                        <div className="space-y-2.5">
+                          {historyLogs.map((log: any, idx: number) => {
+                            const isLogApproved = String(log.status || '').toLowerCase() === 'approved';
+                            const isLogRejected = String(log.status || '').toLowerCase() === 'rejected';
+                            const logApprover = log.approver_name || 'Approver';
+                            const logRole = log.approver_role || `Level ${log.approval_level || 1}`;
+                            const logComment = log.comments || log.rejection_reason || (isLogRejected ? 'Application was rejected.' : 'Application approved.');
+                            const logActionDate = log.approval_date || log.created_at || rawSelected.updated_at;
+
+                            return (
+                              <div 
+                                key={log.id || idx} 
+                                className={`p-3 rounded-xl border text-[11px] space-y-2 ${
+                                  isLogApproved 
+                                    ? 'bg-emerald-50/40 dark:bg-emerald-950/20 border-emerald-200/70 dark:border-emerald-800/40' 
+                                    : 'bg-rose-50/40 dark:bg-rose-950/20 border-rose-200/70 dark:border-rose-800/40'
+                                }`}
+                              >
+                                <div className="flex justify-between items-start gap-2">
+                                  <div>
+                                    <span className="font-bold text-foreground block">
+                                      {logApprover}
+                                    </span>
+                                    <span className="text-[10px] text-muted-foreground">
+                                      {logRole} {log.approver_code ? `(${log.approver_code})` : ''}
+                                    </span>
+                                  </div>
+                                  <div className="text-right">
+                                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase inline-block ${
+                                      isLogApproved 
+                                        ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300' 
+                                        : 'bg-rose-100 text-rose-800 dark:bg-rose-900/60 dark:text-rose-300'
+                                    }`}>
+                                      {log.status || (isLogApproved ? 'Approved' : 'Rejected')}
+                                    </span>
+                                    <span className="text-[10px] text-muted-foreground block mt-0.5 font-medium">
+                                      {formatDateDMY(logActionDate)}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                <div className="p-2.5 rounded-lg bg-background/80 border border-border/50">
+                                  <span className="text-[10px] font-bold text-muted-foreground block">
+                                    {isLogRejected ? 'Reason for Rejection:' : 'Approver Comment / Reason:'}
+                                  </span>
+                                  <p className="text-[11px] font-medium text-foreground mt-0.5 italic">
+                                    "{logComment}"
+                                  </p>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        /* Fallback when historyLogs array is empty but application is processed */
+                        (() => {
+                          const isAppApproved = rawSelected.status?.toLowerCase() === 'approved';
+                          const isAppRejected = rawSelected.status?.toLowerCase() === 'rejected';
+                          const fallbackApprover = rawSelected.approverFirstName ? `${rawSelected.approverFirstName} ${rawSelected.approverLastName || ''}`.trim() : rawSelected.approverEmail || (isAppApproved ? 'Manager / HR' : 'Reviewing Authority');
+                          const fallbackDate = rawSelected.approval_date || rawSelected.approvalDate || rawSelected.updated_at || rawSelected.updatedAt || rawSelected.created_at || rawSelected.createdAt;
+                          const fallbackComment = isAppRejected 
+                            ? (rawSelected.rejection_reason || rawSelected.rejectionReason || rawSelected.admin_notes || rawSelected.comments || 'Application was rejected.')
+                            : (rawSelected.admin_notes || rawSelected.comments || 'Leave request approved.');
+
+                          return (
+                            <div className={`p-3 rounded-xl border text-[11px] space-y-2 ${
+                              isAppApproved
+                                ? 'bg-emerald-50/40 dark:bg-emerald-950/20 border-emerald-200/70 dark:border-emerald-800/40'
+                                : 'bg-rose-50/40 dark:bg-rose-950/20 border-rose-200/70 dark:border-rose-800/40'
+                            }`}>
+                              <div className="flex justify-between items-start gap-2">
+                                <div>
+                                  <span className="font-bold text-foreground block">
+                                    {fallbackApprover}
+                                  </span>
+                                  <span className="text-[10px] text-muted-foreground">
+                                    Reviewing Authority
+                                  </span>
+                                </div>
+                                <div className="text-right">
+                                  <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase inline-block ${
+                                    isAppApproved
+                                      ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300'
+                                      : 'bg-rose-100 text-rose-800 dark:bg-rose-900/60 dark:text-rose-300'
+                                  }`}>
+                                    {rawSelected.status}
+                                  </span>
+                                  <span className="text-[10px] text-muted-foreground block mt-0.5 font-medium">
+                                    {formatDateDMY(fallbackDate)}
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className="p-2.5 rounded-lg bg-background/80 border border-border/50">
+                                <span className="text-[10px] font-bold text-muted-foreground block">
+                                  {isAppRejected ? 'Reason for Rejection:' : 'Approver Comment / Reason:'}
+                                </span>
+                                <p className="text-[11px] font-medium text-foreground mt-0.5 italic">
+                                  "{fallbackComment}"
+                                </p>
+                              </div>
+                            </div>
+                          );
+                        })()
                       )}
                     </div>
                   ) : (
@@ -632,7 +797,7 @@ export function ApprovalInboxPage() {
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Duration:</span>
                   <span className="font-semibold text-foreground">
-                    {(selectedApp as any).totalDays || (selectedApp as any).total_days} Days ({(selectedApp as any).applicationStartDate || (selectedApp as any).application_start_date} to {(selectedApp as any).applicationEndDate || (selectedApp as any).application_end_date})
+                    {(selectedApp as any).totalDays || (selectedApp as any).total_days} Days ({formatDateDMY((selectedApp as any).applicationStartDate || (selectedApp as any).application_start_date)} to {formatDateDMY((selectedApp as any).applicationEndDate || (selectedApp as any).application_end_date)})
                   </span>
                 </div>
               </div>

@@ -1,7 +1,7 @@
 import React, { lazy } from 'react';
 import { Route, Navigate } from 'react-router-dom';
 import { ProtectedRoute } from '../components/ProtectedRoute';
-import { TeamLeadLayout } from '../layouts/TeamLeadLayout';
+import { SharedPortalLayout } from '../layouts/SharedPortalLayout';
 
 // ── Lazy Imports ──────────────────────────────────────────────────────────────
 const TeamLeadDashboardPage = lazy(() => import('../features/team-lead/pages/TeamLeadDashboardPage').then(m => ({ default: m.TeamLeadDashboardPage })));
@@ -45,7 +45,7 @@ export const teamLeadRoutes = (
   <Route
     element={
       <ProtectedRoute allowedRoles={['team_lead']}>
-        <TeamLeadLayout />
+        <SharedPortalLayout portal="team_lead" />
       </ProtectedRoute>
     }
   >

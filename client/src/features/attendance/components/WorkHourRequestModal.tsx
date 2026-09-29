@@ -27,11 +27,11 @@ export const WorkHourRequestModal: React.FC<WorkHourRequestModalProps> = ({
   const [startDate, setStartDate] = useState<string>(initialDate || todayStr);
   const [endDate, setEndDate] = useState<string>(initialDate || todayStr);
 
-  const [actualCheckIn, setActualCheckIn] = useState<string>('11:57 AM');
-  const [actualCheckOut, setActualCheckOut] = useState<string>('11:57 AM');
+  const [actualCheckIn, setActualCheckIn] = useState<string | null>(null);
+  const [actualCheckOut, setActualCheckOut] = useState<string | null>(null);
 
-  const [checkInTime, setCheckInTime] = useState<string>(initialCheckIn || '11:57AM');
-  const [checkOutTime, setCheckOutTime] = useState<string>(initialCheckOut || '11:57AM');
+  const [checkInTime, setCheckInTime] = useState<string>(initialCheckIn || '');
+  const [checkOutTime, setCheckOutTime] = useState<string>(initialCheckOut || '');
   const [reason, setReason] = useState<string>('');
   const [dayType, setDayType] = useState<string>('');
   const [comment, setComment] = useState<string>('');
@@ -48,6 +48,15 @@ export const WorkHourRequestModal: React.FC<WorkHourRequestModalProps> = ({
     }
   }, [initialDate]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    setCheckInTime(initialCheckIn || '');
+    setCheckOutTime(initialCheckOut || '');
+    setReason('');
+    setDayType('');
+    setComment('');
+  }, [isOpen, initialCheckIn, initialCheckOut]);
+
   // Fetch actual attendance log when single date changes
   useEffect(() => {
     if (!isOpen || applyDateRange || !date) return;
@@ -57,28 +66,29 @@ export const WorkHourRequestModal: React.FC<WorkHourRequestModalProps> = ({
       try {
         const res = await apiClient.get('/attendance/history', { params: { startDate: date, endDate: date } });
         const records = Array.isArray(res.data?.data) ? res.data.data : [];
-        const match = records.find((r: any) => r.check_in_date === date || (r.check_in_time && r.check_in_time.startsWith(date)));
+        const match = records.find((r: any) =>
+          (r.check_in_date || r.checkInDate) === date ||
+          String(r.check_in_time || r.checkInTime || '').slice(0, 10) === date
+        );
+
+        const formatAttendanceTime = (value?: string | null): string | null => {
+          if (!value) return null;
+          const normalized = value.includes(' ') && !value.includes('T') ? value.replace(' ', 'T') : value;
+          const parsed = new Date(normalized);
+          if (Number.isNaN(parsed.getTime())) return null;
+          return parsed.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+        };
 
         if (match) {
-          if (match.check_in_time) {
-            const inDate = new Date(match.check_in_time);
-            setActualCheckIn(inDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }));
-          } else {
-            setActualCheckIn('--');
-          }
-          if (match.check_out_time) {
-            const outDate = new Date(match.check_out_time);
-            setActualCheckOut(outDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }));
-          } else {
-            setActualCheckOut('--');
-          }
+          setActualCheckIn(formatAttendanceTime(match.check_in_time || match.checkInTime));
+          setActualCheckOut(formatAttendanceTime(match.check_out_time || match.checkOutTime));
         } else {
-          setActualCheckIn('11:57 AM');
-          setActualCheckOut('11:57 AM');
+          setActualCheckIn(null);
+          setActualCheckOut(null);
         }
-      } catch (err) {
-        setActualCheckIn('11:57 AM');
-        setActualCheckOut('11:57 AM');
+      } catch {
+        setActualCheckIn(null);
+        setActualCheckOut(null);
       } finally {
         setFetchingActual(false);
       }
@@ -121,8 +131,8 @@ export const WorkHourRequestModal: React.FC<WorkHourRequestModalProps> = ({
         endDate: applyDateRange ? endDate : date,
         checkIn: checkInTime,
         checkOut: checkOutTime,
-        actualCheckIn: applyDateRange ? undefined : actualCheckIn,
-        actualCheckOut: applyDateRange ? undefined : actualCheckOut,
+        actualCheckIn: applyDateRange ? undefined : actualCheckIn || undefined,
+        actualCheckOut: applyDateRange ? undefined : actualCheckOut || undefined,
         reason,
         dayType,
         comment,
@@ -210,13 +220,13 @@ export const WorkHourRequestModal: React.FC<WorkHourRequestModalProps> = ({
               <div className="flex items-center gap-2">
                 <span className="font-bold text-slate-900 dark:text-slate-100">Actual Checkin :</span>
                 <span className="font-semibold text-slate-700 dark:text-slate-300">
-                  {fetchingActual ? '...' : actualCheckIn}
+                  {fetchingActual ? 'Loading...' : actualCheckIn || 'No check-in recorded'}
                 </span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="font-bold text-slate-900 dark:text-slate-100">Actual Checkout :</span>
                 <span className="font-semibold text-slate-700 dark:text-slate-300">
-                  {fetchingActual ? '...' : actualCheckOut}
+                  {fetchingActual ? 'Loading...' : actualCheckOut || 'No check-out recorded'}
                 </span>
               </div>
             </div>
@@ -248,7 +258,7 @@ export const WorkHourRequestModal: React.FC<WorkHourRequestModalProps> = ({
                 required
                 value={checkInTime}
                 onChange={(e) => setCheckInTime(e.target.value)}
-                placeholder="11:57AM"
+                placeholder="e.g. 09:30 AM or 09:30"
                 className="w-full h-9 px-3 text-xs font-medium rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 focus:outline-none focus:ring-1 focus:ring-emerald-500"
               />
             </div>
@@ -262,7 +272,7 @@ export const WorkHourRequestModal: React.FC<WorkHourRequestModalProps> = ({
                 required
                 value={checkOutTime}
                 onChange={(e) => setCheckOutTime(e.target.value)}
-                placeholder="11:57AM"
+                placeholder="e.g. 06:30 PM or 18:30"
                 className="w-full h-9 px-3 text-xs font-medium rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 focus:outline-none focus:ring-1 focus:ring-emerald-500"
               />
             </div>
