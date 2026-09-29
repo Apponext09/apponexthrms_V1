@@ -91,6 +91,24 @@ export class EmployeeController {
   });
 
   /**
+   * GET /employees/next-code - Preview the employee code createEmployee()
+   * would assign right now. Calls the exact same generator createEmployee()
+   * itself uses, so the Create Employee form never guesses a code
+   * independently. This is a preview, not a reservation: createEmployee()
+   * re-derives and safely retries the code at insert time regardless of what
+   * was last previewed, so a concurrent create in between cannot cause a
+   * collision or a stale-code rejection.
+   */
+  getNextEmployeeCode = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const employeeCode = await this.service.previewNextEmployeeCode(ctx);
+    res.json({
+      success: true,
+      data: { employeeCode },
+    });
+  });
+
+  /**
    * Get employee by ID
    */
   getEmployee = asyncHandler(async (req: Request, res: Response) => {
@@ -251,6 +269,17 @@ export class EmployeeController {
   /**
    * List employees
    */
+  /**
+   * GET /employees/org-hierarchy
+   * Full active roster, narrow field set, no pageSize cap — purpose-built
+   * for the Organization Chart so it never silently truncates large orgs.
+   */
+  getOrgHierarchy = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const items = await this.service.getOrgHierarchy(ctx);
+    res.json({ success: true, data: items });
+  });
+
   listEmployees = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
     const {

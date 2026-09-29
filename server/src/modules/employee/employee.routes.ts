@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { authenticate } from '../../common/middleware/authenticate';
 import { resolveTenant } from '../../common/middleware/resolveTenant';
+import { requirePermission } from '../../common/middleware/requirePermission';
 import { EmployeeController } from './controllers/EmployeeController';
 
 const router = Router();
@@ -28,8 +29,13 @@ router.get('/my-edit-permission', controller.getMyEditPermission);
 router.post('/consume-edit-permission/:requestId', controller.consumeEditPermission);
 router.get('/my-profile-requests', controller.getMyProfileRequests);
 
+/**
+ * GET /employees/org-hierarchy - Lightweight, uncapped roster for the Org Chart
+ */
+router.get('/org-hierarchy', controller.getOrgHierarchy);
+
 router.get('/org-hierarchy/rules', controller.getOrgHierarchyRules);
-router.put('/org-hierarchy/rules', controller.saveOrgHierarchyRules);
+router.put('/org-hierarchy/rules', requirePermission('employee.org_hierarchy.update'), controller.saveOrgHierarchyRules);
 
 /**
  * GET /employees/me - Get logged-in user employee profile
@@ -40,6 +46,13 @@ router.get('/me', controller.getMeEmployee);
  * PUT /employees/me - Update logged-in user employee profile
  */
 router.put('/me', controller.updateMeEmployee);
+
+/**
+ * GET /employees/next-code - Preview the employee code that would be
+ * assigned by the next POST /employees call (same generator, not a
+ * reservation). Must stay registered before GET /:id.
+ */
+router.get('/next-code', controller.getNextEmployeeCode);
 
 /**
  * GET /employees - List all employees

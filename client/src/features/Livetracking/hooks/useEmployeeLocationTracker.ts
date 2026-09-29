@@ -13,12 +13,12 @@ import { useEffect, useRef, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { pingLocationBatchHttp } from '../api/livetrackingApi';
 
-const SOCKET_URL = (import.meta as any).env.VITE_SOCKET_URL || 'http://localhost:5000';
-// One location is sent every SEND_INTERVAL_MS. watchPosition keeps the GPS warm
-// and the Kalman estimate fresh in between, but only the 5-second tick sends.
-const SEND_INTERVAL_MS = 5_000;
-/** Timer jitter tolerance so a tick firing a few ms early isn't skipped */
-const SEND_INTERVAL_TOLERANCE_MS = 300;
+const SOCKET_URL =
+  import.meta.env.VITE_SOCKET_URL ||
+  import.meta.env.VITE_API_URL?.replace(/\/api(?:\/v1)?\/?$/, '') ||
+  (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5000');
+const MIN_DISTANCE_METERS = 0; // 0 meters — emit on every 2.5s tick for continuous live streaming
+const FORCE_PING_INTERVAL_MS = 2_500; // 2.5 seconds automatic high-frequency emission
 // Reject fixes worse than this radius — 10km previously let wildly inaccurate
 // cell-tower/IP-only fixes through as if they were the employee's real position.
 // 500m still comfortably covers laptop Wi-Fi/IP geolocation (usually well under 300m).

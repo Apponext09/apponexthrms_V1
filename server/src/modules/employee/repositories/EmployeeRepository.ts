@@ -170,6 +170,90 @@ export class EmployeeRepository extends BaseRepository<Employee> {
     });
   }
 
+  /**
+   * Fetch the full active roster for the Organization Chart.
+   *
+   * Reuses the same enriched list() query (department/designation/manager
+   * name lookups, tenant/company scoping) rather than duplicating that
+   * business logic, but:
+   *  - paginates through it internally in bounded chunks so no single
+   *    unbounded query is issued and no artificial caller-side page size
+   *    can silently truncate the org (the previous `pageSize=1000` bug),
+   *  - projects each row down to only the fields the org chart renders,
+   *    dropping statutory/bank/personal fields the directory view would
+   *    otherwise include.
+   * MAX_EMPLOYEES is a sanity ceiling, not a product limit; an organization
+   * genuinely larger than this needs a dedicated projection query, not this
+   * generic-list-reuse approach.
+   */
+  async listForOrgHierarchy(ctx: TenantContext): Promise<Record<string, any>[]> {
+    const CHUNK_SIZE = 500;
+    const MAX_EMPLOYEES = 20000;
+    const results: Record<string, any>[] = [];
+    let page = 1;
+
+    const excludedStatuses = new Set(['exit', 'exited', 'offboarded', 'alumni']);
+
+    while (results.length < MAX_EMPLOYEES) {
+      const { items, meta } = await this.list(ctx, {
+        page,
+        pageSize: CHUNK_SIZE,
+        sortBy: 'id',
+        sortOrder: 'asc',
+      } as any);
+
+      // Filtered here rather than via a query-level customWhere: this
+      // override's own list() unconditionally *replaces* (not merges) any
+      // caller-supplied customWhere whenever the organization has a parent
+      // company (see the directoryCompanyId branch above), so a query-level
+      // filter would silently stop applying for those tenants. Matches the
+      // default "active workforce" scope the Employee Directory controller
+      // applies when no explicit status filter is requested.
+      for (const item of items as any[]) {
+        if (!excludedStatuses.has(String(item.status))) {
+          results.push(this.projectOrgHierarchyFields(item));
+        }
+      }
+
+      if (!meta.hasMore || items.length === 0) break;
+      page += 1;
+    }
+
+    return results;
+  }
+
+  private projectOrgHierarchyFields(item: any): Record<string, any> {
+    return {
+      id: item.id,
+      employeeCode: item.employeeCode ?? item.employee_code,
+      firstName: item.firstName ?? item.first_name,
+      lastName: item.lastName ?? item.last_name,
+      email: item.email,
+      mobile: item.mobile,
+      phone: item.phone,
+      avatarUrl: item.avatarUrl ?? item.avatar_url ?? null,
+      currentDepartmentId: item.currentDepartmentId ?? item.current_department_id ?? null,
+      department: item.department,
+      departmentName: item.departmentName ?? item.department_name,
+      currentDesignationId: item.currentDesignationId ?? item.current_designation_id ?? null,
+      designation: item.designation,
+      designationName: item.designationName ?? item.designation_name,
+      jobTitle: item.jobTitle ?? item.job_title,
+      reportingManagerId: item.reportingManagerId ?? item.reporting_manager_id ?? null,
+      reportingManager: item.reportingManager ?? item.reporting_manager_name,
+      reportingManagerEmail: item.reportingManagerEmail,
+      accessRole: item.accessRole,
+      isCeo: Boolean(item.isCeo ?? item.is_ceo),
+      employmentType: item.employmentType ?? item.employment_type,
+      status: item.status,
+      dateOfJoining: item.dateOfJoining ?? item.date_of_joining,
+      location: item.location,
+      locationName: item.locationName ?? item.location_name,
+      currentLocationId: item.currentLocationId ?? item.current_location_id ?? null,
+      currentBranchId: item.currentBranchId ?? item.current_branch_id ?? null,
+    };
+  }
+
   override async getById(ctx: TenantContext, id: number | string): Promise<Employee | null> {
     const employee = await super.getById(ctx, id);
     if (!employee) return null;

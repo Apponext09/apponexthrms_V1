@@ -450,11 +450,13 @@ export class AuthService {
         }
 
         // Ensure organization_admin role is assigned in user_roles for this user and organization
+        // (scoped strictly to this org's id — must never reuse a role belonging to
+        // another tenant or a platform-level role, which would leak menu/permission
+        // grants across organizations)
         let adminRole = await this.db('roles')
           .where('code', 'organization_admin')
-          .where(function () {
-            this.where('organization_id', orgAdminRow.id).orWhereNull('organization_id').orWhere('is_platform_role', true);
-          })
+          .where('organization_id', orgAdminRow.id)
+          .where('is_platform_role', false)
           .first();
 
         if (!adminRole) {
@@ -1022,9 +1024,8 @@ export class AuthService {
         try {
           let adminRole = await this.db('roles')
             .where('code', 'organization_admin')
-            .where(function () {
-              this.where('organization_id', org.id).orWhereNull('organization_id').orWhere('is_platform_role', true);
-            })
+            .where('organization_id', org.id)
+            .where('is_platform_role', false)
             .first();
           if (!adminRole) {
             const roleUuid = uuidv4();
