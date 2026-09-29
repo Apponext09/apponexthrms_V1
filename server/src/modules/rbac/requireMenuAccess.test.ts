@@ -31,6 +31,13 @@ describe('database-backed menu guards', () => {
     expect(next.mock.calls[0][0]).toMatchObject({ statusCode: 403 });
   });
 
+  it('accepts a granted shift page for the shared attendance API router', async () => {
+    vi.spyOn(RbacService.prototype, 'getMyMenus').mockResolvedValue(access(['/attendance/shifts']) as any);
+    const next = vi.fn();
+    await requireMenuModule('attendance', 'shift_management')({ ctx } as any, {} as any, next);
+    expect(next).toHaveBeenCalledWith();
+  });
+
   it('fails closed when permission lookup fails', async () => {
     vi.spyOn(RbacService.prototype, 'getMyMenus').mockRejectedValue(new Error('database unavailable'));
     const next = vi.fn();

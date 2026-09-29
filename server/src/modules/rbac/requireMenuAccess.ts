@@ -20,12 +20,12 @@ export function requireMenuPage(routes: string[]) {
 }
 
 /** Coarse module gate; specific sensitive APIs should use requireMenuPage instead. */
-export function requireMenuModule(module: string) {
+export function requireMenuModule(...modules: string[]) {
   return async (req: Request, _res: Response, next: NextFunction): Promise<void> => {
     try {
       if (!req.ctx) throw new UnauthorizedError('Tenant context missing');
       const access = await rbac.getMyMenus(req.ctx);
-      if (!access.items.some((item) => item.route && moduleForRoute(item.route) === module)) {
+      if (!access.items.some((item) => item.route && modules.includes(moduleForRoute(item.route)))) {
         throw new ForbiddenError('This module is not available to your role');
       }
       next();

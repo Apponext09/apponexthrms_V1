@@ -16,6 +16,7 @@ import { SectionTabs } from './SectionNavigation';
 import { SharedPortalSidebar, type OrganizationPortal } from './SharedPortalSidebar';
 import { useMenuAccess } from '@/features/access/useMenuAccess';
 import { grantedLandingPath, portalRoot, sessionPortal } from '@/features/access/portalNavigation';
+import { useAuthStore } from '@/features/auth/store/authStore';
 
 function isCheckedInRecord(record: unknown) {
   const value = record as { check_in_time?: string; checkInTime?: string; check_out_time?: string; checkOutTime?: string } | null;
@@ -75,6 +76,8 @@ function MenuPageGuard() {
 
 export function SharedPortalLayout({ portal: routePortal }: { portal: OrganizationPortal }) {
   const { access, ready, error } = useMenuAccess();
+  const attendancePermissions = useAuthStore((state) => state.user?.permissions ?? []);
+  const canReadAttendance = attendancePermissions.includes('*') || attendancePermissions.includes('attendance.read');
   // Page routes identify content, not a change of the authenticated user's portal.
   const portal = sessionPortal(access?.primaryPortal, routePortal);
   useNotificationSocket();
@@ -88,7 +91,7 @@ export function SharedPortalLayout({ portal: routePortal }: { portal: Organizati
   if (!ready && !error) return <div role="status" className="p-6 text-sm text-muted-foreground">Loading your portal...</div>;
 
   return <div className="app-shell-reference flex h-dvh overflow-hidden bg-background font-sans text-foreground">
-    {portal === 'employee' && <EmployeeTrackingEffects />}
+    {portal === 'employee' && canReadAttendance && <EmployeeTrackingEffects />}
     <div className={`z-30 hidden shrink-0 md:block ${sidebarOpen ? 'w-28' : 'w-[72px]'}`}>
       <SharedPortalSidebar portal={portal} open={sidebarOpen} onNavigate={() => undefined} />
     </div>

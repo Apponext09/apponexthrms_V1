@@ -16,7 +16,10 @@ const controller = new AttendanceController();
 const biometricController = new BiometricController();
 
 router.use(authenticate, resolveTenant);
-router.use(requireMenuModule('attendance'));
+// Shift pages are catalogued separately as `shift_management`, but their APIs
+// live under /attendance. Either page family must be able to reach this router;
+// endpoint-level permissions below still enforce read/write capabilities.
+router.use(requireMenuModule('attendance', 'shift_management'));
 
 // Root endpoint - list attendance records
 router.get('/', requirePermission('attendance.read'), controller.getHistory);

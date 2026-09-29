@@ -14,9 +14,11 @@ export function useBreakSync() {
   const { user } = useAuthStore();
   const { setBreakStatusFromAPI } = useAttendanceStore();
   const syncedRef = useRef(false);
+  const permissions = user?.permissions ?? [];
+  const canReadAttendance = permissions.includes('*') || permissions.includes('attendance.read');
 
   useEffect(() => {
-    if (!user || syncedRef.current) return;
+    if (!user || !canReadAttendance || syncedRef.current) return;
     syncedRef.current = true;
 
     const syncFromServer = async () => {
@@ -41,5 +43,5 @@ export function useBreakSync() {
     };
 
     syncFromServer();
-  }, [user, setBreakStatusFromAPI]);
+  }, [user, canReadAttendance, setBreakStatusFromAPI]);
 }

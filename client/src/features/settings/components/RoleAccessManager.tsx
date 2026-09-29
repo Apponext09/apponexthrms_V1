@@ -90,26 +90,30 @@ export function RoleAccessManager({ role, onBack }: { role: AccessRole; onBack: 
     const ids = new Set(menus.map((menu) => menu.id));
     return (permissionQuery.data ?? []).filter((permission) => permission.menuIds.some((id) => ids.has(id)));
   };
-  const toggleFeature = (menus: RoleMenuItem[], enabled: boolean) => {
-    setSelected((current) => expandTabAccessIds(menus.reduce((ids, entry) => toggleMenu(items, ids, entry.id, enabled), current), items));
+  const updateDefaultPermissions = (menus: RoleMenuItem[], enabled: boolean) => {
     const applicable = permissionsForMenus(menus);
     setSelectedPermissions((current) => {
       const next = new Set(current);
       for (const permission of applicable) {
-        if (!enabled || (isViewAction(permission) && mayGrantPermission(permission))) {
-          if (enabled) next.add(permission.code); else next.delete(permission.code);
-        }
+        if (enabled && mayGrantPermission(permission)) next.add(permission.code);
+        if (!enabled) next.delete(permission.code);
       }
       return [...next].sort();
     });
+  };
+  const toggleFeature = (menus: RoleMenuItem[], enabled: boolean) => {
+    setSelected((current) => expandTabAccessIds(menus.reduce((ids, entry) => toggleMenu(items, ids, entry.id, enabled), current), items));
+    updateDefaultPermissions(menus, enabled);
     setDirty(true);
   };
   const toggleModule = (parentIds: number[], pageIds: number[], checked: boolean) => {
     setSelected((current) => toggleSourceModule(items, current, parentIds, pageIds, checked));
+    updateDefaultPermissions(items.filter((item) => pageIds.includes(item.id)), checked);
     setDirty(true);
   };
   const selectAllTabs = (ids: number[]) => {
     setSelected((current) => ids.reduce((grants, id) => toggleMenu(items, grants, id, true), current));
+    updateDefaultPermissions(items.filter((item) => ids.includes(item.id)), true);
     setDirty(true);
   };
   const moveModule = (index: number, direction: -1 | 1) => {
