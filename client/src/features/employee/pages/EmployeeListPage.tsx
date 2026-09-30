@@ -90,6 +90,7 @@ export function EmployeeListPage() {
     pageSize: config.enablePagination ? pageSize : 1000,
     search: config.enableSearchBar ? searchTerm : '',
     status: statusFilter,
+    includeCeo: true,
   });
 
   const filteredEmployees = React.useMemo(() => {

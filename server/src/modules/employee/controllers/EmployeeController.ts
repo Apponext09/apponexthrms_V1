@@ -297,12 +297,21 @@ export class EmployeeController {
       company_id,
       excludeCeo,
       exclude_ceo,
+      includeCeo,
+      include_ceo,
     } = req.query;
 
     const empType = (employmentType || employment_type) as string;
     const deptId = (departmentId || department_id) as string;
     const targetCompId = (companyId || company_id) as string;
-    const shouldExcludeCeo = excludeCeo === 'true' || exclude_ceo === 'true' || excludeCeo === true;
+    const explicitlyIncludeCeo =
+      String(includeCeo || include_ceo || '').toLowerCase() === 'true';
+    const explicitlyExcludeCeo =
+      String(excludeCeo || exclude_ceo || '').toLowerCase() === 'true';
+    // CEO is a protected organization-level record. Collection endpoints are
+    // used by dropdowns and assignment fields throughout the product, so hide
+    // it by default. The main Employee List opts in with includeCeo=true.
+    const shouldExcludeCeo = explicitlyExcludeCeo || !explicitlyIncludeCeo;
 
     logger.debug('listEmployees called', {
       organizationId: ctx.organizationId,

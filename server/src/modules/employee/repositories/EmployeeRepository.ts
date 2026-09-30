@@ -202,13 +202,8 @@ export class EmployeeRepository extends BaseRepository<Employee> {
         sortOrder: 'asc',
       } as any);
 
-      // Filtered here rather than via a query-level customWhere: this
-      // override's own list() unconditionally *replaces* (not merges) any
-      // caller-supplied customWhere whenever the organization has a parent
-      // company (see the directoryCompanyId branch above), so a query-level
-      // filter would silently stop applying for those tenants. Matches the
-      // default "active workforce" scope the Employee Directory controller
-      // applies when no explicit status filter is requested.
+      // Keep the chart aligned with the Employee Directory's default active
+      // workforce scope while retaining chunked pagination.
       for (const item of items as any[]) {
         if (!excludedStatuses.has(String(item.status))) {
           results.push(this.projectOrgHierarchyFields(item));
@@ -465,6 +460,7 @@ export class EmployeeRepository extends BaseRepository<Employee> {
     }
 
     const queryFilters = { ...options.filters };
+    const callerCustomWhere = (options as any).customWhere;
     let excludeCeoFilter = false;
     if (queryFilters.is_ceo === 0 || (queryFilters as any).isCeo === 0) {
       delete queryFilters.is_ceo;
@@ -475,6 +471,9 @@ export class EmployeeRepository extends BaseRepository<Employee> {
     const modifiedOptions = { ...options, filters: queryFilters };
     if (directoryCompanyId || excludeCeoFilter) {
       (modifiedOptions as any).customWhere = (builder: any) => {
+        if (typeof callerCustomWhere === 'function') {
+          callerCustomWhere(builder);
+        }
         if (directoryCompanyId) {
           builder.where(function(this: any) {
             this.where('employees.company_id', directoryCompanyId)
@@ -622,7 +621,8 @@ export class EmployeeRepository extends BaseRepository<Employee> {
 
     const employeeIds = result.items.map((item: any) => item.id);
     const userMap = new Map<number, number>();
-    const roleMap = new Map<number, string>();
+    const roleMap = new Map<number, { code: string; name: string }>();
+    const assignedRoleMap = new Map<number, Array<{ code: string; name: string }>>();
 
     if (employeeIds.length > 0) {
       const users = await this.db('users')
@@ -646,7 +646,7 @@ export class EmployeeRepository extends BaseRepository<Employee> {
             this.where('user_roles.organization_id', ctx.organizationId).orWhereNull('user_roles.organization_id');
           })
           .whereIn('user_roles.user_id', userIds)
-          .select('user_roles.user_id', 'roles.code');
+          .select('user_roles.user_id', 'roles.code', 'roles.name');
 
         const rolePriority: Record<string, number> = {
           ceo: 8,
@@ -667,11 +667,19 @@ export class EmployeeRepository extends BaseRepository<Employee> {
         };
         for (const ur of userRoles) {
           const uId = Number((ur as any).userId || ur.user_id);
+          const code = String(ur.code || '').toLowerCase();
+          const name = String(ur.name || ur.code || 'Employee');
+          const assigned = assignedRoleMap.get(uId) || [];
+          if (!assigned.some((role) => role.code === code)) {
+            assigned.push({ code, name });
+            assignedRoleMap.set(uId, assigned);
+          }
+
           const currentRole = roleMap.get(uId);
-          const currentPriority = currentRole ? (rolePriority[currentRole] ?? 2.5) : 0;
-          const newPriority = rolePriority[ur.code] ?? 2.5;
+          const currentPriority = currentRole ? (rolePriority[currentRole.code] ?? 2.5) : 0;
+          const newPriority = rolePriority[code] ?? 2.5;
           if (newPriority > currentPriority) {
-            roleMap.set(uId, ur.code);
+            roleMap.set(uId, { code, name });
           }
         }
       }
@@ -679,7 +687,12 @@ export class EmployeeRepository extends BaseRepository<Employee> {
 
     for (const item of result.items) {
       const userId = userMap.get(Number(item.id));
-      (item as any).accessRole = userId ? (roleMap.get(userId) || 'employee') : 'employee';
+      const primaryRole = userId ? roleMap.get(userId) : undefined;
+      const assignedRoles = userId ? (assignedRoleMap.get(userId) || []) : [];
+      (item as any).accessRole = primaryRole?.code || 'employee';
+      (item as any).accessRoleName = primaryRole?.name || 'Employee';
+      (item as any).assignedRoles = assignedRoles.map((role) => role.code);
+      (item as any).assignedRoleNames = assignedRoles.map((role) => role.name);
 
       const mId = item.reportingManagerId || item.reporting_manager_id;
       const mInfo = mId ? mgrMap.get(Number(mId)) : null;

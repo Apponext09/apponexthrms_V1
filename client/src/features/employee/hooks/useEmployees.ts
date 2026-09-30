@@ -13,6 +13,7 @@ interface ListOptions {
   status?: string;
   employmentType?: string;
   departmentId?: number;
+  includeCeo?: boolean;
 }
 
 /**
@@ -56,6 +57,7 @@ export function useEmployees(options: ListOptions = {}) {
     status = "",
     employmentType = "",
     departmentId,
+    includeCeo = false,
   } = options;
 
   const { data, isLoading, error, refetch } = useQuery({
@@ -70,6 +72,7 @@ export function useEmployees(options: ListOptions = {}) {
       status,
       employmentType,
       departmentId,
+      includeCeo,
     ],
     queryFn: async () => {
       const params = new URLSearchParams({
@@ -83,6 +86,7 @@ export function useEmployees(options: ListOptions = {}) {
         ...(departmentId !== undefined && {
           departmentId: String(departmentId),
         }),
+        ...(includeCeo && { includeCeo: "true" }),
       });
 
       const response = await apiClient.get(`/employees?${params}`);

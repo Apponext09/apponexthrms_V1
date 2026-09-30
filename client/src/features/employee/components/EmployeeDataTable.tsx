@@ -113,9 +113,27 @@ export function EmployeeDataTable({
             const isCeo = Boolean(
               employee.isCeo ||
               employee.is_ceo ||
-              employee.accessRole === 'organization_admin' ||
+              employee.accessRole === 'ceo' ||
               (employee.employeeCode || employee.employee_code || '').startsWith('CEO-')
             );
+            const lifecycleStatus = String(employee.status || '').trim().toLowerCase();
+            const terminalStatuses = ['exit', 'exited', 'offboarded', 'alumni', 'terminated'];
+            const rawDisplayStatus = terminalStatuses.includes(lifecycleStatus)
+              ? lifecycleStatus
+              : employee.employeeStatus || employee.employee_status || employee.status || 'active';
+            const normalizedStatus = String(rawDisplayStatus).trim().toLowerCase().replace(/[\s_-]+/g, ' ');
+            const displayStatus = normalizedStatus === 'exit' ? 'Exited' : normalizedStatus.replace(/\b\w/g, (char) => char.toUpperCase());
+            const assignedRoleCodes: string[] = Array.isArray(employee.assignedRoles) ? employee.assignedRoles : [];
+            const assignedRoleNames: string[] = Array.isArray(employee.assignedRoleNames) ? employee.assignedRoleNames : [];
+            const roleEntries = assignedRoleCodes.length > 0
+              ? assignedRoleCodes.map((code, index) => ({
+                  code: String(code).toLowerCase(),
+                  name: assignedRoleNames[index] || String(code).replace(/[_-]+/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase()),
+                }))
+              : [{
+                  code: String(employee.accessRole || employee.access_role || 'employee').toLowerCase(),
+                  name: employee.accessRoleName || employee.access_role_name || String(employee.accessRole || employee.access_role || 'employee').replace(/[_-]+/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase()),
+                }];
 
             return (
               <TableRow
@@ -201,10 +219,9 @@ export function EmployeeDataTable({
                 {cols.statusBadge && (
                   <TableCell className="py-3 px-4">
                     {(() => {
-                      const displayStatus = (employee as any).employeeStatus || (employee as any).employee_status || employee.status || 'Active';
-                      const lower = String(displayStatus).toLowerCase();
+                      const lower = normalizedStatus;
                       const isActive = lower === 'active';
-                      const isInactive = lower === 'inactive' || lower === 'exit' || lower === 'terminated';
+                      const isInactive = lower === 'inactive' || terminalStatuses.includes(lower);
                       return (
                         <span
                           className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${
@@ -224,7 +241,7 @@ export function EmployeeDataTable({
                                 : 'bg-amber-500'
                             }`}
                           />
-                          {String(displayStatus).charAt(0).toUpperCase() + String(displayStatus).slice(1)}
+                          {displayStatus}
                         </span>
                       );
                     })()}
@@ -234,51 +251,33 @@ export function EmployeeDataTable({
                 {/* Access Role Badge */}
 {cols.accessRole && (
   <TableCell className="py-3 px-4">
-    <span
-      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold border ${
-        isCeo
-          ? 'bg-amber-500/20 text-amber-800 dark:text-amber-300 border-amber-500/40 font-black'
-          : employee.accessRole === 'hr_manager' ||
-            employee.accessRole === 'organization_admin'
-          ? 'bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/20'
-          : employee.accessRole === 'finance'
-          ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20'
-          : employee.accessRole === 'department_head' ||
-            employee.accessRole === 'manager'
-          ? 'bg-violet-500/10 text-violet-700 dark:text-violet-300 border-violet-500/20'
-          : employee.accessRole === 'team_lead'
-          ? 'bg-teal-500/10 text-teal-700 dark:text-teal-300 border-teal-500/20'
-          : employee.accessRole === 'intern'
-          ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20'
-          : employee.accessRole === 'consultant'
-          ? 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border-indigo-500/20'
-          : 'bg-slate-500/10 text-slate-700 dark:text-slate-300 border-slate-500/20'
-      }`}
-    >
-      {isCeo ? (
-        <>
-          <Crown className="w-3 h-3 text-amber-600 dark:text-amber-400" />
-          CEO / Executive
-        </>
-      ) : employee.accessRole === 'organization_admin' ? (
-        'Admin'
-      ) : employee.accessRole === 'hr_manager' ? (
-        'HR'
-      ) : employee.accessRole === 'finance' ? (
-        'Finance'
-      ) : employee.accessRole === 'department_head' ||
-        employee.accessRole === 'manager' ? (
-        'Manager'
-      ) : employee.accessRole === 'team_lead' ? (
-        'Team Lead'
-      ) : employee.accessRole === 'intern' ? (
-        'Intern'
-      ) : employee.accessRole === 'consultant' ? (
-        'Consultant'
-      ) : (
-        'Employee'
-      )}
-    </span>
+    <div className="flex flex-wrap gap-1">
+      {roleEntries.map((role) => (
+        <span
+          key={role.code}
+          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold border ${
+            isCeo || role.code === 'ceo'
+              ? 'bg-amber-500/20 text-amber-800 dark:text-amber-300 border-amber-500/40 font-black'
+              : ['hr', 'hr_manager', 'organization_admin'].includes(role.code)
+              ? 'bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/20'
+              : role.code === 'finance'
+              ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20'
+              : ['department_head', 'manager'].includes(role.code)
+              ? 'bg-violet-500/10 text-violet-700 dark:text-violet-300 border-violet-500/20'
+              : role.code === 'team_lead'
+              ? 'bg-teal-500/10 text-teal-700 dark:text-teal-300 border-teal-500/20'
+              : role.code === 'intern'
+              ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20'
+              : role.code === 'consultant'
+              ? 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border-indigo-500/20'
+              : 'bg-slate-500/10 text-slate-700 dark:text-slate-300 border-slate-500/20'
+          }`}
+        >
+          {(isCeo || role.code === 'ceo') && <Crown className="w-3 h-3 text-amber-600 dark:text-amber-400" />}
+          {role.name}
+        </span>
+      ))}
+    </div>
   </TableCell>
 )}
 
