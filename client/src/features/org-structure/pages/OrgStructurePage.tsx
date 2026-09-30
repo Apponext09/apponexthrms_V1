@@ -15,7 +15,7 @@ import {
   DragOverlay,
 } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import { useEmployees } from "@/features/employee/hooks/useEmployees";
+import { useOrgHierarchy } from "../hooks/useOrgHierarchy";
 import { useDesignations } from "@/features/settings/hooks/useDesignations";
 import { EmployeeCreateModal } from "@/features/employee/components/EmployeeCreateModal";
 import { useAuthStore } from "@/features/auth/store/authStore";
@@ -668,7 +668,7 @@ function TreeBranch({
 export function OrgStructurePage() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
-  const { employees, isLoading, refetch } = useEmployees({ pageSize: 1000 });
+  const { employees, isLoading, isError, error, refetch } = useOrgHierarchy();
   const { designations = [] } = useDesignations();
   const [searchTerm, setSearchTerm] = useState("");
   const [pulsingEmpId, setPulsingEmpId] = useState<number | null>(null);
@@ -700,7 +700,10 @@ export function OrgStructurePage() {
       return stored !== null ? JSON.parse(stored) : true;
     });
 
-  const userRole = (user as any)?.accessRole || (user as any)?.role || "";
+  const userRole = String((user as any)?.accessRole || (user as any)?.role || "").toLowerCase();
+  const permissions = user?.permissions || [];
+  const hasPermission = (permission: string) =>
+    permissions.includes("*") || permissions.includes(permission);
   const isAdminOrManager = [
     "organization_admin",
     "ceo",
@@ -710,6 +713,8 @@ export function OrgStructurePage() {
     "super_admin",
     "platform_admin",
   ].includes(userRole);
+  const canCreateEmployee = isAdminOrManager || hasPermission("employee.profile.create");
+  const canConfigureHierarchy = isAdminOrManager || hasPermission("employee.org_hierarchy.update");
   const canExport = isAdminOrManager || isExportEnabledForEmployees;
 
   // Local employees state for optimistic UI updates
@@ -1349,7 +1354,7 @@ export function OrgStructurePage() {
               </Button>
             </div>
 
-            {isAdminOrManager && (
+            {canConfigureHierarchy && (
               <Button
                 size="sm"
                 variant="outline"
@@ -1384,7 +1389,7 @@ export function OrgStructurePage() {
               </DropdownMenu>
             )}
 
-            {isAdminOrManager && (
+            {canCreateEmployee && (
               <Button
                 size="sm"
                 onClick={() => setIsCreateModalOpen(true)}
@@ -1476,6 +1481,17 @@ export function OrgStructurePage() {
                 <div className="w-6 h-6 border-2 border-border border-t-primary rounded-full animate-spin" />
                 <p className="text-xs text-muted-foreground font-medium">Building organization hierarchy…</p>
               </div>
+            ) : isError ? (
+              <div className="relative flex flex-col items-center justify-center h-64 text-center space-y-3">
+                <AlertTriangle className="w-10 h-10 text-destructive" />
+                <div>
+                  <p className="text-sm font-bold text-foreground">Unable to load organization structure</p>
+                  <p className="text-xs text-muted-foreground">{error || "Please try again."}</p>
+                </div>
+                <Button size="sm" variant="outline" onClick={() => refetch()} className="h-8 text-xs font-semibold">
+                  Try again
+                </Button>
+              </div>
             ) : !treeData ? (
               <div className="relative flex flex-col items-center justify-center h-64 text-center space-y-3">
                 <Users className="w-10 h-10 text-muted-foreground" />
@@ -1483,9 +1499,11 @@ export function OrgStructurePage() {
                   <p className="text-sm font-bold text-foreground">No employees found</p>
                   <p className="text-xs text-muted-foreground">Add staff to populate the hierarchy chart.</p>
                 </div>
-                <Button size="sm" onClick={() => setIsCreateModalOpen(true)} className={`h-8 text-xs font-semibold gap-1.5 ${BTN_PRIMARY}`}>
-                  <UserPlus className="w-3.5 h-3.5" /> Add first employee
-                </Button>
+                {canCreateEmployee && (
+                  <Button size="sm" onClick={() => setIsCreateModalOpen(true)} className={`h-8 text-xs font-semibold gap-1.5 ${BTN_PRIMARY}`}>
+                    <UserPlus className="w-3.5 h-3.5" /> Add first employee
+                  </Button>
+                )}
               </div>
             ) : (
               <div
