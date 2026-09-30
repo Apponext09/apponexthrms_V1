@@ -48,9 +48,10 @@ export class EventController {
       let query = db('events').whereNull('deleted_at');
 
       if (ctx?.organizationId) {
-        query = query.where(function () {
-          this.where('organization_id', ctx.organizationId).orWhereNull('organization_id');
-        });
+        query = query.where('organization_id', ctx.organizationId);
+      }
+      if (ctx?.companyId) {
+        query = query.where('company_id', ctx.companyId);
       }
 
       const rows = await query.orderBy('id', 'desc');
@@ -71,10 +72,15 @@ export class EventController {
     try {
       const db = getKnex();
       const { id } = req.params;
+      const ctx = req.ctx!;
 
       const row = await db('events')
         .where(function () {
           this.where('id', id).orWhere('uuid', id);
+        })
+        .where('organization_id', ctx.organizationId)
+        .modify((builder) => {
+          if (ctx.companyId) builder.where('company_id', ctx.companyId);
         })
         .whereNull('deleted_at')
         .first();
@@ -187,6 +193,10 @@ export class EventController {
 
       const existing = await db('events')
         .where(function () { this.where('id', id).orWhere('uuid', id); })
+        .where('organization_id', ctx?.organizationId)
+        .modify((builder) => {
+          if (ctx?.companyId) builder.where('company_id', ctx.companyId);
+        })
         .whereNull('deleted_at')
         .first();
 
@@ -229,8 +239,18 @@ export class EventController {
         updateData.status = body.isActive ? 'Active' : 'Inactive';
       }
 
-      await db('events').where('id', existing.id).update(updateData);
-      const updatedRow = await db('events').where('id', existing.id).first();
+      await db('events')
+        .where({ id: existing.id, organization_id: ctx?.organizationId })
+        .modify((builder) => {
+          if (ctx?.companyId) builder.where('company_id', ctx.companyId);
+        })
+        .update(updateData);
+      const updatedRow = await db('events')
+        .where({ id: existing.id, organization_id: ctx?.organizationId })
+        .modify((builder) => {
+          if (ctx?.companyId) builder.where('company_id', ctx.companyId);
+        })
+        .first();
 
       console.log('[EventController.update] Updated event ID:', existing.id);
       res.status(200).json({ success: true, data: parseEventRecord(updatedRow) });
@@ -248,9 +268,14 @@ export class EventController {
     try {
       const db = getKnex();
       const { id } = req.params;
+      const ctx = req.ctx!;
 
       const existing = await db('events')
         .where(function () { this.where('id', id).orWhere('uuid', id); })
+        .where('organization_id', ctx.organizationId)
+        .modify((builder) => {
+          if (ctx.companyId) builder.where('company_id', ctx.companyId);
+        })
         .whereNull('deleted_at')
         .first();
 
@@ -259,7 +284,12 @@ export class EventController {
         return;
       }
 
-      await db('events').where('id', existing.id).update({
+      await db('events')
+        .where({ id: existing.id, organization_id: ctx.organizationId })
+        .modify((builder) => {
+          if (ctx.companyId) builder.where('company_id', ctx.companyId);
+        })
+        .update({
         deleted_at: new Date(),
         status: 'Inactive',
         is_active: false,

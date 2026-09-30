@@ -20,6 +20,7 @@ export interface HolidayCalendar {
 export class HolidayCalendarRepository extends BaseRepository<HolidayCalendar> {
   constructor() {
     super('holiday_calendars');
+    this.companyScoped = true;
   }
 
   /**

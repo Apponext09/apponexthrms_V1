@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/config/api';
 import { toast } from 'sonner';
+import { useCompanyStore } from '../store/companyStore';
 
 export interface EmployeeStatus {
   id: number;
@@ -34,9 +35,10 @@ export interface EmployeeStatusCreate {
 
 export const useEmployeeStatuses = () => {
   const queryClient = useQueryClient();
+  const { selectedCompanyId } = useCompanyStore();
 
   const query = useQuery({
-    queryKey: ['employeeStatuses'],
+    queryKey: ['employeeStatuses', selectedCompanyId],
     queryFn: async () => {
       try {
         const res = await apiClient.get('/settings/employee-statuses');

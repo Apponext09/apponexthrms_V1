@@ -157,8 +157,9 @@ export function useDesignations() {
 }
 
 export function useDummyMappings() {
+  const { selectedCompanyId } = useCompanyStore();
   const companiesQuery = useQuery({
-    queryKey: ['mapping_companies'],
+    queryKey: ['mapping_companies', selectedCompanyId],
     queryFn: async () => {
       try {
         const { data } = await apiClient.get('/settings/companies');
@@ -175,7 +176,7 @@ export function useDummyMappings() {
   });
 
   const locationsQuery = useQuery({
-    queryKey: ['mapping_locations'],
+    queryKey: ['mapping_locations', selectedCompanyId],
     queryFn: async () => {
       try {
         const { data } = await apiClient.get('/settings/locations', { params: { pageSize: 200 } });
@@ -192,7 +193,7 @@ export function useDummyMappings() {
   });
 
   const departmentsQuery = useQuery({
-    queryKey: ['mapping_departments'],
+    queryKey: ['mapping_departments', selectedCompanyId],
     queryFn: async () => {
       try {
         const { data } = await apiClient.get('/settings/departments', { params: { pageSize: 200 } });
@@ -209,7 +210,7 @@ export function useDummyMappings() {
   });
 
   const shiftsQuery = useQuery({
-    queryKey: ['mapping_shifts'],
+    queryKey: ['mapping_shifts', selectedCompanyId],
     queryFn: async () => {
       const allShifts: any[] = [];
       const seenIds = new Set<string>();
@@ -264,7 +265,7 @@ export function useDummyMappings() {
   });
 
   const gradesQuery = useQuery({
-    queryKey: ['mapping_grades'],
+    queryKey: ['mapping_grades', selectedCompanyId],
     queryFn: async () => {
       try {
         const { data } = await apiClient.get('/settings/grades', { params: { pageSize: 200 } });

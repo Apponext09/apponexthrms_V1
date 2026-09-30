@@ -542,6 +542,9 @@ router.get('/offer-templates', asyncHandler(async (req: Request, res: Response) 
   if (await db.schema.hasTable('notification_templates')) {
     dbTemplates = await db('notification_templates')
       .where('organization_id', ctx.organizationId)
+      .modify((builder) => {
+        if (ctx.companyId) builder.where('company_id', ctx.companyId);
+      })
       .whereNull('deleted_at')
       .where(function () {
         this.where('template_name', 'like', '%Offer%')
@@ -626,6 +629,7 @@ router.post('/offer-templates', asyncHandler(async (req: Request, res: Response)
   const [id] = await db('notification_templates').insert({
     uuid: uuidv4(),
     organization_id: ctx.organizationId,
+    company_id: ctx.companyId || null,
     template_name: template_name || 'Custom Offer Template',
     template_code: template_code || `OFFER_${Date.now()}`,
     subject: subject || 'Letter of Offer',
@@ -647,6 +651,9 @@ router.delete('/offer-templates/:id', asyncHandler(async (req: Request, res: Res
   if (!isNaN(id)) {
     await db('notification_templates')
       .where({ id, organization_id: ctx.organizationId })
+      .modify((builder) => {
+        if (ctx.companyId) builder.where('company_id', ctx.companyId);
+      })
       .update({ deleted_at: new Date() });
   }
   res.json({ success: true, message: 'Offer template deleted' });
@@ -1164,16 +1171,11 @@ router.get('/departments', asyncHandler(async (req: Request, res: Response) => {
     const cid = Number(ctx.companyId);
     query = query.where((builder) => {
       builder.where('company_id', cid)
-        .orWhereNull('company_id')
         .orWhere('company_ids', 'like', `%"${cid}"%`)
         .orWhere('company_ids', 'like', `%[${cid}]%`)
         .orWhere('company_ids', 'like', `%,${cid},%`)
         .orWhere('company_ids', 'like', `%,${cid}]%`)
-        .orWhere('company_ids', 'like', `%[${cid},%`)
-        .orWhere('company_ids', 'like', `%${cid}%`)
-        .orWhereNull('company_ids')
-        .orWhere('company_ids', '')
-        .orWhere('company_ids', '[]');
+        .orWhere('company_ids', 'like', `%[${cid},%`);
     });
   }
 
@@ -2242,6 +2244,7 @@ router.post('/holiday-calendars', asyncHandler(async (req: Request, res: Respons
     // Unset other defaults for the same year
     await db('holiday_calendars')
       .where({ organization_id: ctx.organizationId, year, is_default: true })
+      .modify((builder) => { if (ctx.companyId) builder.where('company_id', ctx.companyId); })
       .update({ is_default: false });
   }
 
@@ -2269,7 +2272,10 @@ router.put('/holiday-calendars/:id', asyncHandler(async (req: Request, res: Resp
   const { name, description, is_default, applicable_location_id } = req.body;
   const id = Number(req.params.id);
 
-  const cal = await db('holiday_calendars').where({ id, organization_id: ctx.organizationId }).first();
+  const cal = await db('holiday_calendars')
+    .where({ id, organization_id: ctx.organizationId })
+    .modify((builder) => { if (ctx.companyId) builder.where('company_id', ctx.companyId); })
+    .first();
   if (!cal) {
     res.status(404).json({ success: false, message: 'Not found' });
     return;
@@ -2278,12 +2284,14 @@ router.put('/holiday-calendars/:id', asyncHandler(async (req: Request, res: Resp
   if (is_default) {
     await db('holiday_calendars')
       .where({ organization_id: ctx.organizationId, year: cal.year, is_default: true })
+      .modify((builder) => { if (ctx.companyId) builder.where('company_id', ctx.companyId); })
       .whereNot('id', id)
       .update({ is_default: false });
   }
 
   await db('holiday_calendars')
-    .where({ id })
+    .where({ id, organization_id: ctx.organizationId })
+    .modify((builder) => { if (ctx.companyId) builder.where('company_id', ctx.companyId); })
     .update({
       name,
       description,
@@ -2301,8 +2309,19 @@ router.delete('/holiday-calendars/:id', asyncHandler(async (req: Request, res: R
   const db = getKnex();
   const id = Number(req.params.id);
 
+  const calendar = await db('holiday_calendars')
+    .where({ id, organization_id: ctx.organizationId })
+    .modify((builder) => { if (ctx.companyId) builder.where('company_id', ctx.companyId); })
+    .first('id');
+  if (!calendar) {
+    res.status(404).json({ success: false, message: 'Not found' });
+    return;
+  }
   await db('holidays').where('holiday_calendar_id', id).delete();
-  const count = await db('holiday_calendars').where({ id, organization_id: ctx.organizationId }).delete();
+  const count = await db('holiday_calendars')
+    .where({ id, organization_id: ctx.organizationId })
+    .modify((builder) => { if (ctx.companyId) builder.where('company_id', ctx.companyId); })
+    .delete();
 
   if (!count) {
     res.status(404).json({ success: false, message: 'Not found' });
@@ -3696,6 +3715,7 @@ router.get('/late-deduction-policies', asyncHandler(async (req: Request, res: Re
 
   const policies = await db('late_deduction_policies')
     .where('organization_id', ctx.organizationId)
+    .modify((builder) => { if (ctx.companyId) builder.where('company_id', ctx.companyId); })
     .orderBy('id', 'desc');
 
   const mapped = policies.map((p: any) => {
@@ -3741,6 +3761,7 @@ router.get('/late-deduction-policies/eligibility-data', asyncHandler(async (req:
   // 1. Fetch locations
   const locations = await db('locations')
     .where('organization_id', ctx.organizationId)
+    .modify((builder) => { if (ctx.companyId) builder.where('company_id', ctx.companyId); })
     .whereNull('deleted_at')
     .where(function () {
       this.where('status', 'active').orWhere('is_active', 'Yes');
@@ -3751,17 +3772,20 @@ router.get('/late-deduction-policies/eligibility-data', asyncHandler(async (req:
   // 2. Fetch departments
   const departments = await db('departments')
     .where('organization_id', ctx.organizationId)
+    .modify((builder) => { if (ctx.companyId) builder.where('company_id', ctx.companyId); })
     .whereNull('deleted_at');
 
   // 3. Fetch shifts
   const shifts = await db('shift_templates')
     .where('organization_id', ctx.organizationId)
+    .modify((builder) => { if (ctx.companyId) builder.where('company_id', ctx.companyId); })
     .whereNull('deleted_at');
 
   // 4. Fetch employee statuses (distinct from employees)
   const statusesRows = await db('employees')
     .distinct('status')
     .where('organization_id', ctx.organizationId)
+    .modify((builder) => { if (ctx.companyId) builder.where('company_id', ctx.companyId); })
     .whereNotNull('status')
     .whereNot('status', '')
     .orderBy('status', 'asc');
@@ -3790,6 +3814,7 @@ router.get('/late-deduction-policies/:id', asyncHandler(async (req: Request, res
 
   const policy = await db('late_deduction_policies')
     .where({ id, organization_id: ctx.organizationId })
+    .modify((builder) => { if (ctx.companyId) builder.where('company_id', ctx.companyId); })
     .first();
 
   if (!policy) {
@@ -3860,6 +3885,7 @@ router.post('/late-deduction-policies', asyncHandler(async (req: Request, res: R
 
   const [id] = await db('late_deduction_policies').insert({
     organization_id: ctx.organizationId,
+    company_id: ctx.companyId || null,
     name,
     policy_type: policy_type || 'Late Coming',
     first_deduction_on: parseInt(first_deduction_on, 10) || 3,
@@ -3899,6 +3925,7 @@ router.patch('/late-deduction-policies/:id/status', asyncHandler(async (req: Req
 
   const existing = await db('late_deduction_policies')
     .where({ id, organization_id: ctx.organizationId })
+    .modify((builder) => { if (ctx.companyId) builder.where('company_id', ctx.companyId); })
     .first();
 
   if (!existing) {
@@ -3915,6 +3942,7 @@ router.patch('/late-deduction-policies/:id/status', asyncHandler(async (req: Req
 
   await db('late_deduction_policies')
     .where({ id, organization_id: ctx.organizationId })
+    .modify((builder) => { if (ctx.companyId) builder.where('company_id', ctx.companyId); })
     .update({
       status: newStatus,
       updated_at: new Date(),
@@ -3957,6 +3985,7 @@ router.put('/late-deduction-policies/:id', asyncHandler(async (req: Request, res
 
   await db('late_deduction_policies')
     .where({ id, organization_id: ctx.organizationId })
+    .modify((builder) => { if (ctx.companyId) builder.where('company_id', ctx.companyId); })
     .update({
       name,
       policy_type: policy_type || 'Late Coming',
@@ -3988,6 +4017,7 @@ router.delete('/late-deduction-policies/:id', asyncHandler(async (req: Request, 
 
   await db('late_deduction_policies')
     .where({ id, organization_id: ctx.organizationId })
+    .modify((builder) => { if (ctx.companyId) builder.where('company_id', ctx.companyId); })
     .delete();
 
   res.status(200).json({ success: true, message: 'Late deduction policy deleted successfully.' });
@@ -4001,6 +4031,7 @@ router.get('/late-updations', asyncHandler(async (req: Request, res: Response) =
 
   const updations = await db('late_updations')
     .where('organization_id', ctx.organizationId)
+    .modify((builder) => { if (ctx.companyId) builder.where('company_id', ctx.companyId); })
     .orderBy('id', 'desc');
 
   const mapped = updations.map((p: any) => {
@@ -4054,6 +4085,7 @@ router.post('/late-updations', asyncHandler(async (req: Request, res: Response) 
 
   const [id] = await db('late_updations').insert({
     organization_id: ctx.organizationId,
+    company_id: ctx.companyId || null,
     name,
     late_coming_after: late_coming_after || '09:30',
     update_for: update_for || 'Half Day',
@@ -4097,6 +4129,7 @@ router.put('/late-updations/:id', asyncHandler(async (req: Request, res: Respons
 
   await db('late_updations')
     .where({ id, organization_id: ctx.organizationId })
+    .modify((builder) => { if (ctx.companyId) builder.where('company_id', ctx.companyId); })
     .update({
       name,
       late_coming_after: late_coming_after || '09:30',
@@ -4122,6 +4155,7 @@ router.delete('/late-updations/:id', asyncHandler(async (req: Request, res: Resp
 
   await db('late_updations')
     .where({ id, organization_id: ctx.organizationId })
+    .modify((builder) => { if (ctx.companyId) builder.where('company_id', ctx.companyId); })
     .delete();
 
   res.status(200).json({ success: true, message: 'Late updation deleted successfully.' });
@@ -4134,6 +4168,7 @@ router.get('/late-auto-deductions/logs', asyncHandler(async (req: Request, res: 
 
   const logs = await db('late_auto_deduction_logs')
     .where('organization_id', ctx.organizationId)
+    .modify((builder) => { if (ctx.companyId) builder.where('company_id', ctx.companyId); })
     .orderBy('id', 'desc');
 
   res.status(200).json({ success: true, data: logs });
@@ -4149,11 +4184,13 @@ router.post('/late-auto-deductions/run', asyncHandler(async (req: Request, res: 
   // Retrieve active employees
   const employees = await db('employees')
     .where('organization_id', ctx.organizationId)
+    .modify((builder) => { if (ctx.companyId) builder.where('company_id', ctx.companyId); })
     .whereNull('deleted_at');
 
   // Retrieve active late policies
   const policies = await db('late_deduction_policies')
     .where('organization_id', ctx.organizationId)
+    .modify((builder) => { if (ctx.companyId) builder.where('company_id', ctx.companyId); })
     .where('status', 'active');
 
   const preview = [];
@@ -4337,6 +4374,7 @@ router.post('/late-auto-deductions/run', asyncHandler(async (req: Request, res: 
   if (!isDryRun && preview.length > 0) {
     await db('late_auto_deduction_logs').insert({
       organization_id: ctx.organizationId,
+      company_id: ctx.companyId || null,
       month,
       evaluated: employees.length,
       deducted_leaves: totalDeductions,
