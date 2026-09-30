@@ -55,6 +55,38 @@ export function normalizeDesignation(d: any): Designation {
   };
 }
 
+/**
+ * Keep legacy duplicate rows from being rendered more than once.
+ * Designation names and codes are unique within the current company, so an
+ * item matching any of those identifiers represents the same designation.
+ */
+function uniqueDesignations(items: any[]): Designation[] {
+  const seenIds = new Set<string>();
+  const seenCodes = new Set<string>();
+  const seenNames = new Set<string>();
+
+  return items.reduce<Designation[]>((result, item) => {
+    const designation = normalizeDesignation(item);
+    const id = designation.id == null ? '' : String(designation.id).trim();
+    const code = String(designation.code || '').trim().toLowerCase();
+    const name = String(designation.name || '').trim().toLowerCase();
+
+    if (
+      (id && seenIds.has(id)) ||
+      (code && seenCodes.has(code)) ||
+      (name && seenNames.has(name))
+    ) {
+      return result;
+    }
+
+    if (id) seenIds.add(id);
+    if (code) seenCodes.add(code);
+    if (name) seenNames.add(name);
+    result.push(designation);
+    return result;
+  }, []);
+}
+
 /** Mapping pickers must never offer an inactive master record. */
 function isActiveMappingOption(item: any): boolean {
   const value = item?.status ?? item?.is_active ?? item?.isActive ?? item?.active;
@@ -81,7 +113,7 @@ export function useDesignations() {
       else if (Array.isArray(data?.data?.items)) rawList = data.data.items;
       else if (Array.isArray(data?.items)) rawList = data.items;
 
-      return rawList.map(normalizeDesignation);
+      return uniqueDesignations(rawList);
     },
   });
 
