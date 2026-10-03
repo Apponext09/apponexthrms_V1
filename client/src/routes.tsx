@@ -1,7 +1,8 @@
 import React, { Suspense, lazy } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore, useAuthHydrated, hasStoredAccessToken } from './features/auth/store/authStore';
-import { firstGrantedPage, useMenuAccess } from './features/access/useMenuAccess';
+import { useMenuAccess } from './features/access/useMenuAccess';
+import { grantedLandingPath } from './features/access/portalNavigation';
 
 // ── Portal Route Modules ──────────────────────────────────────────────────────
 import { adminRoutes }        from './routes/admin.routes';
@@ -35,11 +36,10 @@ function PageLoader() {
 }
 
 function RedirectToGrantedPage({ preferred }: { preferred: string }) {
-  const { access, ready, error, canAccessPath } = useMenuAccess();
+  const { access, ready, error } = useMenuAccess();
   if (error) return <Navigate to="/unauthorized" replace />;
   if (!ready) return <PageLoader />;
-  const firstPage = firstGrantedPage(access?.paths ?? []);
-  return <Navigate to={canAccessPath(preferred) ? preferred : firstPage ?? '/unauthorized'} replace />;
+  return <Navigate to={grantedLandingPath(access?.paths ?? [], access?.primaryPortal, preferred)} replace />;
 }
 
 // ── Root Redirect — routes user to their portal based on role ─────────────────

@@ -145,6 +145,17 @@ export class PolicyController {
     try {
       if (!req.ctx) throw new UnauthorizedError('Tenant context not resolved');
       const id = parseInt(req.params.id, 10);
+      const jwtRoles = (req.user as any)?.roles;
+
+      const canAccess = await this.policyService.canUserAccessPolicy(req.ctx, id, jwtRoles);
+      if (!canAccess) {
+        res.status(403).json({
+          success: false,
+          error: { message: 'Forbidden: You are not authorized to view this policy document' },
+        });
+        return;
+      }
+
       const policy = await this.policyService.getPolicyById(req.ctx, id);
       res.json({
         success: true,

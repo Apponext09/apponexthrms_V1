@@ -69,12 +69,15 @@ export function EmployeeProfilePage() {
   // Only fetch edit permission when in employee portal
   const { editUnlocked, approvedRequestId, unlockedSection } = useProfileEditPermission(resolvedEmpId);
 
+  const hasProfileUpdate = isAdminOrHR || user?.permissions?.includes('*') || user?.permissions?.includes('employee.profile.update');
+  const canEditProfile = isEmployeePortal ? editUnlocked : Boolean(hasProfileUpdate);
+
   // Universal approval unlock: when an edit request is approved (editUnlocked is true) or for Admin/HR, unlock all sections for editing
-  const isPhotoUnlocked = !isEmployeePortal || editUnlocked;
-  const isBasicUnlocked = !isEmployeePortal || editUnlocked;
-  const isPersonalUnlocked = !isEmployeePortal || editUnlocked;
-  const isProfessionalUnlocked = !isEmployeePortal || editUnlocked;
-  const isStatutoryUnlocked = !isEmployeePortal || editUnlocked;
+  const isPhotoUnlocked = canEditProfile;
+  const isBasicUnlocked = canEditProfile;
+  const isPersonalUnlocked = canEditProfile;
+  const isProfessionalUnlocked = canEditProfile;
+  const isStatutoryUnlocked = canEditProfile;
 
   if (isLoading) {
     return <CoreCircularLoader />;
@@ -405,7 +408,7 @@ export function EmployeeProfilePage() {
           <EmployeeDocuments
             employeeId={employee.id as number}
             readOnly={isEmployeePortal}
-            canEdit={!isEmployeePortal || editUnlocked}
+            canEdit={canEditProfile}
           />
         </TabsContent>
 

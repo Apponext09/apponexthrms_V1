@@ -8,6 +8,8 @@ import { getKnex } from '../../db/knex';
 import { v4 as uuidv4 } from 'uuid';
 import { LRUCache } from '../../common/lib/cache';
 import { getOrgLeaveSettings, getDefaultWeeklyWorkPattern } from '../leaves/utils/settingsResolver';
+import { requirePermission } from '../../common/middleware/requirePermission';
+import { requireMenuPage } from '../rbac/requireMenuAccess';
 
 // Cache for upcoming holidays (1 hour TTL)
 import { BranchController } from './controllers/BranchController';
@@ -29,6 +31,12 @@ const designationService = new DesignationService();
 const router = Router();
 
 router.use(authenticate, resolveTenant);
+
+const leaveSettingsPages = [
+  '/settings/leave-policies', '/settings/org-leave-settings',
+  '/settings-group/org-leave-settings', '/hr/settings/leave-policies',
+  '/hr/settings/org-leave-settings',
+];
 
 // ─── Location Master Routes ───────────────────────────────────────────────────
 const locationCtrl = new LocationController();
@@ -2462,7 +2470,7 @@ router.get('/leave-types', asyncHandler(async (req: Request, res: Response) => {
   res.json({ success: true, data: parsedTypes });
 }));
 
-router.post('/leave-types', asyncHandler(async (req: Request, res: Response) => {
+router.post('/leave-types', requirePermission('leave.policy.manage'), asyncHandler(async (req: Request, res: Response) => {
   const ctx = req.ctx!;
   const db = getKnex();
   const {
@@ -2688,7 +2696,7 @@ router.post('/leave-types', asyncHandler(async (req: Request, res: Response) => 
   res.status(201).json({ success: true, message: 'Leave type created successfully and assigned to employees' });
 }));
 
-router.put('/leave-types/:id', asyncHandler(async (req: Request, res: Response) => {
+router.put('/leave-types/:id', requirePermission('leave.policy.manage'), asyncHandler(async (req: Request, res: Response) => {
   const ctx = req.ctx!;
   const db = getKnex();
   const id = Number(req.params.id);
@@ -3092,7 +3100,7 @@ router.get('/leave-year-settings', asyncHandler(async (req: Request, res: Respon
   res.json({ success: true, data: formatted });
 }));
 
-router.post('/leave-year-settings', asyncHandler(async (req: Request, res: Response) => {
+router.post('/leave-year-settings', requirePermission('leave.policy.manage'), asyncHandler(async (req: Request, res: Response) => {
   const ctx = req.ctx!;
   const db = getKnex();
   await ensureLeaveYearSettingsTable(db);
@@ -3118,7 +3126,7 @@ router.post('/leave-year-settings', asyncHandler(async (req: Request, res: Respo
   res.json({ success: true, data: { id, message: 'Leave year setting created successfully' } });
 }));
 
-router.put('/leave-year-settings/:id', asyncHandler(async (req: Request, res: Response) => {
+router.put('/leave-year-settings/:id', requirePermission('leave.policy.manage'), asyncHandler(async (req: Request, res: Response) => {
   const ctx = req.ctx!;
   const db = getKnex();
   await ensureLeaveYearSettingsTable(db);
@@ -3143,7 +3151,7 @@ router.put('/leave-year-settings/:id', asyncHandler(async (req: Request, res: Re
   res.json({ success: true, message: 'Leave year setting updated successfully' });
 }));
 
-router.patch('/leave-year-settings/:id/status', asyncHandler(async (req: Request, res: Response) => {
+router.patch('/leave-year-settings/:id/status', requirePermission('leave.policy.manage'), asyncHandler(async (req: Request, res: Response) => {
   const ctx = req.ctx!;
   const db = getKnex();
   await ensureLeaveYearSettingsTable(db);
@@ -3163,7 +3171,7 @@ router.patch('/leave-year-settings/:id/status', asyncHandler(async (req: Request
   res.json({ success: true, message: `Status updated to ${newStatus}` });
 }));
 
-router.delete('/leave-year-settings/:id', asyncHandler(async (req: Request, res: Response) => {
+router.delete('/leave-year-settings/:id', requirePermission('leave.policy.manage'), asyncHandler(async (req: Request, res: Response) => {
   const ctx = req.ctx!;
   const db = getKnex();
   await ensureLeaveYearSettingsTable(db);
@@ -3176,7 +3184,7 @@ router.delete('/leave-year-settings/:id', asyncHandler(async (req: Request, res:
   res.json({ success: true, message: 'Leave year setting deleted successfully' });
 }));
 
-router.delete('/leave-types/:id', asyncHandler(async (req: Request, res: Response) => {
+router.delete('/leave-types/:id', requirePermission('leave.policy.manage'), asyncHandler(async (req: Request, res: Response) => {
   const ctx = req.ctx!;
   const db = getKnex();
   const id = Number(req.params.id);
@@ -3306,7 +3314,7 @@ router.get('/org-leave-settings/resolved', asyncHandler(async (req: Request, res
 }));
 
 // GET list of all settings (org-wide and overrides)
-router.get('/org-leave-settings', asyncHandler(async (req: Request, res: Response) => {
+router.get('/org-leave-settings', requireMenuPage(leaveSettingsPages), asyncHandler(async (req: Request, res: Response) => {
   const ctx = req.ctx!;
   const db = getKnex();
 
@@ -3406,7 +3414,7 @@ router.get('/org-leave-settings', asyncHandler(async (req: Request, res: Respons
 }));
 
 // POST/PUT save settings (upsert style)
-router.post('/org-leave-settings', asyncHandler(async (req: Request, res: Response) => {
+router.post('/org-leave-settings', requirePermission('leave.policy.manage'), asyncHandler(async (req: Request, res: Response) => {
   const ctx = req.ctx!;
   const db = getKnex();
 
@@ -3581,7 +3589,7 @@ router.post('/org-leave-settings', asyncHandler(async (req: Request, res: Respon
 
 
 // DELETE organization settings row (to reset overrides to defaults)
-router.delete('/org-leave-settings/:id', asyncHandler(async (req: Request, res: Response) => {
+router.delete('/org-leave-settings/:id', requirePermission('leave.policy.manage'), asyncHandler(async (req: Request, res: Response) => {
   const ctx = req.ctx!;
   const db = getKnex();
   const { id } = req.params;

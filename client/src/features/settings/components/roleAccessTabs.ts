@@ -11,6 +11,7 @@ import { CONSULTANT_NAV } from '@/layouts/ConsultantSidebar';
 import { EMPLOYEE_NAV_SECTIONS } from '@/features/employee/layout/EmployeeSidebar';
 import type { RoleMenuItem } from './roleMenuSelection';
 import { WORKING_PAGE_GROUPS } from './accessPageDefinitions';
+import { SETTINGS_CONFIGURATION_ROUTES, SETTINGS_CONFIGURATION_TABS, TAB_ACCESS_FLOWS } from '@apponexthrms/shared';
 
 export type AccessPortal = 'admin' | 'hr' | 'manager' | 'team_lead' | 'employee' | 'intern' | 'consultant' | 'finance';
 export const ACCESS_PORTALS: { code: AccessPortal; label: string }[] = [
@@ -27,6 +28,30 @@ export type AccessTab = { menu: RoleMenuItem; label: string; icon: Icon };
 export type AccessTabGroup = { label: string; icon: Icon; tabs: AccessTab[] };
 export type CommonAccessTab = { label: string; icon: Icon; menus: RoleMenuItem[] };
 export type CommonAccessModule = { label: string; icon: Icon; tabs: CommonAccessTab[] };
+export type AccessSourceGroup = { portal: AccessPortal; label: string; modules: CommonAccessModule[] };
+
+/** Source labels are presentation groups; they never imply granting another portal. */
+export function buildAccessSourceGroups(modules: CommonAccessModule[]): AccessSourceGroup[] {
+  return ACCESS_PORTALS.map(({ code: portal, label }) => ({
+    portal,
+    label: portal === 'admin' ? 'CEO / Admin' : label,
+    modules: modules.map((module) => ({ ...module, tabs: module.tabs.map((tab) => ({
+      ...tab, menus: tab.menus.filter((menu) => menu.portal === portal),
+    })).filter((tab) => tab.menus.length > 0) })).filter((module) => module.tabs.length > 0),
+  })).filter((group) => group.modules.length > 0);
+}
+
+/** Keep one module list, with CEO/Admin pages first, then HR and other sources. */
+export function buildSourceLabelledModules(modules: CommonAccessModule[]) {
+  const sources = buildAccessSourceGroups(modules);
+  return modules.map((module) => ({
+    ...module,
+    tabs: sources.flatMap((source) => module.tabs.flatMap((tab) => {
+      const menus = tab.menus.filter((menu) => menu.portal === source.portal);
+      return menus.length ? [{ ...tab, menus, source: source.label, portal: source.portal }] : [];
+    })),
+  }));
+}
 
 /** A common tab can only grant its route in the role's own portal. */
 export function menuForRolePortal(tab: Pick<CommonAccessTab, 'menus'>, portal: AccessPortal): RoleMenuItem | undefined {
@@ -294,6 +319,40 @@ export function buildCompleteAccessModules(items: RoleMenuItem[]): CommonAccessM
         else module.tabs.push({ label: name, icon: module.icon, menus: missing });
       }
     }
+  }
+  // LMS integrations are also linked from General Settings. Keep their single
+  // access entry visibly under Settings, rather than losing it to LMS deduplication.
+  const lmsSettingsRoutes = new Set(Object.values(WORKING_PAGE_GROUPS).flatMap((groups) => groups
+    .filter((group) => group.component === 'LmsIntegrationSettingsPage').flatMap((group) => group.routes.map((route) => route.toLowerCase()))));
+  const lmsSettingsMenus = items.filter((item) => item.route && lmsSettingsRoutes.has(item.route.toLowerCase()));
+  if (lmsSettingsMenus.length) {
+    for (const module of modules) for (const tab of module.tabs) {
+      tab.menus = tab.menus.filter((menu) => !lmsSettingsMenus.some((entry) => entry.id === menu.id));
+    }
+    let settings = modules.find((module) => module.label === 'Settings');
+    if (!settings) { settings = { label: 'Settings', icon: icon('Settings'), tabs: [] }; modules.push(settings); }
+    settings.tabs.push({ label: 'LMS Settings', icon: icon('GraduationCap'), menus: lmsSettingsMenus });
+  }
+  const configurationMenus = items.filter((item) => item.portal && item.route && SETTINGS_CONFIGURATION_ROUTES[item.portal]?.some((route) =>
+    SETTINGS_CONFIGURATION_TABS.some((tab) => item.route === `${route}?tab=${tab.id}`)));
+  if (configurationMenus.length) {
+    let settings = modules.find((module) => module.label === 'Settings');
+    if (!settings) { settings = { label: 'Settings', icon: icon('Settings'), tabs: [] }; modules.push(settings); }
+    for (const module of modules) for (const tab of module.tabs) {
+      tab.menus = tab.menus.filter((menu) => !configurationMenus.some((child) => child.portal === menu.portal && child.route?.split('?')[0] === menu.route));
+    }
+    for (const tab of SETTINGS_CONFIGURATION_TABS) {
+      const menus = configurationMenus.filter((menu) => new URLSearchParams(menu.route!.split('?')[1]).get('tab') === tab.id);
+      if (menus.length) settings.tabs.push({ label: tab.label, icon: icon(tab.icon), menus });
+    }
+  }
+  for (const flow of TAB_ACCESS_FLOWS) {
+    const owners = modules.flatMap((module) => module.tabs).filter((tab) => tab.menus.some((menu) => menu.portal === flow.portal && flow.owners.includes(menu.route?.toLowerCase() ?? '')));
+    if (!owners.length) continue;
+    const owned = items.filter((menu) => menu.portal === flow.portal && flow.pages.includes(menu.route?.toLowerCase() ?? ''));
+    // Remove action-only checkboxes, but keep other source versions in their tabs.
+    for (const module of modules) for (const tab of module.tabs) tab.menus = tab.menus.filter((menu) => !owned.some((page) => page.id === menu.id));
+    for (const tab of owners) tab.menus.push(...owned.filter((page) => !tab.menus.some((menu) => menu.id === page.id)));
   }
   return modules.map((module) => ({ ...module, tabs: module.tabs.filter((tab) => tab.menus.length > 0) })).filter((module) => module.tabs.length > 0);
 }

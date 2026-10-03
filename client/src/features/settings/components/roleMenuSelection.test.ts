@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { selectMenuChildren, toggleMenu, type RoleMenuItem } from './roleMenuSelection';
+import { selectMenuChildren, toggleMenu, toggleSourceModule, type RoleMenuItem } from './roleMenuSelection';
 
 const menus: RoleMenuItem[] = [
   { id: 1, parentId: null, code: 'attendance', label: 'Attendance' },
@@ -26,5 +26,17 @@ describe('role menu selection', () => {
 
   it('supports an explicit select-all action', () => {
     expect(selectMenuChildren(menus, [], 1)).toEqual([1, 2, 3]);
+  });
+
+  it('selecting a source module does not automatically select its pages', () => {
+    expect(toggleSourceModule(menus, [], [1], [2], true)).toEqual([1]);
+  });
+
+  it('unselecting one source keeps another source page and its shared parent', () => {
+    expect(toggleSourceModule(menus, [1, 2, 3], [1], [2], false)).toEqual([1, 3]);
+  });
+
+  it('removes the parent when the last source page is removed', () => {
+    expect(toggleSourceModule(menus, [1, 2], [1], [2], false)).toEqual([]);
   });
 });

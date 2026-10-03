@@ -182,6 +182,12 @@ export class PolicyRepository {
         fileSize: policy.fileSize || policy.file_size,
         fileType: policy.fileType || policy.file_type,
         version: policy.version,
+        status: policy.status || (policy.is_active ? 'published' : 'draft'),
+        effectiveDate: policy.effective_date || policy.effectiveDate || null,
+        reviewDate: policy.review_date || policy.reviewDate || null,
+        expiryDate: policy.expiry_date || policy.expiryDate || null,
+        documentRef: policy.document_ref || policy.documentRef || null,
+        signatureMode: policy.signature_mode || policy.signatureMode || 'ACKNOWLEDGEMENT',
         isActive: Boolean(policy.isActive !== undefined ? policy.isActive : policy.is_active),
         applicableGender: policy.applicableGender || policy.applicable_gender || 'all',
         applicableDepartmentIds: parseDeptIds(policy.applicableDepartmentIds || policy.applicable_department_ids),
@@ -462,6 +468,12 @@ export class PolicyRepository {
       fileSize: policy.fileSize || policy.file_size,
       fileType: policy.fileType || policy.file_type,
       version: policy.version,
+      status: policy.status || (policy.is_active ? 'published' : 'draft'),
+      effectiveDate: policy.effective_date || policy.effectiveDate || null,
+      reviewDate: policy.review_date || policy.reviewDate || null,
+      expiryDate: policy.expiry_date || policy.expiryDate || null,
+      documentRef: policy.document_ref || policy.documentRef || null,
+      signatureMode: policy.signature_mode || policy.signatureMode || 'ACKNOWLEDGEMENT',
       isActive: Boolean(policy.isActive !== undefined ? policy.isActive : policy.is_active),
       applicableGender: policy.applicableGender || policy.applicable_gender || 'all',
       applicableDepartmentIds: parseDeptIds(policy.applicableDepartmentIds || policy.applicable_department_ids),
@@ -509,6 +521,9 @@ export class PolicyRepository {
     return this.db.transaction(async (trx) => {
       const validUserId = await this.getValidUserId(trx, ctx);
       const uuid = uuidv4();
+      const statusVal = input.status ? input.status.toLowerCase() : (input.isActive === false ? 'draft' : 'published');
+      const isActiveVal = statusVal !== 'draft' && statusVal !== 'archived' && statusVal !== 'expired';
+
       const [id] = await trx('policy_documents').insert({
         uuid,
         organization_id: ctx.organizationId,
@@ -521,7 +536,12 @@ export class PolicyRepository {
         file_size: input.fileSize || null,
         file_type: input.fileType || null,
         version: input.version || '1.0',
-        is_active: input.isActive !== undefined ? input.isActive : true,
+        status: statusVal,
+        effective_date: input.effectiveDate ? new Date(input.effectiveDate) : null,
+        review_date: input.reviewDate ? new Date(input.reviewDate) : null,
+        expiry_date: input.expiryDate ? new Date(input.expiryDate) : null,
+        document_ref: input.documentRef || null,
+        is_active: isActiveVal,
         applicable_gender: input.applicableGender || 'all',
         applicable_department_ids: input.applicableDepartmentIds && input.applicableDepartmentIds.length > 0
           ? JSON.stringify(input.applicableDepartmentIds)
@@ -699,7 +719,18 @@ export class PolicyRepository {
       if (input.fileSize !== undefined) updateData.file_size = input.fileSize;
       if (input.fileType !== undefined) updateData.file_type = input.fileType;
       if (input.version !== undefined) updateData.version = input.version;
-      if (input.isActive !== undefined) updateData.is_active = input.isActive;
+      if (input.status !== undefined) {
+        const s = input.status.toLowerCase();
+        updateData.status = s;
+        updateData.is_active = s !== 'draft' && s !== 'archived' && s !== 'expired';
+      } else if (input.isActive !== undefined) {
+        updateData.is_active = input.isActive;
+        updateData.status = input.isActive ? 'published' : 'draft';
+      }
+      if (input.effectiveDate !== undefined) updateData.effective_date = input.effectiveDate ? new Date(input.effectiveDate) : null;
+      if (input.reviewDate !== undefined) updateData.review_date = input.reviewDate ? new Date(input.reviewDate) : null;
+      if (input.expiryDate !== undefined) updateData.expiry_date = input.expiryDate ? new Date(input.expiryDate) : null;
+      if (input.documentRef !== undefined) updateData.document_ref = input.documentRef || null;
       if (input.applicableGender !== undefined) updateData.applicable_gender = input.applicableGender;
       if (input.applicableDepartmentIds !== undefined) {
         updateData.applicable_department_ids = input.applicableDepartmentIds && input.applicableDepartmentIds.length > 0
@@ -869,6 +900,13 @@ export class PolicyRepository {
     userId: number,
     roleCodes: string[]
   ): Promise<UserPolicyView[]> {
+    const isSuperAdmin = roleCodes.some((r) =>
+      ['super_admin', 'superadmin'].includes(String(r).toLowerCase().trim())
+    );
+    if (isSuperAdmin) {
+      return [];
+    }
+
     const roles = expandRoleCodes(roleCodes);
 
     // Fetch user's gender, department, employee ID, designation from linked employee profile
@@ -888,10 +926,9 @@ export class PolicyRepository {
     const userDeptId = userEmployee?.currentDepartmentId ? String(userEmployee.currentDepartmentId) : null;
     const userDesigId = userEmployee?.currentDesignationId ? String(userEmployee.currentDesignationId) : null;
 
-    // Query active policies
+    // Query active policies (including status check)
     const activePolicies = await this.db('policy_documents')
       .where('organization_id', ctx.organizationId)
-      .where('is_active', true)
       .whereNull('deleted_at');
 
     if (activePolicies.length === 0) return [];
@@ -906,59 +943,81 @@ export class PolicyRepository {
 
     const applicablePolicies: any[] = [];
 
+    const now = new Date();
+
     for (const policy of activePolicies) {
-      // 1. Gender Filter Check
+      // 1. Status Filter Check: Draft, archived, expired policies hidden from employee active policies
+      const isActive = Boolean(policy.isActive !== undefined ? policy.isActive : (policy.is_active !== undefined ? policy.is_active : true));
+      const pStatus = String(policy.status || (isActive ? 'published' : 'draft')).toLowerCase().trim();
+      if (pStatus === 'draft' || pStatus === 'archived' || pStatus === 'expired' || !isActive) {
+        continue;
+      }
+
+      // 2. Date Filter Check: Not active before effective date, expired after expiry date
+      const effDate = policy.effectiveDate || policy.effective_date;
+      const expDate = policy.expiryDate || policy.expiry_date;
+      if (effDate && new Date(effDate) > now) {
+        continue;
+      }
+      if (expDate && new Date(expDate) < now) {
+        continue;
+      }
+
+      // 3. Gender Filter Check
       const pGender = String(policy.applicableGender || policy.applicable_gender || 'all').toLowerCase().trim();
       if (pGender !== 'all') {
-        if (userGender && userGender !== pGender) {
+        if (!userGender || userGender !== pGender) {
           continue;
         }
       }
 
-      // 2. Department Filter Check
+      // 4. Department Filter Check
       const pDepts = parseIds(policy.applicableDepartmentIds || policy.applicable_department_ids);
       if (pDepts.length > 0 && !pDepts.includes('all')) {
-        if (userDeptId && !pDepts.includes(userDeptId)) {
+        if (!userDeptId || !pDepts.includes(userDeptId)) {
           continue;
         }
       }
 
-      // 3. Employee Filter Check
+      // 5. Employee Filter Check
       const pEmps = parseIds(policy.applicableEmployeeIds || policy.applicable_employee_ids);
       if (pEmps.length > 0 && !pEmps.includes('all')) {
-        if (userEmpId && !pEmps.includes(userEmpId)) {
+        if (!userEmpId || !pEmps.includes(userEmpId)) {
           continue;
         }
       }
 
-      // 4. Designation Filter Check
+      // 6. Designation Filter Check
       const pDesigs = parseIds(policy.applicableDesignationIds || policy.applicable_designation_ids);
       if (pDesigs.length > 0 && !pDesigs.includes('all')) {
-        if (userDesigId && !pDesigs.includes(userDesigId)) {
+        if (!userDesigId || !pDesigs.includes(userDesigId)) {
           continue;
         }
       }
 
-      // 5. Role Mapping Check
+      // 7. Role Mapping Check
       const pMappings = matchingMappings.filter(
         (m) => (m.policyDocumentId || m.policy_document_id) === policy.id
       );
+      const specificRoleCodes = pMappings
+        .map((m) => String(m.roleCode || m.role_code || '').toLowerCase().trim())
+        .filter((c) => c && c !== 'all');
 
-      const matchedMapping = pMappings.find((m) => {
-        const code = String(m.roleCode || m.role_code || '').toLowerCase().trim();
-        return roles.includes(code);
-      });
-
-      // Include if role matches OR if assigned specifically by department/employee/designation
-      if (matchedMapping || pMappings.length === 0 || (pEmps.length > 0 && userEmpId && pEmps.includes(userEmpId))) {
-        const isMandatory = pMappings.some((m) =>
-          Boolean(m.isMandatory !== undefined ? m.isMandatory : m.is_mandatory)
-        );
-        applicablePolicies.push({
-          ...policy,
-          isMandatory,
-        });
+      if (specificRoleCodes.length > 0) {
+        const matchesRole = specificRoleCodes.some((code) => roles.includes(code));
+        if (!matchesRole) {
+          continue;
+        }
       }
+
+      const isMandatory = pMappings.some((m) =>
+        Boolean(m.isMandatory !== undefined ? m.isMandatory : m.is_mandatory)
+      );
+
+      applicablePolicies.push({
+        ...policy,
+        isMandatory,
+      });
     }
 
     if (applicablePolicies.length === 0) return [];
@@ -988,6 +1047,17 @@ export class PolicyRepository {
         createdAt: a.createdAt || a.created_at,
         updatedAt: a.updatedAt || a.updated_at,
       });
+    }
+
+    // Fetch user's signatures for these policies
+    const signatures = await this.db('policy_signatures')
+      .where('organization_id', ctx.organizationId)
+      .where('user_id', userId)
+      .whereIn('policy_document_id', policyIds);
+
+    const signatureMap = new Map<number, any>();
+    for (const s of signatures) {
+      signatureMap.set(s.policy_document_id || s.policyDocumentId, s);
     }
 
     // Fetch attachments for active policies
@@ -1022,9 +1092,13 @@ export class PolicyRepository {
 
     return applicablePolicies.map((p) => {
       const acceptance = acceptanceMap.get(p.id);
+      const sig = signatureMap.get(p.id);
+      const sigStatus = sig ? (sig.status || sig.status) : null;
+      const isSigned = sigStatus === 'SIGNED';
+
       const isAccepted = Boolean(
-        acceptance &&
-        (!acceptance.policyVersion || normalizeVersion(acceptance.policyVersion) === normalizeVersion(p.version))
+        (acceptance && (!acceptance.policyVersion || normalizeVersion(acceptance.policyVersion) === normalizeVersion(p.version))) ||
+        isSigned
       );
       const isVersionCurrent = isAccepted;
       const pAtts = attachmentMap.get(p.id) || [];
@@ -1043,6 +1117,12 @@ export class PolicyRepository {
         fileSize: p.fileSize || p.file_size,
         fileType: p.fileType || p.file_type,
         version: p.version,
+        status: p.status || (p.isActive !== undefined ? (p.isActive ? 'published' : 'draft') : (p.is_active ? 'published' : 'draft')),
+        effectiveDate: p.effectiveDate || p.effective_date || null,
+        reviewDate: p.reviewDate || p.review_date || null,
+        expiryDate: p.expiryDate || p.expiry_date || null,
+        documentRef: p.documentRef || p.document_ref || null,
+        signatureMode: p.signatureMode || p.signature_mode || 'ACKNOWLEDGEMENT',
         isActive: Boolean(p.isActive !== undefined ? p.isActive : p.is_active),
         applicableGender: p.applicableGender || p.applicable_gender || 'all',
         applicableDepartmentIds: parseDeptIds(p.applicableDepartmentIds || p.applicable_department_ids),
@@ -1053,9 +1133,11 @@ export class PolicyRepository {
         deletedAt: p.deletedAt || p.deleted_at,
         isMandatory: Boolean(p.isMandatory),
         isAccepted,
-        acceptedAt: acceptance?.acceptedAt || null,
-        acceptedVersion: acceptance?.policyVersion || null,
+        acceptedAt: acceptance?.acceptedAt || sig?.signedAt || null,
+        acceptedVersion: acceptance?.policyVersion || sig?.policyVersion || null,
         isVersionCurrent,
+        signatureStatus: sigStatus,
+        signatureRecord: sig || null,
         attachments: pAtts,
         mainAttachment: mainAtt,
       };

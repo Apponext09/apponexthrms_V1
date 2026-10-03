@@ -1,7 +1,36 @@
 import { describe, expect, it } from 'vitest';
-import { PORTAL_ROUTES, expandMenuSelection, moduleForRoute, pageAllowsReadPermission } from './menu.catalog';
+import { PORTAL_ROUTES, expandMenuSelection, moduleForRoute, pageAllowsReadPermission, pageAllowsPermission } from './menu.catalog';
 
 describe('existing page catalog', () => {
+  it('grants supported tab actions without granting unrelated administration', () => {
+    expect(pageAllowsPermission('employee.profile.update', '/employees')).toBe(true);
+    expect(pageAllowsPermission('employee.profile.update', '/hr/employees')).toBe(true);
+    expect(pageAllowsPermission('employee.profile.update', '/intern/profile')).toBe(false);
+    expect(pageAllowsPermission('recruitment.job.write', '/hr/recruitment/jobs')).toBe(true);
+    expect(pageAllowsPermission('recruitment.mrf.write', '/hr/recruitment/jobs')).toBe(false);
+    expect(pageAllowsPermission('performance.goal_write', '/hr/performance/goals')).toBe(true);
+    expect(pageAllowsPermission('performance.review_write', '/hr/performance/goals')).toBe(false);
+    expect(pageAllowsPermission('workflow:update', '/workflows/list')).toBe(true);
+    expect(pageAllowsPermission('workflow:approve', '/workflows/list')).toBe(false);
+    expect(pageAllowsPermission('payroll:process', '/payroll/processing')).toBe(true);
+    expect(pageAllowsPermission('payroll:process', '/employee/payslips')).toBe(false);
+    expect(pageAllowsPermission('loan:create', '/employee/loans')).toBe(false);
+    expect(pageAllowsPermission('asset.delete', '/assets/list')).toBe(true);
+    expect(pageAllowsPermission('asset.transfer.approve', '/assets/transfer')).toBe(true);
+    expect(pageAllowsPermission('asset.transfer.approve', '/assets/list')).toBe(false);
+    expect(pageAllowsPermission('attendance.shift_write', '/attendance/shifts')).toBe(true);
+    expect(pageAllowsPermission('attendance.shift_write', '/attendance/locations')).toBe(false);
+    expect(pageAllowsPermission('leave.approve', '/leaves/approvals')).toBe(true);
+    expect(pageAllowsPermission('leave.approve', '/leaves/my-leaves')).toBe(false);
+    expect(pageAllowsPermission('leave.policy.manage', '/settings/org-leave-settings')).toBe(true);
+    expect(pageAllowsPermission('leave.policy.manage', '/hr/settings/org-leave-settings')).toBe(true);
+    expect(pageAllowsPermission('expense.claim.approve', '/expenses/approvals')).toBe(true);
+    expect(pageAllowsPermission('expense.category.delete', '/expenses/categories')).toBe(true);
+    expect(pageAllowsPermission('expense.category.delete', '/expenses/my-expenses')).toBe(false);
+    expect(pageAllowsPermission('lms.course.update', '/lms/courses')).toBe(true);
+    expect(pageAllowsPermission('lms.course.update', '/lms/batches')).toBe(false);
+    expect(pageAllowsPermission('rbac.roles.write', '/employees')).toBe(false);
+  });
   it('includes every organization portal and known attendance detail paths', () => {
     expect(Object.keys(PORTAL_ROUTES).sort()).toEqual(['admin', 'consultant', 'employee', 'finance', 'hr', 'intern', 'manager', 'teamlead']);
     expect(PORTAL_ROUTES.admin).toContain('/attendance/live-tracking');

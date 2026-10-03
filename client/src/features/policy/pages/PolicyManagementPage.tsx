@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Shield,
   FileText,
@@ -19,6 +20,7 @@ import {
   UserCheck,
   FolderPlus,
   Tag,
+  ArrowLeft,
 } from 'lucide-react';
 import {
   usePolicies,
@@ -72,6 +74,7 @@ const DEFAULT_FALLBACK_CATEGORIES = [
 import { apiClient } from '@/config/api';
 
 export function PolicyManagementPage() {
+  const navigate = useNavigate();
   const { data: policies = [], isLoading } = usePolicies();
   const { data: categories = [], isLoading: categoriesLoading } = usePolicyCategories();
   const { data: deptsQueryResult } = useDepartments(1, 100);
@@ -310,14 +313,25 @@ export function PolicyManagementPage() {
     <div className="p-4 sm:p-6 space-y-6 max-w-7xl mx-auto font-sans antialiased text-foreground">
       {/* Header Banner */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-gradient-to-r from-slate-900 via-slate-800 to-blue-950 p-6 rounded-2xl text-white shadow-xl">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <ShieldCheck className="w-7 h-7 text-blue-400" />
-            <h1 className="text-xl sm:text-2xl font-black tracking-tight">Policy & Governance Master</h1>
+        <div className="flex items-center gap-3">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => navigate(-1)}
+            title="Go Back"
+            className="h-9 w-9 text-slate-300 hover:text-white hover:bg-slate-800/60 shrink-0"
+          >
+            <ArrowLeft className="w-5 h-5 text-blue-400" />
+          </Button>
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="w-7 h-7 text-blue-400" />
+              <h1 className="text-xl sm:text-2xl font-black tracking-tight">Policy & Governance Master</h1>
+            </div>
+            <p className="text-xs text-slate-300 max-w-2xl">
+              Upload organizational compliance policies, target by gender & department, set mandatory sign-offs, and monitor real-time audit trails.
+            </p>
           </div>
-          <p className="text-xs text-slate-300 max-w-2xl">
-            Upload organizational compliance policies, target by gender & department, set mandatory sign-offs, and monitor real-time audit trails.
-          </p>
         </div>
 
         <div className="flex items-center gap-2">

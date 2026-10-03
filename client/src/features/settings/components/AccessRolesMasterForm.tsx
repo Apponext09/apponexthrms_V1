@@ -1,25 +1,41 @@
 import { useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
-  ShieldCheck,
-  Plus,
-  Trash2,
-  Pencil,
-  LayoutGrid,
+  Grid2X2,
+  LayoutList,
   Lock,
+  Pencil,
+  Plus,
   Search,
+  ShieldCheck,
+  Trash2,
   X,
 } from "lucide-react";
 import { apiClient } from "@/lib/api";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Skeleton } from "@/components/ui/skeleton";
+import { confirmAction } from "@/components/ConfirmationDialog";
 import { showToast } from "@/components/ui/toast";
-import { useAccessRoles } from "../hooks/useAccessRoles";
+import { useAccessRoles, type AccessRole } from "../hooks/useAccessRoles";
 import { RoleAccessManager } from "./RoleAccessManager";
 import { useAuthStore } from "@/features/auth/store/authStore";
-import { ACCESS_PORTALS, defaultPortalForRole, type AccessPortal } from "./roleAccessTabs";
+import {
+  ACCESS_PORTALS,
+  defaultPortalForRole,
+  type AccessPortal,
+} from "./roleAccessTabs";
 
-const ADMIN_MANAGED_ROLE_CODES = new Set([
+const ADMIN_ROLES = new Set([
   "organization_admin",
   "org_admin",
   "admin",
@@ -33,358 +49,683 @@ const ADMIN_MANAGED_ROLE_CODES = new Set([
   "hr_admin",
   "hr_manager",
 ]);
+type View = "cards" | "list";
+const EMPTY = {
+  name: "",
+  code: "",
+  description: "",
+  portal: "" as AccessPortal | "",
+};
+type RoleForm = typeof EMPTY;
+
+/* Translucent tints only: no solid fills, so nothing dark is added on top of your page. */
+const surface = "rounded-2xl bg-foreground/[0.03]";
+const input =
+  "w-full rounded-lg border-0 bg-foreground/[0.04] px-3 text-sm outline-none transition focus:bg-foreground/[0.06] focus:ring-2 focus:ring-primary/40";
+
+/* ================================================================ */
+/* Page                                                              */
+/* ================================================================ */
 
 export function AccessRolesMasterForm({ onCancel }: { onCancel?: () => void }) {
+  void onCancel;
   const queryClient = useQueryClient();
   const { data: roles = [], isLoading, error } = useAccessRoles();
   const user = useAuthStore((state) => state.user);
-  const isOrganizationAdmin = [
-    user?.accessRole,
-    user?.role,
-    ...(user?.roles ?? []),
-  ].some((role) => role === "organization_admin" || role === "ceo");
+  const isAdmin = [user?.accessRole, user?.role, ...(user?.roles ?? [])].some(
+    (role) => role === "organization_admin" || role === "ceo",
+  );
 
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [name, setName] = useState("");
-  const [code, setCode] = useState("");
-  const [description, setDescription] = useState("");
-  const [portal, setPortal] = useState<AccessPortal | "">("");
-  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState<RoleForm>(EMPTY);
+  const [modalOpen, setModalOpen] = useState(false);
   const [manageAccess, setManageAccess] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [query, setQuery] = useState("");
-
+  const [view, setView] = useState<View>("cards");
   const selectedRole = roles.find((role) => role.id === selectedId);
-  const isEditing = !!selectedId;
 
-  const filteredRoles = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return roles;
-    return roles.filter(
-      (role) =>
-        role.name.toLowerCase().includes(q) ||
-        role.code.toLowerCase().includes(q) ||
-        (role.description ?? "").toLowerCase().includes(q),
-    );
-  }, [roles, query]);
+  const filtered = useMemo(() => {
+    const value = query.trim().toLowerCase();
+    return value
+      ? roles.filter((role) =>
+          [role.name, role.code, role.description ?? ""].some((field) =>
+            field.toLowerCase().includes(value),
+          ),
+        )
+      : roles;
+  }, [query, roles]);
 
-  const reset = () => {
-    setManageAccess(false);
+  const closeModal = () => {
+    setModalOpen(false);
     setSelectedId(null);
-    setName("");
-    setCode("");
-    setDescription("");
-    setPortal("");
+    setForm(EMPTY);
   };
-
-  /** openAccess = true -> "Edit modules" (module/page access manager).
-   *  openAccess = false -> "Update role" (edit name/description in the form). */
-  const select = (role: (typeof roles)[number], openAccess: boolean) => {
+  const createRole = () => {
+    setSelectedId(null);
+    setForm(EMPTY);
+    setModalOpen(true);
+  };
+  const editRole = (role: AccessRole) => {
     setSelectedId(role.id);
-    setName(role.name);
-    setCode(role.code);
-    setDescription(role.description ?? "");
-    setPortal(role.portal ?? defaultPortalForRole(role.code));
-    setManageAccess(openAccess);
+    setForm({
+      name: role.name,
+      code: role.code,
+      description: role.description ?? "",
+      portal: role.portal ?? defaultPortalForRole(role.code),
+    });
+    setModalOpen(true);
   };
-
-  const refresh = async () =>
-    queryClient.invalidateQueries({ queryKey: ["access-roles"] });
+  const portalName = (role: AccessRole) =>
+    ACCESS_PORTALS.find(
+      (item) => item.code === (role.portal ?? defaultPortalForRole(role.code)),
+    )?.label ?? "Portal";
 
   const save = async (event: React.FormEvent) => {
     event.preventDefault();
-    const normalizedCode = code.trim().toLowerCase();
+    const code = form.code.trim().toLowerCase();
     if (
-      !name.trim() || !portal ||
-      (!selectedId && !/^[a-z][a-z0-9_]{1,49}$/.test(normalizedCode))
+      !form.name.trim() ||
+      !form.portal ||
+      (!selectedId && !/^[a-z][a-z0-9_]{1,49}$/.test(code))
     ) {
-      showToast.error(
-        "Enter a name and a valid role code (letters, numbers, underscore).",
-      );
+      showToast.error("Enter a name, portal, and valid role code.");
       return;
     }
     try {
       setSaving(true);
-      if (selectedId) {
-        await apiClient.patch(`/rbac/roles/${selectedId}`, {
-          name: name.trim(),
-          description: description.trim(),
-          portal,
-        });
-      } else {
-        await apiClient.post("/rbac/roles", {
-          name: name.trim(),
-          code: normalizedCode,
-          description: description.trim(),
-          portal,
-        });
-      }
-      await refresh();
-      reset();
-      showToast.success("Access role saved");
+      const payload = {
+        name: form.name.trim(),
+        description: form.description.trim(),
+        portal: form.portal,
+      };
+      if (selectedId)
+        await apiClient.patch(`/rbac/roles/${selectedId}`, payload);
+      else await apiClient.post("/rbac/roles", { ...payload, code });
+      await queryClient.invalidateQueries({ queryKey: ["access-roles"] });
+      closeModal();
+      showToast.success(selectedId ? "Role updated" : "Role created");
     } catch (err: unknown) {
       const failure = err as { response?: { data?: { message?: string } } };
       showToast.error(
-        failure?.response?.data?.message || "Could not save access role",
+        failure.response?.data?.message || "Could not save access role",
       );
     } finally {
       setSaving(false);
     }
   };
 
-  const remove = async () => {
+  const remove = async (role: AccessRole) => {
     if (
-      !selectedRole ||
-      selectedRole.isSystem ||
-      !window.confirm(`Delete ${selectedRole.name}?`)
+      role.isSystem ||
+      !(await confirmAction(
+        `Delete “${role.name}”? This role must not be assigned to employees.`,
+      ))
     )
       return;
     try {
       setSaving(true);
-      await apiClient.delete(`/rbac/roles/${selectedRole.id}`);
-      await refresh();
-      reset();
+      await apiClient.delete(`/rbac/roles/${role.id}`);
+      await queryClient.invalidateQueries({ queryKey: ["access-roles"] });
       showToast.success("Access role deleted");
     } catch (err: unknown) {
       const failure = err as { response?: { data?: { message?: string } } };
       showToast.error(
-        failure?.response?.data?.message ||
-          "Could not delete access role. It may still be assigned to employees.",
+        failure.response?.data?.message || "Could not delete this role.",
       );
     } finally {
       setSaving(false);
     }
   };
 
-  if (manageAccess && selectedRole)
-    return <RoleAccessManager role={selectedRole} onBack={reset} />;
+  if (manageAccess && selectedRole) {
+    return (
+      <RoleAccessManager
+        role={selectedRole}
+        onBack={() => {
+          setManageAccess(false);
+          setSelectedId(null);
+        }}
+      />
+    );
+  }
+
+  const itemProps = (role: AccessRole): RoleItemProps => ({
+    role,
+    view,
+    portal: portalName(role),
+    locked: !isAdmin && ADMIN_ROLES.has(role.code),
+    onAccess: () => {
+      setSelectedId(role.id);
+      setManageAccess(true);
+    },
+    onEdit: () => editRole(role),
+    onDelete: () => void remove(role),
+  });
 
   return (
-    <div className="space-y-6">
-      {/* Page header */}
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex items-start gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
-            <ShieldCheck className="h-5 w-5" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold">Access Roles</h1>
-            <p className="mt-0.5 max-w-lg text-sm text-muted-foreground">
-             Create Roles and it's access.
-            </p>
-          </div>
+    <div className="mx-auto w-full max-w-6xl space-y-8">
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-balance text-2xl font-semibold tracking-tight sm:text-3xl">
+            Access roles
+          </h1>
+          <p className="mt-1.5 max-w-lg text-pretty text-sm text-muted-foreground">
+            Decide which modules and pages each role can open.
+          </p>
         </div>
-        <Button type="button" variant="outline" onClick={reset}>
-          <Plus className="mr-1.5 h-4 w-4" /> New role
+        <Button size="lg" className="rounded-xl" onClick={createRole}>
+          <Plus className="mr-2 size-4" />
+          New role
         </Button>
-      </div>
+      </header>
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(300px,400px)]">
-        {/* Role list */}
-        <div className="rounded-2xl border border-border bg-card p-6">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <h2 className="font-bold">
-              Organization roles{" "}
-              <span className="font-normal text-muted-foreground">
-                ({filteredRoles.length}
-                {query ? ` of ${roles.length}` : ""})
-              </span>
-            </h2>
-            <div className="relative w-full max-w-[220px] sm:w-56">
-              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search roles"
-                className="h-8 pl-8 pr-7 text-sm"
+      <section className="space-y-4">
+        <Toolbar
+          query={query}
+          setQuery={setQuery}
+          view={view}
+          setView={setView}
+          shown={filtered.length}
+          total={roles.length}
+        />
+
+        {isLoading && (
+          <div
+            className={
+              view === "cards"
+                ? "grid gap-4 sm:grid-cols-2 xl:grid-cols-3"
+                : "space-y-2"
+            }
+          >
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Skeleton
+                key={i}
+                className={cn(
+                  "rounded-2xl",
+                  view === "cards" ? "h-44" : "h-16",
+                )}
               />
-              {query && (
-                <button
-                  type="button"
-                  onClick={() => setQuery("")}
-                  aria-label="Clear search"
-                  className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:text-foreground"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
+            ))}
+          </div>
+        )}
+
+        {error && (
+          <Notice
+            title="Could not load access roles"
+            text="Refresh the page or try again in a moment."
+            tone="error"
+          />
+        )}
+
+        {!isLoading && !error && !filtered.length && (
+          <Notice
+            title={query ? "No matching roles" : "No roles yet"}
+            text={
+              query
+                ? "Try a different name, code or description."
+                : "Create your first role to start assigning access."
+            }
+            action={query ? "Clear search" : "Create role"}
+            onAction={query ? () => setQuery("") : createRole}
+          />
+        )}
+
+        {!isLoading &&
+          !error &&
+          !!filtered.length &&
+          (view === "cards" ? (
+            <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {filtered.map((r) => (
+                <li key={r.id}>
+                  <RoleItem {...itemProps(r)} />
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <ul
+              className={cn(
+                surface,
+                "divide-y divide-foreground/[0.04] overflow-hidden",
               )}
-            </div>
-          </div>
-
-          {isLoading && (
-            <p className="py-6 text-center text-sm text-muted-foreground">
-              Loading roles...
-            </p>
-          )}
-          {error && (
-            <p className="py-6 text-center text-sm text-destructive">
-              Could not load roles.
-            </p>
-          )}
-          {!isLoading && !error && filteredRoles.length === 0 && (
-            <p className="py-6 text-center text-sm text-muted-foreground">
-              {query
-                ? "No roles match your search."
-                : "No roles yet. Add one to get started."}
-            </p>
-          )}
-
-          <div className="space-y-2">
-            {filteredRoles.map((role) => {
-              const locked =
-                !isOrganizationAdmin && ADMIN_MANAGED_ROLE_CODES.has(role.code);
-              const active = selectedId === role.id;
-              return (
-                <div
-                  key={role.id}
-                  className={`rounded-xl border p-3 transition-colors sm:flex sm:items-center sm:justify-between sm:gap-4 ${
-                    active
-                      ? "border-primary bg-primary/5"
-                      : "border-border hover:bg-muted/40"
-                  }`}
-                >
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-medium">{role.name}</span>
-                      <code className="rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
-                        {role.code}
-                      </code>
-                      {Boolean(role.isSystem) && (
-                        <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-                          System
-                        </span>
-                      )}
-                    </div>
-                    {role.description && (
-                      <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                        {role.description}
-                      </p>
-                    )}
-                    {locked && (
-                      <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
-                        <Lock className="h-3 w-3 shrink-0" /> Only Organization
-                        Admin can change this system role.
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="mt-3 flex shrink-0 gap-2 sm:mt-0">
-                    {!role.isSystem && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        disabled={locked}
-                        onClick={() => select(role, false)}
-                        aria-label={`Update ${role.name} role details`}
-                      >
-                        <Pencil className="mr-1.5 h-3.5 w-3.5" /> Update role
-                      </Button>
-                    )}
-                    <Button
-                      type="button"
-                      variant={active && manageAccess ? "default" : "outline"}
-                      size="sm"
-                      disabled={locked}
-                      onClick={() => select(role, true)}
-                      aria-label={`Edit module access for ${role.name}`}
-                    >
-                      <LayoutGrid className="mr-1.5 h-3.5 w-3.5" /> Edit modules
-                    </Button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Create / edit form */}
-        <form
-          onSubmit={save}
-          className="h-fit space-y-5 rounded-2xl border border-border bg-card p-6"
-        >
-          <div>
-            <h2 className="font-bold">
-              {isEditing ? "Update role" : "Add a role"}
-            </h2>
-            <p className="mt-0.5 text-sm text-muted-foreground">
-              {isEditing
-                ? `Editing “${selectedRole?.name ?? ""}”.`
-                : "Role codes can't be changed after creation."}
-            </p>
-          </div>
-
-          <div>
-            <label htmlFor="access-role-name" className="text-sm font-medium">
-              Role name
-            </label>
-            <Input
-              id="access-role-name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              maxLength={100}
-              required
-              disabled={!!selectedRole?.isSystem}
-            />
-          </div>
-          <div>
-            <label htmlFor="access-role-code" className="text-sm font-medium">
-              Role code
-            </label>
-            <Input
-              id="access-role-code"
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              maxLength={50}
-              disabled={!!selectedId}
-              placeholder="Role code"
-              required
-            />
-          </div>
-          <div>
-            <label
-              htmlFor="access-role-description"
-              className="text-sm font-medium"
             >
-              Description
-            </label>
-            <Input
-              id="access-role-description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              maxLength={500}
-              disabled={!!selectedRole?.isSystem}
-            />
-          </div>
-          <div>
-            <label htmlFor="access-role-portal" className="text-sm font-medium">Portal</label>
-            <select id="access-role-portal" className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={portal} onChange={(event) => setPortal(event.target.value as AccessPortal)} required disabled={!!selectedRole?.isSystem}>
-              <option value="" disabled>Choose a portal</option>
-              {ACCESS_PORTALS.map((item) => <option key={item.code} value={item.code}>{item.label}</option>)}
-            </select>
+              {filtered.map((r) => (
+                <li key={r.id}>
+                  <RoleItem {...itemProps(r)} />
+                </li>
+              ))}
+            </ul>
+          ))}
+      </section>
+
+      <RoleDialog
+        open={modalOpen}
+        editing={!!selectedId}
+        form={form}
+        setForm={setForm}
+        saving={saving}
+        onClose={closeModal}
+        onSubmit={save}
+      />
+    </div>
+  );
+}
+
+/* ================================================================ */
+/* Toolbar                                                           */
+/* ================================================================ */
+
+function Toolbar({
+  query,
+  setQuery,
+  view,
+  setView,
+  shown,
+  total,
+}: {
+  query: string;
+  setQuery: (v: string) => void;
+  view: View;
+  setView: (v: View) => void;
+  shown: number;
+  total: number;
+}) {
+  return (
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="relative sm:w-80">
+        <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+        <input
+          aria-label="Search roles"
+          placeholder="Search roles"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          className={cn(input, "h-10 pl-9 pr-9")}
+        />
+        {query && (
+          <button
+            type="button"
+            aria-label="Clear search"
+            onClick={() => setQuery("")}
+            className="absolute right-1.5 top-1/2 flex size-7 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:bg-foreground/[0.06]"
+          >
+            <X className="size-4" />
+          </button>
+        )}
+      </div>
+
+      <div className="flex items-center justify-between gap-4 sm:justify-end">
+        <span className="text-sm text-muted-foreground" aria-live="polite">
+          {query ? `${shown} of ${total}` : total}{" "}
+          {total === 1 ? "role" : "roles"}
+        </span>
+        <div
+          className="flex gap-0.5 rounded-lg bg-foreground/[0.04] p-0.5"
+          role="group"
+          aria-label="Layout"
+        >
+          {(
+            [
+              ["cards", Grid2X2],
+              ["list", LayoutList],
+            ] as const
+          ).map(([mode, Icon]) => (
+            <button
+              key={mode}
+              type="button"
+              aria-pressed={view === mode}
+              aria-label={`${mode} view`}
+              onClick={() => setView(mode)}
+              className={cn(
+                "flex size-8 items-center justify-center rounded-md text-muted-foreground transition",
+                view === mode && "bg-foreground/[0.08] text-foreground",
+              )}
+            >
+              <Icon className="size-4" />
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ================================================================ */
+/* Role item (one component, two layouts)                            */
+/* ================================================================ */
+
+interface RoleItemProps {
+  role: AccessRole;
+  view: View;
+  portal: string;
+  locked: boolean;
+  onAccess: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}
+
+function RoleItem({
+  role,
+  view,
+  portal,
+  locked,
+  onAccess,
+  onEdit,
+  onDelete,
+}: RoleItemProps) {
+  const isCard = view === "cards";
+
+  const identity = (
+    <div className="flex min-w-0 items-center gap-3">
+      <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+        {locked ? (
+          <Lock className="size-4" />
+        ) : (
+          <ShieldCheck className="size-4" />
+        )}
+      </span>
+      <div className="min-w-0">
+        <div className="flex items-center gap-2">
+          <h3 className="truncate font-medium">{role.name}</h3>
+          {role.isSystem && (
+            <span className="rounded-full bg-foreground/[0.08] px-2 py-0.5 text-[11px] text-muted-foreground">
+              System
+            </span>
+          )}
+        </div>
+        <p className="truncate text-xs text-muted-foreground">{role.code}</p>
+      </div>
+    </div>
+  );
+
+  const actions = (
+    <div className="flex shrink-0 items-center gap-1">
+      <Button
+        variant="ghost"
+        size="sm"
+        className="rounded-lg bg-foreground/[0.05] hover:bg-foreground/[0.09]"
+        disabled={locked}
+        onClick={onAccess}
+      >
+        Manage access
+      </Button>
+      {!role.isSystem && (
+        <>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-8 text-muted-foreground"
+            aria-label={`Edit ${role.name}`}
+            disabled={locked}
+            onClick={onEdit}
+          >
+            <Pencil className="size-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-8 text-muted-foreground hover:text-destructive"
+            aria-label={`Delete ${role.name}`}
+            onClick={onDelete}
+          >
+            <Trash2 className="size-4" />
+          </Button>
+        </>
+      )}
+    </div>
+  );
+
+  const description = (
+    <p className="line-clamp-2 text-pretty text-sm text-muted-foreground">
+      {role.description || "No description added."}
+    </p>
+  );
+
+  if (isCard) {
+    return (
+      <article
+        className={cn(
+          surface,
+          "flex h-full min-h-44 flex-col gap-4 p-5 transition-colors hover:bg-foreground/[0.05]",
+        )}
+      >
+        <div className="flex items-start justify-between gap-3">
+          {identity}
+          <span className="shrink-0 rounded-full bg-foreground/[0.05] px-2.5 py-1 text-xs text-muted-foreground">
+            {portal}
+          </span>
+        </div>
+        {description}
+        <div className="mt-auto">{actions}</div>
+      </article>
+    );
+  }
+
+  return (
+    <article className="grid gap-3 px-5 py-4 transition-colors hover:bg-foreground/[0.03] lg:grid-cols-[minmax(220px,1.1fr)_minmax(200px,1.4fr)_120px_auto] lg:items-center lg:gap-6">
+      {identity}
+      {description}
+      <span className="w-fit rounded-full bg-foreground/[0.05] px-2.5 py-1 text-xs text-muted-foreground">
+        {portal}
+      </span>
+      <div className="lg:justify-self-end">{actions}</div>
+    </article>
+  );
+}
+
+/* ================================================================ */
+/* Empty / error notice                                              */
+/* ================================================================ */
+
+function Notice({
+  title,
+  text,
+  action,
+  onAction,
+  tone,
+}: {
+  title: string;
+  text: string;
+  action?: string;
+  onAction?: () => void;
+  tone?: "error";
+}) {
+  return (
+    <div
+      role={tone === "error" ? "alert" : undefined}
+      className={cn(
+        surface,
+        "flex flex-col items-center px-6 py-14 text-center",
+        tone === "error" && "bg-destructive/5",
+      )}
+    >
+      <span
+        className={cn(
+          "flex size-11 items-center justify-center rounded-full bg-primary/10 text-primary",
+          tone === "error" && "bg-destructive/10 text-destructive",
+        )}
+      >
+        <ShieldCheck className="size-5" />
+      </span>
+      <h2 className="mt-4 font-medium">{title}</h2>
+      <p className="mt-1 max-w-sm text-sm text-muted-foreground">{text}</p>
+      {action && (
+        <Button
+          variant="ghost"
+          className="mt-5 rounded-lg bg-foreground/[0.05] hover:bg-foreground/[0.09]"
+          onClick={onAction}
+        >
+          {action}
+        </Button>
+      )}
+    </div>
+  );
+}
+
+/* ================================================================ */
+/* Create / edit dialog                                              */
+/* ================================================================ */
+
+function RoleDialog({
+  open,
+  editing,
+  form,
+  setForm,
+  saving,
+  onClose,
+  onSubmit,
+}: {
+  open: boolean;
+  editing: boolean;
+  form: RoleForm;
+  setForm: (f: RoleForm) => void;
+  saving: boolean;
+  onClose: () => void;
+  onSubmit: (e: React.FormEvent) => void;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
+      <DialogContent className="max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-lg gap-0 overflow-y-auto rounded-2xl border-0 p-0 shadow-xl sm:w-full">
+        <form onSubmit={onSubmit}>
+          <DialogHeader className="space-y-1 p-6 pb-2 pr-12">
+            <DialogTitle className="text-balance text-lg">
+              {editing ? "Edit role" : "New role"}
+            </DialogTitle>
+            <DialogDescription className="text-pretty">
+              {editing
+                ? "Update this role’s details."
+                : "Add the role now, then set what it can access."}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-4 p-6 sm:grid-cols-2">
+            <Field label="Role name" id="role-name" required>
+              <input
+                id="role-name"
+                autoFocus
+                required
+                maxLength={100}
+                placeholder="Regional HR Manager"
+                className={cn(input, "h-10")}
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+              />
+            </Field>
+
+            <Field
+              label="Role code"
+              id="role-code"
+              required
+              hint={editing ? "The code can’t be changed." : undefined}
+            >
+              <input
+                id="role-code"
+                required
+                disabled={editing}
+                placeholder="regional_hr_manager"
+                className={cn(input, "h-10 disabled:opacity-60")}
+                value={form.code}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    code: e.target.value.toLowerCase().replace(/\s+/g, "_"),
+                  })
+                }
+              />
+            </Field>
+
+            <Field
+              label="Portal"
+              id="role-portal"
+              required
+              className="sm:col-span-2"
+            >
+              <select
+                id="role-portal"
+                required
+                value={form.portal}
+                className={cn(input, "h-10")}
+                onChange={(e) =>
+                  setForm({ ...form, portal: e.target.value as AccessPortal })
+                }
+              >
+                <option value="" disabled>
+                  Choose a portal
+                </option>
+                {ACCESS_PORTALS.map((p) => (
+                  <option key={p.code} value={p.code}>
+                    {p.label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+
+            <Field
+              label="Description"
+              id="role-description"
+              className="sm:col-span-2"
+              hint={`${form.description.length}/500`}
+            >
+              <textarea
+                id="role-description"
+                rows={3}
+                maxLength={500}
+                value={form.description}
+                className={cn(input, "resize-none py-2")}
+                onChange={(e) =>
+                  setForm({ ...form, description: e.target.value })
+                }
+              />
+            </Field>
           </div>
 
-          <div className="flex gap-2 pt-1">
-            <Button type="submit" disabled={saving || !!selectedRole?.isSystem}>
-              {saving ? "Saving..." : isEditing ? "Save changes" : "Add role"}
+          <DialogFooter className="gap-2 px-6 pb-6">
+            <Button
+              type="button"
+              variant="ghost"
+              className="rounded-lg"
+              onClick={onClose}
+            >
+              Cancel
             </Button>
-            {isEditing && (
-              <Button type="button" variant="ghost" onClick={reset}>
-                Cancel
-              </Button>
-            )}
-            {selectedRole && !selectedRole.isSystem && (
-              <Button
-                type="button"
-                variant="destructive"
-                disabled={saving}
-                onClick={remove}
-              >
-                <Trash2 className="mr-1.5 h-4 w-4" /> Delete
-              </Button>
-            )}
-          </div>
+            <Button type="submit" className="rounded-lg" disabled={saving}>
+              {saving ? "Saving..." : editing ? "Save changes" : "Create role"}
+            </Button>
+          </DialogFooter>
         </form>
-      </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function Field({
+  label,
+  id,
+  required,
+  hint,
+  className,
+  children,
+}: {
+  label: string;
+  id: string;
+  required?: boolean;
+  hint?: string;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className={cn("space-y-1.5", className)}>
+      <label htmlFor={id} className="text-sm font-medium">
+        {label}{" "}
+        {!required && (
+          <span className="font-normal text-muted-foreground">(optional)</span>
+        )}
+      </label>
+      {children}
+      {hint && (
+        <p className="text-right text-xs tabular-nums text-muted-foreground">
+          {hint}
+        </p>
+      )}
     </div>
   );
 }

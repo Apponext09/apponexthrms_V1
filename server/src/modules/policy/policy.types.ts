@@ -79,6 +79,11 @@ export interface PolicyDocument {
   fileType?: string | null;
   version: string;
   signatureMode?: SignatureMode;
+  status?: string;
+  effectiveDate?: Date | string | null;
+  reviewDate?: Date | string | null;
+  expiryDate?: Date | string | null;
+  documentRef?: string | null;
   isActive: boolean;
   applicableGender?: 'all' | 'male' | 'female' | 'other' | string;
   applicableDepartmentIds?: number[];
@@ -156,6 +161,11 @@ export interface CreatePolicyDTO {
   fileType?: string;
   version?: string;
   signatureMode?: SignatureMode;
+  status?: string;
+  effectiveDate?: Date | string | null;
+  reviewDate?: Date | string | null;
+  expiryDate?: Date | string | null;
+  documentRef?: string | null;
   isActive?: boolean;
   applicableGender?: 'all' | 'male' | 'female' | 'other' | string;
   applicableDepartmentIds?: (number | string)[];
@@ -184,6 +194,11 @@ export interface UpdatePolicyDTO {
   fileType?: string;
   version?: string;
   signatureMode?: SignatureMode;
+  status?: string;
+  effectiveDate?: Date | string | null;
+  reviewDate?: Date | string | null;
+  expiryDate?: Date | string | null;
+  documentRef?: string | null;
   isActive?: boolean;
   applicableGender?: 'all' | 'male' | 'female' | 'other' | string;
   applicableDepartmentIds?: (number | string)[];

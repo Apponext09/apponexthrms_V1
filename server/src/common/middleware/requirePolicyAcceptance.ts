@@ -19,9 +19,13 @@ export async function requirePolicyAcceptance(
       return;
     }
 
-    // 2. Exempt super_admin from policy gates
-    const roles = req.user.roles || req.ctx.roles || [];
-    if (roles.includes('super_admin')) {
+    // 2. Exempt super_admin / superadmin from policy gates
+    const roles = (req.user.roles || req.ctx.roles || []).map((r: any) => String(r).toLowerCase().trim());
+    const userRole = String((req.user as any)?.role || '').toLowerCase().trim();
+    if (
+      roles.some((r: string) => ['super_admin', 'superadmin'].includes(r)) ||
+      ['super_admin', 'superadmin'].includes(userRole)
+    ) {
       next();
       return;
     }

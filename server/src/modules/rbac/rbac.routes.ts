@@ -22,6 +22,7 @@ router.get(
 );
 router.get('/me/menus', asyncHandler((req, res) => controller.getMyMenus(req, res)));
 router.get('/menus', asyncHandler((req, res) => controller.listMenus(req, res)));
+router.get('/permissions', requireRoles(ROLE_MANAGERS), asyncHandler((req, res) => controller.listPermissions(req, res)));
 router.get('/roles/:roleId/menus', requireRoles(ROLE_MANAGERS), asyncHandler((req, res) => controller.getRoleMenus(req, res)));
 router.put('/roles/:roleId/menus', requireRoles(ROLE_MANAGERS), asyncHandler((req, res) => controller.setRoleMenus(req, res)));
 

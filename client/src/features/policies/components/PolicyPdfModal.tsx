@@ -1,7 +1,8 @@
 import React from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 import { PolicyPdfViewer } from './PolicyPdfViewer';
-import { Shield, Badge } from 'lucide-react';
+import { Shield, ArrowLeft } from 'lucide-react';
 
 interface PolicyPdfModalProps {
   isOpen: boolean;
@@ -26,10 +27,19 @@ export const PolicyPdfModal: React.FC<PolicyPdfModalProps> = ({
 }) => {
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-5xl w-[94vw] max-h-[92vh] flex flex-col p-0 overflow-hidden bg-card text-foreground border-border rounded-2xl">
+      <DialogContent className="max-w-5xl w-[94vw] max-h-[92vh] flex flex-col p-0 overflow-hidden bg-card text-foreground border-border rounded-2xl z-[100001]">
         <DialogHeader className="px-6 py-4 border-b border-border flex flex-row items-center justify-between space-y-0">
           <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-xl bg-primary/10 text-primary border border-primary/20 flex items-center justify-center">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onClose}
+              className="h-8 text-xs font-bold gap-1.5 text-muted-foreground hover:text-foreground shrink-0 -ml-2"
+              title="Back"
+            >
+              <ArrowLeft className="w-4 h-4 text-primary" /> Back
+            </Button>
+            <div className="h-9 w-9 rounded-xl bg-primary/10 text-primary border border-primary/20 flex items-center justify-center shrink-0">
               <Shield className="w-5 h-5" />
             </div>
             <div>

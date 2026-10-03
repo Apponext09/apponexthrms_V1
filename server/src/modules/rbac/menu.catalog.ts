@@ -1,3 +1,5 @@
+import { SETTINGS_CONFIGURATION_ROUTES, SETTINGS_CONFIGURATION_TABS } from '@apponexthrms/shared';
+
 /** Existing routable organization pages. Generated from the eight portal route definitions. */
 export const PORTAL_ROUTES: Record<string, string[]> = {
   admin: ["/approvals","/approvals/dashboard","/dashboard","/employees","/employees/:id","/employees/:id/edit","/employees/onboarding","/org-structure","/attendance","/attendance/policies","/attendance/workflow-settings","/attendance/locations","/attendance/employee-locations","/attendance/location-mapping","/attendance/shifts","/attendance/roster-shifts","/attendance/reports","/attendance/break-report","/attendance/break-logs","/attendance/regularization-logs","/admin/regularization-logs","/attendance/live-tracking","/live-tracking","/live-tracking/history","/admin/live-tracking/history","/attendance/face-punch","/leaves","/leaves/my-leaves","/leaves/history","/leaves/apply","/leaves/approvals","/leaves/approval","/leaves/balance","/leaves/balances","/leaves/encashment","/leaves/reports/builder","/leaves/reports/burnout-risk","/holidays","/payroll","/payroll/admin-dashboard","/payroll/admin-portal","/admin/payroll-policies","/admin/payroll-portal","/expenses","/expenses/dashboard","/expenses/my-expenses","/expenses/approvals","/expenses/finance-verification","/expenses/reimbursements","/expenses/travel-requests","/expenses/travel-advances","/expenses/mileage-claims","/expenses/categories","/expenses/policies","/expenses/reports","/expenses/settings","/payroll/expense-claims","/payroll/travel-requests","/payroll/reimbursements","/expense-claims","/travel-requests","/reimbursements","/policies/manage","/policies/queries","/policies/create","/policies/edit/:id","/policies/reports","/payroll/salary-structure","/payroll/settings","/payroll/master-settings","/payroll/salary-revision","/payroll/salary-revisions","/payroll/processing","/payroll-processing","/payroll/reports","/payroll/loans","/payroll/loan-types","/payroll/tax-declaration","/payroll/settlements","/payroll/settlement","/payroll/gratuity","/gratuity","/payroll/policies","/payroll/payslips","/payroll/payslip-requests","/payroll/mass-salary-upload","/mass-salary-upload","/manager/settlements","/team-lead/settlements","/recruitment","/recruitment/dashboard","/recruitment/mrf-request","/recruitment/jobs","/recruitment/candidates","/recruitment/candidate-report","/recruitment/resume-bank","/recruitment/applicant-tracker","/recruitment/assessments","/recruitment/offers","/letters","/employee-lifecycle/letters","/recruitment/interview-schedule","/recruitment/interviewer-rating","/recruitment/referrals","/recruitment/career-customization","/assets","/assets/list","/assets/:id","/assets/assign","/assets/transfer","/assets/return","/assets/maintenance","/assets/licenses","/assets/reports","/assets/analytics","/performance","/performance/goals","/performance/reviews","/performance/okrs","/performance/review-form","/performance/appraisals","/performance/competencies","/performance/pips","/performance/succession","/performance/recognition","/performance/analytics","/workflow","/workflows","/workflows/list","/workflows/create","/workflows/new","/workflows/builder","/workflows/:id","/workflows/:id/edit","/workflows/:id/builder","/workflow/create","/workflow/new","/workflow/builder","/workflow/approvals","/notifications","/notifications/preferences","/announcements","/announcements/manage","/announcements/feed","/hr-operations/requests","/requests","/configuration","/hr-operations/configuration","/hr-operations/announcements","/settings/configuration","/admin/configuration","/analytics","/analytics/attendance","/analytics/timelog","/analytics/ceo-attendance","/analytics/report-engine","/lms","/lms/dashboard","/lms/courses","/lms/categories","/lms/batches","/lms/enrollments","/lms/compliance","/lms/reports","/lms/catalog","/lms/catalog/:id","/lms/courses/:id","/lms/course/:id","/lms/my-learning","/lms/my-courses","/lms/assessment/:id","/lms/certificates","/lms/settings/integrations","/employee-lifecycle","/profile","/settings","/settings/general","/settings/company-profile","/settings/branches","/settings/locations","/settings/branding","/settings/leave-policies","/settings/org-leave-settings","/settings/id-card-designer","/settings/id-card-templates","/settings/career-customization","/settings/lms-integrations","/settings/workflows","/settings/modules","/settings/master-builder","/settings/master-builder/:id","/masters/builder","/masters/builder/:id","/masters","/operational-masters","/modules","/settings-group"],
@@ -29,8 +31,13 @@ PORTAL_ROUTES.admin.push(...['general', 'company-profile', 'branches', 'location
 PORTAL_ROUTES.hr.push(...['admin-config', 'hr-config', 'company-profile', 'branches', 'locations', 'branding',
   'org-leave-settings', 'modules'].map((page) => `/hr/settings/${page}`));
 
+for (const [portal, routes] of Object.entries(SETTINGS_CONFIGURATION_ROUTES)) {
+  PORTAL_ROUTES[portal].push(...routes.flatMap((route) => SETTINGS_CONFIGURATION_TABS.map((tab) => `${route}?tab=${tab.id}`)));
+}
+
 export function moduleForRoute(path: string): string {
   const value = path.toLowerCase();
+  if (Object.values(SETTINGS_CONFIGURATION_ROUTES).some((routes) => routes.includes(value.split('?')[0]))) return 'settings';
   if (/^\/(hr\/)?operational-masters(?:[/?]|$)/.test(value)) return 'master_operations';
   if (/^\/(hr\/)?masters(?:[/?]|$)/.test(value)) return 'masters';
   if (/(^|\/)(shifts|roster-shifts|shift-roster|my-shifts|my-shift)(\/|$)/.test(value)) return 'shift_management';
@@ -112,5 +119,94 @@ export function pageAllowsReadPermission(permission: string, route: string): boo
     };
     return Boolean(aliases[resource]?.test(path));
   }
+  return false;
+}
+
+/** A tab grant owns its supported actions, not unrelated tabs or RBAC administration. */
+export function pageAllowsPermission(permission: string, route: string): boolean {
+  if (pageAllowsReadPermission(permission, route)) return true;
+  const path = route.toLowerCase().replace(/^\/(hr|manager|team-lead|employee|intern|consultant|finance)(?=\/)/, '');
+  if (/^employee\.profile\.(read|create|update|delete|export)$/.test(permission)) return /^\/employees(?:\/:id(?:\/edit)?)?$/.test(path);
+  if (permission === 'employee.org_hierarchy.update') return /^\/(org-structure|org-chart)$/.test(path);
+  if (/^attendance\./.test(permission)) {
+    const action = permission.slice('attendance.'.length);
+    if (/^shift_/.test(action)) return /shift|roster/.test(path);
+    if (/^location_/.test(action)) return /location|geo/.test(path);
+    if (/^regularization_/.test(action)) return /regularization/.test(path);
+    if (/^overtime_/.test(action)) return /overtime|attendance\/(reports|break-report)/.test(path);
+    if (/^timesheet_/.test(action)) return /timesheet|timelog/.test(path);
+    if (action === 'analytics_read') return /analytics|report|timelog/.test(path);
+    if (/^(check|break)_/.test(action)) return /attendance|face-punch/.test(path);
+    if (/^(read|write)$/.test(action)) return /attendance|face-punch|timelog|break-log/.test(path);
+  }
+  if (/^leave\./.test(permission)) {
+    if (permission === 'leave.policy.manage') return /leave-polic|policies|org-leave-settings/.test(path);
+    if (permission === 'leave.balance.manage') return /leave.*balance|balances/.test(path);
+    if (permission === 'leave.analytics') return /leave.*report|burnout|analytics/.test(path);
+    if (permission === 'leave.approve') return /leave.*approval|approvals/.test(path);
+    if (permission === 'leave.admin') return /^\/leaves$|encashment|leave.*setting/.test(path);
+    if (permission === 'leave.apply') return /leaves\/(apply|my-leaves|history)|encashment/.test(path);
+    if (permission === 'leave.read') return /^\/leaves$|leaves\/(apply|my-leaves|history)|holiday|encashment/.test(path);
+    return false;
+  }
+  if (/^asset\./.test(permission)) {
+    const resource = permission.split('.')[1];
+    if (['view', 'create', 'edit', 'delete', 'export', 'admin'].includes(resource)) return /^\/assets(?:\/list|\/:id)?$/.test(path);
+    const aliases: Record<string, RegExp> = {
+      category: /asset.*(categor|setting)/, assign: /asset.*assign/, assignment: /asset.*assign/,
+      transfer: /asset.*transfer/, return: /asset.*return/, maintenance: /asset.*maintenance/,
+      license: /asset.*license/, request: /asset.*request/, vendor: /asset.*vendor/,
+      report: /asset.*report/, analytics: /asset.*analytics/,
+    };
+    return Boolean(aliases[resource]?.test(path));
+  }
+  if (/^lms\./.test(permission)) {
+    const resource = permission.split('.')[1];
+    const aliases: Record<string, RegExp> = {
+      course: /lms\/(course|courses|catalog|my-courses|my-learning)/,
+      category: /lms\/categories/, module: /lms\/(course|courses)/,
+      batch: /lms\/batches/, enrollment: /lms\/(enrollments|my-learning)/,
+      assessment: /lms\/assessment/, compliance: /lms\/compliance/,
+      integration: /lms\/settings\/integrations|lms-integrations/,
+    };
+    return Boolean(aliases[resource]?.test(path));
+  }
+  if (/^expense\./.test(permission)) {
+    const resource = permission.split('.')[1];
+    const aliases: Record<string, RegExp> = {
+      category: /expense.*categor/, policy: /expense.*polic/, travel: /travel-request|travel$/, advance: /travel-advance/,
+      mileage: /mileage/, report: /expense.*report/, settings: /expense.*setting/,
+      workflow: /expense.*workflow/, claim: /expense|reimbursement|my-expenses|approval|verification/,
+    };
+    return Boolean(aliases[resource]?.test(path));
+  }
+  if (/^recruitment\.(mrf|job|candidate|application|interview|assessment|offer)\.(read|write)$/.test(permission)) {
+    return pageAllowsReadPermission(permission.replace(/\.write$/, '.read'), route);
+  }
+  if (/^performance\.[a-z_]+_(read|write|approve|submit|manage|review|redeem|360)$/.test(permission)) {
+    const read = permission.replace(/_(write|approve|submit|manage|review|redeem|360)$/, '_read');
+    return pageAllowsReadPermission(read, route);
+  }
+  const payrollActions: Record<string, RegExp> = {
+    'payroll:generate': /^\/(payroll(?:\/(settings|master-settings|policies|processing))?|payroll-processing)$/,
+    'payroll:process': /^\/(payroll\/processing|payroll-processing)$/,
+    'payroll:lock': /^\/(payroll\/processing|payroll-processing)$/,
+    'payroll:unlock': /^\/(payroll\/processing|payroll-processing)$/,
+    'payroll:approve': /^\/(payroll\/processing|payroll-processing)$/,
+    'payroll:publish': /^\/(payroll\/processing|payroll-processing)$/,
+  };
+  if (payrollActions[permission]) return !/^\/(employee|intern|consultant)\//.test(route.toLowerCase()) && payrollActions[permission].test(path);
+  if (/^structure:(view|create|edit|assign)$/.test(permission)) return /^\/(payroll\/salary-structure|salary-structures?|payroll\/mass-salary-upload|mass-salary-upload)$/.test(path);
+  if (/^loan:(view|create)$/.test(permission)) return !/^\/(employee|intern|consultant)\//.test(route.toLowerCase()) && /^\/(payroll\/)?(loans|loan-types)$/.test(path);
+  if (/^payslip:(send|lock)$/.test(permission)) return /^\/(payroll\/payslips|payroll\/payslip-requests)$/.test(path);
+  if (/^settlement:(view|create|calculate|submit|approve|process)$/.test(permission)) return !/^\/(employee|intern|consultant)\//.test(route.toLowerCase()) && /^\/(payroll\/)?(settlements?|gratuity)$/.test(path);
+  if (/^workflow:(read|create|update|delete|publish|execute|manage_templates)$/.test(permission)) return /^\/(workflows\/list|settings\/workflows|settings-group\/workflows)$/.test(path);
+  if (/^workflow:(read|approve|delegate|escalate)$/.test(permission)) return /^\/(workflow\/approvals|approvals|leaves\/approvals?)$/.test(path);
+  // Future modules can join the action system without changing the editor.
+  // A permission only attaches when its resource is explicitly visible in the route.
+  const tokens = permission.toLowerCase().split(/[.:]/).filter(Boolean);
+  const resource = tokens.length > 2 ? tokens[1] : tokens[0];
+  const normalizedResource = resource.replace(/_/g, '-').replace(/s$/, '');
+  if (normalizedResource.length >= 4 && path.split(/[/?-]/).some((part) => part.replace(/s$/, '') === normalizedResource)) return true;
   return false;
 }

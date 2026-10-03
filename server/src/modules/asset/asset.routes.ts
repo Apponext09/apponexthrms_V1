@@ -3,6 +3,7 @@ import { authenticate } from '../../common/middleware/authenticate';
 import { resolveTenant } from '../../common/middleware/resolveTenant';
 import { assetController } from './controllers/AssetController';
 import { requireMenuModule } from '../rbac/requireMenuAccess';
+import { requirePermission } from '../../common/middleware/requirePermission';
 
 const router = Router();
 
@@ -11,55 +12,57 @@ router.use(authenticate, resolveTenant);
 router.use(requireMenuModule('assets'));
 
 // ===== ASSETS =====
-router.get('/stats', assetController.getStats);
-router.get('/', assetController.listAssets);
-router.post('/', assetController.createAsset);
-router.get('/:id', assetController.getAsset);
-router.put('/:id', assetController.updateAsset);
-router.delete('/:id', assetController.deleteAsset);
+router.get('/stats', requirePermission('asset.view'), assetController.getStats);
+router.get('/', requirePermission('asset.view'), assetController.listAssets);
+router.post('/', requirePermission('asset.create'), assetController.createAsset);
+router.put('/:id', requirePermission('asset.edit'), assetController.updateAsset);
+router.delete('/:id', requirePermission('asset.delete'), assetController.deleteAsset);
 
 // ===== CATEGORIES =====
-router.get('/categories', assetController.listCategories);
-router.post('/categories', assetController.createCategory);
-router.put('/categories/:id', assetController.updateCategory);
+router.get('/categories', requirePermission('asset.category.view'), assetController.listCategories);
+router.post('/categories', requirePermission('asset.category.create'), assetController.createCategory);
+router.put('/categories/:id', requirePermission('asset.category.edit'), assetController.updateCategory);
 
 // ===== ASSIGNMENTS =====
-router.get('/assignments', assetController.listAssignments);
-router.post('/assign', assetController.assignAsset);
-router.get('/my-assets', assetController.getMyAssets);
+router.get('/assignments', requirePermission('asset.assign.view'), assetController.listAssignments);
+router.post('/assign', requirePermission('asset.assign'), assetController.assignAsset);
+router.get('/my-assets', requirePermission('asset.view'), assetController.getMyAssets);
 
 // ===== TRANSFERS =====
-router.get('/transfers', assetController.listTransfers);
-router.post('/transfer/request', assetController.requestTransfer);
-router.post('/transfer/:id/approve', assetController.approveTransfer);
-router.post('/transfer/:id/reject', assetController.rejectTransfer);
+router.get('/transfers', requirePermission('asset.transfer.view'), assetController.listTransfers);
+router.post('/transfer/request', requirePermission('asset.transfer.request'), assetController.requestTransfer);
+router.post('/transfer/:id/approve', requirePermission('asset.transfer.approve'), assetController.approveTransfer);
+router.post('/transfer/:id/reject', requirePermission('asset.transfer.approve'), assetController.rejectTransfer);
 
 // ===== RETURNS =====
-router.get('/returns', assetController.listReturns);
-router.post('/return/request', assetController.requestReturn);
-router.post('/return/:id/process', assetController.processReturn);
+router.get('/returns', requirePermission('asset.return.view'), assetController.listReturns);
+router.post('/return/request', requirePermission('asset.return.request'), assetController.requestReturn);
+router.post('/return/:id/process', requirePermission('asset.return.process'), assetController.processReturn);
 
 // ===== MAINTENANCE =====
-router.get('/maintenance', assetController.listMaintenance);
-router.post('/maintenance', assetController.createMaintenance);
-router.post('/maintenance/:id/complete', assetController.completeMaintenance);
+router.get('/maintenance', requirePermission('asset.maintenance.view'), assetController.listMaintenance);
+router.post('/maintenance', requirePermission('asset.maintenance.create'), assetController.createMaintenance);
+router.post('/maintenance/:id/complete', requirePermission('asset.maintenance.complete'), assetController.completeMaintenance);
 
 // ===== SOFTWARE LICENSES =====
-router.get('/licenses', assetController.listLicenses);
-router.post('/licenses', assetController.createLicense);
-router.put('/licenses/:id', assetController.updateLicense);
-router.get('/licenses/expiring', assetController.getExpiringLicenses);
+router.get('/licenses', requirePermission('asset.license.view'), assetController.listLicenses);
+router.post('/licenses', requirePermission('asset.license.create'), assetController.createLicense);
+router.put('/licenses/:id', requirePermission('asset.license.edit'), assetController.updateLicense);
+router.get('/licenses/expiring', requirePermission('asset.license.view'), assetController.getExpiringLicenses);
 
 // ===== ASSET REQUESTS =====
-router.get('/requests', assetController.listRequests);
-router.post('/requests', assetController.createRequest);
-router.post('/requests/:id/approve', assetController.approveRequest);
-router.post('/requests/:id/reject', assetController.rejectRequest);
+router.get('/requests', requirePermission('asset.request.view'), assetController.listRequests);
+router.post('/requests', requirePermission('asset.request.create'), assetController.createRequest);
+router.post('/requests/:id/approve', requirePermission('asset.request.approve'), assetController.approveRequest);
+router.post('/requests/:id/reject', requirePermission('asset.request.approve'), assetController.rejectRequest);
 
 // ===== VENDORS =====
-router.get('/vendors', assetController.listVendors);
-router.post('/vendors', assetController.createVendor);
-router.put('/vendors/:id', assetController.updateVendor);
-router.delete('/vendors/:id', assetController.deleteVendor);
+router.get('/vendors', requirePermission('asset.vendor.view'), assetController.listVendors);
+router.post('/vendors', requirePermission('asset.vendor.create'), assetController.createVendor);
+router.put('/vendors/:id', requirePermission('asset.vendor.edit'), assetController.updateVendor);
+router.delete('/vendors/:id', requirePermission('asset.vendor.delete'), assetController.deleteVendor);
+
+// Keep the dynamic asset lookup after every named GET route.
+router.get('/:id', requirePermission('asset.view'), assetController.getAsset);
 
 export default router;

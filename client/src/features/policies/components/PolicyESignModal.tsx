@@ -182,7 +182,7 @@ export const PolicyESignModal: React.FC<PolicyESignModalProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto p-6 space-y-5">
+      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto p-6 space-y-5 z-[100001]">
         <DialogHeader className="space-y-1">
           <div className="flex items-center justify-between">
             <DialogTitle className="text-base font-black flex items-center gap-2">

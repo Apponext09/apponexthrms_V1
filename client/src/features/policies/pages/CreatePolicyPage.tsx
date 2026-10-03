@@ -194,8 +194,8 @@ export const CreatePolicyPage: React.FC = () => {
           ? 'Updated and published policy'
           : 'Updated draft policy'
         : isPublished
-        ? 'Initial published version'
-        : 'Created new draft policy',
+          ? 'Initial published version'
+          : 'Created new draft policy',
     };
   };
 
@@ -313,22 +313,20 @@ export const CreatePolicyPage: React.FC = () => {
                 onClick={() => {
                   if (s.num < currentStep) setCurrentStep(s.num);
                 }}
-                className={`flex items-center gap-2 p-2.5 rounded-lg border text-xs font-bold transition-all cursor-pointer select-none ${
-                  isActive
+                className={`flex items-center gap-2 p-2.5 rounded-lg border text-xs font-bold transition-all cursor-pointer select-none ${isActive
                     ? 'border-primary bg-primary/10 text-primary shadow-2xs'
                     : isCompleted
-                    ? 'border-emerald-500/30 bg-emerald-500/5 text-emerald-600'
-                    : 'border-border/60 bg-muted/20 text-muted-foreground'
-                }`}
+                      ? 'border-emerald-500/30 bg-emerald-500/5 text-emerald-600'
+                      : 'border-border/60 bg-muted/20 text-muted-foreground'
+                  }`}
               >
                 <div
-                  className={`h-6 w-6 rounded-full flex items-center justify-center text-[11px] font-black shrink-0 ${
-                    isActive
+                  className={`h-6 w-6 rounded-full flex items-center justify-center text-[11px] font-black shrink-0 ${isActive
                       ? 'bg-primary text-primary-foreground'
                       : isCompleted
-                      ? 'bg-emerald-500 text-white'
-                      : 'bg-muted text-muted-foreground'
-                  }`}
+                        ? 'bg-emerald-500 text-white'
+                        : 'bg-muted text-muted-foreground'
+                    }`}
                 >
                   {isCompleted ? <CheckCircle2 className="w-3.5 h-3.5" /> : s.num}
                 </div>

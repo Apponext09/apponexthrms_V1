@@ -8,6 +8,26 @@ import type {
 
 export const policiesApi = {
   /**
+   * Get dynamic policy categories from backend DB
+   */
+  async getCategories(): Promise<Array<{ id: number; name: string; description?: string }>> {
+    try {
+      const res = await apiClient.get('/policies/categories');
+      return res.data?.data || [];
+    } catch {
+      return [];
+    }
+  },
+
+  /**
+   * Create custom policy category in backend DB
+   */
+  async createCategory(name: string, description?: string): Promise<any> {
+    const res = await apiClient.post('/policies/categories', { name, description });
+    return res.data?.data;
+  },
+
+  /**
    * Get Admin Policy Dashboard stats
    */
   async getDashboardStats(): Promise<PolicyDashboardStats> {
@@ -16,9 +36,9 @@ export const policiesApi = {
       const policies: any[] = res.data?.data || [];
 
       const totalPolicies = policies.length;
-      const publishedPolicies = policies.filter((p) => p.isActive && !p.deletedAt).length;
-      const draftPolicies = policies.filter((p) => !p.isActive && !p.deletedAt).length;
-      const archivedPolicies = policies.filter((p) => Boolean(p.deletedAt)).length;
+      const publishedPolicies = policies.filter((p) => (p.status === 'published' || p.status === 'active' || p.isActive) && !p.deletedAt).length;
+      const draftPolicies = policies.filter((p) => p.status === 'draft' || (!p.isActive && !p.deletedAt)).length;
+      const archivedPolicies = policies.filter((p) => p.status === 'archived' || Boolean(p.deletedAt)).length;
 
       let totalComplianceSum = 0;
       let totalPendingSignoffs = 0;
@@ -67,7 +87,6 @@ export const policiesApi = {
       const res = await apiClient.get('/policies', { params });
       let list: any[] = res.data?.data || [];
 
-      // Filter in-memory if needed
       if (params?.search && params.search.trim()) {
         const query = params.search.toLowerCase().trim();
         list = list.filter(
@@ -80,11 +99,11 @@ export const policiesApi = {
 
       if (params?.status && params.status !== 'all') {
         if (params.status === 'published') {
-          list = list.filter((p) => p.isActive && !p.deletedAt);
+          list = list.filter((p) => (p.status === 'published' || p.status === 'active' || p.isActive) && !p.deletedAt);
         } else if (params.status === 'draft') {
-          list = list.filter((p) => !p.isActive && !p.deletedAt);
+          list = list.filter((p) => p.status === 'draft' || (!p.isActive && !p.deletedAt));
         } else if (params.status === 'archived') {
-          list = list.filter((p) => Boolean(p.deletedAt));
+          list = list.filter((p) => p.status === 'archived' || Boolean(p.deletedAt));
         }
       }
 
@@ -98,21 +117,22 @@ export const policiesApi = {
         );
       }
 
-      // Map DB policy format to RolePolicyRecord format for UI
       return list.map((p) => ({
         id: p.id,
         title: p.title,
-        documentRef: `POL-${String(p.id).padStart(3, '0')}`,
+        documentRef: p.documentRef || p.document_ref || `POL-${String(p.id).padStart(3, '0')}`,
         category: p.category || 'General',
         description: p.description || '',
         fileUrl: p.fileUrl || p.file_url,
         fileName: p.fileName || p.file_name,
         fileSize: p.fileSize || p.file_size,
         fileType: p.fileType || p.file_type,
-        status: p.deletedAt ? 'archived' : p.isActive ? 'published' : 'draft',
+        status: p.deletedAt ? 'archived' : (p.status || (p.isActive ? 'published' : 'draft')),
         version: p.version || '1.0',
-        effectiveDate: p.createdAt ? new Date(p.createdAt).toISOString().split('T')[0] : '',
-        reviewDate: p.updatedAt ? new Date(p.updatedAt).toISOString().split('T')[0] : '',
+        signatureMode: p.signatureMode || p.signature_mode || 'ACKNOWLEDGEMENT',
+        effectiveDate: p.effectiveDate ? new Date(p.effectiveDate).toISOString().split('T')[0] : (p.createdAt ? new Date(p.createdAt).toISOString().split('T')[0] : ''),
+        reviewDate: p.reviewDate ? new Date(p.reviewDate).toISOString().split('T')[0] : '',
+        expiryDate: p.expiryDate ? new Date(p.expiryDate).toISOString().split('T')[0] : '',
         createdBy: String(p.createdBy || 'System Admin'),
         updatedAt: p.updatedAt ? new Date(p.updatedAt).toISOString().split('T')[0] : '',
         sections: (() => {
@@ -129,6 +149,7 @@ export const policiesApi = {
         pendingCount: p.stats?.pendingUsers || 0,
         totalTargetEmployees: p.stats?.totalTargetUsers || 0,
         isAcknowledged: p.isAccepted || false,
+        policyAccepted: p.isAccepted || false,
         requireAcknowledgement: true,
         allowDownload: true,
         sendNotification: true,
@@ -151,17 +172,20 @@ export const policiesApi = {
       return list.map((p) => ({
         id: p.id,
         title: p.title,
-        documentRef: `POL-${String(p.id).padStart(3, '0')}`,
+        documentRef: p.documentRef || p.document_ref || `POL-${String(p.id).padStart(3, '0')}`,
         category: p.category || 'General',
         description: p.description || '',
         fileUrl: p.fileUrl || p.file_url,
         fileName: p.fileName || p.file_name,
         fileSize: p.fileSize || p.file_size,
         fileType: p.fileType || p.file_type,
-        status: p.isActive ? 'published' : 'draft',
+        status: p.status || (p.isActive ? 'published' : 'draft'),
         version: p.version || '1.0',
-        effectiveDate: p.createdAt ? new Date(p.createdAt).toISOString().split('T')[0] : '',
-        reviewDate: p.updatedAt ? new Date(p.updatedAt).toISOString().split('T')[0] : '',
+        signatureMode: p.signatureMode || p.signature_mode || 'ACKNOWLEDGEMENT',
+        signatureStatus: p.signatureStatus || null,
+        effectiveDate: p.effectiveDate ? new Date(p.effectiveDate).toISOString().split('T')[0] : (p.createdAt ? new Date(p.createdAt).toISOString().split('T')[0] : ''),
+        reviewDate: p.reviewDate ? new Date(p.reviewDate).toISOString().split('T')[0] : '',
+        expiryDate: p.expiryDate ? new Date(p.expiryDate).toISOString().split('T')[0] : '',
         createdBy: 'Admin',
         updatedAt: p.updatedAt ? new Date(p.updatedAt).toISOString().split('T')[0] : '',
         sections: (() => {
@@ -177,6 +201,7 @@ export const policiesApi = {
         pendingCount: p.isAccepted ? 0 : 1,
         totalTargetEmployees: 1,
         isAcknowledged: Boolean(p.isAccepted),
+        policyAccepted: Boolean(p.isAccepted),
         requireAcknowledgement: Boolean(p.isMandatory),
         allowDownload: true,
         sendNotification: true,

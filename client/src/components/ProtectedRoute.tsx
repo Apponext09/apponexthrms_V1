@@ -5,6 +5,7 @@ import type { Role } from '@/config/roles';
 import { hasAnyRole } from '@/lib/rbac';
 import { PolicyAcceptanceModal } from '../features/auth/components/PolicyAcceptanceModal';
 import { useMenuAccess } from '@/features/access/useMenuAccess';
+import { grantedLandingPath, portalRoot, sessionPortal } from '@/features/access/portalNavigation';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -148,7 +149,10 @@ export function ProtectedRoute({
     const effectiveRoles = Array.from(new Set([...userRoles.map((r) => String(r).toLowerCase()), accessRole].filter(Boolean)));
 
     // User must have at least one of the allowed roles
-    if (!hasAnyRole(effectiveRoles, allowedRoles) && (window.location.pathname.startsWith('/superadmin') || menuAccess.error || (menuAccess.ready && !menuAccess.canAccessPath(`${window.location.pathname}${window.location.search}`)))) {
+    const primaryPortal = sessionPortal(menuAccess.access?.primaryPortal, 'employee');
+    const grantedRoot = menuAccess.ready && window.location.pathname.replace(/\/$/, '') === portalRoot(primaryPortal) &&
+      menuAccess.canAccessPath(grantedLandingPath(menuAccess.access?.paths ?? [], primaryPortal, `${portalRoot(primaryPortal)}/dashboard`));
+    if (!hasAnyRole(effectiveRoles, allowedRoles) && (window.location.pathname.startsWith('/superadmin') || menuAccess.error || (menuAccess.ready && !grantedRoot && !menuAccess.canAccessPath(`${window.location.pathname}${window.location.search}`)))) {
       console.warn('[ProtectedRoute] Access denied: Insufficient role', {
         userRoles: effectiveRoles,
         allowedRoles,

@@ -27,6 +27,7 @@ import {
   X,
   Filter,
   MessageSquare,
+  ArrowLeft,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -34,13 +35,20 @@ export const AdminPolicyDashboardPage: React.FC = () => {
   const navigate = useNavigate();
 
   const [dynamicRoles, setDynamicRoles] = useState<Array<{ id: string | number; name: string; code: string }>>([]);
+  const [dynamicCategories, setDynamicCategories] = useState<string[]>([]);
 
   useEffect(() => {
     policiesApi.getTargetOptions().then((res) => {
       if (res && Array.isArray(res.roles)) {
         setDynamicRoles(res.roles);
       }
-    }).catch(() => {});
+    }).catch(() => { });
+
+    policiesApi.getCategories().then((cats) => {
+      if (Array.isArray(cats) && cats.length > 0) {
+        setDynamicCategories(cats.map((c: any) => typeof c === 'string' ? c : c.name));
+      }
+    }).catch(() => { });
   }, []);
 
   const [stats, setStats] = useState<PolicyDashboardStats>({
@@ -127,18 +135,29 @@ export const AdminPolicyDashboardPage: React.FC = () => {
     <div className="space-y-6">
       {/* Top Banner Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card border border-border/80 rounded-xl p-5 shadow-2xs">
-        <div>
-          <div className="flex items-center gap-2">
-            <h2 className="text-xl font-black text-foreground tracking-tight flex items-center gap-2">
-              <ShieldCheck className="w-5 h-5 text-primary" /> Role-Based Policy Management
-            </h2>
-            <Badge className="bg-primary/10 text-primary border border-primary/20 font-bold uppercase text-[10px]">
-              Admin Governance
-            </Badge>
+        <div className="flex items-center gap-3">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => navigate('/admin/dashboard')}
+            title="Back to Dashboard"
+            className="h-8 w-8 text-muted-foreground hover:text-foreground shrink-0"
+          >
+            <ArrowLeft className="w-4 h-4" />
+          </Button>
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="text-xl font-black text-foreground tracking-tight flex items-center gap-2">
+                <ShieldCheck className="w-5 h-5 text-primary" /> Role-Based Policy Management
+              </h2>
+              <Badge className="bg-primary/10 text-primary border border-primary/20 font-bold uppercase text-[10px]">
+                Admin Governance
+              </Badge>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Create, assign, version, and monitor enterprise role-based policies across all departments.
+            </p>
           </div>
-          <p className="text-xs text-muted-foreground mt-1">
-            Create, assign, version, and monitor enterprise role-based policies across all departments.
-          </p>
         </div>
 
         <div className="flex items-center gap-2 w-full sm:w-auto">
@@ -216,7 +235,7 @@ export const AdminPolicyDashboardPage: React.FC = () => {
       {/* Control Bar: Filters & Search */}
       <div className="bg-card border border-border/80 rounded-xl p-4 shadow-2xs space-y-3">
         <div className="flex flex-col md:flex-row items-center justify-between gap-3">
-          
+
           {/* Status Tabs */}
           <div className="flex items-center gap-1.5 w-full md:w-auto overflow-x-auto pb-1 md:pb-0">
             {['all', 'published', 'draft', 'archived'].map((st) => (
@@ -242,7 +261,7 @@ export const AdminPolicyDashboardPage: React.FC = () => {
               className="h-8 rounded-lg border border-input bg-background px-2.5 text-xs font-medium"
             >
               <option value="all">All Categories</option>
-              {POLICY_CATEGORIES.map((cat) => (
+              {dynamicCategories.map((cat) => (
                 <option key={cat} value={cat}>
                   {cat}
                 </option>
@@ -356,53 +375,53 @@ export const AdminPolicyDashboardPage: React.FC = () => {
                     </td>
 
                     <td className="p-3.5 text-right whitespace-nowrap">
-                    <div className="flex items-center justify-end gap-1">
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => setSelectedReaderPolicy(p)}
-                        title="Read Policy Document"
-                        className="h-7 w-7 text-muted-foreground hover:text-primary"
-                      >
-                        <Eye className="w-3.5 h-3.5" />
-                      </Button>
-
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => navigate(`/policies/edit/${p.id}`)}
-                        title="Edit Policy"
-                        className="h-7 w-7 text-muted-foreground hover:text-primary"
-                      >
-                        <Edit className="w-3.5 h-3.5" />
-                      </Button>
-
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => handleOpenVersionHistory(p)}
-                        title="Version History"
-                        className="h-7 w-7 text-muted-foreground hover:text-primary"
-                      >
-                        <History className="w-3.5 h-3.5" />
-                      </Button>
-
-                      {p.status !== 'archived' && (
+                      <div className="flex items-center justify-end gap-1">
                         <Button
                           size="icon"
                           variant="ghost"
-                          onClick={() => handleArchivePolicy(p.id)}
-                          title="Archive Policy"
-                          className="h-7 w-7 text-slate-400 hover:text-rose-600"
+                          onClick={() => setSelectedReaderPolicy(p)}
+                          title="Read Policy Document"
+                          className="h-7 w-7 text-muted-foreground hover:text-primary"
                         >
-                          <Archive className="w-3.5 h-3.5" />
+                          <Eye className="w-3.5 h-3.5" />
                         </Button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
+
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => navigate(`/policies/edit/${p.id}`)}
+                          title="Edit Policy"
+                          className="h-7 w-7 text-muted-foreground hover:text-primary"
+                        >
+                          <Edit className="w-3.5 h-3.5" />
+                        </Button>
+
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => handleOpenVersionHistory(p)}
+                          title="Version History"
+                          className="h-7 w-7 text-muted-foreground hover:text-primary"
+                        >
+                          <History className="w-3.5 h-3.5" />
+                        </Button>
+
+                        {p.status !== 'archived' && (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => handleArchivePolicy(p.id)}
+                            title="Archive Policy"
+                            className="h-7 w-7 text-slate-400 hover:text-rose-600"
+                          >
+                            <Archive className="w-3.5 h-3.5" />
+                          </Button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

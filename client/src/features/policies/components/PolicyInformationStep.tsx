@@ -1,8 +1,8 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { POLICY_CATEGORIES } from '../types/policy';
-import { ArrowRight, Save } from 'lucide-react';
+import { policiesApi } from '../api/policiesApi';
+import { ArrowRight, Save, Plus } from 'lucide-react';
 
 interface PolicyInfoData {
   title: string;
@@ -12,7 +12,7 @@ interface PolicyInfoData {
   effectiveDate: string;
   reviewDate: string;
   expiryDate: string;
-  status: 'draft' | 'published' | string;
+  status: 'draft' | 'published' | 'active' | 'archived' | 'expired' | string;
   signatureMode?: string;
   applicableTo?: string;
   selectedGenders?: string[];
@@ -35,6 +35,44 @@ export const PolicyInformationStep: React.FC<PolicyInformationStepProps> = ({
   onCancel,
   isSubmitting = false,
 }) => {
+  const [dbCategories, setDbCategories] = useState<string[]>([]);
+  const [isAddingNewCat, setIsAddingNewCat] = useState(false);
+  const [newCatName, setNewCatName] = useState('');
+
+  useEffect(() => {
+    policiesApi.getCategories().then((cats) => {
+      if (Array.isArray(cats) && cats.length > 0) {
+        const catNames = cats.map((c: any) => typeof c === 'string' ? c : c.name);
+        setDbCategories(catNames);
+        if (!formData.category && catNames.length > 0) {
+          onChange({ category: catNames[0] });
+        }
+      } else {
+        const defaults = ['Leave', 'Attendance', 'WFH / Remote Work', 'Code of Conduct', 'IT / Security', 'Travel', 'Expense', 'Payroll', 'Holiday', 'Grievance', 'Workplace Conduct / POSH', 'Data Privacy', 'Employee Handbook', 'Custom'];
+        setDbCategories(defaults);
+      }
+    }).catch(() => {
+      setDbCategories(['Leave', 'Attendance', 'WFH / Remote Work', 'Code of Conduct', 'IT / Security', 'Travel', 'Expense', 'Payroll', 'Holiday', 'Grievance', 'Workplace Conduct / POSH', 'Data Privacy', 'Employee Handbook', 'Custom']);
+    });
+  }, []);
+
+  const handleAddCustomCategory = async () => {
+    if (!newCatName.trim()) return;
+    const trimmed = newCatName.trim();
+    try {
+      await policiesApi.createCategory(trimmed);
+      setDbCategories((prev) => Array.from(new Set([...prev, trimmed])));
+      onChange({ category: trimmed });
+      setNewCatName('');
+      setIsAddingNewCat(false);
+    } catch {
+      setDbCategories((prev) => Array.from(new Set([...prev, trimmed])));
+      onChange({ category: trimmed });
+      setNewCatName('');
+      setIsAddingNewCat(false);
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.title.trim()) {
@@ -95,18 +133,44 @@ export const PolicyInformationStep: React.FC<PolicyInformationStepProps> = ({
             <label className="block text-foreground font-bold">
               Policy Category <span className="text-rose-500">*</span>
             </label>
-            <select
-              value={formData.category}
-              onChange={(e) => onChange({ category: e.target.value })}
-              className="w-full h-10 rounded-md border border-input bg-background px-3 text-xs font-medium focus:ring-1 focus:ring-primary"
-              required
-            >
-              {POLICY_CATEGORIES.map((cat) => (
-                <option key={cat} value={cat}>
-                  {cat}
-                </option>
-              ))}
-            </select>
+            <div className="flex items-center gap-2">
+              <select
+                value={formData.category}
+                onChange={(e) => onChange({ category: e.target.value })}
+                className="w-full h-10 rounded-md border border-input bg-background px-3 text-xs font-medium focus:ring-1 focus:ring-primary"
+                required
+              >
+                {dbCategories.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {isAddingNewCat ? (
+              <div className="flex items-center gap-2 mt-1.5">
+                <Input
+                  placeholder="Enter custom category name..."
+                  value={newCatName}
+                  onChange={(e) => setNewCatName(e.target.value)}
+                  className="h-8 text-xs bg-background"
+                />
+                <Button type="button" size="sm" onClick={handleAddCustomCategory} className="h-8 text-xs font-bold px-3">
+                  Add
+                </Button>
+                <Button type="button" size="sm" variant="ghost" onClick={() => setIsAddingNewCat(false)} className="h-8 text-xs px-2">
+                  Cancel
+                </Button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setIsAddingNewCat(true)}
+                className="text-[11px] text-primary hover:underline font-bold flex items-center gap-1 mt-1"
+              >
+                <Plus className="w-3 h-3" /> Add Custom Category
+              </button>
+            )}
           </div>
 
           {/* Short Description */}
@@ -163,7 +227,10 @@ export const PolicyInformationStep: React.FC<PolicyInformationStepProps> = ({
               className="w-full h-10 rounded-md border border-input bg-background px-3 text-xs font-medium focus:ring-1 focus:ring-primary"
             >
               <option value="draft">Draft (Save for Later)</option>
-              <option value="published">Publish Immediately</option>
+              <option value="published">Published</option>
+              <option value="active">Active</option>
+              <option value="archived">Archived</option>
+              <option value="expired">Expired</option>
             </select>
           </div>
 

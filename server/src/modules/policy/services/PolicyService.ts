@@ -62,22 +62,6 @@ export class PolicyService {
       }
     }
 
-    // 2. Normalize roleMappings if missing from assignments array
-    let roleMappings = input.roleMappings;
-    if (!roleMappings || !Array.isArray(roleMappings) || roleMappings.length === 0) {
-      if (input.assignments && Array.isArray(input.assignments)) {
-        roleMappings = input.assignments
-          .filter((a: any) => a.targetType === 'role' || !a.targetType)
-          .map((a: any) => ({
-            roleCode: a.targetId,
-            isMandatory: input.requireAcknowledgement !== false,
-          }));
-      }
-    }
-    if (!roleMappings || roleMappings.length === 0) {
-      roleMappings = [{ roleCode: 'all', isMandatory: true }];
-    }
-
     // 3. Normalize department assignments if present in assignments
     let applicableDepartmentIds = input.applicableDepartmentIds;
     if ((!applicableDepartmentIds || applicableDepartmentIds.length === 0) && input.assignments) {
@@ -105,6 +89,29 @@ export class PolicyService {
         .filter((id: string) => id !== 'all');
     }
 
+    // 2. Normalize roleMappings if missing from assignments array
+    let roleMappings = input.roleMappings;
+    if (!roleMappings || !Array.isArray(roleMappings) || roleMappings.length === 0) {
+      if (input.assignments && Array.isArray(input.assignments)) {
+        roleMappings = input.assignments
+          .filter((a: any) => a.targetType === 'role' || !a.targetType)
+          .map((a: any) => ({
+            roleCode: a.targetId,
+            isMandatory: input.requireAcknowledgement !== false,
+          }));
+      }
+    }
+    const hasOtherTarget =
+      (applicableDepartmentIds && applicableDepartmentIds.length > 0) ||
+      (applicableEmployeeIds && applicableEmployeeIds.length > 0) ||
+      (applicableDesignationIds && applicableDesignationIds.length > 0);
+
+    if ((!roleMappings || roleMappings.length === 0) && !hasOtherTarget) {
+      roleMappings = [{ roleCode: 'all', isMandatory: true }];
+    } else if (!roleMappings) {
+      roleMappings = [];
+    }
+
     // 6. Custom Scope
     const customScope = input.customScope || {};
     if (input.assignments) {
@@ -114,7 +121,8 @@ export class PolicyService {
       }
     }
 
-    const isActive = input.status === 'draft' ? false : (input.isActive !== undefined ? Boolean(input.isActive) : true);
+    const statusVal = input.status ? input.status.toLowerCase() : (input.isActive === false ? 'draft' : 'published');
+    const isActive = statusVal !== 'draft' && statusVal !== 'archived' && statusVal !== 'expired';
 
     return this.policyRepo.create(ctx, {
       ...input,
@@ -122,6 +130,11 @@ export class PolicyService {
       category: input.category || 'General',
       fileUrl: fileUrl,
       version: input.version || '1.0',
+      status: statusVal,
+      effectiveDate: input.effectiveDate || null,
+      reviewDate: input.reviewDate || null,
+      expiryDate: input.expiryDate || null,
+      documentRef: input.documentRef || null,
       isActive: isActive,
       applicableDepartmentIds: applicableDepartmentIds || [],
       applicableEmployeeIds: applicableEmployeeIds || [],
@@ -177,6 +190,11 @@ export class PolicyService {
     const updated = await this.policyRepo.update(ctx, id, {
       ...input,
       fileUrl: fileUrl,
+      status: input.status,
+      effectiveDate: input.effectiveDate,
+      reviewDate: input.reviewDate,
+      expiryDate: input.expiryDate,
+      documentRef: input.documentRef,
       roleMappings: roleMappings,
       applicableDepartmentIds: applicableDepartmentIds,
       applicableEmployeeIds: applicableEmployeeIds,
@@ -393,6 +411,10 @@ export class PolicyService {
    * Resolve user roles from DB or JWT
    */
   async getUserRoleCodes(organizationId: number, userId: number, jwtRoles?: string[]): Promise<string[]> {
+    const rolesSet = new Set<string>();
+    if (jwtRoles && Array.isArray(jwtRoles)) {
+      jwtRoles.forEach((r) => rolesSet.add(String(r).toLowerCase().trim()));
+    }
     try {
       const db = getKnex();
       const roles = await db('user_roles as ur')
@@ -403,32 +425,49 @@ export class PolicyService {
         .pluck('r.code');
 
       if (roles && roles.length > 0) {
-        return Array.from(new Set(roles.map((r) => String(r).toLowerCase())));
+        roles.forEach((r) => rolesSet.add(String(r).toLowerCase().trim()));
+      }
+
+      const user = await db('users').where('id', userId).first();
+      if (user && user.role) {
+        rolesSet.add(String(user.role).toLowerCase().trim());
       }
     } catch (err) {
       console.warn('Failed to query user roles from DB, falling back to JWT:', err);
     }
 
-    if (jwtRoles && jwtRoles.length > 0) {
-      return Array.from(new Set(jwtRoles.map((r) => String(r).toLowerCase())));
+    if (rolesSet.size > 0) {
+      return Array.from(rolesSet);
     }
 
     return ['employee'];
   }
 
   /**
-   * Get all policies applicable to the logged-in user
+   * Get all policies applicable to the logged-in user (Superadmin exempt)
    */
   async getMyPolicies(ctx: TenantContext, jwtRoles?: string[]): Promise<UserPolicyView[]> {
     const roleCodes = await this.getUserRoleCodes(ctx.organizationId, ctx.userId, jwtRoles);
+    const isSuperAdmin = roleCodes.some((r) =>
+      ['super_admin', 'superadmin'].includes(String(r).toLowerCase().trim())
+    );
+    if (isSuperAdmin) {
+      return [];
+    }
     return this.policyRepo.getUserPoliciesWithAcceptance(ctx, ctx.userId, roleCodes);
   }
 
   /**
-   * Get pending mandatory policies for logged in user
+   * Get pending mandatory policies for logged in user (Superadmin exempt)
    */
   async getPendingPolicies(ctx: TenantContext, jwtRoles?: string[]): Promise<UserPolicyView[]> {
     const roleCodes = await this.getUserRoleCodes(ctx.organizationId, ctx.userId, jwtRoles);
+    const isSuperAdmin = roleCodes.some((r) =>
+      ['super_admin', 'superadmin'].includes(String(r).toLowerCase().trim())
+    );
+    if (isSuperAdmin) {
+      return [];
+    }
     return this.policyRepo.getPendingMandatoryPolicies(ctx, ctx.userId, roleCodes);
   }
 

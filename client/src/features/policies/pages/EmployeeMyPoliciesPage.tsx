@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { policiesApi } from '../api/policiesApi';
 import type { RolePolicyRecord } from '../types/policy';
 import { PolicyStatusBadge } from '../components/PolicyStatusBadge';
@@ -22,10 +23,12 @@ import {
   RefreshCw,
   ShieldCheck,
   HelpCircle,
+  ArrowLeft,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
 export const EmployeeMyPoliciesPage: React.FC = () => {
+  const navigate = useNavigate();
   const [policies, setPolicies] = useState<RolePolicyRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'active' | 'archived' | 'queries'>('active');
@@ -76,23 +79,34 @@ export const EmployeeMyPoliciesPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Top Banner Header */}
+      {/* Top Banner Header with Back Arrow */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card border border-border/80 rounded-xl p-5 shadow-2xs">
-        <div>
-          <div className="flex items-center gap-2">
-            <h2 className="text-xl font-black text-foreground tracking-tight flex items-center gap-2">
-              <Shield className="w-5 h-5 text-primary" /> My Company Policies
-            </h2>
-            <Badge className="bg-primary/10 text-primary border border-primary/20 font-bold uppercase text-[10px]">
-              Assigned Scope
-            </Badge>
+        <div className="flex items-center gap-3">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => navigate('/employee/dashboard')}
+            title="Back to Dashboard"
+            className="h-8 w-8 text-muted-foreground hover:text-foreground shrink-0"
+          >
+            <ArrowLeft className="w-4 h-4" />
+          </Button>
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="text-xl font-black text-foreground tracking-tight flex items-center gap-2">
+                <Shield className="w-5 h-5 text-primary" /> My Company Policies
+              </h2>
+              <Badge className="bg-primary/10 text-primary border border-primary/20 font-bold uppercase text-[10px]">
+                Assigned Scope
+              </Badge>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Access official governance manuals, operational responsibilities, and HR policy frameworks assigned to your role.
+            </p>
           </div>
-          <p className="text-xs text-muted-foreground mt-1">
-            Access official governance manuals, operational responsibilities, and HR policy frameworks assigned to your role.
-          </p>
         </div>
 
-        <Button size="sm" variant="outline" onClick={fetchMyPolicies} className="h-8 text-xs font-bold gap-1.5">
+        <Button size="sm" variant="outline" onClick={fetchMyPolicies} className="h-8 text-xs font-bold gap-1.5 shrink-0">
           <RefreshCw className="w-3.5 h-3.5" /> Refresh List
         </Button>
       </div>
@@ -160,7 +174,7 @@ export const EmployeeMyPoliciesPage: React.FC = () => {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredPolicies.map((p) => {
-            const isAck = p.policyAccepted;
+            const isAck = Boolean(p.isAcknowledged || p.policyAccepted);
             const isSigned = p.signatureStatus === 'SIGNED';
             const mode = p.signatureMode || 'ACKNOWLEDGEMENT';
 
@@ -266,8 +280,8 @@ export const EmployeeMyPoliciesPage: React.FC = () => {
 
       {/* Reader Modal */}
       {readerPolicy && (
-        <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-slate-950/80 backdrop-blur-xs p-4 overflow-y-auto">
-          <div className="max-w-4xl w-full">
+        <div className="fixed inset-0 z-[99999] flex items-start sm:items-center justify-center bg-slate-950/80 backdrop-blur-xs p-2 sm:p-4 overflow-y-auto py-6">
+          <div className="max-w-4xl w-full max-h-[92vh] flex flex-col my-auto">
             <PolicyReader
               policy={readerPolicy}
               canManage={false}

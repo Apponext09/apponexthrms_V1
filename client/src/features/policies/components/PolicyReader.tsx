@@ -28,6 +28,7 @@ import {
   Copy,
   Lock,
   FileSignature,
+  ArrowLeft,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -119,20 +120,34 @@ export const PolicyReader: React.FC<PolicyReaderProps> = ({
     }
   };
 
+  const handleClose = onClose || (() => {
+    if (typeof window !== 'undefined' && window.history.length > 1) {
+      window.history.back();
+    }
+  });
+
   return (
-    <div className="bg-card text-foreground border border-border rounded-xl shadow-lg overflow-hidden flex flex-col lg:flex-row min-h-[600px]">
-      
+    <div className="bg-card text-foreground border border-border rounded-xl shadow-lg overflow-hidden flex flex-col lg:flex-row min-h-[600px] max-h-[90vh]">
+
       {/* Left Information Panel */}
-      <div className="lg:w-1/3 bg-muted/20 border-r border-border p-6 space-y-6 flex flex-col justify-between">
+      <div className="lg:w-1/3 bg-muted/20 border-r border-border p-6 space-y-6 flex flex-col justify-between overflow-y-auto">
         <div className="space-y-5">
-          {onClose && (
-            <div className="flex items-center justify-between pb-2 border-b border-border">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Policy Information</span>
-              <Button variant="ghost" size="icon" onClick={onClose} className="h-7 w-7">
+          <div className="flex items-center justify-between pb-3 border-b border-border sticky top-0 bg-muted/95 backdrop-blur-md z-10 pt-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleClose}
+              className="h-8 text-xs font-bold gap-1.5 text-foreground hover:text-primary -ml-2 bg-background/50 border border-border/60 hover:bg-background"
+              title="Back to Policies"
+            >
+              <ArrowLeft className="w-4 h-4 text-primary" /> Back to Policies
+            </Button>
+            {onClose && (
+              <Button variant="ghost" size="icon" onClick={onClose} className="h-7 w-7 text-muted-foreground">
                 <X className="w-4 h-4" />
               </Button>
-            </div>
-          )}
+            )}
+          </div>
 
           {/* Policy Header Icon & Name */}
           <div className="space-y-3 text-center sm:text-left">
@@ -256,7 +271,7 @@ export const PolicyReader: React.FC<PolicyReaderProps> = ({
 
       {/* Right Main Content Area */}
       <div className="lg:w-2/3 p-6 sm:p-8 flex flex-col justify-between space-y-6">
-        
+
         {/* Tab Header */}
         <div className="space-y-4">
           <div className="flex items-center gap-2 border-b border-border pb-3 overflow-x-auto">
@@ -329,17 +344,29 @@ export const PolicyReader: React.FC<PolicyReaderProps> = ({
                   </h1>
                 </div>
 
-                {policy.fileUrl && (
+                <div className="flex items-center gap-2">
                   <Button
                     type="button"
-                    variant="outline"
+                    variant="ghost"
                     size="sm"
-                    onClick={() => setShowFullPdfModal(true)}
-                    className="h-8 text-xs font-bold gap-1.5 text-primary border-primary/30"
+                    onClick={handleClose}
+                    className="h-8 text-xs font-bold gap-1 text-muted-foreground hover:text-foreground border border-border/60"
+                    title="Back to Policies"
                   >
-                    <Eye className="w-3.5 h-3.5" /> Fullscreen View
+                    <ArrowLeft className="w-3.5 h-3.5 text-primary" /> Back
                   </Button>
-                )}
+                  {policy.fileUrl && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowFullPdfModal(true)}
+                      className="h-8 text-xs font-bold gap-1.5 text-primary border-primary/30"
+                    >
+                      <Eye className="w-3.5 h-3.5" /> Fullscreen View
+                    </Button>
+                  )}
+                </div>
               </div>
 
               {policy.fileUrl ? (
@@ -407,17 +434,16 @@ export const PolicyReader: React.FC<PolicyReaderProps> = ({
                     const downloadUrl = att.id
                       ? policiesApi.getAttachmentDownloadUrl(policy.id, att.id)
                       : att.storagePath.startsWith('/')
-                      ? `${window.location.protocol}//${window.location.host}${att.storagePath}`
-                      : att.storagePath;
+                        ? `${window.location.protocol}//${window.location.host}${att.storagePath}`
+                        : att.storagePath;
 
                     return (
                       <div
                         key={att.id || att.uuid || att.fileName}
-                        className={`p-4 rounded-xl border transition-all space-y-2.5 ${
-                          att.isMainDocument
+                        className={`p-4 rounded-xl border transition-all space-y-2.5 ${att.isMainDocument
                             ? 'bg-primary/5 border-primary/30 shadow-2xs'
                             : 'bg-muted/20 border-border hover:border-border/80'
-                        }`}
+                          }`}
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div className="flex items-start gap-3 min-w-0">
@@ -630,8 +656,8 @@ export const PolicyReader: React.FC<PolicyReaderProps> = ({
                   {policy.signatureMode === 'BOTH'
                     ? 'This policy requires both Checkbox Acknowledgement and a Digital E-Signature.'
                     : policy.signatureMode === 'E_SIGNATURE'
-                    ? 'This policy requires an official cryptographic E-Signature.'
-                    : 'Mandatory role compliance acknowledgement required.'}
+                      ? 'This policy requires an official cryptographic E-Signature.'
+                      : 'Mandatory role compliance acknowledgement required.'}
                 </p>
               </div>
 
@@ -681,7 +707,7 @@ export const PolicyReader: React.FC<PolicyReaderProps> = ({
 
       {/* Version History Modal */}
       <Dialog open={showVersionHistoryModal} onOpenChange={setShowVersionHistoryModal}>
-        <DialogContent className="max-w-2xl w-[90vw] bg-card text-foreground border-border rounded-2xl">
+        <DialogContent className="max-w-2xl w-[90vw] bg-card text-foreground border-border rounded-2xl z-[100001]">
           <DialogHeader className="border-b border-border pb-3">
             <div className="flex items-center gap-2">
               <History className="w-5 h-5 text-primary" />

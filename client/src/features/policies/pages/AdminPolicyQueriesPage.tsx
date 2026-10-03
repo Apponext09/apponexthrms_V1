@@ -1,13 +1,15 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { policiesApi } from '../api/policiesApi';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { RefreshCw, MessageSquare, Send } from 'lucide-react';
+import { RefreshCw, MessageSquare, Send, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 
 export const AdminPolicyQueriesPage: React.FC = () => {
+  const navigate = useNavigate();
   const [queries, setQueries] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -72,13 +74,24 @@ export const AdminPolicyQueriesPage: React.FC = () => {
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card border border-border/80 rounded-xl p-5 shadow-2xs">
-        <div>
-          <h2 className="text-xl font-black text-foreground flex items-center gap-2">
-            <MessageSquare className="w-5 h-5 text-primary" /> Policy Queries Management
-          </h2>
-          <p className="text-xs text-muted-foreground mt-1">
-            Review and respond to questions asked by employees regarding company policies.
-          </p>
+        <div className="flex items-center gap-3">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => navigate('/policies/manage')}
+            title="Back to Policy Management"
+            className="h-8 w-8 text-muted-foreground hover:text-foreground shrink-0"
+          >
+            <ArrowLeft className="w-4 h-4" />
+          </Button>
+          <div>
+            <h2 className="text-xl font-black text-foreground flex items-center gap-2">
+              <MessageSquare className="w-5 h-5 text-primary" /> Policy Queries Management
+            </h2>
+            <p className="text-xs text-muted-foreground mt-1">
+              Review and respond to questions asked by employees regarding company policies.
+            </p>
+          </div>
         </div>
 
         <div className="flex items-center gap-2">

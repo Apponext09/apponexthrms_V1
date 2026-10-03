@@ -17,7 +17,7 @@ import { useThemeStore } from '@/features/settings/store/themeStore';
 import hrmsLogo from '@/assests/hrms.png';
 import { apiClient } from '@/lib/api';
 import type { User as AuthUser } from '../store/authStore';
-import { firstGrantedPage } from '@/features/access/useMenuAccess';
+import { grantedLandingPath } from '@/features/access/portalNavigation';
 
 function preferredLandingPath(user: AuthUser): string {
   const roles = new Set([...(user.roles || []), user.accessRole || '', user.role || ''].map((role) => role.toLowerCase()));
@@ -40,14 +40,9 @@ async function permittedLandingPath(user: AuthUser): Promise<string> {
     const data = response.data?.data ?? response.data;
     const paths = (Array.isArray(data?.paths) ? data.paths : []) as string[];
     const portal = typeof data?.primaryPortal === 'string' ? data.primaryPortal : '';
-    const portalPrefix: Record<string, string> = { admin: '/', hr: '/hr/', manager: '/manager/', team_lead: '/team-lead/', employee: '/employee/', intern: '/intern/', consultant: '/consultant/', finance: '/finance/' };
-    const portalPaths = portal === 'admin' ? paths.filter((path) => !/^\/(hr|manager|team-lead|employee|intern|consultant|finance)\//.test(path))
-      : paths.filter((path) => path.startsWith(portalPrefix[portal] || '/employee/'));
-    const portalHome = portal === 'admin' ? '/dashboard' : `${portalPrefix[portal]?.slice(0, -1) || '/employee'}/dashboard`;
-    return paths.includes(preferred) && portalPaths.includes(preferred) ? preferred
-      : portalPaths.includes(portalHome) ? portalHome : firstGrantedPage(portalPaths) ?? '/unauthorized';
+    return grantedLandingPath(paths, portal, preferred);
   } catch {
-    return preferred;
+    return '/unauthorized';
   }
 }
 

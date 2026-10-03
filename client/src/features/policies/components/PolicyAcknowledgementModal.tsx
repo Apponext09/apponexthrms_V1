@@ -54,7 +54,7 @@ export const PolicyAcknowledgementModal: React.FC<PolicyAcknowledgementModalProp
   return (
     <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-slate-950/80 backdrop-blur-xs p-4 overflow-y-auto">
       <div className="bg-card text-foreground border border-border rounded-xl shadow-2xl max-w-lg w-full p-6 space-y-5 animate-in fade-in zoom-in-95 duration-150">
-        
+
         {/* Modal Header */}
         <div className="flex items-start justify-between border-b border-border pb-4">
           <div className="flex items-center gap-3">
